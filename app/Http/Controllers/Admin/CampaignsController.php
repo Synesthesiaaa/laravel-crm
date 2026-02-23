@@ -1,0 +1,78 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\Campaign;
+use App\Services\CampaignService;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\View\View;
+
+class CampaignsController extends Controller
+{
+    public function __construct(protected CampaignService $campaignService) {}
+
+    public function index(Request $request): View
+    {
+        $campaigns = Campaign::orderBy('display_order')->orderBy('id')->get();
+        return view('admin.campaigns', [
+            'campaigns' => $campaigns,
+            'campaignName' => $request->session()->get('campaign_name', 'CRM'),
+        ]);
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $v = $request->validate([
+            'code' => 'required|string|max:50|unique:campaigns,code',
+            'name' => 'required|string|max:255',
+        ], [
+            'code.required' => 'Campaign code is required.',
+            'code.unique' => 'That campaign code is already in use.',
+            'name.required' => 'Campaign name is required.',
+        ]);
+        Campaign::create([
+            'code' => $v['code'],
+            'name' => $v['name'],
+            'description' => $request->input('description', ''),
+            'color' => $request->input('color', 'blue'),
+            'display_order' => (int) $request->input('display_order', 0),
+            'is_active' => true,
+        ]);
+        $this->campaignService->clearCampaignsCache();
+        return redirect()->route('admin.campaigns.index')->with('success', 'Campaign created.');
+    }
+
+    public function update(Request $request, Campaign $campaign): RedirectResponse
+    {
+        $v = $request->validate([
+            'code' => 'required|string|max:50|unique:campaigns,code,' . $campaign->id,
+            'name' => 'required|string|max:255',
+        ], [
+            'code.required' => 'Campaign code is required.',
+            'code.unique' => 'That campaign code is already in use.',
+            'name.required' => 'Campaign name is required.',
+        ]);
+        $campaign->update([
+            'code' => $v['code'],
+            'name' => $v['name'],
+            'description' => $request->input('description', ''),
+            'color' => $request->input('color', 'blue'),
+            'display_order' => (int) $request->input('display_order', 0),
+            'is_active' => $request->boolean('is_active', true),
+        ]);
+        $this->campaignService->clearCampaignsCache();
+        return redirect()->route('admin.campaigns.index')->with('success', 'Campaign updated.');
+    }
+
+    public function destroy(Request $request): RedirectResponse
+    {
+        $c = Campaign::findOrFail((int) $request->input('id'));
+        if ($c->forms()->exists()) {
+            return redirect()->route('admin.campaigns.index')->with('error', 'Cannot delete campaign with existing forms.');
+        }
+        $c->update(['is_active' => false]);
+        return redirect()->route('admin.campaigns.index')->with('success', 'Campaign deactivated.');
+    }
+}
