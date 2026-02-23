@@ -148,7 +148,16 @@ html[data-theme="light"] .login-error { background: rgba(239, 68, 68, 0.12); bor
 
   .content-padding {
     flex: 1;
+    max-width: 100%;
     animation: contentFadeIn 0.35s ease-out;
+  }
+
+  /* Header link focus for keyboard nav */
+  .md-header a:focus-visible,
+  .md-header button:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: 6px;
   }
 
   /* Cards: elevated surface with hover */
@@ -167,36 +176,70 @@ html[data-theme="light"] .login-error { background: rgba(239, 68, 68, 0.12); bor
     border-color: var(--color-border-strong);
   }
 
-  /* Sidebar */
+  /* Sidebar: fixed height so nav can scroll */
   .md-sidebar {
     position: fixed;
     left: 0;
     top: 0;
     width: 280px;
-    min-height: 100vh;
+    height: 100vh;
+    max-height: 100dvh;
     background: var(--color-surface-1);
     border-right: 1px solid var(--color-border);
     z-index: 40;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
     transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
                 box-shadow 0.28s ease;
   }
 
   .sidebar-header {
-    padding: 1.5rem 1.25rem;
+    padding: 1.25rem 1rem;
     border-bottom: 1px solid var(--color-border);
     display: flex;
     align-items: center;
     gap: 0.75rem;
     flex-shrink: 0;
+    background: var(--color-surface-1);
+  }
+
+  /* Scrollable nav: max-height + overflow-y: scroll so the scrollbar appears when content overflows */
+  #sidebar .sidebar-nav,
+  .md-sidebar .sidebar-nav {
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: calc(100vh - 5rem);
+    overflow-y: scroll;
+    overflow-x: hidden;
+    padding: 0.5rem 0.75rem 1.5rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+  #sidebar .sidebar-nav::-webkit-scrollbar,
+  .md-sidebar .sidebar-nav::-webkit-scrollbar {
+    width: 8px;
+  }
+  .md-sidebar .sidebar-nav::-webkit-scrollbar-track {
+    background: var(--color-surface-2);
+  }
+  .md-sidebar .sidebar-nav::-webkit-scrollbar-thumb {
+    background: var(--color-border-strong);
+    border-radius: 4px;
+  }
+  .md-sidebar .sidebar-nav::-webkit-scrollbar-thumb:hover {
+    background: var(--color-on-surface-dim);
+  }
+  .md-sidebar .sidebar-nav::-webkit-scrollbar-corner {
+    background: var(--color-surface-2);
   }
 
   .sidebar-item {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.75rem 1rem;
+    padding: 0.625rem 1rem;
     margin: 0 0.5rem;
     border-radius: 10px;
     color: var(--color-on-surface-muted);
@@ -205,8 +248,8 @@ html[data-theme="light"] .login-error { background: rgba(239, 68, 68, 0.12); bor
     font-size: 0.9375rem;
     transition: background-color 0.2s ease,
                 color 0.2s ease,
-                transform 0.2s ease,
-                padding-left 0.2s ease;
+                transform 0.2s ease;
+    min-height: 2.5rem;
   }
   .sidebar-item:hover {
     background: var(--color-surface-2);
@@ -215,19 +258,25 @@ html[data-theme="light"] .login-error { background: rgba(239, 68, 68, 0.12); bor
   .sidebar-item:active {
     transform: scale(0.98);
   }
+  .sidebar-item:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
   .sidebar-item.active {
     background: var(--color-primary-muted);
     color: var(--color-primary);
+    font-weight: 600;
   }
 
   .sidebar-label {
-    padding: 0.5rem 1rem;
-    margin-top: 0.5rem;
+    padding: 0.5rem 1rem 0.25rem;
+    margin-top: 0.25rem;
     font-size: 0.65rem;
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--color-on-surface-dim);
+    flex-shrink: 0;
   }
 
   /* Header bar */

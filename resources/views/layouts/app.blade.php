@@ -20,12 +20,12 @@
 <body class="min-h-screen flex" style="margin: 0;">
     @include('layouts.sidebar')
     <div id="main-layout" class="md-main-layout flex-1">
-        <header class="md-header">
-            <h1 class="text-lg font-bold tracking-tight flex items-center gap-3 text-[var(--color-on-surface)]">
+        <header class="md-header" role="banner">
+            <h1 class="text-lg font-semibold tracking-tight flex items-center gap-3 text-[var(--color-on-surface)] truncate">
                 @yield('header-icon', '')
-                @yield('header-title', 'Dashboard')
+                <span class="truncate">@yield('header-title', 'Dashboard')</span>
             </h1>
-            <div class="flex items-center gap-4 shrink-0">
+            <div class="flex items-center gap-3 shrink-0">
                 @yield('header-actions')
                 <button type="button" id="theme-toggle" class="theme-toggle inline-flex items-center justify-center shrink-0 w-9 h-9 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-on-surface-muted)] hover:bg-[var(--color-surface-3)] hover:text-[var(--color-primary)] transition-colors cursor-pointer" style="min-width: 2.25rem; min-height: 2.25rem;" aria-label="Toggle light/dark mode" title="Toggle theme">
                     <svg class="theme-icon-dark w-5 h-5" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>

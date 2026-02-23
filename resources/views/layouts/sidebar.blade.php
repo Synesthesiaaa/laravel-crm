@@ -9,7 +9,7 @@
         <span class="text-2xl opacity-90">◆</span>
         <span class="font-bold uppercase tracking-wider text-[var(--color-on-surface)]">{{ $campaignName }}</span>
     </div>
-    <nav class="p-3 flex-1 overflow-y-auto space-y-0.5">
+    <nav class="sidebar-nav space-y-0.5" aria-label="Main navigation">
         <a href="{{ route('dashboard') }}" class="sidebar-item {{ $currentRoute === 'dashboard' ? 'active' : '' }}">
             <span>📊</span>
             <span>Dashboard</span>
