@@ -26,7 +26,9 @@ class AsteriskOriginateJob implements ShouldQueue
         public string $channel,
         public string $number,
         public string $callerId = ''
-    ) {}
+    ) {
+        $this->onQueue('asterisk');
+    }
 
     public function handle(AsteriskAmiService $ami): void
     {

@@ -17,7 +17,7 @@ class DispositionRecordsController extends Controller
     public function index(Request $request): View
     {
         $campaign = $request->session()->get('campaign', 'mbsales');
-        $query = CampaignDispositionRecord::where('campaign_code', $campaign)->orderByDesc('called_at');
+        $query = CampaignDispositionRecord::with('campaign')->where('campaign_code', $campaign)->orderByDesc('called_at');
         if ($request->filled('agent')) {
             $query->where('agent', 'like', '%' . $request->input('agent') . '%');
         }

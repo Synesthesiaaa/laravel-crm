@@ -127,6 +127,30 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        'audit' => [
+            'driver' => 'daily',
+            'path'   => storage_path('logs/audit.log'),
+            'level'  => 'info',
+            'days'   => env('LOG_AUDIT_DAYS', 90),
+            'replace_placeholders' => true,
+        ],
+
+        'security' => [
+            'driver' => 'daily',
+            'path'   => storage_path('logs/security.log'),
+            'level'  => 'info',
+            'days'   => env('LOG_SECURITY_DAYS', 365),
+            'replace_placeholders' => true,
+        ],
+
+        'telephony' => [
+            'driver' => 'daily',
+            'path'   => storage_path('logs/telephony.log'),
+            'level'  => 'info',
+            'days'   => env('LOG_TELEPHONY_DAYS', 30),
+            'replace_placeholders' => true,
+        ],
+
     ],
 
 ];

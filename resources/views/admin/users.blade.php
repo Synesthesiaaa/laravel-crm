@@ -1,118 +1,120 @@
 @extends('layouts.app')
 
-@section('title', 'User Access - Admin')
-@section('header-icon')
-    <span class="mr-3 text-indigo-600">👥</span>
-@endsection
-@section('header-title')
-    User Access
-@endsection
+@section('title', 'User Access')
+@section('header-icon')<x-icon name="users" class="w-5 h-5 text-[var(--color-primary)]" />@endsection
+@section('header-title', 'User Access')
 
 @section('content')
-    @if(session('success'))
-        <div class="mb-4 p-4 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm">{{ session('success') }}</div>
-    @endif
-    @if(session('error'))
-        <div class="mb-4 p-4 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm">{{ session('error') }}</div>
-    @endif
-    <x-validation-errors />
+<x-page-header title="User Access" description="Manage staff accounts and roles."
+    :breadcrumbs="['Admin' => route('admin.dashboard'), 'User Access' => null]" />
 
-    <div class="bg-white rounded-xl shadow border border-gray-100 overflow-hidden mb-6">
-        <div class="p-6 border-b border-gray-100 bg-gray-50">
-            <form method="POST" action="{{ route('admin.users.store') }}" class="flex flex-wrap gap-4 items-end">
-                @csrf
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Username</label>
-                    <input type="text" name="username" value="{{ old('username') }}" required class="px-3 py-2 border border-gray-200 rounded @error('username') border-red-500 @enderror">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Full name</label>
-                    <input type="text" name="full_name" value="{{ old('full_name') }}" required class="px-3 py-2 border border-gray-200 rounded @error('full_name') border-red-500 @enderror">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Password</label>
-                    <input type="password" name="password" class="px-3 py-2 border border-gray-200 rounded @error('password') border-red-500 @enderror" required>
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Confirm</label>
-                    <input type="password" name="password_confirmation" class="px-3 py-2 border border-gray-200 rounded" required>
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Role</label>
-                    <select name="role" class="px-3 py-2 border border-gray-200 rounded">
-                        @foreach(['Agent','Team Leader','Admin','Super Admin'] as $r)
-                            <option value="{{ $r }}" {{ old('role') === $r ? 'selected' : '' }}>{{ $r }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Add</button>
-            </form>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Username</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Full name</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Role</th>
-                        <th class="text-right py-3 px-4 font-semibold text-gray-700">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($users as $usr)
-                        <tr class="border-b border-gray-100 hover:bg-gray-50">
-                            <td class="py-3 px-4">{{ $usr->username }}</td>
-                            <td class="py-3 px-4">{{ $usr->full_name ?? $usr->name }}</td>
-                            <td class="py-3 px-4">{{ $usr->role }}</td>
-                            <td class="py-3 px-4 text-right">
-                                <button type="button" onclick="document.getElementById('edit-row-{{ $usr->id }}').classList.toggle('hidden'); this.textContent = document.getElementById('edit-row-{{ $usr->id }}').classList.contains('hidden') ? 'Edit' : 'Cancel';" class="text-indigo-600 hover:underline text-xs mr-2">Edit</button>
-                                @if($usr->id !== auth()->id())
-                                    <form method="POST" action="{{ route('admin.users.destroy') }}" class="inline" onsubmit="return confirm('Delete this user?');">
-                                        @csrf
-                                        <input type="hidden" name="id" value="{{ $usr->id }}">
-                                        <button type="submit" class="text-red-600 hover:underline text-xs">Delete</button>
-                                    </form>
-                                @else
-                                    <span class="text-gray-400 text-xs">(you)</span>
-                                @endif
-                            </td>
-                        </tr>
-                        <tr id="edit-row-{{ $usr->id }}" class="hidden bg-indigo-50 border-b border-gray-100">
-                            <td colspan="4" class="py-4 px-4">
-                                <form method="POST" action="{{ route('admin.users.update', $usr) }}" class="flex flex-wrap gap-4 items-end">
-                                    @csrf
-                                    @method('PUT')
-                                    <div>
-                                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Username</label>
-                                        <input type="text" name="username" value="{{ old('username', $usr->username) }}" required class="px-3 py-2 border rounded w-40 @error('username') border-red-500 @enderror">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Full name</label>
-                                        <input type="text" name="full_name" value="{{ old('full_name', $usr->full_name ?? $usr->name) }}" required class="px-3 py-2 border rounded w-48 @error('full_name') border-red-500 @enderror">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Role</label>
-                                        <select name="role" class="px-3 py-2 border rounded">
-                                            @foreach(['Agent','Team Leader','Admin','Super Admin'] as $r)
-                                                <option value="{{ $r }}" {{ old('role', $usr->role) === $r ? 'selected' : '' }}>{{ $r }}</option>
-                                            @endforeach
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">New password (leave blank to keep)</label>
-                                        <input type="password" name="password" class="px-3 py-2 border rounded w-40">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Confirm</label>
-                                        <input type="password" name="password_confirmation" class="px-3 py-2 border rounded w-40">
-                                    </div>
-                                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Update</button>
-                                </form>
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
+<x-validation-errors />
+
+{{-- Add user form --}}
+<div class="md-card mb-6">
+    <div class="px-6 py-4 border-b border-[var(--color-border)]">
+        <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Add New User</h3>
     </div>
+    <div class="p-6">
+        <form method="POST" action="{{ route('admin.users.store') }}"
+              x-data="{ submitting: false }" @submit="submitting = true">
+            @csrf
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <x-form.input name="username"  label="Username"  :value="old('username')"  required />
+                <x-form.input name="full_name" label="Full Name" :value="old('full_name')" required />
+                <x-form.input name="password" type="password" label="Password" required />
+                <x-form.input name="password_confirmation" type="password" label="Confirm Password" required />
+                <x-form.select name="role" label="Role"
+                    :options="['Agent' => 'Agent', 'Team Leader' => 'Team Leader', 'Admin' => 'Admin', 'Super Admin' => 'Super Admin']"
+                    :selected="old('role', 'Agent')" :empty="false" />
+            </div>
+            <div class="mt-4">
+                <button type="submit" class="btn-primary" :disabled="submitting">
+                    <x-icon name="plus" class="w-4 h-4" />
+                    <span x-text="submitting ? 'Adding...' : 'Add User'">Add User</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Users table --}}
+<x-table.index caption="User accounts">
+    <x-table.head :columns="[
+        ['label' => 'Username'],
+        ['label' => 'Full Name'],
+        ['label' => 'Role'],
+        ['label' => 'Actions', 'align' => 'right'],
+    ]" />
+    <tbody>
+        @forelse($users as $usr)
+            <tr x-data="{ editOpen: {{ ($errors->any() && old('_editing') == $usr->id) ? 'true' : 'false' }} }">
+                <td>
+                    <div class="font-medium text-[var(--color-on-surface)]">{{ $usr->username }}</div>
+                </td>
+                <td>{{ $usr->full_name ?? $usr->name }}</td>
+                <td>
+                    <x-badge :type="$usr->role === 'Super Admin' ? 'error' : ($usr->role === 'Admin' ? 'warning' : ($usr->role === 'Team Leader' ? 'info' : 'inactive'))">
+                        {{ $usr->role }}
+                    </x-badge>
+                </td>
+                <td>
+                    <div class="table-actions">
+                        <button type="button" class="btn-secondary text-xs px-2 py-1" @click="editOpen = !editOpen">
+                            <x-icon name="pencil" class="w-3.5 h-3.5" />
+                            <span x-text="editOpen ? 'Cancel' : 'Edit'">Edit</span>
+                        </button>
+                        @if($usr->id !== auth()->id())
+                        <div x-data="{ async del(form) {
+                            const ok = await Alpine.store('confirm').ask('Delete user?', 'Remove {{ $usr->username }} from the system. This cannot be undone.');
+                            if (ok) form.submit();
+                        }}">
+                            <form method="POST" action="{{ route('admin.users.destroy') }}" x-ref="delForm{{ $usr->id }}">
+                                @csrf
+                                <input type="hidden" name="id" value="{{ $usr->id }}">
+                                <button type="button" class="btn-danger text-xs px-2 py-1"
+                                        @click="del($refs['delForm{{ $usr->id }}'])">
+                                    <x-icon name="trash" class="w-3.5 h-3.5" />
+                                    Delete
+                                </button>
+                            </form>
+                        </div>
+                        @else
+                            <span class="text-xs text-[var(--color-on-surface-dim)]">(you)</span>
+                        @endif
+                    </div>
+                </td>
+            </tr>
+            {{-- Inline edit row --}}
+            <tr x-show="editOpen" class="inline-edit-row" x-collapse>
+                <td colspan="4">
+                    <form method="POST" action="{{ route('admin.users.update', $usr) }}"
+                          x-data="{ submitting: false }" @submit="submitting = true; $el.prepend(document.createElement('input')).name='_editing', $el.querySelector('input[name=_editing]').value='{{ $usr->id }}'">
+                        @csrf
+                        @method('PUT')
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                            <x-form.input name="username" label="Username" :value="old('username', $usr->username)" required />
+                            <x-form.input name="full_name" label="Full Name" :value="old('full_name', $usr->full_name ?? $usr->name)" required />
+                            <x-form.select name="role" label="Role"
+                                :options="['Agent' => 'Agent', 'Team Leader' => 'Team Leader', 'Admin' => 'Admin', 'Super Admin' => 'Super Admin']"
+                                :selected="old('role', $usr->role)" :empty="false" />
+                            <x-form.input name="password" type="password" label="New Password" help="Leave blank to keep" />
+                            <x-form.input name="password_confirmation" type="password" label="Confirm" />
+                        </div>
+                        <div class="mt-4">
+                            <button type="submit" class="btn-primary text-sm" :disabled="submitting">
+                                <x-icon name="check" class="w-4 h-4" />
+                                <span x-text="submitting ? 'Saving...' : 'Update User'">Update User</span>
+                            </button>
+                        </div>
+                    </form>
+                </td>
+            </tr>
+        @empty
+        @endforelse
+    </tbody>
+</x-table.index>
+@if($users instanceof \Illuminate\Pagination\LengthAwarePaginator)
+    <x-table.pagination :paginator="$users" />
+@endif
 @endsection

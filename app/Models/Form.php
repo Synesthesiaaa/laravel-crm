@@ -2,12 +2,22 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class Form extends Model
 {
+    use SoftDeletes, LogsActivity;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()->logFillable()->logOnlyDirty()->dontSubmitEmptyLogs();
+    }
     protected $fillable = [
         'campaign_code',
         'form_code',
@@ -35,5 +45,20 @@ class Form extends Model
     {
         return $this->hasMany(FormField::class, 'form_type', 'form_code')
             ->whereColumn('form_fields.campaign_code', 'forms.campaign_code');
+    }
+
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('is_active', true);
+    }
+
+    public function scopeForCampaign(Builder $query, string $campaignCode): Builder
+    {
+        return $query->where('campaign_code', $campaignCode);
+    }
+
+    public function scopeOrdered(Builder $query): Builder
+    {
+        return $query->orderBy('display_order')->orderBy('id');
     }
 }

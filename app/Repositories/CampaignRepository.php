@@ -2,11 +2,12 @@
 
 namespace App\Repositories;
 
+use App\Contracts\Repositories\CampaignRepositoryInterface;
 use App\Models\Campaign;
 use App\Models\Form;
 use Illuminate\Support\Collection;
 
-class CampaignRepository
+class CampaignRepository implements CampaignRepositoryInterface
 {
     public function allActive(): Collection
     {

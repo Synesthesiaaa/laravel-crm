@@ -2,11 +2,21 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class Campaign extends Model
 {
+    use SoftDeletes, LogsActivity;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()->logFillable()->logOnlyDirty()->dontSubmitEmptyLogs();
+    }
     protected $fillable = [
         'code',
         'name',
@@ -26,5 +36,40 @@ class Campaign extends Model
     public function forms(): HasMany
     {
         return $this->hasMany(Form::class, 'campaign_code', 'code');
+    }
+
+    public function dispositionCodes(): HasMany
+    {
+        return $this->hasMany(DispositionCode::class, 'campaign_code', 'code');
+    }
+
+    public function vicidialServers(): HasMany
+    {
+        return $this->hasMany(VicidialServer::class, 'campaign_code', 'code');
+    }
+
+    public function agentScreenFields(): HasMany
+    {
+        return $this->hasMany(AgentScreenField::class, 'campaign_code', 'code');
+    }
+
+    public function callHistory(): HasMany
+    {
+        return $this->hasMany(CrmCallHistory::class, 'campaign_code', 'code');
+    }
+
+    public function dispositionRecords(): HasMany
+    {
+        return $this->hasMany(CampaignDispositionRecord::class, 'campaign_code', 'code');
+    }
+
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('is_active', true);
+    }
+
+    public function scopeOrdered(Builder $query): Builder
+    {
+        return $query->orderBy('display_order')->orderBy('id');
     }
 }

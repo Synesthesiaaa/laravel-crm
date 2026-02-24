@@ -10,7 +10,8 @@ class CallHistoryService
 {
     public function getUnifiedHistory(string $campaignCode, ?int $leadId = null, ?string $phone = null, int $limit = 50): Collection
     {
-        $q = CrmCallHistory::where('campaign_code', $campaignCode)
+        $q = CrmCallHistory::with('campaign')
+            ->where('campaign_code', $campaignCode)
             ->orderByDesc('created_at')
             ->limit($limit);
         if ($leadId !== null) {
@@ -27,7 +28,7 @@ class CallHistoryService
 
     public function getHistoryForCampaign(string $campaignCode, ?string $startDate = null, ?string $endDate = null, ?string $agent = null, int $perPage = 15)
     {
-        $q = CrmCallHistory::where('campaign_code', $campaignCode)->orderByDesc('created_at');
+        $q = CrmCallHistory::with('campaign')->where('campaign_code', $campaignCode)->orderByDesc('created_at');
         if ($startDate) {
             $q->whereDate('created_at', '>=', $startDate);
         }

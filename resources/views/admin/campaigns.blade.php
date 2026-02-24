@@ -1,102 +1,109 @@
 @extends('layouts.app')
 
-@section('title', 'Campaigns - Admin')
-
-@section('header-icon')
-    <span class="mr-3 text-indigo-600">📢</span>
-@endsection
-
-@section('header-title')
-    Campaigns
-@endsection
+@section('title', 'Campaigns')
+@section('header-icon')<x-icon name="building-office" class="w-5 h-5 text-[var(--color-primary)]" />@endsection
+@section('header-title', 'Campaigns')
 
 @section('content')
-    @if(session('success'))
-        <div class="mb-4 p-4 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm">{{ session('success') }}</div>
-    @endif
-    @if(session('error'))
-        <div class="mb-4 p-4 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm">{{ session('error') }}</div>
-    @endif
-    <x-validation-errors />
+<x-page-header title="Campaigns" description="Manage campaign settings."
+    :breadcrumbs="['Admin' => route('admin.dashboard'), 'Campaigns' => null]" />
 
-    <div class="bg-white rounded-xl shadow border border-gray-100 overflow-hidden mb-6">
-        <div class="p-6 border-b border-gray-100 bg-gray-50">
-            <form method="POST" action="{{ route('admin.campaigns.store') }}" class="flex flex-wrap gap-4 items-end">
-                @csrf
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Code</label>
-                    <input type="text" name="code" value="{{ old('code') }}" required class="px-3 py-2 border border-gray-200 rounded @error('code') border-red-500 @enderror">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Name</label>
-                    <input type="text" name="name" value="{{ old('name') }}" required class="px-3 py-2 border border-gray-200 rounded @error('name') border-red-500 @enderror">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Description</label>
-                    <input type="text" name="description" value="{{ old('description') }}" class="px-3 py-2 border border-gray-200 rounded">
-                </div>
-                <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Add</button>
-            </form>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Code</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Name</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Active</th>
-                        <th class="text-right py-3 px-4 font-semibold text-gray-700">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($campaigns as $c)
-                        <tr class="border-b border-gray-100 hover:bg-gray-50">
-                            <td class="py-3 px-4">{{ $c->code }}</td>
-                            <td class="py-3 px-4">{{ $c->name }}</td>
-                            <td class="py-3 px-4">{{ $c->is_active ? 'Yes' : 'No' }}</td>
-                            <td class="py-3 px-4 text-right">
-                                <button type="button" onclick="document.getElementById('edit-campaign-{{ $c->id }}').classList.toggle('hidden'); this.textContent = document.getElementById('edit-campaign-{{ $c->id }}').classList.contains('hidden') ? 'Edit' : 'Cancel';" class="text-indigo-600 hover:underline text-xs mr-2">Edit</button>
-                                <a href="{{ route('admin.forms.index', ['campaign' => $c->code]) }}" class="text-indigo-600 hover:underline text-xs mr-2">Forms</a>
-                                <form method="POST" action="{{ route('admin.campaigns.destroy') }}" class="inline" onsubmit="return confirm('Deactivate this campaign?');">
-                                    @csrf
-                                    <input type="hidden" name="id" value="{{ $c->id }}">
-                                    <button type="submit" class="text-red-600 hover:underline text-xs">Deactivate</button>
-                                </form>
-                            </td>
-                        </tr>
-                        <tr id="edit-campaign-{{ $c->id }}" class="hidden bg-indigo-50 border-b border-gray-100">
-                            <td colspan="4" class="py-4 px-4">
-                                <form method="POST" action="{{ route('admin.campaigns.update', $c) }}" class="flex flex-wrap gap-4 items-end">
-                                    @csrf
-                                    @method('PUT')
-                                    <div>
-                                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Code</label>
-                                        <input type="text" name="code" value="{{ old('code', $c->code) }}" required class="px-3 py-2 border rounded w-40 @error('code') border-red-500 @enderror">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Name</label>
-                                        <input type="text" name="name" value="{{ old('name', $c->name) }}" required class="px-3 py-2 border rounded w-48 @error('name') border-red-500 @enderror">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Description</label>
-                                        <input type="text" name="description" value="{{ old('description', $c->description) }}" class="px-3 py-2 border rounded w-64">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Display order</label>
-                                        <input type="number" name="display_order" value="{{ old('display_order', $c->display_order) }}" class="px-3 py-2 border rounded w-24">
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <input type="hidden" name="is_active" value="0">
-                                        <input type="checkbox" name="is_active" value="1" id="active-{{ $c->id }}" {{ old('is_active', $c->is_active) ? 'checked' : '' }}>
-                                        <label for="active-{{ $c->id }}" class="text-sm">Active</label>
-                                    </div>
-                                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Update</button>
-                                </form>
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
+<x-validation-errors />
+
+{{-- Add campaign form --}}
+<div class="md-card mb-6">
+    <div class="px-6 py-4 border-b border-[var(--color-border)]">
+        <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Add Campaign</h3>
     </div>
+    <div class="p-6">
+        <form method="POST" action="{{ route('admin.campaigns.store') }}"
+              x-data="{ submitting: false }" @submit="submitting = true">
+            @csrf
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <x-form.input name="code" label="Code" :value="old('code')" required placeholder="e.g. SALES2024" />
+                <x-form.input name="name" label="Name" :value="old('name')" required />
+                <x-form.input name="description" label="Description" :value="old('description')" />
+            </div>
+            <div class="mt-4">
+                <button type="submit" class="btn-primary" :disabled="submitting">
+                    <x-icon name="plus" class="w-4 h-4" />
+                    Add Campaign
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Campaigns table --}}
+<x-table.index caption="Campaigns list">
+    <x-table.head :columns="[
+        ['label' => 'Code'],
+        ['label' => 'Name'],
+        ['label' => 'Status'],
+        ['label' => 'Actions', 'align' => 'right'],
+    ]" />
+    <tbody>
+        @forelse($campaigns as $c)
+            <tr x-data="{ editOpen: false }">
+                <td><span class="font-mono font-semibold text-[var(--color-on-surface)] text-sm">{{ $c->code }}</span></td>
+                <td>{{ $c->name }}</td>
+                <td>
+                    <x-badge :type="$c->is_active ? 'active' : 'inactive'">
+                        {{ $c->is_active ? 'Active' : 'Inactive' }}
+                    </x-badge>
+                </td>
+                <td>
+                    <div class="table-actions">
+                        <button type="button" class="btn-secondary text-xs px-2 py-1" @click="editOpen = !editOpen">
+                            <x-icon name="pencil" class="w-3.5 h-3.5" />
+                            <span x-text="editOpen ? 'Cancel' : 'Edit'">Edit</span>
+                        </button>
+                        <a href="{{ route('admin.forms.index', ['campaign' => $c->code]) }}" class="btn-ghost text-xs px-2 py-1">
+                            <x-icon name="document-text" class="w-3.5 h-3.5" />
+                            Forms
+                        </a>
+                        <div x-data="{ async del(form) {
+                            const ok = await Alpine.store('confirm').ask('Deactivate campaign?', '{{ $c->name }} will be disabled.');
+                            if (ok) form.submit();
+                        }}">
+                            <form method="POST" action="{{ route('admin.campaigns.destroy') }}" x-ref="delFormC{{ $c->id }}">
+                                @csrf
+                                <input type="hidden" name="id" value="{{ $c->id }}">
+                                <button type="button" class="btn-danger text-xs px-2 py-1"
+                                        @click="del($refs['delFormC{{ $c->id }}'])">
+                                    <x-icon name="minus" class="w-3.5 h-3.5" />
+                                    Deactivate
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            <tr x-show="editOpen" class="inline-edit-row" x-collapse>
+                <td colspan="4">
+                    <form method="POST" action="{{ route('admin.campaigns.update', $c) }}"
+                          x-data="{ submitting: false }" @submit="submitting = true">
+                        @csrf
+                        @method('PUT')
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <x-form.input name="code" label="Code" :value="old('code', $c->code)" required />
+                            <x-form.input name="name" label="Name" :value="old('name', $c->name)" required />
+                            <x-form.input name="description" label="Description" :value="old('description', $c->description)" />
+                            <x-form.input name="display_order" type="number" label="Display Order" :value="old('display_order', $c->display_order)" />
+                        </div>
+                        <div class="mt-3 flex items-center gap-4">
+                            <x-form.checkbox name="is_active" label="Active" :checked="$c->is_active" />
+                            <button type="submit" class="btn-primary text-sm" :disabled="submitting">
+                                <x-icon name="check" class="w-4 h-4" />
+                                <span x-text="submitting ? 'Saving...' : 'Update'">Update</span>
+                            </button>
+                        </div>
+                    </form>
+                </td>
+            </tr>
+        @empty
+            <x-table.empty :colspan="4" message="No campaigns yet." />
+        @endforelse
+    </tbody>
+</x-table.index>
 @endsection

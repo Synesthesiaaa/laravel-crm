@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Events\FormSubmitted;
 use App\Repositories\FormFieldRepository;
 use App\Repositories\FormSubmissionRepository;
 use App\Support\OperationResult;
@@ -27,22 +28,28 @@ class FormSubmissionService
         if (!$this->formFieldRepository->validateTableName($tableName, $this->campaignService->getAllFormTableNames())) {
             return OperationResult::failure('Invalid table.');
         }
-        $fields = $this->formFieldRepository->getFieldsForForm($campaign, $formType);
+        $fields  = $this->formFieldRepository->getFieldsForForm($campaign, $formType);
         $prepared = $this->prepareFormRow($fields, $data, $agent);
         if ($prepared === null) {
             return OperationResult::failure('Date and Request ID are required.');
         }
 
         try {
-            $recordId = $this->formSubmissionRepository->insert($tableName, $prepared);
-            $this->callHistoryService->logFormSubmission(
-                $campaign,
-                $formType,
-                $recordId,
-                $agent,
-                isset($data['lead_id']) && $data['lead_id'] !== '' ? (int) $data['lead_id'] : null,
-                $data['phone_number'] ?? null
-            );
+            $recordId = DB::transaction(function () use ($tableName, $prepared, $campaign, $formType, $agent, $data): int {
+                $id = $this->formSubmissionRepository->insert($tableName, $prepared);
+                $this->callHistoryService->logFormSubmission(
+                    $campaign,
+                    $formType,
+                    $id,
+                    $agent,
+                    isset($data['lead_id']) && $data['lead_id'] !== '' ? (int) $data['lead_id'] : null,
+                    $data['phone_number'] ?? null
+                );
+                return $id;
+            });
+
+            event(new FormSubmitted($campaign, $formType, $recordId, $agent));
+
             return OperationResult::success($recordId);
         } catch (\Throwable $e) {
             return OperationResult::failure($e->getMessage());
@@ -52,15 +59,15 @@ class FormSubmissionService
     /** @return array<string, mixed>|null */
     public function prepareFormRow(Collection $fields, array $data, string $agent): ?array
     {
-        $date = $this->sanitizeDate($data['date'] ?? '');
+        $date      = $this->sanitizeDate($data['date'] ?? '');
         $requestId = trim((string) ($data['request_id'] ?? ''));
         if ($date === '' || $requestId === '') {
             return null;
         }
         $row = [
-            'date' => $date,
+            'date'       => $date,
             'request_id' => $requestId,
-            'agent' => $agent,
+            'agent'      => $agent,
         ];
         foreach ($fields as $field) {
             $colName = $field->field_name;
@@ -72,7 +79,7 @@ class FormSubmissionService
             if ($field->field_type === 'number') {
                 $value = preg_replace('/[^0-9.]/', '', (string) $value);
             }
-            if ($field->is_required && (string)$value === '') {
+            if ($field->is_required && (string) $value === '') {
                 throw new \InvalidArgumentException("Field '{$colName}' is required.");
             }
             $row[$colName] = $value;
@@ -87,8 +94,8 @@ class FormSubmissionService
             $tableName = 'ezycash';
         }
         $datePrefix = now()->format('ymd');
-        $count = DB::table($tableName)->where('request_id', 'like', $datePrefix . '%')->count();
-        $nextId = $count + 1;
+        $count      = DB::table($tableName)->where('request_id', 'like', $datePrefix . '%')->count();
+        $nextId     = $count + 1;
         return $datePrefix . str_pad((string) $nextId, 3, '0', STR_PAD_LEFT);
     }
 

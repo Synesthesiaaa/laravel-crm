@@ -1,46 +1,32 @@
 @extends('layouts.app')
 
-@section('title', 'Extraction - Admin')
-
-@section('header-icon')
-    <span class="mr-3 text-indigo-600">📥</span>
-@endsection
-
-@section('header-title')
-    Extraction of Data
-@endsection
+@section('title', 'Data Extraction - Admin')
+@section('header-icon')<x-icon name="arrow-down-tray" class="w-5 h-5 text-[var(--color-primary)]" />@endsection
+@section('header-title', 'Data Extraction')
 
 @section('content')
-    @if(session('error'))
-        <div class="mb-4 p-4 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm">{{ session('error') }}</div>
-    @endif
-    <x-validation-errors />
-    <div class="bg-white rounded-xl shadow border border-gray-100 overflow-hidden max-w-xl">
-        <div class="p-6">
-            <p class="text-gray-600 text-sm mb-6">Export form data to CSV by date range.</p>
-            <form method="POST" action="{{ route('admin.extraction.export') }}">
-                @csrf
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Start date</label>
-                        <input type="date" name="start_date" class="w-full px-3 py-2 border border-gray-200 rounded">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">End date</label>
-                        <input type="date" name="end_date" class="w-full px-3 py-2 border border-gray-200 rounded">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Data type</label>
-                        <select name="data_type" class="w-full px-3 py-2 border border-gray-200 rounded">
-                            <option value="all">All forms</option>
-                            @foreach($forms as $code => $config)
-                                <option value="{{ $code }}">{{ $config['name'] ?? $code }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Export CSV</button>
-                </div>
-            </form>
-        </div>
+<x-page-header title="Data Extraction" description="Export form submission data to CSV."
+    :breadcrumbs="['Admin' => route('admin.dashboard'), 'Extraction' => null]" />
+
+<x-validation-errors />
+
+<div class="md-card max-w-xl">
+    <div class="p-6">
+        <form method="POST" action="{{ route('admin.extraction.export') }}"
+              x-data="{ submitting: false }" @submit="submitting = true">
+            @csrf
+            <div class="space-y-4">
+                <x-form.input name="start_date" type="date" label="Start Date" required />
+                <x-form.input name="end_date"   type="date" label="End Date"   required />
+                <x-form.select name="data_type" label="Data Type"
+                    :options="collect($forms)->mapWithKeys(fn($v,$k) => [$k => $v['name'] ?? $k])->prepend('All forms','all')->all()"
+                    :empty="false" />
+                <button type="submit" class="btn-primary" :disabled="submitting">
+                    <x-icon name="arrow-down-tray" class="w-4 h-4" />
+                    <span x-text="submitting ? 'Exporting...' : 'Export CSV'">Export CSV</span>
+                </button>
+            </div>
+        </form>
     </div>
+</div>
 @endsection

@@ -2,9 +2,10 @@
 
 namespace App\Repositories;
 
+use App\Contracts\Repositories\FormSubmissionRepositoryInterface;
 use Illuminate\Support\Facades\DB;
 
-class FormSubmissionRepository
+class FormSubmissionRepository implements FormSubmissionRepositoryInterface
 {
     public function __construct(
         protected CampaignRepository $campaignRepository

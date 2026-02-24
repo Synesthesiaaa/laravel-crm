@@ -2,10 +2,11 @@
 
 namespace App\Repositories;
 
+use App\Contracts\Repositories\UserRepositoryInterface;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 
-class UserRepository
+class UserRepository implements UserRepositoryInterface
 {
     public function findById(int $id): ?User
     {

@@ -30,7 +30,9 @@ class ImportLeadsCsvJob implements ShouldQueue
         public string $campaignCode,
         public string $formType,
         public string $agent
-    ) {}
+    ) {
+        $this->onQueue('imports');
+    }
 
     public function handle(CampaignService $campaignService, FormSubmissionService $formSubmissionService): void
     {

@@ -2,10 +2,13 @@
 
 namespace App\Services;
 
+use App\Events\UserLoggedIn;
+use App\Events\UserLoggedOut;
 use App\Models\User;
 use App\Repositories\AttendanceRepository;
 use App\Repositories\UserRepository;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class AuthService
 {
@@ -26,14 +29,22 @@ class AuthService
 
     public function logAttendance(int $userId, string $eventType, ?string $ip = null): void
     {
-        $this->attendanceRepository->log($userId, $eventType, $ip);
+        DB::transaction(function () use ($userId, $eventType, $ip): void {
+            $log = $this->attendanceRepository->log($userId, $eventType, $ip);
+            if ($eventType === 'login') {
+                event(new UserLoggedIn($userId, $ip));
+            }
+        });
     }
 
     public function logout(): void
     {
         $user = Auth::user();
         if ($user) {
-            $this->attendanceRepository->log($user->id, 'logout', request()?->ip());
+            DB::transaction(function () use ($user): void {
+                $this->attendanceRepository->log($user->id, 'logout', request()?->ip());
+                event(new UserLoggedOut($user->id));
+            });
         }
         Auth::logout();
         request()->session()->invalidate();

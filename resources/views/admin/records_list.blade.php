@@ -1,64 +1,52 @@
 @extends('layouts.app')
 
 @section('title', 'Records List - Admin')
-
-@section('header-icon')
-    <span class="mr-3 text-indigo-600">📜</span>
-@endsection
-
-@section('header-title')
-    Records List
-@endsection
+@section('header-icon')<x-icon name="table-cells" class="w-5 h-5 text-[var(--color-primary)]" />@endsection
+@section('header-title', 'Records List')
 
 @section('content')
-    <div class="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-        <div class="p-6 border-b border-gray-100">
-            <form method="GET" action="{{ route('admin.records.index') }}" class="flex flex-wrap gap-4 items-end">
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Start Date</label>
-                    <input type="date" name="start_date" value="{{ request('start_date') }}" class="px-3 py-2 border border-gray-200 rounded">
+<x-page-header title="Records List" :breadcrumbs="['Admin' => route('admin.dashboard'), 'Records List' => null]" />
+
+<div class="md-card mb-4">
+    <div class="p-4">
+        <form method="GET" action="{{ route('admin.records.index') }}" class="flex flex-wrap items-end gap-4">
+            <x-form.input name="start_date" type="date" label="Start Date" :value="request('start_date')" />
+            <x-form.input name="end_date"   type="date" label="End Date"   :value="request('end_date')" />
+            <x-form.input name="agent" label="Agent" :value="request('agent')" placeholder="Agent name" />
+            <div class="form-field">
+                <label class="form-label">&nbsp;</label>
+                <div class="flex gap-2">
+                    <button type="submit" class="btn-primary"><x-icon name="funnel" class="w-4 h-4" /> Filter</button>
+                    <a href="{{ route('admin.records.index') }}" class="btn-ghost">Clear</a>
                 </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">End Date</label>
-                    <input type="date" name="end_date" value="{{ request('end_date') }}" class="px-3 py-2 border border-gray-200 rounded">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Agent</label>
-                    <input type="text" name="agent" value="{{ request('agent') }}" placeholder="Agent name" class="px-3 py-2 border border-gray-200 rounded">
-                </div>
-                <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Filter</button>
-            </form>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Date</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Form</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Agent</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Phone</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($history as $row)
-                        <tr class="border-b border-gray-100 hover:bg-gray-50">
-                            <td class="py-3 px-4">{{ $row->created_at?->format('Y-m-d H:i') }}</td>
-                            <td class="py-3 px-4">{{ $row->form_type }}</td>
-                            <td class="py-3 px-4">{{ $row->agent }}</td>
-                            <td class="py-3 px-4">{{ $row->phone_number ?? '-' }}</td>
-                            <td class="py-3 px-4">{{ $row->status ?? 'RECORDED' }}</td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="5" class="py-8 px-4 text-center text-gray-500">No records.</td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-        <div class="p-4 border-t border-gray-100">
-            {{ $history->withQueryString()->links() }}
-        </div>
+            </div>
+        </form>
     </div>
+</div>
+
+<x-table.index caption="Form submission records">
+    <x-table.head :columns="[
+        ['label' => 'Date'],
+        ['label' => 'Form'],
+        ['label' => 'Agent'],
+        ['label' => 'Phone'],
+        ['label' => 'Status'],
+    ]" />
+    @if($history->isEmpty())
+        <x-table.empty :colspan="5" message="No records found." />
+    @else
+    <tbody>
+        @foreach($history as $row)
+            <tr>
+                <td class="whitespace-nowrap text-[var(--color-on-surface-muted)] text-sm">{{ $row->created_at?->format('Y-m-d H:i') }}</td>
+                <td>{{ $row->form_type }}</td>
+                <td>{{ $row->agent }}</td>
+                <td class="font-mono text-sm">{{ $row->phone_number ?? '—' }}</td>
+                <td><x-badge type="active">{{ $row->status ?? 'RECORDED' }}</x-badge></td>
+            </tr>
+        @endforeach
+    </tbody>
+    @endif
+</x-table.index>
+<x-table.pagination :paginator="$history" />
 @endsection

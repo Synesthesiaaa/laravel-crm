@@ -2,10 +2,11 @@
 
 namespace App\Repositories;
 
+use App\Contracts\Repositories\VicidialServerRepositoryInterface;
 use App\Models\VicidialServer;
 use Illuminate\Database\Eloquent\Collection;
 
-class VicidialServerRepository
+class VicidialServerRepository implements VicidialServerRepositoryInterface
 {
     public function getForCampaign(string $campaignCode): ?VicidialServer
     {

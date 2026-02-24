@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -24,5 +25,20 @@ class AttendanceLog extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function scopeForUser(Builder $query, int $userId): Builder
+    {
+        return $query->where('user_id', $userId);
+    }
+
+    public function scopeForDate(Builder $query, string $date): Builder
+    {
+        return $query->whereDate('event_time', $date);
+    }
+
+    public function scopeRecent(Builder $query, int $days = 7): Builder
+    {
+        return $query->where('event_time', '>=', now()->subDays($days));
     }
 }

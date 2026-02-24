@@ -2,10 +2,11 @@
 
 namespace App\Repositories;
 
+use App\Contracts\Repositories\DispositionRepositoryInterface;
 use App\Models\DispositionCode;
 use Illuminate\Support\Collection;
 
-class DispositionRepository
+class DispositionRepository implements DispositionRepositoryInterface
 {
     public function getForCampaign(string $campaignCode): Collection
     {

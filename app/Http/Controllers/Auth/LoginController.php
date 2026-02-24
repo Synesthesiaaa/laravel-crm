@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\LoginRequest;
 use App\Services\AuthService;
 use App\Services\CampaignService;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -27,13 +27,9 @@ class LoginController extends Controller
         return view('auth.login', ['campaigns' => $campaigns]);
     }
 
-    public function login(Request $request): RedirectResponse
+    public function login(LoginRequest $request): RedirectResponse
     {
-        $request->validate([
-            'username' => ['required', 'string'],
-            'password' => ['required', 'string'],
-            'campaign' => ['nullable', 'string'],
-        ]);
+        $request->ensureIsNotRateLimited();
 
         $username = $request->string('username')->trim()->toString();
         $password = $request->password;
@@ -41,11 +37,13 @@ class LoginController extends Controller
 
         $user = $this->authService->attempt($username, $password);
         if (!$user) {
+            $request->incrementAttempts();
             throw ValidationException::withMessages([
                 'username' => [__('auth.failed')],
             ]);
         }
 
+        $request->clearAttempts();
         $this->authService->logAttendance($user->id, 'login', $request->ip());
 
         $campaigns = $this->campaignService->getCampaigns();
@@ -65,7 +63,7 @@ class LoginController extends Controller
         return redirect()->intended(route('dashboard'));
     }
 
-    public function logout(Request $request): RedirectResponse
+    public function logout(\Illuminate\Http\Request $request): RedirectResponse
     {
         $this->authService->logout();
         return redirect()->route('login');

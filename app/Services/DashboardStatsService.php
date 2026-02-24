@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Repositories\CampaignRepository;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class DashboardStatsService
@@ -13,71 +14,97 @@ class DashboardStatsService
 
     public function getActivityTrend(string $campaignCode, int $days = 14): array
     {
-        $campaigns = $this->campaignRepository->getCampaignsWithForms();
-        $config = $campaigns[$campaignCode] ?? null;
-        if (!$config || empty($config['forms'])) {
-            return ['labels' => [], 'values' => []];
-        }
-        $tables = array_filter(array_column($config['forms'], 'table'));
-        $allowed = $this->campaignRepository->getAllFormTableNames();
-        $tables = array_intersect($tables, $allowed);
-        if (empty($tables)) {
-            return ['labels' => [], 'values' => []];
-        }
+        return Cache::remember("activity_trend_{$campaignCode}_{$days}", 300, function () use ($campaignCode, $days) {
+            $tables = $this->resolveAllowedTables($campaignCode);
+            if (empty($tables)) {
+                return ['labels' => [], 'values' => []];
+            }
 
-        $unions = [];
-        foreach ($tables as $t) {
-            $unions[] = "SELECT `date`, `agent` FROM `{$t}`";
-        }
-        $unionQuery = implode(' UNION ALL ', $unions);
-        $sql = "SELECT `date`, COUNT(*) as total FROM ({$unionQuery}) as combined 
-                WHERE `date` >= DATE_SUB(CURDATE(), INTERVAL ? DAY) 
-                GROUP BY `date` ORDER BY `date` ASC";
-        $rows = DB::select($sql, [$days]);
-        $activityData = [];
-        foreach ($rows as $row) {
-            $activityData[$row->date] = (int) $row->total;
-        }
+            $cutoff = now()->subDays($days)->format('Y-m-d');
+            $queries = [];
+            foreach ($tables as $t) {
+                $queries[] = DB::table($t)
+                    ->select(DB::raw("'$t' as source, `date`"))
+                    ->where('date', '>=', $cutoff);
+            }
 
-        $labels = [];
-        $values = [];
-        for ($i = $days - 1; $i >= 0; $i--) {
-            $d = now()->subDays($i)->format('Y-m-d');
-            $labels[] = now()->subDays($i)->format('M d');
-            $values[] = $activityData[$d] ?? 0;
-        }
-        return ['labels' => $labels, 'values' => $values];
+            $union = array_shift($queries);
+            foreach ($queries as $q) {
+                $union = $union->unionAll($q);
+            }
+
+            $rows = DB::table(DB::raw("({$union->toSql()}) as combined"))
+                ->mergeBindings($union)
+                ->select(DB::raw('`date`, COUNT(*) as total'))
+                ->groupBy('date')
+                ->orderBy('date')
+                ->get();
+
+            $activityData = [];
+            foreach ($rows as $row) {
+                $activityData[$row->date] = (int) $row->total;
+            }
+
+            $labels = [];
+            $values = [];
+            for ($i = $days - 1; $i >= 0; $i--) {
+                $d        = now()->subDays($i)->format('Y-m-d');
+                $labels[] = now()->subDays($i)->format('M d');
+                $values[] = $activityData[$d] ?? 0;
+            }
+            return ['labels' => $labels, 'values' => $values];
+        });
     }
 
     public function getTopAgents(string $campaignCode, int $limit = 10): array
     {
-        $campaigns = $this->campaignRepository->getCampaignsWithForms();
-        $config = $campaigns[$campaignCode] ?? null;
-        if (!$config || empty($config['forms'])) {
-            return ['labels' => [], 'values' => []];
-        }
-        $tables = array_filter(array_column($config['forms'], 'table'));
-        $allowed = $this->campaignRepository->getAllFormTableNames();
-        $tables = array_intersect($tables, $allowed);
-        if (empty($tables)) {
-            return ['labels' => [], 'values' => []];
-        }
+        return Cache::remember("top_agents_{$campaignCode}_{$limit}", 300, function () use ($campaignCode, $limit) {
+            $tables = $this->resolveAllowedTables($campaignCode);
+            if (empty($tables)) {
+                return ['labels' => [], 'values' => []];
+            }
 
-        $unions = [];
-        foreach ($tables as $t) {
-            $unions[] = "SELECT `agent` FROM `{$t}`";
+            $queries = [];
+            foreach ($tables as $t) {
+                $queries[] = DB::table($t)->select('agent')->whereNotNull('agent')->where('agent', '!=', '');
+            }
+
+            $union = array_shift($queries);
+            foreach ($queries as $q) {
+                $union = $union->unionAll($q);
+            }
+
+            $rows = DB::table(DB::raw("({$union->toSql()}) as combined"))
+                ->mergeBindings($union)
+                ->select('agent', DB::raw('COUNT(*) as total'))
+                ->groupBy('agent')
+                ->orderByDesc('total')
+                ->limit($limit)
+                ->get();
+
+            return [
+                'labels' => $rows->pluck('agent')->all(),
+                'values' => $rows->pluck('total')->map(fn ($v) => (int) $v)->all(),
+            ];
+        });
+    }
+
+    public function invalidate(string $campaignCode, int $days = 14): void
+    {
+        Cache::forget("activity_trend_{$campaignCode}_{$days}");
+        Cache::forget("top_agents_{$campaignCode}_10");
+    }
+
+    /** @return list<string> */
+    private function resolveAllowedTables(string $campaignCode): array
+    {
+        $campaigns = $this->campaignRepository->getCampaignsWithForms();
+        $config    = $campaigns[$campaignCode] ?? null;
+        if (!$config || empty($config['forms'])) {
+            return [];
         }
-        $unionQuery = implode(' UNION ALL ', $unions);
-        $sql = "SELECT `agent`, COUNT(*) as total FROM ({$unionQuery}) as combined 
-                WHERE `agent` IS NOT NULL AND `agent` != '' 
-                GROUP BY `agent` ORDER BY total DESC LIMIT ?";
-        $rows = DB::select($sql, [$limit]);
-        $labels = [];
-        $values = [];
-        foreach ($rows as $row) {
-            $labels[] = $row->agent;
-            $values[] = (int) $row->total;
-        }
-        return ['labels' => $labels, 'values' => $values];
+        $allowed = $this->campaignRepository->getAllFormTableNames();
+        $tables  = array_filter(array_column($config['forms'], 'table'));
+        return array_values(array_intersect($tables, $allowed));
     }
 }

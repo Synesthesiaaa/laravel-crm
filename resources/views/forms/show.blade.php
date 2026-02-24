@@ -1,108 +1,94 @@
 @extends('layouts.app')
 
 @section('title', $formName . ' - ' . $campaignName)
-
-@section('header-icon')
-    <span class="mr-3 text-indigo-600">📝</span>
-@endsection
-
-@section('header-title')
-    {{ $formName }} Form
-@endsection
+@section('header-icon')<x-icon name="document-text" class="w-5 h-5 text-[var(--color-primary)]" />@endsection
+@section('header-title', $formName . ' Form')
 
 @section('content')
-    <div class="max-w-3xl mx-auto">
-        <div class="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-            <div class="p-6 border-b border-gray-100">
-                <h1 class="text-2xl font-bold text-gray-900">{{ $formName }}</h1>
-                <p class="text-gray-500 text-sm mt-1">Fill out the details below for {{ $campaignName }}.</p>
-            </div>
+<div class="max-w-3xl mx-auto">
+    <x-breadcrumbs :items="[$formName => null]" />
 
-            @if (session('success'))
-                <div class="mx-6 mt-6 p-4 bg-green-50 border-l-4 border-green-500 text-green-700 rounded text-sm">
-                    {{ session('success') }}
-                </div>
-            @endif
-            @if (session('error'))
-                <div class="mx-6 mt-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 rounded text-sm">
-                    {{ session('error') }}
-                </div>
-            @endif
+    <form action="{{ route('forms.store') }}" method="POST"
+          x-data="{ submitting: false }" @submit="submitting = true">
+        @csrf
+        <input type="hidden" name="campaign"     value="{{ $campaign }}">
+        <input type="hidden" name="form_type"    value="{{ $formType }}">
+        <input type="hidden" name="lead_id"      value="{{ $leadId ?? '' }}">
+        <input type="hidden" name="phone_number" value="{{ $phoneNumber ?? '' }}">
 
-            <form action="{{ route('forms.store') }}" method="POST" class="p-6">
-                @csrf
-                <input type="hidden" name="campaign" value="{{ $campaign }}">
-                <input type="hidden" name="form_type" value="{{ $formType }}">
-                <input type="hidden" name="lead_id" value="{{ $leadId ?? '' }}">
-                <input type="hidden" name="phone_number" value="{{ $phoneNumber ?? '' }}">
+        <div class="md-hero mb-6">
+            <h1 class="text-xl font-bold text-[var(--color-on-surface)]">{{ $formName }}</h1>
+            <p class="text-[var(--color-on-surface-muted)] text-sm mt-1">Fill out the details below for {{ $campaignName }}.</p>
+        </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-600 uppercase tracking-tight mb-1">Request ID</label>
-                        <input type="text" name="request_id" value="{{ $prefill['request_id'] ?? '' }}" readonly class="w-full px-3 py-2 border border-gray-200 rounded bg-gray-50">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-600 uppercase tracking-tight mb-1">Date <span class="text-red-500">*</span></label>
-                        <input type="date" name="date" required value="{{ $prefill['date'] ?? date('Y-m-d') }}" class="w-full px-3 py-2 border border-gray-200 rounded">
-                    </div>
-                </div>
+        <x-validation-errors />
 
-                @if (!empty($viciFields))
-                <div class="mb-8 p-6 bg-pink-50/50 border border-pink-100 rounded-xl">
-                    <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wider mb-4">VICIdial Lead Information</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        @foreach ($viciFields as $field)
-                            @if (!in_array($field['name'], ['request_id', 'date', 'agent']))
-                            <div>
-                                <label class="block text-xs font-bold text-gray-600 uppercase tracking-tight mb-1">
-                                    {{ $field['label'] }}
-                                    @if($field['required'] ?? false)<span class="text-red-500">*</span>@endif
-                                </label>
-                                <input type="{{ $field['type'] === 'number' ? 'text' : $field['type'] }}" name="{{ $field['name'] }}"
-                                       value="{{ $prefill[$field['name']] ?? '' }}"
-                                       class="w-full px-3 py-2 border border-gray-200 rounded"
-                                       @if($field['required'] ?? false) required @endif>
-                            </div>
-                            @endif
-                        @endforeach
-                    </div>
+        {{-- System fields --}}
+        <x-form.group title="Reference" cols="2">
+            <x-form.input name="request_id" label="Request ID" :value="$prefill['request_id'] ?? ''" readonly />
+            <x-form.input name="date" type="date" label="Date" :value="$prefill['date'] ?? date('Y-m-d')" required />
+        </x-form.group>
+
+        {{-- VICIdial / lead fields --}}
+        @if (!empty($viciFields))
+        <x-form.group title="Lead Information (VICIdial)" cols="2">
+            @foreach ($viciFields as $field)
+                @if (!in_array($field['name'], ['request_id', 'date', 'agent']))
+                <div @if(($field['field_width'] ?? '') === 'full') class="md:col-span-2" @endif>
+                    <x-form.input
+                        :name="$field['name']"
+                        :label="$field['label']"
+                        :type="$field['type'] === 'number' ? 'text' : ($field['type'] ?? 'text')"
+                        :value="$prefill[$field['name']] ?? ''"
+                        :required="$field['required'] ?? false" />
                 </div>
                 @endif
+            @endforeach
+        </x-form.group>
+        @endif
 
-                <div class="mb-8 p-6 border border-gray-100 rounded-xl">
-                    <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wider mb-4">{{ $formName }} Details</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        @foreach ($campaignFields as $field)
-                            <div class="@if(($field['field_width'] ?? '') === 'full') md:col-span-2 @endif">
-                                <label class="block text-xs font-bold text-gray-600 uppercase tracking-tight mb-1">
-                                    {{ $field['label'] }}
-                                    @if($field['required'] ?? false)<span class="text-red-500">*</span>@endif
-                                </label>
-                                @if(($field['type'] ?? 'text') === 'textarea')
-                                    <textarea name="{{ $field['name'] }}" rows="3" class="w-full px-3 py-2 border border-gray-200 rounded" @if($field['required'] ?? false) required @endif>{{ $prefill[$field['name']] ?? '' }}</textarea>
-                                @elseif(($field['type'] ?? 'text') === 'select')
-                                    <select name="{{ $field['name'] }}" class="w-full px-3 py-2 border border-gray-200 rounded" @if($field['required'] ?? false) required @endif>
-                                        <option value="">-- Select --</option>
-                                        @foreach(($field['options'] ?? []) as $opt)
-                                            <option value="{{ is_array($opt) ? ($opt['value'] ?? $opt['label'] ?? '') : $opt }}" {{ ($prefill[$field['name']] ?? '') == (is_array($opt) ? ($opt['value'] ?? $opt['label'] ?? '') : $opt) ? 'selected' : '' }}>{{ is_array($opt) ? ($opt['label'] ?? $opt['value'] ?? '') : $opt }}</option>
-                                        @endforeach
-                                    </select>
-                                @else
-                                    <input type="{{ $field['type'] ?? 'text' }}" name="{{ $field['name'] }}"
-                                           value="{{ $prefill[$field['name']] ?? '' }}"
-                                           class="w-full px-3 py-2 border border-gray-200 rounded"
-                                           @if($field['required'] ?? false) required @endif>
-                                @endif
-                            </div>
-                        @endforeach
+        {{-- Campaign-specific fields --}}
+        <x-form.group :title="$formName . ' Details'" cols="2">
+            @foreach ($campaignFields as $field)
+            <div @if(($field['field_width'] ?? '') === 'full') class="md:col-span-2" @endif>
+                @if(($field['type'] ?? 'text') === 'textarea')
+                    <x-form.textarea :name="$field['name']" :label="$field['label']"
+                        :value="$prefill[$field['name']] ?? ''"
+                        :required="$field['required'] ?? false" />
+                @elseif(($field['type'] ?? 'text') === 'select')
+                    <div class="form-field">
+                        <label class="form-label">
+                            {{ $field['label'] }}
+                            @if($field['required'] ?? false)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif
+                        </label>
+                        <select name="{{ $field['name'] }}" class="form-select" @if($field['required'] ?? false) required @endif>
+                            <option value="">-- Select --</option>
+                            @foreach(($field['options'] ?? []) as $opt)
+                                @php
+                                    $val     = is_array($opt) ? ($opt['value'] ?? $opt['label'] ?? '') : $opt;
+                                    $display = is_array($opt) ? ($opt['label'] ?? $opt['value'] ?? '') : $opt;
+                                @endphp
+                                <option value="{{ $val }}" @selected(($prefill[$field['name']] ?? '') == $val)>{{ $display }}</option>
+                            @endforeach
+                        </select>
                     </div>
-                </div>
+                @else
+                    <x-form.input :name="$field['name']" :label="$field['label']"
+                        :type="$field['type'] ?? 'text'"
+                        :value="$prefill[$field['name']] ?? ''"
+                        :required="$field['required'] ?? false" />
+                @endif
+            </div>
+            @endforeach
+        </x-form.group>
 
-                <div class="flex gap-4">
-                    <button type="submit" class="px-6 py-2.5 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700">Save</button>
-                    <a href="{{ route('dashboard') }}" class="px-6 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</a>
-                </div>
-            </form>
+        <div class="flex gap-3 pt-2">
+            <button type="submit" class="btn-primary" :disabled="submitting">
+                <x-icon name="check" class="w-4 h-4" />
+                <span x-text="submitting ? 'Saving...' : 'Save Record'">Save Record</span>
+            </button>
+            <a href="{{ route('dashboard') }}" class="btn-ghost">Cancel</a>
         </div>
-    </div>
+    </form>
+</div>
 @endsection

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\StoreCampaignRequest;
+use App\Http\Requests\Admin\UpdateCampaignRequest;
 use App\Models\Campaign;
 use App\Services\CampaignService;
 use Illuminate\Http\RedirectResponse;
@@ -15,52 +17,38 @@ class CampaignsController extends Controller
 
     public function index(Request $request): View
     {
-        $campaigns = Campaign::orderBy('display_order')->orderBy('id')->get();
+        $campaigns = Campaign::withCount('forms')->orderBy('display_order')->orderBy('id')->get();
         return view('admin.campaigns', [
-            'campaigns' => $campaigns,
+            'campaigns'    => $campaigns,
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreCampaignRequest $request): RedirectResponse
     {
-        $v = $request->validate([
-            'code' => 'required|string|max:50|unique:campaigns,code',
-            'name' => 'required|string|max:255',
-        ], [
-            'code.required' => 'Campaign code is required.',
-            'code.unique' => 'That campaign code is already in use.',
-            'name.required' => 'Campaign name is required.',
-        ]);
+        $v = $request->validated();
         Campaign::create([
-            'code' => $v['code'],
-            'name' => $v['name'],
-            'description' => $request->input('description', ''),
-            'color' => $request->input('color', 'blue'),
-            'display_order' => (int) $request->input('display_order', 0),
-            'is_active' => true,
+            'code'          => $v['code'],
+            'name'          => $v['name'],
+            'description'   => $v['description'] ?? '',
+            'color'         => $v['color'] ?? 'blue',
+            'display_order' => (int) ($v['display_order'] ?? 0),
+            'is_active'     => true,
         ]);
         $this->campaignService->clearCampaignsCache();
         return redirect()->route('admin.campaigns.index')->with('success', 'Campaign created.');
     }
 
-    public function update(Request $request, Campaign $campaign): RedirectResponse
+    public function update(UpdateCampaignRequest $request, Campaign $campaign): RedirectResponse
     {
-        $v = $request->validate([
-            'code' => 'required|string|max:50|unique:campaigns,code,' . $campaign->id,
-            'name' => 'required|string|max:255',
-        ], [
-            'code.required' => 'Campaign code is required.',
-            'code.unique' => 'That campaign code is already in use.',
-            'name.required' => 'Campaign name is required.',
-        ]);
+        $v = $request->validated();
         $campaign->update([
-            'code' => $v['code'],
-            'name' => $v['name'],
-            'description' => $request->input('description', ''),
-            'color' => $request->input('color', 'blue'),
-            'display_order' => (int) $request->input('display_order', 0),
-            'is_active' => $request->boolean('is_active', true),
+            'code'          => $v['code'],
+            'name'          => $v['name'],
+            'description'   => $v['description'] ?? '',
+            'color'         => $v['color'] ?? 'blue',
+            'display_order' => (int) ($v['display_order'] ?? 0),
+            'is_active'     => $request->boolean('is_active', true),
         ]);
         $this->campaignService->clearCampaignsCache();
         return redirect()->route('admin.campaigns.index')->with('success', 'Campaign updated.');

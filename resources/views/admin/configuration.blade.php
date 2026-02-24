@@ -1,28 +1,45 @@
 @extends('layouts.app')
 
 @section('title', 'Configuration - Admin')
-
-@section('header-icon')
-    <span class="mr-3 text-indigo-600">⚙</span>
-@endsection
-
-@section('header-title')
-    Configuration
-@endsection
+@section('header-icon')<x-icon name="cog-6-tooth" class="w-5 h-5 text-[var(--color-primary)]" />@endsection
+@section('header-title', 'System Configuration')
 
 @section('content')
-    <div class="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-        <div class="p-6 border-b border-gray-100 flex gap-4">
-            <a href="?tab=general" class="px-4 py-2 rounded {{ ($tab ?? '') === 'general' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700' }}">General</a>
-            <a href="?tab=disposition" class="px-4 py-2 rounded {{ ($tab ?? '') === 'disposition' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700' }}">Disposition</a>
-        </div>
-        <div class="p-6">
-            @if(($tab ?? '') === 'disposition')
-                <p class="text-gray-600">Disposition codes are managed per campaign. Default codes are seeded.</p>
-            @else
-                <p class="text-gray-600">Campaigns and forms are loaded from the database.</p>
-                <p class="text-sm text-gray-500 mt-2">Campaigns: {{ count($campaigns ?? []) }}</p>
-            @endif
-        </div>
+<x-page-header title="System Configuration"
+    :breadcrumbs="['Admin' => route('admin.dashboard'), 'Configuration' => null]" />
+
+<div class="md-card">
+    <div class="flex gap-2 p-4 border-b border-[var(--color-border)]">
+        <a href="?tab=general"
+           class="{{ ($tab ?? '') !== 'disposition' ? 'btn-primary' : 'btn-secondary' }} text-sm">
+            General
+        </a>
+        <a href="?tab=disposition"
+           class="{{ ($tab ?? '') === 'disposition' ? 'btn-primary' : 'btn-secondary' }} text-sm">
+            Disposition
+        </a>
     </div>
+    <div class="p-6">
+        @if(($tab ?? '') === 'disposition')
+            <x-alert type="info">
+                Disposition codes are managed per campaign from the
+                <a href="{{ route('admin.disposition-codes.index') }}" class="link-primary">Disposition Codes</a> page.
+            </x-alert>
+        @else
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <x-stat-card label="Active Campaigns"
+                    :value="count($campaigns ?? [])"
+                    icon="building-office"
+                    :href="route('admin.campaigns.index')" />
+            </div>
+            <div class="mt-6">
+                <x-alert type="info" title="Configuration Note">
+                    Campaigns and forms are loaded from the database. Use the
+                    <a href="{{ route('admin.campaigns.index') }}" class="link-primary">Campaigns</a> and
+                    <a href="{{ route('admin.forms.index') }}" class="link-primary">Forms</a> pages to manage them.
+                </x-alert>
+            </div>
+        @endif
+    </div>
+</div>
 @endsection

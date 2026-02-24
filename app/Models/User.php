@@ -4,13 +4,25 @@ namespace App\Models;
 
 use App\Casts\EncryptedIfPossible;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable, SoftDeletes, LogsActivity, HasRoles;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['username', 'full_name', 'role'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
 
     public const ROLE_SUPER_ADMIN = 'Super Admin';
     public const ROLE_ADMIN = 'Admin';

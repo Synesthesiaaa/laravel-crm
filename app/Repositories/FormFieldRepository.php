@@ -2,10 +2,11 @@
 
 namespace App\Repositories;
 
+use App\Contracts\Repositories\FormFieldRepositoryInterface;
 use App\Models\FormField;
 use Illuminate\Support\Collection;
 
-class FormFieldRepository
+class FormFieldRepository implements FormFieldRepositoryInterface
 {
     public function getFieldsForForm(string $campaignCode, string $formType): Collection
     {

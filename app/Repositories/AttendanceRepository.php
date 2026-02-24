@@ -2,10 +2,11 @@
 
 namespace App\Repositories;
 
+use App\Contracts\Repositories\AttendanceRepositoryInterface;
 use App\Models\AttendanceLog;
 use Illuminate\Support\Collection;
 
-class AttendanceRepository
+class AttendanceRepository implements AttendanceRepositoryInterface
 {
     public function log(int $userId, string $eventType, ?string $ipAddress = null): AttendanceLog
     {

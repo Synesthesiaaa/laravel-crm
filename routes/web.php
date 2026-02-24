@@ -15,7 +15,7 @@ Route::get('/', function () {
 
 Route::middleware('guest')->group(function () {
     Route::get('login', [LoginController::class, 'showLoginForm'])->name('login');
-    Route::post('login', [LoginController::class, 'login']);
+    Route::post('login', [LoginController::class, 'login'])->middleware('throttle:login');
 });
 
 Route::post('logout', [LoginController::class, 'logout'])->name('logout')->middleware('auth');
@@ -24,16 +24,20 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('records', [RecordsController::class, 'index'])->name('records.index');
     Route::get('agent', [AgentController::class, 'index'])->name('agent.index');
-    Route::get('api/vicidial/proxy', VicidialProxyController::class)->name('api.vicidial.proxy');
-    Route::get('api/disposition-codes', \App\Http\Controllers\Api\DispositionController::class)->name('api.disposition.codes');
-    Route::get('api/notifications', \App\Http\Controllers\Api\NotificationsController::class)->name('api.notifications');
-    Route::post('api/disposition/save', \App\Http\Controllers\Api\SaveDispositionController::class)->name('api.disposition.save');
-    Route::get('leads', fn () => redirect()->route('dashboard'))->name('leads.index');
+    Route::get('api/vicidial/proxy', VicidialProxyController::class)->name('api.vicidial.proxy')->middleware('throttle:vicidial');
+    Route::get('api/disposition-codes', \App\Http\Controllers\Api\DispositionController::class)->name('api.disposition.codes')->middleware('throttle:api');
+    Route::get('api/notifications', \App\Http\Controllers\Api\NotificationsController::class)->name('api.notifications')->middleware('throttle:api');
+    Route::get('api/search', \App\Http\Controllers\Api\GlobalSearchController::class)->name('api.search')->middleware('throttle:api');
+    Route::get('api/supervisor/agents', \App\Http\Controllers\Api\SupervisorAgentsController::class)->name('api.supervisor.agents')->middleware('throttle:api');
+    Route::post('api/notifications/read-all', \App\Http\Controllers\Api\MarkNotificationsReadController::class)->name('api.notifications.read-all')->middleware('throttle:api');
+    Route::post('api/disposition/save', \App\Http\Controllers\Api\SaveDispositionController::class)->name('api.disposition.save')->middleware('throttle:api');
+    Route::post('api/client-errors', fn() => response()->json(['ok' => true]))->name('api.client-errors');
     Route::get('attendance', [AttendanceController::class, 'index'])->name('attendance.index');
 
     // Admin: Team Leader, Admin, or Super Admin
     Route::middleware('role:Team Leader,Admin,Super Admin')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'index'])->name('dashboard');
+        Route::get('supervisor', [\App\Http\Controllers\Admin\SupervisorController::class, 'index'])->name('supervisor');
         Route::get('attendance', [\App\Http\Controllers\Admin\AttendanceLogsController::class, 'index'])->name('attendance.index');
         Route::get('records', [\App\Http\Controllers\Admin\RecordsListController::class, 'index'])->name('records.index');
         Route::get('data-master', [\App\Http\Controllers\Admin\DataMasterController::class, 'index'])->name('data-master.index');
@@ -78,5 +82,5 @@ Route::middleware(['auth', 'campaign'])->group(function () {
         });
     });
     Route::get('forms/{type}', [FormController::class, 'show'])->name('forms.show')->where('type', '[a-z_]+');
-    Route::post('forms/submit', [FormController::class, 'store'])->name('forms.store');
+    Route::post('forms/submit', [FormController::class, 'store'])->name('forms.store')->middleware('throttle:form-submit');
 });

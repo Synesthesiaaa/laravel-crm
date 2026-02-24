@@ -10,6 +10,16 @@ export default defineConfig({
         }),
         tailwindcss(),
     ],
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    apexcharts: ['apexcharts'],
+                },
+            },
+        },
+        sourcemap: process.env.NODE_ENV !== 'production',
+    },
     server: {
         watch: {
             ignored: ['**/storage/framework/views/**'],
