@@ -42,7 +42,11 @@ class VicidialProxyService
             'value' => $params['value'] ?? '',
         ]);
         if ($action === 'external_dial') {
+            $phoneNum = $params['phone_number'] ?? $params['value'] ?? '';
             $url .= '&phone_code=' . urlencode($params['phone_code'] ?? '1') . '&search=YES&preview=NO&focus=YES';
+            if ($phoneNum !== '') {
+                $url .= '&phone_number=' . urlencode($phoneNum);
+            }
         }
         if ($action === 'transfer_conference' && !empty($params['phone_number'])) {
             $url .= '&phone_number=' . urlencode($params['phone_number']);

@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Events\CallOriginated;
+use App\Events\CallStateChanged;
 use App\Events\DispositionSaved;
 use App\Events\FormSubmitted;
 use App\Events\LeadImported;
@@ -37,6 +38,9 @@ class EventServiceProvider extends ServiceProvider
         ],
         CallOriginated::class => [
             LogCallOriginated::class,
+        ],
+        CallStateChanged::class => [
+            LogCallStateChanged::class,
         ],
     ];
 

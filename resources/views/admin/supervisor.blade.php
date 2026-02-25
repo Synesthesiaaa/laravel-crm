@@ -236,8 +236,17 @@ window.supervisorDashboard = function() {
 
         async init() {
             await this.refresh();
-            // Poll every 15 seconds
-            this.pollInterval = setInterval(() => this.refresh(), 15000);
+            const te = window.TelephonyEcho;
+            if (te && te.initEcho && te.isBroadcastEnabled()) {
+                te.initEcho();
+                te.subscribeSupervisorChannel(
+                    () => this.refresh(),
+                    () => this.refresh()
+                );
+                this.pollInterval = setInterval(() => this.refresh(), 60000);
+            } else {
+                this.pollInterval = setInterval(() => this.refresh(), 15000);
+            }
             this.$watch('tab', (t) => {
                 if (t === 'performance' || t === 'wallboard') this.renderCharts();
             });

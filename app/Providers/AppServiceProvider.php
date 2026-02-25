@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Contracts\Repositories\DispositionRepositoryInterface;
 use App\Models\Campaign;
 use App\Models\DispositionCode;
 use App\Models\Form;
@@ -38,6 +39,9 @@ class AppServiceProvider extends ServiceProvider
         View::composer(['layouts.app', 'layouts.sidebar'], function ($view) {
             $view->with('user', Auth::user());
             $view->with('campaignConfig', app(CampaignService::class)->getCampaign(session('campaign', 'mbsales')) ?? ['forms' => []]);
+            $view->with('dispositionCodes', Auth::user()
+                ? app(DispositionRepositoryInterface::class)->getForCampaign(session('campaign', 'mbsales'))
+                : collect());
         });
     }
 

@@ -19,6 +19,7 @@ class UserService
                 'role'      => $data['role'],
                 'vici_user' => $data['vici_user'] ?? null,
                 'vici_pass' => $data['vici_pass'] ?? null,
+                'extension' => $data['extension'] ?? null,
             ]);
         });
     }
@@ -31,8 +32,9 @@ class UserService
             $user->full_name = $data['full_name'];
             $user->role      = $data['role'];
             $user->vici_user = $data['vici_user'] ?? null;
+            $user->extension = $data['extension'] ?? null;
 
-            if (!empty($data['vici_pass'])) {
+            if (! empty($data['vici_pass'])) {
                 $user->vici_pass = $data['vici_pass'];
             }
             if (!empty($data['password'])) {

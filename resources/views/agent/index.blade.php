@@ -5,7 +5,7 @@
 @section('header-title', 'Agent Screen')
 
 @section('content')
-<div x-data="agentScreen()" x-init="init()" class="flex flex-col lg:flex-row gap-6 h-full">
+<div x-data="agentScreen()" x-init="init()" data-campaign="{{ session('campaign', 'mbsales') }}" class="flex flex-col lg:flex-row gap-6 h-full">
 
     {{-- LEFT: Lead info + form --}}
     <div class="flex-1 min-w-0 space-y-4">
@@ -150,7 +150,7 @@
                     <button class="phone-dial-btn"
                             @click="dial()"
                             x-show="callState === 'idle'"
-                            :disabled="!phoneNumber">
+                            :disabled="!phoneNumber || dialBlocked">
                         <x-icon name="phone" class="w-6 h-6" />
                     </button>
                     <button class="phone-hangup-btn"
@@ -214,6 +214,7 @@
 window.agentScreen = function() {
     return {
         callState: 'idle',
+        sessionId: null,
         phoneNumber: '',
         leadId: '',
         clientName: '',
@@ -225,30 +226,72 @@ window.agentScreen = function() {
         dispositionCode: '',
         dispositionNotes: '',
         recentCalls: [],
+        dialBlocked: false,
+
+        _echoUnsubscribe: null,
+        _statusPollInterval: null,
 
         init() {
-            // Sync with global call store
             this.$watch('callState', (v) => Alpine.store('call').state = v);
+            this.syncCallStatus();
+            const te = window.TelephonyEcho;
+            if (te && te.initEcho && te.isBroadcastEnabled()) {
+                te.initEcho();
+                const userId = parseInt(this.$el.dataset.userId, 10);
+                if (userId) {
+                    this._echoUnsubscribe = te.subscribeAgentChannel(userId, (p) => {
+                        if (String(p.session_id) === String(this.sessionId)) {
+                            if (['completed','failed','abandoned'].includes(p.to_status)) {
+                                clearInterval(this.timer);
+                                Alpine.store('call').stopTimer();
+                                this.callState = 'wrapup';
+                                Alpine.store('call').state = 'wrapup';
+                            } else if (p.to_status === 'ringing') { this.callState = 'ringing'; }
+                            else if (['answered','in_call','on_hold'].includes(p.to_status)) { this.callState = 'connected'; }
+                        }
+                    });
+                }
+            } else {
+                this._statusPollInterval = setInterval(() => this.syncCallStatus(), 30000);
+            }
+        },
+
+        async syncCallStatus() {
+            try {
+                const res = await window.axios.get('/api/call/status');
+                if (res.data.disposition_pending && res.data.pending_call) {
+                    this.dialBlocked = true;
+                    this.callState = 'wrapup';
+                    this.sessionId = res.data.pending_call.session_id;
+                    this.phoneNumber = res.data.pending_call.phone_number || this.phoneNumber;
+                    Alpine.store('call').state = 'wrapup';
+                }
+            } catch {}
         },
 
         async dial() {
-            if (!this.phoneNumber || this.callState !== 'idle') return;
+            if (!this.phoneNumber || this.callState !== 'idle' || this.dialBlocked) return;
             this.callState = 'ringing';
             Alpine.store('call').number = this.phoneNumber;
             try {
-                await window.axios.get('/api/vicidial/proxy', {
-                    params: { action: 'originate', phone: this.phoneNumber, lead_id: this.leadId }
+                const campaign = this.$el.dataset.campaign || 'mbsales';
+                const res = await window.axios.get('/api/vicidial/proxy', {
+                    params: { action: 'originate', phone: this.phoneNumber, lead_id: this.leadId, campaign }
                 });
+                if (res.data.session_id) {
+                    this.sessionId = res.data.session_id;
+                    Alpine.store('call').setSessionId(res.data.session_id);
+                }
                 this.callState = 'connected';
                 Alpine.store('call').startTimer();
                 this.timer = setInterval(() => this.duration++, 1000);
             } catch (e) {
                 this.callState = 'idle';
-                Alpine.store('toast').error('Failed to originate call. Check ViciDial connection.');
+                Alpine.store('toast').error(e.response?.data?.message || 'Failed to originate call. Check ViciDial connection.');
             }
         },
 
-        hangup() {
+        async hangup() {
             clearInterval(this.timer);
             Alpine.store('call').stopTimer();
             this.callState = 'wrapup';
@@ -271,12 +314,16 @@ window.agentScreen = function() {
         async saveDisposition() {
             if (!this.dispositionCode) return;
             this.savingDisposition = true;
+            const campaign = this.$el.dataset.campaign || 'mbsales';
             try {
                 await window.axios.post('/api/disposition/save', {
+                    campaign_code:    campaign,
+                    call_session_id:  this.sessionId,
                     lead_id:          this.leadId,
                     phone_number:     this.phoneNumber,
                     disposition_code: this.dispositionCode,
                     notes:            this.dispositionNotes,
+                    call_duration_seconds: this.duration,
                 });
                 this.recentCalls.unshift({
                     id:          Date.now(),
@@ -287,12 +334,14 @@ window.agentScreen = function() {
                 if (this.recentCalls.length > 10) this.recentCalls.pop();
                 Alpine.store('toast').success('Disposition saved.');
                 this.callState = 'idle';
+                this.sessionId = null;
                 this.dispositionCode = '';
                 this.dispositionNotes = '';
                 this.duration = 0;
+                this.dialBlocked = false;
                 Alpine.store('call').state = 'idle';
-            } catch {
-                Alpine.store('toast').error('Failed to save disposition.');
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Failed to save disposition.');
             } finally {
                 this.savingDisposition = false;
             }

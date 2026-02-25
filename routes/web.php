@@ -20,11 +20,20 @@ Route::middleware('guest')->group(function () {
 
 Route::post('logout', [LoginController::class, 'logout'])->name('logout')->middleware('auth');
 
+// AMI webhook (CSRF exempt, no auth) - Asterisk posts hangup/CDR events; validate via X-Webhook-Secret if configured
+Route::post('api/webhooks/ami', \App\Http\Controllers\Api\AmiWebhookController::class)->name('api.webhooks.ami');
+
+// Telephony health (for monitoring; optionally restrict by IP in production)
+Route::get('api/telephony/health', \App\Http\Controllers\Api\TelephonyHealthController::class)->name('api.telephony.health');
+
 Route::middleware(['auth', 'campaign'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('records', [RecordsController::class, 'index'])->name('records.index');
     Route::get('agent', [AgentController::class, 'index'])->name('agent.index');
     Route::get('api/vicidial/proxy', VicidialProxyController::class)->name('api.vicidial.proxy')->middleware('throttle:vicidial');
+    Route::post('api/call/dial', [\App\Http\Controllers\Api\CallController::class, 'dial'])->name('api.call.dial')->middleware('throttle:vicidial');
+    Route::post('api/call/hangup', [\App\Http\Controllers\Api\CallController::class, 'hangup'])->name('api.call.hangup')->middleware('throttle:api');
+    Route::get('api/call/status', [\App\Http\Controllers\Api\CallController::class, 'status'])->name('api.call.status')->middleware('throttle:api');
     Route::get('api/disposition-codes', \App\Http\Controllers\Api\DispositionController::class)->name('api.disposition.codes')->middleware('throttle:api');
     Route::get('api/notifications', \App\Http\Controllers\Api\NotificationsController::class)->name('api.notifications')->middleware('throttle:api');
     Route::get('api/search', \App\Http\Controllers\Api\GlobalSearchController::class)->name('api.search')->middleware('throttle:api');
@@ -38,6 +47,7 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::middleware('role:Team Leader,Admin,Super Admin')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'index'])->name('dashboard');
         Route::get('supervisor', [\App\Http\Controllers\Admin\SupervisorController::class, 'index'])->name('supervisor');
+        Route::get('telephony-monitor', [\App\Http\Controllers\Admin\TelephonyMonitorController::class, 'index'])->name('telephony-monitor');
         Route::get('attendance', [\App\Http\Controllers\Admin\AttendanceLogsController::class, 'index'])->name('attendance.index');
         Route::get('records', [\App\Http\Controllers\Admin\RecordsListController::class, 'index'])->name('records.index');
         Route::get('data-master', [\App\Http\Controllers\Admin\DataMasterController::class, 'index'])->name('data-master.index');

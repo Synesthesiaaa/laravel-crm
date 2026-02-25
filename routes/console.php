@@ -49,6 +49,12 @@ Schedule::call(function () {
     \Illuminate\Support\Facades\Cache::forget('dashboard_top_agents');
 })->hourly()->name('invalidate-dashboard-cache')->withoutOverlapping();
 
+// Reconcile stuck call sessions: force stale active calls to failed
+Schedule::job(new \App\Jobs\ReconcileCallStateJob())
+    ->everyFifteenMinutes()
+    ->name('reconcile-call-state')
+    ->withoutOverlapping(10);
+
 // Daily log rotation reminder (rotate logs older than configured days)
 Schedule::command('horizon:snapshot')
     ->everyFiveMinutes()

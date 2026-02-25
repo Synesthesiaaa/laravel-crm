@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CampaignDispositionRecord extends Model
 {
     protected $fillable = [
+        'call_session_id',
         'campaign_code',
         'lead_id',
         'phone_number',

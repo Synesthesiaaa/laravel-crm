@@ -125,9 +125,10 @@ window.clickToCall = function() {
             Alpine.store('call').state  = 'ringing';
             Alpine.store('call').number = this.phoneNumber;
             try {
-                await window.axios.get('/api/vicidial/proxy', {
+                const res = await window.axios.get('/api/vicidial/proxy', {
                     params: { action: 'originate', phone: this.phoneNumber, lead_id: this.leadId }
                 });
+                if (res.data.session_id) Alpine.store('call').setSessionId(res.data.session_id);
                 Alpine.store('call').state = 'connected';
                 Alpine.store('call').startTimer();
             } catch (e) {
@@ -136,9 +137,14 @@ window.clickToCall = function() {
             }
             this.open = false;
         },
-        hangup() {
+        async hangup() {
             Alpine.store('call').stopTimer();
             Alpine.store('call').state = 'wrapup';
+            try {
+                await window.axios.post('/api/call/hangup');
+            } catch {
+                Alpine.store('toast').warning('Call ended locally.');
+            }
         },
     };
 };
@@ -185,12 +191,14 @@ window.dispositionModal = function() {
         open: false,
         codes: [],
         leadId: null,
+        phoneNumber: '',
         selectedCode: '',
         notes: '',
         submitting: false,
-        show(leadId, codes) {
+        show(leadId, codes, phoneNumber = '') {
             this.leadId = leadId;
             this.codes  = codes;
+            this.phoneNumber = phoneNumber;
             this.open   = true;
         },
         async submit() {
@@ -199,17 +207,22 @@ window.dispositionModal = function() {
                 return;
             }
             this.submitting = true;
+            const campaign = document.body.dataset.campaign || 'mbsales';
             try {
                 await window.axios.post('/api/disposition/save', {
+                    campaign_code:    campaign,
+                    call_session_id:  Alpine.store('call').sessionId,
                     lead_id:          this.leadId,
+                    phone_number:     this.phoneNumber || Alpine.store('call').number,
                     disposition_code: this.selectedCode,
                     notes:            this.notes,
                 });
                 Alpine.store('toast').success('Disposition saved.');
                 Alpine.store('call').state = 'idle';
+                Alpine.store('call').setSessionId(null);
                 this.open = false;
-            } catch {
-                Alpine.store('toast').error('Failed to save disposition.');
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Failed to save disposition.');
             } finally {
                 this.submitting = false;
             }

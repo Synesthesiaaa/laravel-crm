@@ -2,6 +2,7 @@
 
 return [
 
+    'webhook_secret' => env('ASTERISK_AMI_WEBHOOK_SECRET', ''),
     'host' => env('ASTERISK_AMI_HOST', '127.0.0.1'),
     'port' => (int) env('ASTERISK_AMI_PORT', 5038),
     'username' => env('ASTERISK_AMI_USERNAME', 'cron'),

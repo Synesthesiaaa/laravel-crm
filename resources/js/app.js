@@ -1,4 +1,5 @@
 import './bootstrap';
+import './echo';
 import './components';
 
 // Make ApexCharts available for dynamic import in views
@@ -95,6 +96,7 @@ Alpine.store('sidebar', {
 // Global call status store (telephony)
 Alpine.store('call', {
     state: 'idle', // idle | ringing | connected | hold | wrapup
+    sessionId: null,
     number: '',
     duration: 0,
     timer: null,
@@ -104,6 +106,7 @@ Alpine.store('call', {
         this.timer = setInterval(() => this.duration++, 1000);
     },
     stopTimer() { clearInterval(this.timer); this.timer = null; this.duration = 0; },
+    setSessionId(id) { this.sessionId = id; },
     formattedDuration() {
         const m = String(Math.floor(this.duration / 60)).padStart(2, '0');
         const s = String(this.duration % 60).padStart(2, '0');

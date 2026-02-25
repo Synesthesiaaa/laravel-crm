@@ -38,6 +38,7 @@ class User extends Authenticatable
         'role',
         'vici_user',
         'vici_pass',
+        'extension',
     ];
 
     protected $hidden = [
@@ -83,5 +84,10 @@ class User extends Authenticatable
     public function attendanceLogs(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(AttendanceLog::class);
+    }
+
+    public function callSessions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(CallSession::class);
     }
 }

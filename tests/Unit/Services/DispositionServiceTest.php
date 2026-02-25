@@ -3,9 +3,9 @@
 namespace Tests\Unit\Services;
 
 use App\Models\DispositionCode;
-use App\Models\User;
 use App\Repositories\DispositionRepository;
 use App\Services\DispositionService;
+use App\Services\Telephony\VicidialDispositionSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -19,7 +19,8 @@ class DispositionServiceTest extends TestCase
     {
         parent::setUp();
         $this->service = new DispositionService(
-            $this->app->make(DispositionRepository::class)
+            $this->app->make(DispositionRepository::class),
+            $this->app->make(VicidialDispositionSyncService::class)
         );
     }
 

@@ -18,7 +18,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @stack('styles')
 </head>
-<body class="min-h-screen flex" style="margin: 0;" x-data x-cloak>
+<body class="min-h-screen flex" style="margin: 0;" x-data x-cloak data-campaign="{{ session('campaign', 'mbsales') }}">
 
     {{-- Mobile sidebar overlay --}}
     <div x-show="$store.sidebar.mobileOpen"
