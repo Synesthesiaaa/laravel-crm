@@ -1,5 +1,7 @@
 Production Installation Guide -- Laravel CRM
 
+Last updated: 2026-02-27
+
 
 
 1. Server Requirements
@@ -54,7 +56,7 @@ Node.js: 18+ (build-time only, not needed at runtime)
 
 
 
-Supervisor: For Horizon and queue workers
+Supervisor: For Horizon, AMI listener, and Reverb
 
 
 
@@ -312,21 +314,23 @@ sudo -u crm php artisan storage:link
 
 
 
-6. Optimization Commands
+6. Optimization and Cache Commands
 
 Run these after every deployment:
 
 cd /var/www/laravel-crm
+sudo -u crm php artisan optimize:clear
 sudo -u crm php artisan config:cache
 sudo -u crm php artisan route:cache
 sudo -u crm php artisan view:cache
 sudo -u crm php artisan event:cache
-sudo -u crm php artisan icons:cache    # If applicable
+sudo -u crm php artisan horizon:publish
 
 Publish Horizon assets:
 
-sudo -u crm php artisan horizon:publish
+sudo -u crm php artisan horizon:terminate
 
+Supervisor will restart Horizon automatically.
 
 
 7. Nginx Configuration
@@ -426,15 +430,16 @@ sudo systemctl restart php8.3-fpm
 
 
 
-9. Supervisor Configuration (Horizon + Queue Workers)
+9. Supervisor Configuration (Horizon + AMI Listener + Reverb)
 
-9a. Horizon (Primary -- Recommended)
+9a. Horizon (Primary Queue Worker)
 
 Create /etc/supervisor/conf.d/horizon.conf:
 
 [program:horizon]
 process_name=%(program_name)s
 command=php /var/www/laravel-crm/artisan horizon
+directory=/var/www/laravel-crm
 autostart=true
 autorestart=true
 user=crm
@@ -442,21 +447,67 @@ redirect_stderr=true
 stdout_logfile=/var/www/laravel-crm/storage/logs/horizon.log
 stopwaitsecs=3600
 
-9b. Reload Supervisor
+9b. AMI Listener (Telephony Events)
+
+Create /etc/supervisor/conf.d/laravel-ami-listener.conf:
+
+[program:laravel-ami-listener]
+process_name=%(program_name)s
+directory=/var/www/laravel-crm
+command=php artisan ami:listen --reconnect-delay=5
+autostart=true
+autorestart=true
+startsecs=3
+startretries=10
+user=crm
+numprocs=1
+redirect_stderr=true
+stdout_logfile=/var/www/laravel-crm/storage/logs/ami-listener.log
+stdout_logfile_maxbytes=20MB
+stdout_logfile_backups=10
+stopwaitsecs=15
+
+9c. Reverb WebSocket Server
+
+Create /etc/supervisor/conf.d/reverb.conf:
+
+[program:reverb]
+process_name=%(program_name)s
+directory=/var/www/laravel-crm
+command=php artisan reverb:start --host=0.0.0.0 --port=6001
+autostart=true
+autorestart=true
+startsecs=3
+startretries=10
+user=crm
+numprocs=1
+redirect_stderr=true
+stdout_logfile=/var/www/laravel-crm/storage/logs/reverb.log
+stdout_logfile_maxbytes=20MB
+stdout_logfile_backups=10
+stopwaitsecs=15
+
+9d. Reload Supervisor
 
 sudo supervisorctl reread
 sudo supervisorctl update
 sudo supervisorctl start horizon
+sudo supervisorctl start laravel-ami-listener
+sudo supervisorctl start reverb
 
 Verify status:
 
 sudo supervisorctl status horizon
+sudo supervisorctl status laravel-ami-listener
+sudo supervisorctl status reverb
 
-After each deployment, gracefully restart Horizon:
+After each deployment, gracefully restart managed processes:
 
 sudo -u crm php artisan horizon:terminate
+sudo supervisorctl restart laravel-ami-listener
+sudo supervisorctl restart reverb
 
-Supervisor will automatically restart it.
+Supervisor keeps all programs running after restarts/crashes.
 
 
 
@@ -593,7 +644,7 @@ rename-command DEBUG ""
 
 
 
-12. VICIdial Integration (Optional)
+12. VICIdial / Asterisk Telephony Integration (Optional)
 
 If you are using VICIdial telephony, you also need:
 
@@ -615,6 +666,21 @@ Asterisk AMI credentials if using click-to-call / call origination features
 
 Network connectivity between the CRM server and VICIdial/Asterisk hosts on ports 3306 (MySQL) and 5038 (AMI)
 
+SIP-only policy for agents (chan_sip):
+
+ASTERISK_AGENT_CHANNEL=SIP
+
+Validate telephony before go-live:
+
+php artisan telephony:preflight
+
+Smoke-test dial path:
+
+php artisan telephony:smoke-dial --user-id=AGENT_ID --number=DESTINATION --campaign=mbsales
+
+If preflight fails or calls do not bridge, follow:
+docs/asterisk/VICIDIAL_DIRECT_CRM_INTEGRATION_GUIDE.md
+
 
 
 13. Deployment Workflow (Subsequent Deploys)
@@ -634,6 +700,7 @@ composer install --no-dev --optimize-autoloader --no-interaction
 npm ci && npm run build
 
 php artisan migrate --force
+php artisan optimize:clear
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
@@ -642,6 +709,8 @@ php artisan horizon:publish
 php artisan horizon:terminate
 
 sudo systemctl restart php8.3-fpm
+sudo supervisorctl restart laravel-ami-listener
+sudo supervisorctl restart reverb
 
 php artisan up
 
@@ -676,6 +745,10 @@ Scheduler: storage/logs/scheduler.log
 
 
 Horizon: storage/logs/horizon.log
+
+AMI listener: storage/logs/ami-listener.log
+
+Reverb: storage/logs/reverb.log
 
 Health Check
 
@@ -717,10 +790,10 @@ If using Redis persistence (AOF/RDB), back up /var/lib/redis/dump.rdb. Otherwise
 8.  php artisan db:seed --force
 9.  php artisan db:seed --class=RolesAndPermissionsSeeder --force
 10. php artisan storage:link
-11. php artisan config:capche && route:cache && view:cache && event:cache
+11. php artisan optimize:clear && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan event:cache
 12. php artisan horizon:publish
 13. Configure Nginx virtual host with SSL
-14. Configure Supervisor for Horizon
+14. Configure Supervisor for Horizon, AMI listener, and Reverb
 15. Add cron entry for scheduler
 16. Start services: nginx, php-fpm, redis, supervisor
 17. Log in as admin/admin@example.com, change password, assign Super Admin role
