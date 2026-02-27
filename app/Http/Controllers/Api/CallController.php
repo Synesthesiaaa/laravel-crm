@@ -4,13 +4,15 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\Telephony\CallOrchestrationService;
+use App\Services\Telephony\PredictiveDialerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class CallController extends Controller
 {
     public function __construct(
-        protected CallOrchestrationService $orchestration
+        protected CallOrchestrationService $orchestration,
+        protected PredictiveDialerService $predictiveDialer
     ) {}
 
     /**
@@ -40,7 +42,11 @@ class CallController extends Controller
         );
 
         if (! $result->success) {
-            return response()->json(['success' => false, 'message' => $result->message], 422);
+            $payload = ['success' => false, 'message' => $result->message];
+            if (is_array($result->data) && isset($result->data['error_code'])) {
+                $payload['error'] = $result->data;
+            }
+            return response()->json($payload, 422);
         }
 
         return response()->json([
@@ -111,5 +117,23 @@ class CallController extends Controller
             'disposition_pending' => false,
             'call' => null,
         ]);
+    }
+
+    /**
+     * Predictive dial: claim next hopper lead and originate immediately.
+     */
+    public function predictiveDial(Request $request): JsonResponse
+    {
+        $campaign = $request->query('campaign') ?: $request->session()->get('campaign', 'mbsales');
+        $result = $this->predictiveDialer->dialNext($request->user(), $campaign);
+
+        if (! $result->success) {
+            return response()->json([
+                'success' => false,
+                'message' => $result->message,
+            ], 422);
+        }
+
+        return response()->json(array_merge(['success' => true], (array) $result->data));
     }
 }

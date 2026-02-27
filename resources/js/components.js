@@ -122,29 +122,49 @@ window.clickToCall = function() {
         },
         async dial() {
             if (!this.phoneNumber) return;
-            Alpine.store('call').state  = 'ringing';
-            Alpine.store('call').number = this.phoneNumber;
-            try {
-                const res = await window.axios.get('/api/vicidial/proxy', {
-                    params: { action: 'originate', phone: this.phoneNumber, lead_id: this.leadId }
-                });
-                if (res.data.session_id) Alpine.store('call').setSessionId(res.data.session_id);
-                Alpine.store('call').state = 'connected';
-                Alpine.store('call').startTimer();
-            } catch (e) {
-                Alpine.store('call').state = 'idle';
-                Alpine.store('toast').error('Failed to originate call');
-            }
+            const store = Alpine.store('call');
+            store.state = 'ringing';
+            store.number = this.phoneNumber;
             this.open = false;
+            try {
+                // POST to Laravel: creates CallSession + AMI originates to agent's SIP extension.
+                // SIP.js (TelephonyCore) will auto-answer the incoming INVITE from Asterisk.
+                const res = await window.axios.post('/api/call/dial', {
+                    phone_number: this.phoneNumber,
+                    lead_id: this.leadId,
+                });
+                if (res.data.session_id) store.setSessionId(res.data.session_id);
+                // State transitions are driven by SIP.js events + Reverb broadcasts;
+                // do not hard-code 'connected' here.
+            } catch (e) {
+                store.state = 'idle';
+                const errMsg = e.response?.data?.error?.message
+                    || e.response?.data?.message
+                    || 'Failed to originate call';
+                Alpine.store('toast').error(errMsg);
+            }
         },
         async hangup() {
-            Alpine.store('call').stopTimer();
-            Alpine.store('call').state = 'wrapup';
-            try {
-                await window.axios.post('/api/call/hangup');
-            } catch {
-                Alpine.store('toast').warning('Call ended locally.');
+            // Delegate to TelephonyCore which handles SIP BYE + API notification
+            if (window.TelephonyCore?.hasActiveCall()) {
+                await window.TelephonyCore.hangup();
+            } else {
+                // Fallback: API-only hangup (e.g. SIP not registered but session exists)
+                const store = Alpine.store('call');
+                store.stopTimer();
+                try {
+                    await window.axios.post('/api/call/hangup', { session_id: store.sessionId });
+                } catch {
+                    Alpine.store('toast').warning('Call ended locally.');
+                }
+                store.state = 'wrapup';
             }
+        },
+        toggleMute() {
+            Alpine.store('call').toggleMuteWebRTC();
+        },
+        async toggleHold() {
+            await Alpine.store('call').toggleHoldWebRTC();
         },
     };
 };

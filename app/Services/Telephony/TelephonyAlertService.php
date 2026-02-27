@@ -3,13 +3,16 @@
 namespace App\Services\Telephony;
 
 use App\Models\TelephonyAlert;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Logs telephony-related alerts for monitoring and dashboard.
  */
 class TelephonyAlertService
 {
+    public function __construct(
+        protected TelephonyLogger $telephonyLogger
+    ) {}
+
     public function log(
         string $type,
         string $message,
@@ -23,8 +26,13 @@ class TelephonyAlertService
             'context' => $context,
         ]);
 
-        $logLevel = $severity === TelephonyAlert::SEVERITY_CRITICAL ? 'error' : 'warning';
-        Log::channel('telephony')->{$logLevel}("[{$type}] {$message}", $context);
+        if ($severity === TelephonyAlert::SEVERITY_INFO) {
+            $this->telephonyLogger->info('TelephonyAlertService', "[{$type}] {$message}", $context);
+        } elseif ($severity === TelephonyAlert::SEVERITY_CRITICAL) {
+            $this->telephonyLogger->error('TelephonyAlertService', "[{$type}] {$message}", $context);
+        } else {
+            $this->telephonyLogger->warning('TelephonyAlertService', "[{$type}] {$message}", $context);
+        }
 
         return $alert;
     }

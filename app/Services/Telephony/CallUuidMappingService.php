@@ -5,7 +5,6 @@ namespace App\Services\Telephony;
 use App\Models\CallSession;
 use App\Models\UnmatchedAmiEvent;
 use App\Models\User;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Maps Asterisk AMI identifiers (linkedid, channel, extension) to Laravel CallSession.
@@ -13,16 +12,26 @@ use Illuminate\Support\Facades\Log;
  */
 class CallUuidMappingService
 {
+    public function __construct(
+        protected TelephonyLogger $telephonyLogger
+    ) {}
+
     /**
-     * Extract SIP/PJSIP extension from channel name.
-     * Formats: SIP/1001-00000001, PJSIP/agent1-00000001, Local/1001@context-00000001
+     * Extract SIP extension from channel name.
+     * Formats: SIP/1001-00000001, Local/1001@context-00000001
      */
     public function extractExtensionFromChannel(?string $channel): ?string
     {
         if (empty($channel)) {
             return null;
         }
-        if (preg_match('#(?:SIP|PJSIP|Local)/([^/-]+)#i', $channel, $m)) {
+        if (preg_match('#^PJSIP/#i', $channel)) {
+            $this->telephonyLogger->warning('CallUuidMappingService', 'PJSIP channel received while SIP-only mode is enabled', [
+                'channel' => $channel,
+            ]);
+        }
+
+        if (preg_match('#(?:SIP|Local)/([^/-]+)#i', $channel, $m)) {
             return $m[1];
         }
 
@@ -81,7 +90,7 @@ class CallUuidMappingService
 
         $user = $this->findUserByExtension($extension);
         if (! $user) {
-            Log::channel('telephony')->debug('CallUuidMapping: No user for extension', [
+            $this->telephonyLogger->debug('CallUuidMappingService', 'No user for extension', [
                 'extension' => $extension,
                 'channel' => $channel,
             ]);
@@ -91,7 +100,7 @@ class CallUuidMappingService
 
         $session = CallSession::where('user_id', $user->id)->active()->orderByDesc('dialed_at')->first();
         if ($session) {
-            Log::channel('telephony')->info('CallUuidMapping: Matched session by extension fallback', [
+            $this->telephonyLogger->info('CallUuidMappingService', 'Matched session by extension fallback', [
                 'session_id' => $session->id,
                 'extension' => $extension,
                 'user_id' => $user->id,

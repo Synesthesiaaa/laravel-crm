@@ -5,7 +5,7 @@
 @section('header-title', 'Agent Screen')
 
 @section('content')
-<div x-data="agentScreen()" x-init="init()" data-campaign="{{ session('campaign', 'mbsales') }}" class="flex flex-col lg:flex-row gap-6 h-full">
+<div x-data="agentScreen()" x-init="init()" data-campaign="{{ session('campaign', 'mbsales') }}" data-user-id="{{ auth()->id() }}" class="flex flex-col lg:flex-row gap-6 h-full">
 
     {{-- LEFT: Lead info + form --}}
     <div class="flex-1 min-w-0 space-y-4">
@@ -14,7 +14,20 @@
         <div class="md-card p-5">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Lead Information</h3>
-                <x-badge :dot="false" type="info" x-text="leadId ? 'Lead #' + leadId : 'No lead loaded'">No lead loaded</x-badge>
+                <div class="flex items-center gap-2">
+                    <button type="button"
+                            class="text-xs px-2 py-1 rounded-md border"
+                            :class="predictiveMode ? 'border-emerald-500 text-emerald-600 bg-emerald-50' : 'border-[var(--color-border)] text-[var(--color-on-surface-dim)]'"
+                            @click="togglePredictiveMode()">
+                        <span x-text="predictiveMode ? 'Predictive: ON' : 'Predictive: OFF'">Predictive: OFF</span>
+                    </button>
+                    <button type="button" class="btn-secondary text-xs px-2 py-1" @click="fetchNextLead()" :disabled="callState !== 'idle' && callState !== 'wrapup' || loadingNextLead"
+                            title="Get next lead">
+                        <x-icon name="arrow-path" class="w-3.5 h-3.5" />
+                        <span x-text="loadingNextLead ? 'Loading...' : 'Next Lead'">Next Lead</span>
+                    </button>
+                    <x-badge :dot="false" type="info" x-text="leadId ? 'Lead #' + leadId : 'No lead loaded'">No lead loaded</x-badge>
+                </div>
             </div>
             <div class="grid grid-cols-2 gap-4">
                 <div class="form-field">
@@ -46,7 +59,7 @@
         @if(isset($fields) && $fields->isNotEmpty())
         <div class="md-card p-5">
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)] mb-4">Capture Details</h3>
-            <form @submit.prevent="saveForm()" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <form id="capture-form" @submit.prevent="saveForm()" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 @foreach($fields as $field)
                 <div class="@if(($field->field_width ?? '') === 'full') sm:col-span-2 @endif">
                     @if($field->field_type === 'textarea')
@@ -128,13 +141,14 @@
                 <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold mb-4"
                      :class="{
                          'call-connected': callState === 'connected',
-                         'call-ringing':   callState === 'ringing',
+                         'call-ringing':   callState === 'dialing' || callState === 'ringing',
                          'call-hold':      callState === 'hold',
                          'call-wrapup':    callState === 'wrapup',
                          'bg-[var(--color-surface-2)] text-[var(--color-on-surface-dim)] border border-[var(--color-border)]': callState === 'idle',
                      }">
                     <x-icon name="phone" class="w-3.5 h-3.5" />
                     <span x-show="callState === 'idle'">Ready</span>
+                    <span x-show="callState === 'dialing'">Dialing...</span>
                     <span x-show="callState === 'ringing'">Ringing...</span>
                     <span x-show="callState === 'connected'" x-text="'Connected · ' + formatDuration(duration)"></span>
                     <span x-show="callState === 'hold'">On Hold</span>
@@ -176,7 +190,11 @@
                 <select x-model="dispositionCode" class="form-select">
                     <option value="">-- Select disposition --</option>
                     @foreach($dispositionCodes ?? [] as $dc)
-                        <option value="{{ $dc->code }}">{{ $dc->label }}</option>
+                        @php
+                            $code = is_array($dc) ? ($dc['code'] ?? '') : ($dc->code ?? '');
+                            $label = is_array($dc) ? ($dc['label'] ?? $code) : ($dc->label ?? $code);
+                        @endphp
+                        <option value="{{ $code }}">{{ $label }}</option>
                     @endforeach
                 </select>
             </div>
@@ -227,12 +245,20 @@ window.agentScreen = function() {
         dispositionNotes: '',
         recentCalls: [],
         dialBlocked: false,
+        loadingNextLead: false,
+        predictiveMode: false,
+        predictiveDelay: 3,
+        _predictiveTimer: null,
 
         _echoUnsubscribe: null,
         _statusPollInterval: null,
 
         init() {
             this.$watch('callState', (v) => Alpine.store('call').state = v);
+            this.$watch('$store.call.duration', (v) => { this.duration = v; });
+            this.$watch('$store.call.state', (v) => { if (v) this.callState = v; });
+            this.$watch('$store.call.number', (v) => { if (v) this.phoneNumber = v; });
+            this.$watch('$store.call.sessionId', (v) => { if (v) this.sessionId = v; });
             this.syncCallStatus();
             const te = window.TelephonyEcho;
             if (te && te.initEcho && te.isBroadcastEnabled()) {
@@ -243,72 +269,137 @@ window.agentScreen = function() {
                         if (String(p.session_id) === String(this.sessionId)) {
                             if (['completed','failed','abandoned'].includes(p.to_status)) {
                                 clearInterval(this.timer);
+                                this.timer = null;
                                 Alpine.store('call').stopTimer();
                                 this.callState = 'wrapup';
                                 Alpine.store('call').state = 'wrapup';
-                            } else if (p.to_status === 'ringing') { this.callState = 'ringing'; }
-                            else if (['answered','in_call','on_hold'].includes(p.to_status)) { this.callState = 'connected'; }
+                                if (p.to_status === 'failed') {
+                                    Alpine.store('toast').warning('Call failed or ended before answer.');
+                                } else {
+                                    Alpine.store('toast').info('Call ended. Please save disposition.');
+                                }
+                                if (this.predictiveMode && p.to_status === 'failed') {
+                                    this.schedulePredictiveDial();
+                                }
+                            } else if (p.to_status === 'ringing') {
+                                this.callState = 'ringing';
+                                Alpine.store('call').state = 'ringing';
+                                Alpine.store('toast').info('Call is ringing...');
+                            } else if (['answered','in_call','on_hold'].includes(p.to_status)) {
+                                this.callState = 'connected';
+                                Alpine.store('call').state = 'connected';
+                                Alpine.store('call').startTimer();
+                                Alpine.store('toast').success('Call connected.');
+                            }
                         }
                     });
                 }
             } else {
-                this._statusPollInterval = setInterval(() => this.syncCallStatus(), 30000);
+                this._statusPollInterval = setInterval(() => this.syncCallStatus(), 15000);
             }
         },
 
         async syncCallStatus() {
             try {
                 const res = await window.axios.get('/api/call/status');
-                if (res.data.disposition_pending && res.data.pending_call) {
+                if (res.data.active && res.data.call) {
+                    this.sessionId = res.data.call.session_id;
+                    this.phoneNumber = res.data.call.phone_number || this.phoneNumber;
+                    this.duration = res.data.call.duration_seconds || 0;
+                    const statusMap = { dialing: 'dialing', ringing: 'ringing', answered: 'connected', in_call: 'connected', on_hold: 'hold' };
+                    this.callState = statusMap[res.data.call.status] || 'connected';
+                    Alpine.store('call').state = this.callState;
+                    Alpine.store('call').number = this.phoneNumber;
+                    Alpine.store('call').setSessionId(this.sessionId);
+                    if (this.callState === 'connected') Alpine.store('call').startTimer();
+                } else if (res.data.disposition_pending && res.data.pending_call) {
                     this.dialBlocked = true;
                     this.callState = 'wrapup';
                     this.sessionId = res.data.pending_call.session_id;
                     this.phoneNumber = res.data.pending_call.phone_number || this.phoneNumber;
                     Alpine.store('call').state = 'wrapup';
+                } else {
+                    this.dialBlocked = false;
+                    this.callState = 'idle';
+                    Alpine.store('call').state = 'idle';
                 }
             } catch {}
         },
 
         async dial() {
             if (!this.phoneNumber || this.callState !== 'idle' || this.dialBlocked) return;
-            this.callState = 'ringing';
+            this.callState = 'dialing';
+            Alpine.store('call').state = 'dialing';
             Alpine.store('call').number = this.phoneNumber;
             try {
                 const campaign = this.$el.dataset.campaign || 'mbsales';
-                const res = await window.axios.get('/api/vicidial/proxy', {
-                    params: { action: 'originate', phone: this.phoneNumber, lead_id: this.leadId, campaign }
+                const res = await window.axios.post('/api/call/dial?campaign=' + encodeURIComponent(campaign), {
+                    phone_number: this.phoneNumber,
+                    lead_id: this.leadId || null,
                 });
                 if (res.data.session_id) {
                     this.sessionId = res.data.session_id;
                     Alpine.store('call').setSessionId(res.data.session_id);
                 }
-                this.callState = 'connected';
-                Alpine.store('call').startTimer();
-                this.timer = setInterval(() => this.duration++, 1000);
+                if (!res.data.success) {
+                    this.callState = 'idle';
+                    Alpine.store('call').state = 'idle';
+                    Alpine.store('toast').error(res.data.message || 'Call failed.');
+                    return;
+                }
+                // Wait for SIP.js state + AMI events to transition dialing -> ringing -> connected.
             } catch (e) {
                 this.callState = 'idle';
-                Alpine.store('toast').error(e.response?.data?.message || 'Failed to originate call. Check ViciDial connection.');
+                Alpine.store('call').state = 'idle';
+                Alpine.store('toast').error(e.response?.data?.message || 'Failed to originate call. Check connection.');
             }
         },
 
         async hangup() {
+            await Alpine.store('call').hangupWebRTC();
             clearInterval(this.timer);
+            this.timer = null;
             Alpine.store('call').stopTimer();
             this.callState = 'wrapup';
+            Alpine.store('call').state = 'wrapup';
         },
 
-        toggleHold() {
-            this.callState = this.callState === 'hold' ? 'connected' : 'hold';
+        async toggleHold() {
+            await Alpine.store('call').toggleHoldWebRTC();
+            this.callState = Alpine.store('call').state;
         },
 
         toggleMute() {
-            this.muted = !this.muted;
+            Alpine.store('call').toggleMuteWebRTC();
+            this.muted = Alpine.store('call').muted;
         },
 
         formatDuration(s) {
             const m = String(Math.floor(s / 60)).padStart(2, '0');
             const sec = String(s % 60).padStart(2, '0');
             return `${m}:${sec}`;
+        },
+
+        async fetchNextLead() {
+            if (this.loadingNextLead || (this.callState !== 'idle' && this.callState !== 'wrapup')) return;
+            this.loadingNextLead = true;
+            try {
+                const campaign = this.$el.dataset.campaign || 'mbsales';
+                const res = await window.axios.get('/api/leads/next', { params: { campaign } });
+                if (res.data.lead) {
+                    this.leadId = res.data.lead.lead_id || '';
+                    this.phoneNumber = res.data.lead.phone_number || '';
+                    this.clientName = res.data.lead.client_name || '';
+                    Alpine.store('call').number = this.phoneNumber;
+                    Alpine.store('toast').success('Lead loaded.');
+                } else {
+                    Alpine.store('toast').info(res.data.message || 'No leads available.');
+                }
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Failed to fetch lead.');
+            } finally {
+                this.loadingNextLead = false;
+            }
         },
 
         async saveDisposition() {
@@ -340,6 +431,11 @@ window.agentScreen = function() {
                 this.duration = 0;
                 this.dialBlocked = false;
                 Alpine.store('call').state = 'idle';
+                if (this.predictiveMode) {
+                    this.schedulePredictiveDial();
+                } else {
+                    this.fetchNextLead();
+                }
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Failed to save disposition.');
             } finally {
@@ -347,16 +443,81 @@ window.agentScreen = function() {
             }
         },
 
+        togglePredictiveMode() {
+            this.predictiveMode = !this.predictiveMode;
+            if (!this.predictiveMode && this._predictiveTimer) {
+                clearTimeout(this._predictiveTimer);
+                this._predictiveTimer = null;
+            }
+            Alpine.store('toast').info(this.predictiveMode ? 'Predictive dialing enabled.' : 'Predictive dialing disabled.');
+            if (this.predictiveMode && this.callState === 'idle' && !this.dialBlocked) {
+                this.schedulePredictiveDial();
+            }
+        },
+
+        schedulePredictiveDial() {
+            if (!this.predictiveMode || this.callState !== 'idle') return;
+            if (this._predictiveTimer) clearTimeout(this._predictiveTimer);
+            this._predictiveTimer = setTimeout(() => this.predictiveDial(), Math.max(1, this.predictiveDelay) * 1000);
+        },
+
+        async predictiveDial() {
+            if (!this.predictiveMode || this.callState !== 'idle' || this.dialBlocked) return;
+            try {
+                const campaign = this.$el.dataset.campaign || 'mbsales';
+                const res = await window.axios.post('/api/call/predictive-dial?campaign=' + encodeURIComponent(campaign));
+                if (!res.data.success) {
+                    Alpine.store('toast').warning(res.data.message || 'Predictive dial failed.');
+                    return;
+                }
+                if (!res.data.lead) {
+                    Alpine.store('toast').info(res.data.message || 'No leads available in hopper.');
+                    return;
+                }
+                this.leadId = res.data.lead.lead_id || '';
+                this.phoneNumber = res.data.lead.phone_number || '';
+                this.clientName = res.data.lead.client_name || '';
+                this.predictiveDelay = Number(res.data.predictive_delay_seconds || this.predictiveDelay || 3);
+                this.sessionId = res.data.session_id || null;
+                Alpine.store('call').number = this.phoneNumber;
+                Alpine.store('call').setSessionId(this.sessionId);
+                this.callState = 'dialing';
+                Alpine.store('call').state = 'dialing';
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Predictive dial request failed.');
+            }
+        },
+
         async saveForm() {
             this.saving = true;
-            await new Promise(r => setTimeout(r, 400));
-            Alpine.store('toast').success('Record saved.');
-            this.saving = false;
+            const form = document.getElementById('capture-form');
+            if (!form) { this.saving = false; return; }
+            const captureData = {};
+            form.querySelectorAll('input, select, textarea').forEach(el => {
+                if (el.name && !el.name.startsWith('_')) captureData[el.name] = el.value ?? '';
+            });
+            try {
+                await window.axios.post('/api/agent/capture', {
+                    campaign_code: this.$el.dataset.campaign || 'mbsales',
+                    call_session_id: this.sessionId,
+                    lead_id: this.leadId,
+                    phone_number: this.phoneNumber,
+                    capture_data: captureData,
+                });
+                Alpine.store('toast').success('Record saved.');
+                this.clearForm();
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Failed to save record.');
+            } finally {
+                this.saving = false;
+            }
         },
 
         clearForm() {
-            document.querySelectorAll('#capture-form input, #capture-form select, #capture-form textarea')
-                .forEach(el => { el.value = ''; });
+            const form = document.getElementById('capture-form');
+            if (form) {
+                form.querySelectorAll('input, select, textarea').forEach(el => { el.value = ''; });
+            }
         },
     };
 };

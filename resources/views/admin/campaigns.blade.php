@@ -24,6 +24,11 @@
                 <x-form.input name="name" label="Name" :value="old('name')" required />
                 <x-form.input name="description" label="Description" :value="old('description')" />
             </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+                <x-form.checkbox name="predictive_enabled" label="Predictive Dialing Enabled" :checked="old('predictive_enabled', false)" />
+                <x-form.input name="predictive_delay_seconds" type="number" min="1" max="300" label="Predictive Delay (seconds)" :value="old('predictive_delay_seconds', 3)" />
+                <x-form.input name="predictive_max_attempts" type="number" min="1" max="20" label="Max Attempts Per Lead" :value="old('predictive_max_attempts', 3)" />
+            </div>
             <div class="mt-4">
                 <button type="submit" class="btn-primary" :disabled="submitting">
                     <x-icon name="plus" class="w-4 h-4" />
@@ -90,9 +95,12 @@
                             <x-form.input name="name" label="Name" :value="old('name', $c->name)" required />
                             <x-form.input name="description" label="Description" :value="old('description', $c->description)" />
                             <x-form.input name="display_order" type="number" label="Display Order" :value="old('display_order', $c->display_order)" />
+                            <x-form.input name="predictive_delay_seconds" type="number" min="1" max="300" label="Predictive Delay (seconds)" :value="old('predictive_delay_seconds', $c->predictive_delay_seconds ?? 3)" />
+                            <x-form.input name="predictive_max_attempts" type="number" min="1" max="20" label="Max Attempts Per Lead" :value="old('predictive_max_attempts', $c->predictive_max_attempts ?? 3)" />
                         </div>
                         <div class="mt-3 flex items-center gap-4">
                             <x-form.checkbox name="is_active" label="Active" :checked="$c->is_active" />
+                            <x-form.checkbox name="predictive_enabled" label="Predictive Enabled" :checked="$c->predictive_enabled" />
                             <button type="submit" class="btn-primary text-sm" :disabled="submitting">
                                 <x-icon name="check" class="w-4 h-4" />
                                 <span x-text="submitting ? 'Saving...' : 'Update'">Update</span>

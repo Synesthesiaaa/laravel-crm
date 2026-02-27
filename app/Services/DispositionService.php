@@ -7,16 +7,19 @@ use App\Models\CallSession;
 use App\Models\CampaignDispositionRecord;
 use App\Models\DispositionCode;
 use App\Repositories\DispositionRepository;
+use App\Services\Telephony\CallStateService;
+use App\Services\Telephony\TelephonyLogger;
 use App\Services\Telephony\VicidialDispositionSyncService;
 use App\Support\OperationResult;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class DispositionService
 {
     public function __construct(
         protected DispositionRepository $dispositionRepository,
-        protected VicidialDispositionSyncService $vicidialSync
+        protected VicidialDispositionSyncService $vicidialSync,
+        protected CallStateService $callStateService,
+        protected TelephonyLogger $telephonyLogger,
     ) {}
 
     public function getCodesForCampaign(string $campaignCode): array
@@ -53,9 +56,25 @@ class DispositionService
             if (! $session) {
                 return OperationResult::failure('Call session not found or access denied.');
             }
+
+            // Safety net: if the session is somehow still active (e.g. hangup failed to
+            // transition correctly), force it to completed so disposition can proceed.
             if (! $session->isTerminal()) {
-                return OperationResult::failure('Call must be ended before submitting disposition.');
+                $this->telephonyLogger->warning('DispositionService', 'Session not terminal on save, forcing completed', [
+                    'session_id' => $session->id,
+                    'status' => $session->status,
+                ]);
+                $this->callStateService->transition($session, CallSession::STATUS_COMPLETED, [
+                    'end_reason' => 'force_ended_on_disposition',
+                ], true);
+                $session->refresh();
+
+                // After force, confirm it is now terminal
+                if (! $session->isTerminal()) {
+                    return OperationResult::failure('Call must be ended before submitting disposition.');
+                }
             }
+
             if ($session->disposition_code !== null) {
                 return OperationResult::failure('Disposition already submitted for this call.');
             }
@@ -110,7 +129,7 @@ class DispositionService
 
             return OperationResult::success();
         } catch (\Throwable $e) {
-            Log::channel('telephony')->error('DispositionService: Save failed', [
+            $this->telephonyLogger->error('DispositionService', 'Save failed', [
                 'error' => $e->getMessage(),
                 'campaign' => $campaignCode,
                 'session_id' => $callSessionId,
@@ -133,22 +152,45 @@ class DispositionService
         return ['code' => $dc->code, 'label' => $label ?: $dc->label];
     }
 
+    /**
+     * End reasons that indicate the call was closed by the system, not by a real
+     * agent interaction. These sessions never require a disposition.
+     */
+    protected const SKIP_DISPOSITION_END_REASONS = [
+        'stale_session',           // auto-cleaned by stale detection
+        'user_logout',             // cleaned on logout
+        'ami_originate_failed',    // AMI couldn't dial – call never placed
+        'reconciliation_timeout',  // cleaned by reconciliation job
+        'force_ended_on_disposition', // safety net force-close (already saving disposition)
+    ];
+
+    /**
+     * Pending disposition sessions older than this are ignored (no longer block).
+     */
+    protected const PENDING_DISPOSITION_MAX_AGE_HOURS = 24;
+
     public function hasPendingDisposition(int $userId): bool
     {
-        return CallSession::where('user_id', $userId)
-            ->whereIn('status', CallSession::TERMINAL_STATUSES)
-            ->whereNull('disposition_code')
-            ->whereNotNull('ended_at')
-            ->exists();
+        return $this->pendingDispositionQuery($userId)->exists();
     }
 
     public function getPendingDispositionSession(int $userId): ?CallSession
     {
+        return $this->pendingDispositionQuery($userId)
+            ->orderByDesc('ended_at')
+            ->first();
+    }
+
+    protected function pendingDispositionQuery(int $userId)
+    {
         return CallSession::where('user_id', $userId)
             ->whereIn('status', CallSession::TERMINAL_STATUSES)
             ->whereNull('disposition_code')
             ->whereNotNull('ended_at')
-            ->orderByDesc('ended_at')
-            ->first();
+            ->where('ended_at', '>=', now()->subHours(self::PENDING_DISPOSITION_MAX_AGE_HOURS))
+            ->where(function ($q) {
+                $q->whereNull('end_reason')
+                    ->orWhereNotIn('end_reason', self::SKIP_DISPOSITION_END_REASONS);
+            });
     }
 }

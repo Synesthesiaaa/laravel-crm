@@ -6,7 +6,6 @@ use App\Models\CallSession;
 use App\Models\VicidialServer;
 use App\Repositories\VicidialServerRepository;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Syncs disposition to VICIdial when lead_id is available.
@@ -15,7 +14,8 @@ use Illuminate\Support\Facades\Log;
 class VicidialDispositionSyncService
 {
     public function __construct(
-        protected VicidialServerRepository $serverRepository
+        protected VicidialServerRepository $serverRepository,
+        protected TelephonyLogger $telephonyLogger
     ) {}
 
     /**
@@ -29,7 +29,7 @@ class VicidialDispositionSyncService
 
         $server = $this->serverRepository->getForCampaign($session->campaign_code);
         if (! $server) {
-            Log::channel('telephony')->debug('VicidialDispositionSync: No server for campaign', [
+            $this->telephonyLogger->debug('VicidialDispositionSyncService', 'No server for campaign', [
                 'campaign' => $session->campaign_code,
             ]);
 
@@ -53,7 +53,7 @@ class VicidialDispositionSyncService
         ];
 
         if (empty($params['user']) || empty($params['pass'])) {
-            Log::channel('telephony')->debug('VicidialDispositionSync: No API credentials');
+            $this->telephonyLogger->debug('VicidialDispositionSyncService', 'No API credentials');
             return;
         }
 
@@ -64,14 +64,14 @@ class VicidialDispositionSyncService
             $success = stripos($body, 'SUCCESS') !== false;
 
             if (! $success) {
-                Log::channel('telephony')->warning('VicidialDispositionSync: Write-back failed', [
+                $this->telephonyLogger->warning('VicidialDispositionSyncService', 'Write-back failed', [
                     'lead_id' => $session->lead_id,
                     'status' => $viciCode,
                     'response' => substr($body, 0, 200),
                 ]);
             }
         } catch (\Throwable $e) {
-            Log::channel('telephony')->warning('VicidialDispositionSync: Exception', [
+            $this->telephonyLogger->warning('VicidialDispositionSyncService', 'Exception while syncing disposition', [
                 'lead_id' => $session->lead_id,
                 'error' => $e->getMessage(),
             ]);

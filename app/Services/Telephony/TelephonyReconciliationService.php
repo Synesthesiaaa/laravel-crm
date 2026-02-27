@@ -5,7 +5,6 @@ namespace App\Services\Telephony;
 use App\Models\CallSession;
 use App\Models\UnmatchedAmiEvent;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Reconciles Laravel call_sessions with AMI events and optional external sources.
@@ -16,7 +15,8 @@ class TelephonyReconciliationService
     public function __construct(
         protected CallStateService $callStateService,
         protected CallUuidMappingService $mapping,
-        protected TelephonyAlertService $alerts
+        protected TelephonyAlertService $alerts,
+        protected TelephonyLogger $telephonyLogger
     ) {}
 
     /**
@@ -37,7 +37,7 @@ class TelephonyReconciliationService
             ->count();
 
         if ($staleCount > 0) {
-            Log::channel('telephony')->warning('TelephonyReconciliation: Stale calls still present after run', [
+            $this->telephonyLogger->warning('TelephonyReconciliationService', 'Stale calls still present after run', [
                 'count' => $staleCount,
                 'stale_corrected' => $staleCorrected,
             ]);

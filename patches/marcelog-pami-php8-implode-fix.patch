@@ -1,0 +1,11 @@
+--- a/src/PAMI/Message/Event/Factory/Impl/EventFactoryImpl.php
++++ b/src/PAMI/Message/Event/Factory/Impl/EventFactoryImpl.php
+@@ -69,7 +69,7 @@ public static function createFromRaw($message)
+         for ($i = 0; $i < $totalParts; $i++) {
+             $parts[$i] = ucfirst($parts[$i]);
+         }
+-        $name = implode($parts, '');
++        $name = implode('', $parts);
+         $className = '\\PAMI\\Message\\Event\\' . $name . 'Event';
+         if (class_exists($className, true)) {
+             return new $className($message);

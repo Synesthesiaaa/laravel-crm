@@ -34,6 +34,9 @@ class CampaignsController extends Controller
             'color'         => $v['color'] ?? 'blue',
             'display_order' => (int) ($v['display_order'] ?? 0),
             'is_active'     => true,
+            'predictive_enabled' => $request->boolean('predictive_enabled', false),
+            'predictive_delay_seconds' => (int) ($v['predictive_delay_seconds'] ?? 3),
+            'predictive_max_attempts' => (int) ($v['predictive_max_attempts'] ?? 3),
         ]);
         $this->campaignService->clearCampaignsCache();
         return redirect()->route('admin.campaigns.index')->with('success', 'Campaign created.');
@@ -49,6 +52,9 @@ class CampaignsController extends Controller
             'color'         => $v['color'] ?? 'blue',
             'display_order' => (int) ($v['display_order'] ?? 0),
             'is_active'     => $request->boolean('is_active', true),
+            'predictive_enabled' => $request->boolean('predictive_enabled', false),
+            'predictive_delay_seconds' => (int) ($v['predictive_delay_seconds'] ?? 3),
+            'predictive_max_attempts' => (int) ($v['predictive_max_attempts'] ?? 3),
         ]);
         $this->campaignService->clearCampaignsCache();
         return redirect()->route('admin.campaigns.index')->with('success', 'Campaign updated.');

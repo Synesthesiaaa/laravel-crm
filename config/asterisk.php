@@ -9,5 +9,8 @@ return [
     'secret' => env('ASTERISK_AMI_SECRET', ''),
     'timeout' => (int) env('ASTERISK_AMI_TIMEOUT', 5),
     'read_timeout' => (int) env('ASTERISK_AMI_READ_TIMEOUT', 5000),
+    'goip_trunk'      => env('ASTERISK_GOIP_TRUNK', 'goip-trunk'),
+    // SIP-only enforcement for CRM telephony routing.
+    'agent_channel'   => 'SIP',
 
 ];

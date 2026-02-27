@@ -5,12 +5,12 @@ namespace App\Services\Telephony;
 use App\Models\User;
 use App\Repositories\VicidialServerRepository;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 
 class VicidialProxyService
 {
     public function __construct(
-        protected VicidialServerRepository $serverRepository
+        protected VicidialServerRepository $serverRepository,
+        protected TelephonyLogger $telephonyLogger
     ) {}
 
     /**
@@ -21,7 +21,7 @@ class VicidialProxyService
     {
         $server = $this->serverRepository->getForCampaign($campaign);
         if (!$server) {
-            Log::warning('VicidialProxyService: No server for campaign', ['campaign' => $campaign]);
+            $this->telephonyLogger->warning('VicidialProxyService', 'No server for campaign', ['campaign' => $campaign]);
             return ['success' => false, 'raw_response' => '', 'message' => 'No VICIdial server configured for this campaign.'];
         }
         $viciUser = $user->vici_user ?? '';
@@ -60,7 +60,7 @@ class VicidialProxyService
         $response = Http::connectTimeout($connectTimeout)
             ->timeout($timeout)
             ->retry($retryTimes, $retrySleepMs, function (\Throwable $e, $request) use ($action, $campaign) {
-                Log::warning('VicidialProxyService: Retrying after failure', [
+                $this->telephonyLogger->warning('VicidialProxyService', 'Retrying after failure', [
                     'action' => $action,
                     'campaign' => $campaign,
                     'error' => $e->getMessage(),
@@ -75,10 +75,10 @@ class VicidialProxyService
         if (!$success) {
             if (stripos($body, 'INVALID USERNAME/PASSWORD') !== false || stripos($body, '|BAD|') !== false) {
                 $message = 'VICIdial credentials were rejected.';
-                Log::warning('VicidialProxyService: Credentials rejected', ['campaign' => $campaign, 'user_id' => $user->id]);
+                $this->telephonyLogger->warning('VicidialProxyService', 'Credentials rejected', ['campaign' => $campaign, 'user_id' => $user->id]);
             } else {
                 $message = trim($body) ?: 'Request failed';
-                Log::warning('VicidialProxyService: Request failed', [
+                $this->telephonyLogger->warning('VicidialProxyService', 'Request failed', [
                     'action' => $action,
                     'campaign' => $campaign,
                     'response' => strlen($body) > 200 ? substr($body, 0, 200) . '...' : $body,

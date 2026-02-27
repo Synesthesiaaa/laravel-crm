@@ -21,6 +21,9 @@ class UpdateCampaignRequest extends FormRequest
             'color'         => ['nullable', 'string', 'max:50'],
             'display_order' => ['nullable', 'integer'],
             'is_active'     => ['nullable', 'boolean'],
+            'predictive_enabled' => ['nullable', 'boolean'],
+            'predictive_delay_seconds' => ['nullable', 'integer', 'min:1', 'max:300'],
+            'predictive_max_attempts' => ['nullable', 'integer', 'min:1', 'max:20'],
         ];
     }
 

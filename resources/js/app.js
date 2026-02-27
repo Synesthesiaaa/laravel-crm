@@ -1,6 +1,7 @@
 import './bootstrap';
 import './echo';
 import './components';
+import TelephonyCore from './telephony-core';
 
 // Make ApexCharts available for dynamic import in views
 window.ApexChartsLoader = () => import('apexcharts').then(m => m.default);
@@ -100,6 +101,9 @@ Alpine.store('call', {
     number: '',
     duration: 0,
     timer: null,
+    muted: false,
+    onHold: false,
+
     startTimer() {
         this.duration = 0;
         clearInterval(this.timer);
@@ -112,9 +116,29 @@ Alpine.store('call', {
         const s = String(this.duration % 60).padStart(2, '0');
         return `${m}:${s}`;
     },
+
+    // ── WebRTC delegation ──────────────────────────────────────────────────
+    async hangupWebRTC() {
+        await window.TelephonyCore?.hangup();
+    },
+    toggleMuteWebRTC() {
+        if (!window.TelephonyCore) return;
+        this.muted = !this.muted;
+        this.muted ? window.TelephonyCore.mute() : window.TelephonyCore.unmute();
+    },
+    async toggleHoldWebRTC() {
+        if (!window.TelephonyCore) return;
+        this.onHold = !this.onHold;
+        if (this.onHold) {
+            await window.TelephonyCore.hold();
+        } else {
+            await window.TelephonyCore.unhold();
+        }
+    },
 });
 
 window.Alpine = Alpine;
+window.TelephonyCore = TelephonyCore;
 Alpine.start();
 
 // Global keyboard shortcuts

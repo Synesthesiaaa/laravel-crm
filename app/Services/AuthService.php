@@ -7,6 +7,7 @@ use App\Events\UserLoggedOut;
 use App\Models\User;
 use App\Repositories\AttendanceRepository;
 use App\Repositories\UserRepository;
+use App\Services\Telephony\CallOrchestrationService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -14,7 +15,8 @@ class AuthService
 {
     public function __construct(
         protected UserRepository $userRepository,
-        protected AttendanceRepository $attendanceRepository
+        protected AttendanceRepository $attendanceRepository,
+        protected CallOrchestrationService $callOrchestration
     ) {}
 
     public function attempt(string $username, string $password): ?User
@@ -41,6 +43,7 @@ class AuthService
     {
         $user = Auth::user();
         if ($user) {
+            $this->callOrchestration->forceCompleteAllForUser($user);
             DB::transaction(function () use ($user): void {
                 $this->attendanceRepository->log($user->id, 'logout', request()?->ip());
                 event(new UserLoggedOut($user->id));

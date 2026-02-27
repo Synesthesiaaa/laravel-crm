@@ -185,7 +185,20 @@
                             My Attendance
                         </a>
                         <div class="border-t border-[var(--color-border)] mt-1 pt-1">
-                            <form method="POST" action="{{ route('logout') }}">
+                            <form method="POST" action="{{ route('logout') }}" id="logout-form" @submit.prevent="
+                                (async () => {
+                                    const s = Alpine.store('call');
+                                    if (s.state !== 'idle' && s.sessionId) {
+                                        try { await axios.post('/api/call/hangup', { session_id: s.sessionId }); } catch(e) {}
+                                    }
+                                    s.state = 'idle'; s.sessionId = null; s.stopTimer();
+                                    // Unregister SIP and destroy UA before logout
+                                    if (window.TelephonyCore) {
+                                        try { await window.TelephonyCore.destroy(); } catch(e) {}
+                                    }
+                                    document.getElementById('logout-form').submit();
+                                })()
+                            ">
                                 @csrf
                                 <button type="submit" class="dropdown-item w-full text-red-400 hover:text-red-300">
                                     <x-icon name="arrow-right-on-rectangle" class="w-4 h-4" />
@@ -418,6 +431,87 @@
             });
         </script>
     @endif
+
+    {{-- WebRTC remote audio element (hidden, managed by TelephonyCore) --}}
+    @auth
+    @if(in_array(auth()->user()->role ?? '', ['Agent', 'Team Leader']))
+    <audio id="remoteAudio" autoplay playsinline style="display:none;" aria-hidden="true"></audio>
+    @endif
+    @endauth
+
+    {{-- Global telephony: rehydrate call state + Echo subscription + SIP.js registration (persists across navigation) --}}
+    @auth
+    @if(in_array(auth()->user()->role ?? '', ['Agent', 'Team Leader']))
+    <script>
+    document.addEventListener('alpine:init', function() {
+        const store = Alpine.store('call');
+        const userId = @js(auth()->id());
+
+        function mapBackendToUI(status) {
+            const map = { dialing: 'ringing', ringing: 'ringing', answered: 'connected', in_call: 'connected', on_hold: 'hold', transferring: 'connected', completed: 'wrapup', failed: 'idle', abandoned: 'idle' };
+            return map[status] ?? 'idle';
+        }
+
+        function rehydrateFromStatus(res) {
+            if (res.active && res.call) {
+                store.state = mapBackendToUI(res.call.status);
+                store.sessionId = res.call.session_id;
+                store.number = res.call.phone_number || '';
+                if (store.state === 'connected' && res.call.duration_seconds) {
+                    store.duration = res.call.duration_seconds;
+                    store.startTimer();
+                }
+            } else if (res.disposition_pending && res.pending_call) {
+                store.state = 'wrapup';
+                store.sessionId = res.pending_call.session_id;
+                store.number = res.pending_call.phone_number || '';
+            } else {
+                store.state = 'idle';
+                store.sessionId = null;
+                store.number = '';
+                store.stopTimer();
+            }
+        }
+
+        (async function init() {
+            store.state = 'idle';
+            store.sessionId = null;
+            store.number = '';
+            store.stopTimer();
+            try {
+                const res = await window.axios.get('/api/call/status');
+                if (res.data?.success) rehydrateFromStatus(res.data);
+            } catch {}
+
+            // 2. Subscribe Reverb channel for real-time state updates
+            if (window.TelephonyEcho?.initEcho && window.TelephonyEcho.isBroadcastEnabled()) {
+                window.TelephonyEcho.initEcho();
+                window.TelephonyEcho.subscribeAgentChannel(userId, (payload) => {
+                    store.state = mapBackendToUI(payload.to_status);
+                    if (payload.session_id) store.sessionId = payload.session_id;
+                    if (payload.phone_number) store.number = payload.phone_number;
+                    if (['completed', 'failed', 'abandoned'].includes(payload.to_status)) {
+                        store.stopTimer();
+                        store.state = 'wrapup';
+                    } else if (['answered', 'in_call'].includes(payload.to_status)) {
+                        store.startTimer();
+                    }
+                });
+            }
+
+            // 3. Register SIP.js with Asterisk SIP (WebRTC)
+            //    TelephonyCore is a singleton – calling register() when already
+            //    registered is a no-op, so page navigation is safe.
+            if (window.TelephonyCore) {
+                window.TelephonyCore.register().catch(err => {
+                    console.warn('[TelephonyInit] SIP register error:', err);
+                });
+            }
+        })();
+    });
+    </script>
+    @endif
+    @endauth
 
     {{-- Theme toggle script --}}
     <script>

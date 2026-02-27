@@ -32,6 +32,7 @@ class CallStateChanged implements ShouldBroadcast
 
         if ($this->session->user_id) {
             $channels[] = new PrivateChannel('App.Models.User.'.$this->session->user_id);
+            $channels[] = new PrivateChannel('agent.'.$this->session->user_id);
         }
 
         return $channels;
@@ -52,13 +53,23 @@ class CallStateChanged implements ShouldBroadcast
      */
     public function broadcastWith(): array
     {
+        $duration = ($this->session->answered_at && $this->session->ended_at)
+            ? (int) $this->session->answered_at->diffInSeconds($this->session->ended_at)
+            : ($this->session->answered_at ? (int) $this->session->answered_at->diffInSeconds(now()) : 0);
+
         return [
+            'call_id'       => $this->session->id,
             'session_id'    => $this->session->id,
             'user_id'       => $this->session->user_id,
+            'agent_id'      => $this->session->user_id,
+            'status'        => $this->toStatus,
             'from_status'   => $this->fromStatus,
             'to_status'     => $this->toStatus,
+            'linkedid'      => $this->session->linkedid,
             'phone_number'  => $this->session->phone_number,
             'campaign_code' => $this->session->campaign_code,
+            'call_status'   => $this->toStatus,
+            'duration'      => $duration,
             'answered_at'   => $this->session->answered_at?->toIso8601String(),
             'ended_at'      => $this->session->ended_at?->toIso8601String(),
             'timestamp'     => now()->toIso8601String(),

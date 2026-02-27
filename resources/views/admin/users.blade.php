@@ -28,6 +28,15 @@
                     :options="['Agent' => 'Agent', 'Team Leader' => 'Team Leader', 'Admin' => 'Admin', 'Super Admin' => 'Super Admin']"
                     :selected="old('role', 'Agent')" :empty="false" />
             </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
+                <div class="col-span-full">
+                    <p class="text-xs font-medium text-[var(--color-on-surface-muted)] mb-3">WebRTC / SIP (optional – required for browser calling)</p>
+                </div>
+                <x-form.input name="extension" label="SIP Extension" :value="old('extension')"
+                    help="e.g. 6001 – must match sip.conf endpoint" />
+                <x-form.input name="sip_password" type="password" label="SIP Password"
+                    help="Min 4 chars – must match pjsip.conf auth password" />
+            </div>
             <div class="mt-4">
                 <button type="submit" class="btn-primary" :disabled="submitting">
                     <x-icon name="plus" class="w-4 h-4" />
@@ -46,9 +55,9 @@
         ['label' => 'Role'],
         ['label' => 'Actions', 'align' => 'right'],
     ]" />
-    <tbody>
-        @forelse($users as $usr)
-            <tr x-data="{ editOpen: {{ ($errors->any() && old('_editing') == $usr->id) ? 'true' : 'false' }} }">
+    @forelse($users as $usr)
+    <tbody x-data="{ editOpen: {{ ($errors->any() && old('_editing') == $usr->id) ? 'true' : 'false' }} }">
+            <tr>
                 <td>
                     <div class="font-medium text-[var(--color-on-surface)]">{{ $usr->username }}</div>
                 </td>
@@ -101,6 +110,16 @@
                             <x-form.input name="password" type="password" label="New Password" help="Leave blank to keep" />
                             <x-form.input name="password_confirmation" type="password" label="Confirm" />
                         </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
+                            <div class="col-span-full">
+                                <p class="text-xs font-medium text-[var(--color-on-surface-muted)] mb-3">WebRTC / SIP</p>
+                            </div>
+                            <x-form.input name="extension" label="SIP Extension"
+                                :value="old('extension', $usr->extension)"
+                                help="e.g. 6001 – must match sip.conf" />
+                            <x-form.input name="sip_password" type="password" label="SIP Password"
+                                help="Leave blank to keep current" />
+                        </div>
                         <div class="mt-4">
                             <button type="submit" class="btn-primary text-sm" :disabled="submitting">
                                 <x-icon name="check" class="w-4 h-4" />
@@ -110,9 +129,10 @@
                     </form>
                 </td>
             </tr>
-        @empty
-        @endforelse
     </tbody>
+        @empty
+        <tbody><tr><td colspan="4" class="py-8 text-center text-[var(--color-on-surface-muted)]">No users yet.</td></tr></tbody>
+        @endforelse
 </x-table.index>
 @if($users instanceof \Illuminate\Pagination\LengthAwarePaginator)
     <x-table.pagination :paginator="$users" />

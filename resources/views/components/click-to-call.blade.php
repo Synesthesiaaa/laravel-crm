@@ -4,7 +4,7 @@
   Connects to Alpine.js store 'call'.
 --}}
 <div class="phone-widget" x-data="clickToCall()" x-show="open || $store.call.state !== 'idle'" style="display: none;">
-    {{-- Trigger fab --}}
+    {{-- Trigger fab (idle only) --}}
     <button type="button"
             @click="open = !open"
             x-show="$store.call.state === 'idle'"
@@ -13,7 +13,19 @@
         <x-icon name="phone" class="w-5 h-5" />
     </button>
 
-    {{-- Panel --}}
+    {{-- Active call: hangup button --}}
+    <div x-show="$store.call.state !== 'idle' && !open"
+         x-transition
+         class="phone-widget-panel mb-2 flex items-center gap-3">
+        <span class="text-sm text-[var(--color-on-surface)] truncate max-w-[140px]" x-text="$store.call.number || 'Call in progress'"></span>
+        <span x-show="$store.call.state === 'connected'" class="text-xs text-[var(--color-on-surface-dim)]" x-text="'· ' + $store.call.formattedDuration()"></span>
+        <button type="button" @click="hangup()" class="btn-danger shrink-0 text-sm py-1 px-3 rounded-lg flex items-center gap-1">
+            <x-icon name="phone-x-mark" class="w-4 h-4" />
+            Hang up
+        </button>
+    </div>
+
+    {{-- Dial panel --}}
     <div x-show="open"
          x-transition:enter="transition ease-out duration-200"
          x-transition:enter-start="opacity-0 scale-90 translate-y-2"

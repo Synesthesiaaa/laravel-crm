@@ -7,8 +7,14 @@ Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
 });
 
 /**
+ * Agent-specific telephony channel (alias for App.Models.User.{id}).
+ */
+Broadcast::channel('agent.{agent_id}', function ($user, $agentId) {
+    return (int) $user->id === (int) $agentId;
+});
+
+/**
  * Supervisor dashboard: real-time telephony stats and agent status.
- * Only users with supervisor or admin role may subscribe.
  */
 Broadcast::channel('telephony.supervisor', function ($user) {
     return in_array($user->role ?? '', ['Super Admin', 'Admin', 'Team Leader'], true);

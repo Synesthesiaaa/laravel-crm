@@ -23,6 +23,9 @@ class Campaign extends Model
         'description',
         'color',
         'is_active',
+        'predictive_enabled',
+        'predictive_delay_seconds',
+        'predictive_max_attempts',
         'display_order',
     ];
 
@@ -30,6 +33,9 @@ class Campaign extends Model
     {
         return [
             'is_active' => 'boolean',
+            'predictive_enabled' => 'boolean',
+            'predictive_delay_seconds' => 'integer',
+            'predictive_max_attempts' => 'integer',
         ];
     }
 

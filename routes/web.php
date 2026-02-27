@@ -26,14 +26,21 @@ Route::post('api/webhooks/ami', \App\Http\Controllers\Api\AmiWebhookController::
 // Telephony health (for monitoring; optionally restrict by IP in production)
 Route::get('api/telephony/health', \App\Http\Controllers\Api\TelephonyHealthController::class)->name('api.telephony.health');
 
+// WebSocket config for frontend (public, returns connection params)
+Route::get('api/websocket/health', \App\Http\Controllers\Api\WebsocketHealthController::class)->name('api.websocket.health');
+
 Route::middleware(['auth', 'campaign'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('records', [RecordsController::class, 'index'])->name('records.index');
     Route::get('agent', [AgentController::class, 'index'])->name('agent.index');
     Route::get('api/vicidial/proxy', VicidialProxyController::class)->name('api.vicidial.proxy')->middleware('throttle:vicidial');
     Route::post('api/call/dial', [\App\Http\Controllers\Api\CallController::class, 'dial'])->name('api.call.dial')->middleware('throttle:vicidial');
+    Route::post('api/call/predictive-dial', [\App\Http\Controllers\Api\CallController::class, 'predictiveDial'])->name('api.call.predictive-dial')->middleware('throttle:vicidial');
     Route::post('api/call/hangup', [\App\Http\Controllers\Api\CallController::class, 'hangup'])->name('api.call.hangup')->middleware('throttle:api');
     Route::get('api/call/status', [\App\Http\Controllers\Api\CallController::class, 'status'])->name('api.call.status')->middleware('throttle:api');
+    Route::get('api/sip/credentials', [\App\Http\Controllers\Api\SipCredentialsController::class, 'show'])->name('api.sip.credentials')->middleware('throttle:api');
+    Route::post('api/agent/capture', [\App\Http\Controllers\Api\AgentCaptureController::class, 'store'])->name('api.agent.capture')->middleware('throttle:api');
+    Route::get('api/leads/next', \App\Http\Controllers\Api\NextLeadController::class)->name('api.leads.next')->middleware('throttle:api');
     Route::get('api/disposition-codes', \App\Http\Controllers\Api\DispositionController::class)->name('api.disposition.codes')->middleware('throttle:api');
     Route::get('api/notifications', \App\Http\Controllers\Api\NotificationsController::class)->name('api.notifications')->middleware('throttle:api');
     Route::get('api/search', \App\Http\Controllers\Api\GlobalSearchController::class)->name('api.search')->middleware('throttle:api');

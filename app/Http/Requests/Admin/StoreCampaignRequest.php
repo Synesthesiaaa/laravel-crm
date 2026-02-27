@@ -19,6 +19,9 @@ class StoreCampaignRequest extends FormRequest
             'description'   => ['nullable', 'string', 'max:1000'],
             'color'         => ['nullable', 'string', 'max:50'],
             'display_order' => ['nullable', 'integer'],
+            'predictive_enabled' => ['nullable', 'boolean'],
+            'predictive_delay_seconds' => ['nullable', 'integer', 'min:1', 'max:300'],
+            'predictive_max_attempts' => ['nullable', 'integer', 'min:1', 'max:20'],
         ];
     }
 

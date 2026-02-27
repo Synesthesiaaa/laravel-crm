@@ -18,9 +18,10 @@ class StoreUserRequest extends FormRequest
             'full_name' => ['required', 'string', 'max:255'],
             'password'  => ['required', 'string', 'min:8', 'confirmed', 'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/'],
             'role'      => ['required', 'in:Super Admin,Admin,Team Leader,Agent'],
-            'vici_user' => ['nullable', 'string', 'max:80'],
-            'extension' => ['nullable', 'string', 'max:50'],
-            'vici_pass' => ['nullable', 'string', 'max:255'],
+            'vici_user'    => ['nullable', 'string', 'max:80'],
+            'extension'    => ['nullable', 'string', 'max:50'],
+            'vici_pass'    => ['nullable', 'string', 'max:255'],
+            'sip_password' => ['nullable', 'string', 'min:4', 'max:255'],
         ];
     }
 

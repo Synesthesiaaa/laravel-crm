@@ -39,12 +39,14 @@ class User extends Authenticatable
         'vici_user',
         'vici_pass',
         'extension',
+        'sip_password',
     ];
 
     protected $hidden = [
         'password',
         'remember_token',
         'vici_pass',
+        'sip_password',
     ];
 
     protected function casts(): array
@@ -53,6 +55,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'vici_pass' => EncryptedIfPossible::class,
+            'sip_password' => 'encrypted',
         ];
     }
 

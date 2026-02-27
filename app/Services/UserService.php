@@ -13,13 +13,16 @@ class UserService
     {
         return DB::transaction(function () use ($data): User {
             return User::create([
-                'username'  => $data['username'],
-                'full_name' => $data['full_name'],
-                'password'  => Hash::make($data['password']),
-                'role'      => $data['role'],
-                'vici_user' => $data['vici_user'] ?? null,
-                'vici_pass' => $data['vici_pass'] ?? null,
-                'extension' => $data['extension'] ?? null,
+                'username'     => $data['username'],
+                'name'         => $data['name'] ?? $data['full_name'] ?? $data['username'],
+                'full_name'    => $data['full_name'],
+                'email'        => $data['email'] ?? ($data['username'] . '@' . parse_url(config('app.url', 'http://localhost'), PHP_URL_HOST) ?: 'local'),
+                'password'     => Hash::make($data['password']),
+                'role'         => $data['role'],
+                'vici_user'    => $data['vici_user'] ?? null,
+                'vici_pass'    => $data['vici_pass'] ?? null,
+                'extension'    => $data['extension'] ?? null,
+                'sip_password' => $data['sip_password'] ?? null,
             ]);
         });
     }
@@ -37,7 +40,10 @@ class UserService
             if (! empty($data['vici_pass'])) {
                 $user->vici_pass = $data['vici_pass'];
             }
-            if (!empty($data['password'])) {
+            if (! empty($data['sip_password'])) {
+                $user->sip_password = $data['sip_password'];
+            }
+            if (! empty($data['password'])) {
                 $user->password = Hash::make($data['password']);
             }
             $user->save();
