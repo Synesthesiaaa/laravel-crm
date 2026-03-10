@@ -25,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'campaign' => \App\Http\Middleware\EnsureCampaignSelected::class,
             'role' => \App\Http\Middleware\CheckRole::class,
+            'telephony_feature' => \App\Http\Middleware\EnsureTelephonyFeatureEnabled::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

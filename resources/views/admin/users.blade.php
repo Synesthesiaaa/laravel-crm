@@ -30,6 +30,15 @@
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
                 <div class="col-span-full">
+                    <p class="text-xs font-medium text-[var(--color-on-surface-muted)] mb-3">ViciDial Agent Credentials (required for telephony)</p>
+                </div>
+                <x-form.input name="vici_user" label="ViciDial Username" :value="old('vici_user')"
+                    help="Must match ViciDial agent username" />
+                <x-form.input name="vici_pass" type="password" label="ViciDial Password"
+                    help="Must match ViciDial agent password" />
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
+                <div class="col-span-full">
                     <p class="text-xs font-medium text-[var(--color-on-surface-muted)] mb-3">WebRTC / SIP (optional – required for browser calling)</p>
                 </div>
                 <x-form.input name="extension" label="SIP Extension" :value="old('extension')"
@@ -109,6 +118,16 @@
                                 :selected="old('role', $usr->role)" :empty="false" />
                             <x-form.input name="password" type="password" label="New Password" help="Leave blank to keep" />
                             <x-form.input name="password_confirmation" type="password" label="Confirm" />
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
+                            <div class="col-span-full">
+                                <p class="text-xs font-medium text-[var(--color-on-surface-muted)] mb-3">ViciDial Agent Credentials</p>
+                            </div>
+                            <x-form.input name="vici_user" label="ViciDial Username"
+                                :value="old('vici_user', $usr->vici_user)"
+                                help="Must match ViciDial agent username" />
+                            <x-form.input name="vici_pass" type="password" label="ViciDial Password"
+                                help="Leave blank to keep current" />
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
                             <div class="col-span-full">

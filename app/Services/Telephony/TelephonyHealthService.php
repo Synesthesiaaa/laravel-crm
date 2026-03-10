@@ -6,9 +6,9 @@ use App\Models\CallSession;
 use App\Models\TelephonyAlert;
 use App\Models\UnmatchedAmiEvent;
 use App\Models\VicidialServer;
+use App\Repositories\VicidialServerRepository;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Queue;
 
 /**
  * Provides telephony health metrics for monitoring and alerting.

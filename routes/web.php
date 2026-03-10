@@ -6,6 +6,7 @@ use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FormController;
+use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\RecordsController;
 use Illuminate\Support\Facades\Route;
 
@@ -35,9 +36,49 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::get('agent', [AgentController::class, 'index'])->name('agent.index');
     Route::get('api/vicidial/proxy', VicidialProxyController::class)->name('api.vicidial.proxy')->middleware('throttle:vicidial');
     Route::post('api/call/dial', [\App\Http\Controllers\Api\CallController::class, 'dial'])->name('api.call.dial')->middleware('throttle:vicidial');
-    Route::post('api/call/predictive-dial', [\App\Http\Controllers\Api\CallController::class, 'predictiveDial'])->name('api.call.predictive-dial')->middleware('throttle:vicidial');
+    Route::post('api/call/predictive-dial', [\App\Http\Controllers\Api\CallController::class, 'predictiveDial'])->name('api.call.predictive-dial')->middleware(['throttle:vicidial', 'telephony_feature:predictive_dialing']);
     Route::post('api/call/hangup', [\App\Http\Controllers\Api\CallController::class, 'hangup'])->name('api.call.hangup')->middleware('throttle:api');
     Route::get('api/call/status', [\App\Http\Controllers\Api\CallController::class, 'status'])->name('api.call.status')->middleware('throttle:api');
+    Route::post('api/call/dtmf', \App\Http\Controllers\Api\DtmfController::class)->name('api.call.dtmf')->middleware(['throttle:api', 'telephony_feature:dtmf_controls']);
+    Route::post('api/call/transfer/blind', [\App\Http\Controllers\Api\TransferController::class, 'blind'])->name('api.call.transfer.blind')->middleware(['throttle:vicidial', 'telephony_feature:transfer_controls']);
+    Route::post('api/call/transfer/warm', [\App\Http\Controllers\Api\TransferController::class, 'warm'])->name('api.call.transfer.warm')->middleware(['throttle:vicidial', 'telephony_feature:transfer_controls']);
+    Route::post('api/call/transfer/local', [\App\Http\Controllers\Api\TransferController::class, 'local'])->name('api.call.transfer.local')->middleware(['throttle:vicidial', 'telephony_feature:transfer_controls']);
+    Route::post('api/call/transfer/leave-3way', [\App\Http\Controllers\Api\TransferController::class, 'leaveThreeWay'])->name('api.call.transfer.leave-3way')->middleware(['throttle:vicidial', 'telephony_feature:transfer_controls']);
+    Route::post('api/call/transfer/hangup-xfer', [\App\Http\Controllers\Api\TransferController::class, 'hangupXfer'])->name('api.call.transfer.hangup-xfer')->middleware(['throttle:vicidial', 'telephony_feature:transfer_controls']);
+    Route::post('api/call/transfer/hangup-both', [\App\Http\Controllers\Api\TransferController::class, 'hangupBoth'])->name('api.call.transfer.hangup-both')->middleware(['throttle:vicidial', 'telephony_feature:transfer_controls']);
+    Route::post('api/call/transfer/vm', [\App\Http\Controllers\Api\TransferController::class, 'vm'])->name('api.call.transfer.vm')->middleware(['throttle:vicidial', 'telephony_feature:transfer_controls']);
+    Route::post('api/call/park', [\App\Http\Controllers\Api\TransferController::class, 'park'])->name('api.call.park')->middleware(['throttle:vicidial', 'telephony_feature:transfer_controls']);
+    Route::post('api/call/grab', [\App\Http\Controllers\Api\TransferController::class, 'grab'])->name('api.call.grab')->middleware(['throttle:vicidial', 'telephony_feature:transfer_controls']);
+    Route::post('api/call/park-ivr', [\App\Http\Controllers\Api\TransferController::class, 'parkIvr'])->name('api.call.park-ivr')->middleware(['throttle:vicidial', 'telephony_feature:transfer_controls']);
+    Route::post('api/call/swap-park', [\App\Http\Controllers\Api\TransferController::class, 'swap'])->name('api.call.swap-park')->middleware(['throttle:vicidial', 'telephony_feature:transfer_controls']);
+    Route::post('api/call/recording/start', [\App\Http\Controllers\Api\RecordingController::class, 'start'])->name('api.call.recording.start')->middleware(['throttle:vicidial', 'telephony_feature:recording_controls']);
+    Route::post('api/call/recording/stop', [\App\Http\Controllers\Api\RecordingController::class, 'stop'])->name('api.call.recording.stop')->middleware(['throttle:vicidial', 'telephony_feature:recording_controls']);
+    Route::get('api/call/recording/status', [\App\Http\Controllers\Api\RecordingController::class, 'status'])->name('api.call.recording.status')->middleware(['throttle:vicidial', 'telephony_feature:recording_controls']);
+    Route::get('api/call/recording/lookup', [\App\Http\Controllers\Api\RecordingController::class, 'lookup'])->name('api.call.recording.lookup')->middleware(['throttle:vicidial', 'telephony_feature:recording_controls']);
+    Route::post('api/callbacks/schedule', [\App\Http\Controllers\Api\CallbackController::class, 'schedule'])->name('api.callbacks.schedule')->middleware(['throttle:api', 'telephony_feature:callback_controls']);
+    Route::post('api/callbacks/remove', [\App\Http\Controllers\Api\CallbackController::class, 'remove'])->name('api.callbacks.remove')->middleware(['throttle:api', 'telephony_feature:callback_controls']);
+    Route::get('api/callbacks/info', [\App\Http\Controllers\Api\CallbackController::class, 'info'])->name('api.callbacks.info')->middleware(['throttle:api', 'telephony_feature:callback_controls']);
+    Route::post('api/vicidial/session/login', [\App\Http\Controllers\Api\VicidialSessionController::class, 'login'])->name('api.vicidial.session.login')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
+    Route::post('api/vicidial/session/pause', [\App\Http\Controllers\Api\VicidialSessionController::class, 'pause'])->name('api.vicidial.session.pause')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
+    Route::post('api/vicidial/session/pause-code', [\App\Http\Controllers\Api\VicidialSessionController::class, 'pauseCode'])->name('api.vicidial.session.pause-code')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
+    Route::post('api/vicidial/session/logout', [\App\Http\Controllers\Api\VicidialSessionController::class, 'logout'])->name('api.vicidial.session.logout')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
+    Route::post('api/vicidial/session/ingroups', [\App\Http\Controllers\Api\VicidialSessionController::class, 'ingroups'])->name('api.vicidial.session.ingroups')->middleware(['throttle:vicidial', 'telephony_feature:ingroup_management']);
+    Route::get('api/vicidial/session/status', [\App\Http\Controllers\Api\VicidialSessionController::class, 'status'])->name('api.vicidial.session.status')->middleware(['throttle:api', 'telephony_feature:session_controls']);
+    Route::get('api/leads/search', [\App\Http\Controllers\Api\LeadController::class, 'search'])->name('api.leads.search')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
+    Route::get('api/leads/info', [\App\Http\Controllers\Api\LeadController::class, 'info'])->name('api.leads.info')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
+    Route::get('api/leads/field', [\App\Http\Controllers\Api\LeadController::class, 'field'])->name('api.leads.field')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
+    Route::post('api/leads/add', [\App\Http\Controllers\Api\LeadController::class, 'add'])->name('api.leads.add')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
+    Route::post('api/leads/update', [\App\Http\Controllers\Api\LeadController::class, 'update'])->name('api.leads.update')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
+    Route::post('api/leads/switch', [\App\Http\Controllers\Api\LeadController::class, 'switch'])->name('api.leads.switch')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
+    Route::post('api/leads/update-fields', [\App\Http\Controllers\Api\LeadController::class, 'updateFields'])->name('api.leads.update-fields')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
+    Route::get('api/reports/call-status-stats', [\App\Http\Controllers\Api\ReportingController::class, 'callStatusStats'])->name('api.reports.call-status-stats')->middleware('throttle:api');
+    Route::get('api/reports/call-dispo-report', [\App\Http\Controllers\Api\ReportingController::class, 'callDispoReport'])->name('api.reports.call-dispo-report')->middleware('throttle:api');
+    Route::get('api/reports/agent-stats', [\App\Http\Controllers\Api\ReportingController::class, 'agentStats'])->name('api.reports.agent-stats')->middleware('throttle:api');
+    Route::get('api/reports/logged-in-agents', [\App\Http\Controllers\Api\ReportingController::class, 'loggedInAgents'])->name('api.reports.logged-in-agents')->middleware('throttle:api');
+    Route::get('api/reports/phone-number-log', [\App\Http\Controllers\Api\ReportingController::class, 'phoneNumberLog'])->name('api.reports.phone-number-log')->middleware('throttle:api');
+    Route::get('api/reports/user-group-status', [\App\Http\Controllers\Api\ReportingController::class, 'userGroupStatus'])->name('api.reports.user-group-status')->middleware('throttle:api');
+    Route::get('api/reports/in-group-status', [\App\Http\Controllers\Api\ReportingController::class, 'inGroupStatus'])->name('api.reports.in-group-status')->middleware('throttle:api');
+    Route::get('api/reports/agent-status', [\App\Http\Controllers\Api\ReportingController::class, 'agentStatus'])->name('api.reports.agent-status')->middleware('throttle:api');
     Route::get('api/sip/credentials', [\App\Http\Controllers\Api\SipCredentialsController::class, 'show'])->name('api.sip.credentials')->middleware('throttle:api');
     Route::post('api/agent/capture', [\App\Http\Controllers\Api\AgentCaptureController::class, 'store'])->name('api.agent.capture')->middleware('throttle:api');
     Route::get('api/leads/next', \App\Http\Controllers\Api\NextLeadController::class)->name('api.leads.next')->middleware('throttle:api');
@@ -49,6 +90,14 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::post('api/disposition/save', \App\Http\Controllers\Api\SaveDispositionController::class)->name('api.disposition.save')->middleware('throttle:api');
     Route::post('api/client-errors', fn() => response()->json(['ok' => true]))->name('api.client-errors');
     Route::get('attendance', [AttendanceController::class, 'index'])->name('attendance.index');
+    Route::middleware('role:Team Leader,Admin,Super Admin')->group(function () {
+        Route::get('reports', [ReportsController::class, 'index'])->name('reports.index');
+        Route::post('api/supervisor/monitor', [\App\Http\Controllers\Api\SupervisorTelephonyController::class, 'monitor'])->name('api.supervisor.monitor')->middleware('throttle:vicidial');
+        Route::post('api/supervisor/whisper', [\App\Http\Controllers\Api\SupervisorTelephonyController::class, 'whisper'])->name('api.supervisor.whisper')->middleware('throttle:vicidial');
+        Route::post('api/supervisor/force-pause', [\App\Http\Controllers\Api\SupervisorTelephonyController::class, 'forcePause'])->name('api.supervisor.force-pause')->middleware('throttle:vicidial');
+        Route::post('api/supervisor/force-logout', [\App\Http\Controllers\Api\SupervisorTelephonyController::class, 'forceLogout'])->name('api.supervisor.force-logout')->middleware('throttle:vicidial');
+        Route::post('api/supervisor/send-notification', [\App\Http\Controllers\Api\SupervisorTelephonyController::class, 'sendNotification'])->name('api.supervisor.send-notification')->middleware('throttle:vicidial');
+    });
 
     // Admin: Team Leader, Admin, or Super Admin
     Route::middleware('role:Team Leader,Admin,Super Admin')->prefix('admin')->name('admin.')->group(function () {
@@ -76,6 +125,8 @@ Route::middleware(['auth', 'campaign'])->group(function () {
         // Super Admin only
         Route::middleware('role:Super Admin')->group(function () {
             Route::get('configuration', [\App\Http\Controllers\Admin\ConfigurationController::class, 'index'])->name('configuration');
+            Route::post('configuration/telephony-features', [\App\Http\Controllers\Admin\ConfigurationController::class, 'updateTelephonyFeatures'])->name('configuration.telephony-features.update');
+            Route::post('configuration/telephony-diagnostics', \App\Http\Controllers\Admin\TelephonyDiagnosticsController::class)->name('configuration.telephony-diagnostics');
             Route::get('users', [\App\Http\Controllers\Admin\UsersController::class, 'index'])->name('users.index');
             Route::post('users', [\App\Http\Controllers\Admin\UsersController::class, 'store'])->name('users.store');
             Route::put('users/{user}', [\App\Http\Controllers\Admin\UsersController::class, 'update'])->name('users.update');

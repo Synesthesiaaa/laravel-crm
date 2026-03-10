@@ -3,6 +3,10 @@
 namespace Tests\Unit\Services;
 
 use App\Models\FormField;
+use App\Repositories\FormFieldRepository;
+use App\Repositories\FormSubmissionRepository;
+use App\Services\CallHistoryService;
+use App\Services\CampaignService;
 use App\Services\FormSubmissionService;
 use Illuminate\Support\Collection;
 use Tests\TestCase;
@@ -63,5 +67,21 @@ class FormSubmissionServiceTest extends TestCase
         ], 'agent1');
 
         $this->assertEquals('639123456789', $result['phone']);
+    }
+
+    public function test_generate_request_id_returns_default_when_table_missing(): void
+    {
+        $campaignService = \Mockery::mock(CampaignService::class);
+        $campaignService->shouldReceive('getAllFormTableNames')->once()->andReturn([]);
+
+        $service = new FormSubmissionService(
+            $campaignService,
+            \Mockery::mock(FormFieldRepository::class),
+            \Mockery::mock(FormSubmissionRepository::class),
+            \Mockery::mock(CallHistoryService::class)
+        );
+
+        $requestId = $service->generateRequestId('table_that_does_not_exist');
+        $this->assertStringEndsWith('001', $requestId);
     }
 }

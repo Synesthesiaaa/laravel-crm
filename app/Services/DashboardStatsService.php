@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Repositories\CampaignRepository;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class DashboardStatsService
 {
@@ -105,6 +106,7 @@ class DashboardStatsService
         }
         $allowed = $this->campaignRepository->getAllFormTableNames();
         $tables  = array_filter(array_column($config['forms'], 'table'));
-        return array_values(array_intersect($tables, $allowed));
+        $tables  = array_values(array_intersect($tables, $allowed));
+        return array_values(array_filter($tables, fn (string $t) => Schema::hasTable($t) && Schema::hasColumn($t, 'date') && Schema::hasColumn($t, 'agent')));
     }
 }

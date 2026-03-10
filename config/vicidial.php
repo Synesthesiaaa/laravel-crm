@@ -9,6 +9,7 @@ return [
     */
 
     'api_url' => env('VICI_API_URL', 'http://10.10.88.138/agc/api.php'),
+    'non_agent_api_url' => env('VICI_NON_AGENT_API_URL', ''),
     'default_source' => env('VICI_SOURCE', 'crm_tracker'),
     'timeout' => (int) env('VICI_API_TIMEOUT', 10),
     'connect_timeout' => (int) env('VICI_CONNECT_TIMEOUT', 5),
@@ -31,5 +32,13 @@ return [
         'BUSY' => 'BUSY',
         'OTHER' => 'OTHER',
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Agent session defaults
+    |--------------------------------------------------------------------------
+    */
+    'pause_codes' => ['BREAK', 'LUNCH', 'MEETING', 'COACHING', 'SYSTEM'],
+    'session_status_poll_seconds' => (int) env('VICI_SESSION_STATUS_POLL_SECONDS', 15),
 
 ];

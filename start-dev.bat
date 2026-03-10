@@ -18,7 +18,9 @@ timeout /t 1 /nobreak >nul
 
 start /b php artisan ami:listen
 
+start /b php artisan migrate --force
+
 echo.
-echo All services running (serve, reverb, queue, ami). Close this window to stop all.
+echo All services running (serve, reverb, queue, ami, migrate). Close this window to stop all.
 echo.
 pause

@@ -15,12 +15,14 @@
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Lead Information</h3>
                 <div class="flex items-center gap-2">
-                    <button type="button"
-                            class="text-xs px-2 py-1 rounded-md border"
-                            :class="predictiveMode ? 'border-emerald-500 text-emerald-600 bg-emerald-50' : 'border-[var(--color-border)] text-[var(--color-on-surface-dim)]'"
-                            @click="togglePredictiveMode()">
-                        <span x-text="predictiveMode ? 'Predictive: ON' : 'Predictive: OFF'">Predictive: OFF</span>
-                    </button>
+                    <template x-if="featureEnabled('predictive_dialing')">
+                        <button type="button"
+                                class="text-xs px-2 py-1 rounded-md border"
+                                :class="predictiveMode ? 'border-emerald-500 text-emerald-600 bg-emerald-50' : 'border-[var(--color-border)] text-[var(--color-on-surface-dim)]'"
+                                @click="togglePredictiveMode()">
+                            <span x-text="predictiveMode ? 'Predictive: ON' : 'Predictive: OFF'">Predictive: OFF</span>
+                        </button>
+                    </template>
                     <button type="button" class="btn-secondary text-xs px-2 py-1" @click="fetchNextLead()" :disabled="callState !== 'idle' && callState !== 'wrapup' || loadingNextLead"
                             title="Get next lead">
                         <x-icon name="arrow-path" class="w-3.5 h-3.5" />
@@ -223,6 +225,28 @@
             </div>
         </div>
 
+        @if(($telephonyFeatures['session_controls'] ?? true) === true)
+            @include('agent.partials.session-panel')
+        @endif
+        @if(($telephonyFeatures['ingroup_management'] ?? true) === true)
+            @include('agent.partials.ingroup-panel')
+        @endif
+        @if(($telephonyFeatures['transfer_controls'] ?? true) === true)
+            @include('agent.partials.transfer-panel')
+        @endif
+        @if(($telephonyFeatures['recording_controls'] ?? true) === true)
+            @include('agent.partials.recording-controls')
+        @endif
+        @if(($telephonyFeatures['dtmf_controls'] ?? true) === true)
+            @include('agent.partials.dtmf-keypad')
+        @endif
+        @if(($telephonyFeatures['callback_controls'] ?? true) === true)
+            @include('agent.partials.callback-form')
+        @endif
+        @if(($telephonyFeatures['lead_tools'] ?? true) === true)
+            @include('agent.partials.lead-search')
+        @endif
+
     </div>
 </div>
 @endsection
@@ -249,9 +273,39 @@ window.agentScreen = function() {
         predictiveMode: false,
         predictiveDelay: 3,
         _predictiveTimer: null,
+        vici: {
+            loading: false,
+            phone_login: '',
+            phone_pass: '',
+            pause_code: 'BREAK',
+            pause_codes: @js(config('vicidial.pause_codes', ['BREAK'])),
+            ingroups_raw: '',
+            blended: true,
+        },
+        transfer: {
+            phone_number: '',
+            ingroup: '',
+        },
+        recording: {
+            statusText: '',
+        },
+        dtmf: {
+            custom: '',
+        },
+        callback: {
+            datetime: '',
+            type: 'ANYONE',
+            user: '',
+            comments: '',
+        },
+        leadTools: {
+            phone_search: '',
+            raw: '',
+        },
 
         _echoUnsubscribe: null,
         _statusPollInterval: null,
+        features: @js($telephonyFeatures ?? []),
 
         init() {
             this.$watch('callState', (v) => Alpine.store('call').state = v);
@@ -259,7 +313,13 @@ window.agentScreen = function() {
             this.$watch('$store.call.state', (v) => { if (v) this.callState = v; });
             this.$watch('$store.call.number', (v) => { if (v) this.phoneNumber = v; });
             this.$watch('$store.call.sessionId', (v) => { if (v) this.sessionId = v; });
+            if (!this.featureEnabled('predictive_dialing')) {
+                this.predictiveMode = false;
+            }
             this.syncCallStatus();
+            if (this.featureEnabled('session_controls')) {
+                this.syncVicidialStatus();
+            }
             const te = window.TelephonyEcho;
             if (te && te.initEcho && te.isBroadcastEnabled()) {
                 te.initEcho();
@@ -297,6 +357,29 @@ window.agentScreen = function() {
             } else {
                 this._statusPollInterval = setInterval(() => this.syncCallStatus(), 15000);
             }
+            if (this.featureEnabled('session_controls')) {
+                setInterval(() => this.syncVicidialStatus(), 15000);
+            }
+
+            window.addEventListener('telephony-shortcut-dial', () => this.dial());
+            window.addEventListener('telephony-shortcut-hangup', () => this.hangup());
+            window.addEventListener('telephony-shortcut-transfer', () => {
+                const panel = document.querySelector('[x-data=\"agentScreen()\"]');
+                if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+            window.addEventListener('telephony-shortcut-recording', () => {
+                if (!this.featureEnabled('recording_controls')) return;
+                this.startRecording();
+            });
+            window.addEventListener('telephony-shortcut-pause', () => {
+                if (!this.featureEnabled('session_controls')) return;
+                if (Alpine.store('vicidial').status === 'paused') this.viciPause('RESUME');
+                else this.viciPause('PAUSE');
+            });
+        },
+
+        featureEnabled(key) {
+            return !!this.features[key];
         },
 
         async syncCallStatus() {
@@ -324,6 +407,296 @@ window.agentScreen = function() {
                     Alpine.store('call').state = 'idle';
                 }
             } catch {}
+        },
+
+        async syncVicidialStatus() {
+            try {
+                const data = await Alpine.store('vicidial').sync(this.$el.dataset.campaign || 'mbsales');
+                const raw = data?.agent_status?.data?.raw_response || '';
+                if (!this.sessionId && typeof raw === 'string' && raw.includes('INCALL')) {
+                    this.callState = 'connected';
+                    Alpine.store('call').state = 'connected';
+                    if (raw.includes('|')) {
+                        const parts = raw.split('|');
+                        if (parts[10]) {
+                            this.phoneNumber = parts[10];
+                            Alpine.store('call').number = parts[10];
+                        }
+                    }
+                }
+            } catch {}
+        },
+
+        async viciLogin() {
+            if (!this.featureEnabled('session_controls')) return;
+            this.vici.loading = true;
+            try {
+                await window.axios.post('/api/vicidial/session/login', {
+                    campaign: this.$el.dataset.campaign || 'mbsales',
+                    phone_login: this.vici.phone_login || null,
+                    phone_pass: this.vici.phone_pass || null,
+                    blended: this.vici.blended,
+                    ingroups: this.parseIngroups(this.vici.ingroups_raw),
+                });
+                Alpine.store('toast').success('VICIdial session initialized.');
+                await this.syncVicidialStatus();
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'VICIdial login failed.');
+            } finally {
+                this.vici.loading = false;
+            }
+        },
+
+        async viciPause(value) {
+            if (!this.featureEnabled('session_controls')) return;
+            this.vici.loading = true;
+            try {
+                await window.axios.post('/api/vicidial/session/pause', {
+                    campaign: this.$el.dataset.campaign || 'mbsales',
+                    value,
+                });
+                Alpine.store('toast').info(value === 'PAUSE' ? 'Agent paused.' : 'Agent resumed.');
+                await this.syncVicidialStatus();
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Unable to change pause state.');
+            } finally {
+                this.vici.loading = false;
+            }
+        },
+
+        async setPauseCode() {
+            if (!this.featureEnabled('session_controls')) return;
+            if (!this.vici.pause_code) return;
+            try {
+                await window.axios.post('/api/vicidial/session/pause-code', {
+                    campaign: this.$el.dataset.campaign || 'mbsales',
+                    pause_code: this.vici.pause_code,
+                });
+                Alpine.store('toast').success('Pause code set.');
+                await this.syncVicidialStatus();
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Unable to set pause code.');
+            }
+        },
+
+        async viciLogout() {
+            if (!this.featureEnabled('session_controls')) return;
+            this.vici.loading = true;
+            try {
+                await window.axios.post('/api/vicidial/session/logout', {
+                    campaign: this.$el.dataset.campaign || 'mbsales',
+                });
+                Alpine.store('toast').info('VICIdial session logged out.');
+                await this.syncVicidialStatus();
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'VICIdial logout failed.');
+            } finally {
+                this.vici.loading = false;
+            }
+        },
+
+        async updateIngroups(action) {
+            if (!this.featureEnabled('ingroup_management')) return;
+            try {
+                await window.axios.post('/api/vicidial/session/ingroups', {
+                    campaign: this.$el.dataset.campaign || 'mbsales',
+                    action,
+                    blended: this.vici.blended,
+                    ingroups: this.parseIngroups(this.vici.ingroups_raw),
+                });
+                Alpine.store('toast').success('In-group settings updated.');
+                await this.syncVicidialStatus();
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Unable to update in-groups.');
+            }
+        },
+
+        parseIngroups(raw) {
+            return (raw || '')
+                .split(/[,\s]+/)
+                .map(v => v.trim())
+                .filter(Boolean);
+        },
+
+        async blindTransfer() {
+            if (!this.featureEnabled('transfer_controls')) return;
+            if (!this.transfer.phone_number) return;
+            await this.transferAction('/api/call/transfer/blind', { phone_number: this.transfer.phone_number });
+        },
+
+        async warmTransfer() {
+            if (!this.featureEnabled('transfer_controls')) return;
+            await this.transferAction('/api/call/transfer/warm', {
+                phone_number: this.transfer.phone_number || null,
+                ingroup: this.transfer.ingroup || null,
+                consultative: true,
+            });
+        },
+
+        async localCloser() {
+            if (!this.featureEnabled('transfer_controls')) return;
+            if (!this.transfer.ingroup) return;
+            await this.transferAction('/api/call/transfer/local', {
+                ingroup: this.transfer.ingroup,
+                phone_number: this.transfer.phone_number || null,
+            });
+        },
+
+        async leaveThreeWay() { if (!this.featureEnabled('transfer_controls')) return; await this.transferAction('/api/call/transfer/leave-3way'); },
+        async hangupXfer() { if (!this.featureEnabled('transfer_controls')) return; await this.transferAction('/api/call/transfer/hangup-xfer'); },
+        async hangupBoth() { if (!this.featureEnabled('transfer_controls')) return; await this.transferAction('/api/call/transfer/hangup-both'); },
+        async vmDrop() { if (!this.featureEnabled('transfer_controls')) return; await this.transferAction('/api/call/transfer/vm'); },
+        async parkCustomer() { if (!this.featureEnabled('transfer_controls')) return; await this.transferAction('/api/call/park'); },
+        async grabCustomer() { if (!this.featureEnabled('transfer_controls')) return; await this.transferAction('/api/call/grab'); },
+        async parkIvr() { if (!this.featureEnabled('transfer_controls')) return; await this.transferAction('/api/call/park-ivr'); },
+        async swapPark(target) { if (!this.featureEnabled('transfer_controls')) return; await this.transferAction('/api/call/swap-park', { target }); },
+
+        async transferAction(url, data = {}) {
+            try {
+                await window.axios.post(url, { campaign: this.$el.dataset.campaign || 'mbsales', ...data });
+                Alpine.store('toast').success('Transfer action sent.');
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Transfer action failed.');
+            }
+        },
+
+        async startRecording() {
+            if (!this.featureEnabled('recording_controls')) return;
+            try {
+                const res = await window.axios.post('/api/call/recording/start', { campaign: this.$el.dataset.campaign || 'mbsales' });
+                this.recording.statusText = res.data?.data?.raw_response || 'Recording started.';
+                Alpine.store('toast').success('Recording start sent.');
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Failed to start recording.');
+            }
+        },
+
+        async stopRecording() {
+            if (!this.featureEnabled('recording_controls')) return;
+            try {
+                const res = await window.axios.post('/api/call/recording/stop', { campaign: this.$el.dataset.campaign || 'mbsales' });
+                this.recording.statusText = res.data?.data?.raw_response || 'Recording stopped.';
+                Alpine.store('toast').info('Recording stop sent.');
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Failed to stop recording.');
+            }
+        },
+
+        async recordingStatus() {
+            if (!this.featureEnabled('recording_controls')) return;
+            try {
+                const res = await window.axios.get('/api/call/recording/status', { params: { campaign: this.$el.dataset.campaign || 'mbsales' } });
+                this.recording.statusText = res.data?.data?.raw_response || 'No status';
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Failed to fetch recording status.');
+            }
+        },
+
+        async sendDtmf(digit) {
+            if (!this.featureEnabled('dtmf_controls')) return;
+            const digits = (digit || '').toString().trim();
+            if (!digits) return;
+            try {
+                await window.axios.post('/api/call/dtmf', {
+                    campaign: this.$el.dataset.campaign || 'mbsales',
+                    digits,
+                });
+                Alpine.store('toast').info('DTMF sent: ' + digits);
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Failed to send DTMF.');
+            }
+        },
+
+        async scheduleCallback() {
+            if (!this.featureEnabled('callback_controls')) return;
+            if (!this.leadId || !this.callback.datetime) return;
+            try {
+                await window.axios.post('/api/callbacks/schedule', {
+                    campaign: this.$el.dataset.campaign || 'mbsales',
+                    lead_id: this.leadId,
+                    callback_datetime: this.callback.datetime.replace('T', '+') + ':00',
+                    callback_type: this.callback.type,
+                    callback_user: this.callback.user || null,
+                    callback_comments: this.callback.comments || null,
+                });
+                Alpine.store('toast').success('Callback scheduled.');
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Unable to schedule callback.');
+            }
+        },
+
+        async removeCallback() {
+            if (!this.featureEnabled('callback_controls')) return;
+            if (!this.leadId) return;
+            try {
+                await window.axios.post('/api/callbacks/remove', {
+                    campaign: this.$el.dataset.campaign || 'mbsales',
+                    lead_id: this.leadId,
+                });
+                Alpine.store('toast').info('Callback removed.');
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Unable to remove callback.');
+            }
+        },
+
+        async callbackInfo() {
+            if (!this.featureEnabled('callback_controls')) return;
+            if (!this.leadId) return;
+            try {
+                const res = await window.axios.get('/api/callbacks/info', {
+                    params: {
+                        campaign: this.$el.dataset.campaign || 'mbsales',
+                        lead_id: this.leadId,
+                    },
+                });
+                this.leadTools.raw = res.data?.data?.raw_response || '';
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Unable to fetch callback info.');
+            }
+        },
+
+        async searchLead() {
+            if (!this.featureEnabled('lead_tools')) return;
+            if (!this.leadTools.phone_search) return;
+            try {
+                const res = await window.axios.get('/api/leads/search', {
+                    params: {
+                        campaign: this.$el.dataset.campaign || 'mbsales',
+                        phone_number: this.leadTools.phone_search,
+                    },
+                });
+                this.leadTools.raw = res.data?.data?.raw_response || '';
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Lead search failed.');
+            }
+        },
+
+        async loadLeadInfo() {
+            if (!this.featureEnabled('lead_tools')) return;
+            try {
+                const params = { campaign: this.$el.dataset.campaign || 'mbsales' };
+                if (this.leadId) params.lead_id = this.leadId;
+                if (!this.leadId && this.leadTools.phone_search) params.phone_number = this.leadTools.phone_search;
+                const res = await window.axios.get('/api/leads/info', { params });
+                this.leadTools.raw = res.data?.data?.raw_response || '';
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Unable to fetch lead info.');
+            }
+        },
+
+        async switchLead() {
+            if (!this.featureEnabled('lead_tools')) return;
+            if (!this.leadId) return;
+            try {
+                const res = await window.axios.post('/api/leads/switch', {
+                    campaign: this.$el.dataset.campaign || 'mbsales',
+                    lead_id: this.leadId,
+                });
+                this.leadTools.raw = res.data?.data?.raw_response || '';
+                Alpine.store('toast').success('Lead switch request sent.');
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || 'Lead switch failed.');
+            }
         },
 
         async dial() {
@@ -444,6 +817,7 @@ window.agentScreen = function() {
         },
 
         togglePredictiveMode() {
+            if (!this.featureEnabled('predictive_dialing')) return;
             this.predictiveMode = !this.predictiveMode;
             if (!this.predictiveMode && this._predictiveTimer) {
                 clearTimeout(this._predictiveTimer);
@@ -456,12 +830,14 @@ window.agentScreen = function() {
         },
 
         schedulePredictiveDial() {
+            if (!this.featureEnabled('predictive_dialing')) return;
             if (!this.predictiveMode || this.callState !== 'idle') return;
             if (this._predictiveTimer) clearTimeout(this._predictiveTimer);
             this._predictiveTimer = setTimeout(() => this.predictiveDial(), Math.max(1, this.predictiveDelay) * 1000);
         },
 
         async predictiveDial() {
+            if (!this.featureEnabled('predictive_dialing')) return;
             if (!this.predictiveMode || this.callState !== 'idle' || this.dialBlocked) return;
             try {
                 const campaign = this.$el.dataset.campaign || 'mbsales';

@@ -33,17 +33,39 @@ class VicidialProxyService
         $source = $server->source ?: config('vicidial.default_source', 'crm_tracker');
         $baseUrl = rtrim($server->api_url, '?&');
         $sep = str_contains($baseUrl, '?') ? '&' : '?';
-        $url = $baseUrl . $sep . http_build_query([
+
+        $baseQuery = [
             'user' => $viciUser,
             'pass' => $viciPass,
             'agent_user' => $viciUser,
             'source' => $source,
             'function' => $action,
             'value' => $params['value'] ?? '',
-        ]);
+        ];
+
+        $extraQuery = $params['query'] ?? [];
+        foreach ($params as $k => $v) {
+            if (in_array($k, ['value', 'phone_code', 'phone_number', 'query'], true)) {
+                continue;
+            }
+            if (!array_key_exists($k, $extraQuery)) {
+                $extraQuery[$k] = $v;
+            }
+        }
+
+        $url = $baseUrl . $sep . http_build_query(array_merge($baseQuery, $extraQuery));
         if ($action === 'external_dial') {
             $phoneNum = $params['phone_number'] ?? $params['value'] ?? '';
-            $url .= '&phone_code=' . urlencode($params['phone_code'] ?? '1') . '&search=YES&preview=NO&focus=YES';
+            $url .= '&phone_code=' . urlencode($params['phone_code'] ?? '1');
+            if (!isset($extraQuery['search'])) {
+                $url .= '&search=YES';
+            }
+            if (!isset($extraQuery['preview'])) {
+                $url .= '&preview=NO';
+            }
+            if (!isset($extraQuery['focus'])) {
+                $url .= '&focus=YES';
+            }
             if ($phoneNum !== '') {
                 $url .= '&phone_number=' . urlencode($phoneNum);
             }
@@ -70,7 +92,8 @@ class VicidialProxyService
             ->get($url);
 
         $body = $response->body();
-        $success = stripos($body, 'SUCCESS') !== false;
+        $normalized = strtolower(trim($body));
+        $success = !str_starts_with($normalized, 'error:');
         $message = null;
         if (!$success) {
             if (stripos($body, 'INVALID USERNAME/PASSWORD') !== false || stripos($body, '|BAD|') !== false) {

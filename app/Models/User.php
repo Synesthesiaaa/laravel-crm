@@ -93,4 +93,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(CallSession::class);
     }
+
+    public function vicidialSessions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(VicidialAgentSession::class);
+    }
 }

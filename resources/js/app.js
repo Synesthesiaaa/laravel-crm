@@ -103,6 +103,9 @@ Alpine.store('call', {
     timer: null,
     muted: false,
     onHold: false,
+    transferState: 'idle',
+    recording: false,
+    inbound: false,
 
     startTimer() {
         this.duration = 0;
@@ -137,6 +140,39 @@ Alpine.store('call', {
     },
 });
 
+// Global VICIdial session store
+Alpine.store('vicidial', {
+    loggedIn: false,
+    status: 'logged_out',
+    pauseCode: '',
+    queueCount: 0,
+    campaign: '',
+    blended: true,
+    ingroups: [],
+    lastSyncAt: null,
+    async sync(campaign = null) {
+        try {
+            const params = campaign ? { campaign } : {};
+            const { data } = await window.axios.get('/api/vicidial/session/status', { params });
+            const session = data.local_session || {};
+            const queue = data.queue?.data?.count ?? 0;
+            this.loggedIn = session.session_status && session.session_status !== 'logged_out';
+            this.status = session.session_status || 'logged_out';
+            this.pauseCode = session.pause_code || '';
+            this.queueCount = Number(queue) || 0;
+            this.campaign = session.campaign_code || campaign || this.campaign;
+            this.blended = typeof session.blended === 'boolean' ? session.blended : this.blended;
+            const choices = (session.ingroup_choices || '').trim();
+            this.ingroups = choices ? choices.split(/\s+/) : [];
+            this.lastSyncAt = new Date().toISOString();
+            return data;
+        } catch (_) {
+            // silent: UI falls back to local values
+            return null;
+        }
+    },
+});
+
 window.Alpine = Alpine;
 window.TelephonyCore = TelephonyCore;
 Alpine.start();
@@ -151,6 +187,22 @@ document.addEventListener('keydown', (e) => {
     // Escape → close search
     if (e.key === 'Escape') {
         Alpine.store('search').close();
+    }
+
+    // Telephony shortcuts (only active on agent views that listen to these events)
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+        const key = e.key.toLowerCase();
+        const map = {
+            d: 'telephony-shortcut-dial',
+            h: 'telephony-shortcut-hangup',
+            t: 'telephony-shortcut-transfer',
+            r: 'telephony-shortcut-recording',
+            p: 'telephony-shortcut-pause',
+        };
+        if (map[key]) {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent(map[key]));
+        }
     }
 });
 

@@ -45,6 +45,34 @@
         </div>
     </div>
 
+    <div class="md-card p-4">
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
+            <div class="form-field">
+                <label class="form-label">Recipient Type</label>
+                <select class="form-select" x-model="notification.recipient_type">
+                    <option value="USER">USER</option>
+                    <option value="USER_GROUP">USER_GROUP</option>
+                    <option value="CAMPAIGN">CAMPAIGN</option>
+                </select>
+            </div>
+            <div class="form-field">
+                <label class="form-label">Recipient</label>
+                <input class="form-input" x-model="notification.recipient" placeholder="e.g. AGENTS or TESTCAMP or 6666" />
+            </div>
+            <div class="form-field md:col-span-2">
+                <label class="form-label">Message</label>
+                <input class="form-input" x-model="notification.text" placeholder="Notification text" />
+            </div>
+            <div class="form-field">
+                <label class="inline-flex items-center gap-2 text-xs text-[var(--color-on-surface-muted)] mb-1">
+                    <input type="checkbox" x-model="notification.confetti" />
+                    Confetti
+                </label>
+                <button class="btn-secondary w-full text-xs" @click="sendNotification()">Send</button>
+            </div>
+        </div>
+    </div>
+
     {{-- Tabs --}}
     <div class="flex gap-2 border-b border-[var(--color-border)]" role="tablist">
         <button class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
@@ -115,8 +143,9 @@
                         <span class="text-xs text-[var(--color-on-surface-dim)]" x-text="agent.calls_today + ' calls today'"></span>
                         <span class="text-xs font-mono text-[var(--color-on-surface-muted)]" x-text="agent.since"></span>
                     </div>
+                    <div class="text-[11px] text-[var(--color-on-surface-dim)] mt-1" x-text="'Vici: ' + (agent.vici_status || 'unknown') + ' · Queue: ' + (agent.queue_count ?? 0)"></div>
                     {{-- Supervisor controls --}}
-                    <div class="flex gap-1.5 mt-2" x-show="agent.status === 'oncall'">
+                    <div class="flex gap-1.5 mt-2 flex-wrap">
                         <button class="btn-ghost text-xs px-2 py-1" @click="monitorAgent(agent)" title="Monitor (listen only)">
                             <x-icon name="eye" class="w-3 h-3" />
                             Monitor
@@ -124,6 +153,14 @@
                         <button class="btn-ghost text-xs px-2 py-1" @click="whisperAgent(agent)" title="Whisper (agent only)">
                             <x-icon name="microphone" class="w-3 h-3" />
                             Whisper
+                        </button>
+                        <button class="btn-ghost text-xs px-2 py-1" @click="forcePause(agent)" title="Force pause agent">
+                            <x-icon name="pause" class="w-3 h-3" />
+                            Pause
+                        </button>
+                        <button class="btn-ghost text-xs px-2 py-1" @click="forceLogout(agent)" title="Force logout agent">
+                            <x-icon name="arrow-right-on-rectangle" class="w-3 h-3" />
+                            Logout
                         </button>
                     </div>
                 </div>
@@ -233,6 +270,12 @@ window.supervisorDashboard = function() {
             avgWaitTime: 0, todayTotal: 0, slaPercent: 0,
         },
         pollInterval: null,
+        notification: {
+            recipient_type: 'USER_GROUP',
+            recipient: 'AGENTS',
+            text: '',
+            confetti: false,
+        },
 
         async init() {
             await this.refresh();
@@ -290,15 +333,39 @@ window.supervisorDashboard = function() {
         },
 
         async monitorAgent(agent) {
-            await window.axios.get('/api/vicidial/proxy', { params: { action: 'monitor', agent_id: agent.id } })
+            await window.axios.post('/api/supervisor/monitor', { agent_user_id: agent.id })
                 .catch(() => {});
             Alpine.store('toast').info(`Monitoring ${agent.name}`);
         },
 
         async whisperAgent(agent) {
-            await window.axios.get('/api/vicidial/proxy', { params: { action: 'whisper', agent_id: agent.id } })
+            await window.axios.post('/api/supervisor/whisper', { agent_user_id: agent.id })
                 .catch(() => {});
             Alpine.store('toast').info(`Whispering to ${agent.name}`);
+        },
+
+        async forcePause(agent) {
+            await window.axios.post('/api/supervisor/force-pause', { agent_user_id: agent.id }).catch(() => {});
+            Alpine.store('toast').warning(`Pause command sent to ${agent.name}`);
+        },
+
+        async forceLogout(agent) {
+            await window.axios.post('/api/supervisor/force-logout', { agent_user_id: agent.id }).catch(() => {});
+            Alpine.store('toast').warning(`Logout command sent to ${agent.name}`);
+        },
+
+        async sendNotification() {
+            if (!this.notification.recipient) return;
+            await window.axios.post('/api/supervisor/send-notification', {
+                recipient_type: this.notification.recipient_type,
+                recipient: this.notification.recipient,
+                notification_text: this.notification.text,
+                show_confetti: this.notification.confetti,
+            }).then(() => {
+                Alpine.store('toast').success('Notification sent.');
+            }).catch((e) => {
+                Alpine.store('toast').error(e.response?.data?.message || 'Failed to send notification.');
+            });
         },
 
         async renderCharts() {

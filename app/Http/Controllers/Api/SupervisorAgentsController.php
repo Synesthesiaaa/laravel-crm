@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CallSession;
 use App\Models\CampaignDispositionRecord;
 use App\Models\User;
+use App\Models\VicidialAgentSession;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -43,7 +44,12 @@ class SupervisorAgentsController extends Controller
             ->groupBy('agent')
             ->pluck('total', 'agent');
 
-        $agents = $users->map(function (User $user) use ($today, $activeCalls, $todaysCompleted, $todaysDispositions, $agentNames) {
+        $viciSessions = VicidialAgentSession::whereIn('user_id', $userIds)
+            ->where('campaign_code', session('campaign', 'mbsales'))
+            ->get()
+            ->keyBy('user_id');
+
+        $agents = $users->map(function (User $user) use ($today, $activeCalls, $todaysCompleted, $todaysDispositions, $agentNames, $viciSessions) {
             $latestLog = $user->attendanceLogs->first();
             $isOnline  = $latestLog?->event_type === 'login';
             $currentCall = $activeCalls->get($user->id);
@@ -52,7 +58,7 @@ class SupervisorAgentsController extends Controller
 
             $status = 'offline';
             if ($currentCall) {
-                $status = 'on_call';
+                $status = 'oncall';
             } elseif ($isOnline) {
                 $status = 'available';
             }
@@ -76,6 +82,8 @@ class SupervisorAgentsController extends Controller
                     'status'       => $currentCall->status,
                     'duration'     => $currentCall->answered_at ? (int) now()->diffInSeconds($currentCall->answered_at) : 0,
                 ] : null,
+                'vici_status' => $viciSessions->get($user->id)?->session_status,
+                'queue_count' => (int) ($viciSessions->get($user->id)?->last_status_payload['queue_count'] ?? 0),
             ];
         });
 
@@ -94,7 +102,7 @@ class SupervisorAgentsController extends Controller
     private function statusLabel(string $status): string
     {
         return match ($status) {
-            'on_call'   => 'On Call',
+            'oncall'   => 'On Call',
             'available' => 'Available',
             default     => 'Offline',
         };

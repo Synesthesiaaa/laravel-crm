@@ -8,6 +8,7 @@ use App\Repositories\FormSubmissionRepository;
 use App\Support\OperationResult;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class FormSubmissionService
 {
@@ -27,6 +28,12 @@ class FormSubmissionService
         $tableName = $formConfig['table_name'];
         if (!$this->formFieldRepository->validateTableName($tableName, $this->campaignService->getAllFormTableNames())) {
             return OperationResult::failure('Invalid table.');
+        }
+        if (!Schema::hasTable($tableName)) {
+            return OperationResult::failure("Form storage table '{$tableName}' does not exist.");
+        }
+        if (!Schema::hasColumn($tableName, 'request_id')) {
+            return OperationResult::failure("Form storage table '{$tableName}' is missing required column 'request_id'.");
         }
         $fields  = $this->formFieldRepository->getFieldsForForm($campaign, $formType);
         $prepared = $this->prepareFormRow($fields, $data, $agent);
@@ -94,6 +101,9 @@ class FormSubmissionService
             $tableName = 'ezycash';
         }
         $datePrefix = now()->format('ymd');
+        if (!Schema::hasTable($tableName) || !Schema::hasColumn($tableName, 'request_id')) {
+            return $datePrefix . '001';
+        }
         $count      = DB::table($tableName)->where('request_id', 'like', $datePrefix . '%')->count();
         $nextId     = $count + 1;
         return $datePrefix . str_pad((string) $nextId, 3, '0', STR_PAD_LEFT);

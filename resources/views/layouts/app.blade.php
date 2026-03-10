@@ -147,6 +147,15 @@
                     <span x-show="$store.call.state === 'wrapup'">Wrap-up</span>
                 </div>
 
+                <div x-show="$store.vicidial.loggedIn"
+                     class="call-status-badge border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-on-surface)]"
+                     style="display: none;">
+                    <x-icon name="signal" class="w-3.5 h-3.5" />
+                    <span x-text="'Vici: ' + ($store.vicidial.status || 'ready')"></span>
+                    <span x-show="$store.vicidial.pauseCode">· <span x-text="$store.vicidial.pauseCode"></span></span>
+                    <span>· Q:<span x-text="$store.vicidial.queueCount"></span></span>
+                </div>
+
                 {{-- Theme toggle --}}
                 <button type="button" id="theme-toggle" class="btn-icon theme-toggle" aria-label="Toggle theme">
                     <x-icon name="moon" class="theme-icon-dark w-4 h-4" />
@@ -196,6 +205,7 @@
                                     if (window.TelephonyCore) {
                                         try { await window.TelephonyCore.destroy(); } catch(e) {}
                                     }
+                                    try { await axios.post('/api/vicidial/session/logout'); } catch(e) {}
                                     document.getElementById('logout-form').submit();
                                 })()
                             ">
@@ -481,6 +491,9 @@
             try {
                 const res = await window.axios.get('/api/call/status');
                 if (res.data?.success) rehydrateFromStatus(res.data);
+            } catch {}
+            try {
+                await Alpine.store('vicidial').sync();
             } catch {}
 
             // 2. Subscribe Reverb channel for real-time state updates
