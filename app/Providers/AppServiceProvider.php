@@ -23,6 +23,7 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->ensureTempDirectoryForPhp();
         $this->registerRepositoryBindings();
     }
 
@@ -43,6 +44,21 @@ class AppServiceProvider extends ServiceProvider
                 ? app(DispositionRepositoryInterface::class)->getForCampaign(session('campaign', 'mbsales'))
                 : collect());
         });
+    }
+
+    /**
+     * Use app storage for PHP temp files to avoid tempnam() notice on PHP 8.4+
+     * (e.g. "file created in the system's temporary directory" when compiling Blade).
+     */
+    private function ensureTempDirectoryForPhp(): void
+    {
+        $tempDir = storage_path('framework/temp');
+        if (! is_dir($tempDir)) {
+            @mkdir($tempDir, 0755, true);
+        }
+        if (! getenv('TMPDIR') && is_dir($tempDir)) {
+            putenv('TMPDIR=' . $tempDir);
+        }
     }
 
     private function registerRepositoryBindings(): void

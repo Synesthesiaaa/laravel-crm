@@ -24,6 +24,10 @@ Route::post('logout', [LoginController::class, 'logout'])->name('logout')->middl
 // AMI webhook (CSRF exempt, no auth) - Asterisk posts hangup/CDR events; validate via X-Webhook-Secret if configured
 Route::post('api/webhooks/ami', \App\Http\Controllers\Api\AmiWebhookController::class)->name('api.webhooks.ami');
 
+// ViciDial Agent Events Push webhook (CSRF exempt, no auth) - configured via ViciDial System Settings
+Route::post('api/webhooks/vicidial-events', \App\Http\Controllers\Api\VicidialEventsWebhookController::class)->name('api.webhooks.vicidial-events');
+Route::get('api/webhooks/vicidial-events', fn () => response()->json(['status' => 'ok', 'method' => 'POST only']));
+
 // Telephony health (for monitoring; optionally restrict by IP in production)
 Route::get('api/telephony/health', \App\Http\Controllers\Api\TelephonyHealthController::class)->name('api.telephony.health');
 
@@ -59,6 +63,7 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::post('api/callbacks/remove', [\App\Http\Controllers\Api\CallbackController::class, 'remove'])->name('api.callbacks.remove')->middleware(['throttle:api', 'telephony_feature:callback_controls']);
     Route::get('api/callbacks/info', [\App\Http\Controllers\Api\CallbackController::class, 'info'])->name('api.callbacks.info')->middleware(['throttle:api', 'telephony_feature:callback_controls']);
     Route::post('api/vicidial/session/login', [\App\Http\Controllers\Api\VicidialSessionController::class, 'login'])->name('api.vicidial.session.login')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
+    Route::post('api/vicidial/session/verify', [\App\Http\Controllers\Api\VicidialSessionController::class, 'verify'])->name('api.vicidial.session.verify')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
     Route::post('api/vicidial/session/pause', [\App\Http\Controllers\Api\VicidialSessionController::class, 'pause'])->name('api.vicidial.session.pause')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
     Route::post('api/vicidial/session/pause-code', [\App\Http\Controllers\Api\VicidialSessionController::class, 'pauseCode'])->name('api.vicidial.session.pause-code')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
     Route::post('api/vicidial/session/logout', [\App\Http\Controllers\Api\VicidialSessionController::class, 'logout'])->name('api.vicidial.session.logout')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);

@@ -668,7 +668,13 @@ html[data-theme="light"] {
     transition: transform .15s, box-shadow .2s;
     box-shadow: 0 0 0 0 rgba(34,197,94,.4);
   }
-  .phone-dial-btn:hover { transform: scale(1.05); box-shadow: 0 0 0 6px rgba(34,197,94,.2); }
+  .phone-dial-btn:hover:not(:disabled) { transform: scale(1.05); box-shadow: 0 0 0 6px rgba(34,197,94,.2); }
+  .phone-dial-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
   .phone-hangup-btn {
     width: 2.75rem; height: 2.75rem;
     border-radius: 50%;

@@ -46,7 +46,8 @@ class VicidialNonAgentApiService
         ], $params);
 
         try {
-            $response = Http::connectTimeout((int) config('vicidial.connect_timeout', 5))
+            $response = Http::when(! config('vicidial.verify_ssl', true), fn ($h) => $h->withoutVerifying())
+                ->connectTimeout((int) config('vicidial.connect_timeout', 5))
                 ->timeout((int) config('vicidial.timeout', 10))
                 ->retry(
                     (int) config('vicidial.retry_times', 2),
@@ -106,6 +107,15 @@ class VicidialNonAgentApiService
         }
 
         return rtrim($apiUrl, '/') . '/non_agent_api.php';
+    }
+
+    /**
+     * Expose the VicidialServer record for a campaign so other services (e.g.
+     * VicidialSessionService) can build URLs without duplicating repo logic.
+     */
+    public function getServerForCampaign(string $campaign): ?\App\Models\VicidialServer
+    {
+        return $this->serverRepository->getForCampaign($campaign);
     }
 
     /**

@@ -4,8 +4,9 @@ namespace Tests\Feature\Api;
 
 use App\Models\User;
 use App\Models\VicidialAgentSession;
-use App\Services\Telephony\VicidialProxyService;
+use App\Models\VicidialServer;
 use App\Services\Telephony\VicidialNonAgentApiService;
+use App\Services\Telephony\VicidialProxyService;
 use App\Support\OperationResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
@@ -22,10 +23,11 @@ class VicidialSessionApiTest extends TestCase
         parent::setUp();
 
         $this->agent = User::factory()->create([
-            'role'      => 'Agent',
-            'vici_user' => 'testagent',
-            'vici_pass' => 'testpass',
-            'extension' => '6001',
+            'role'         => 'Agent',
+            'vici_user'    => 'testagent',
+            'vici_pass'    => 'testpass',
+            'extension'    => '6001',
+            'sip_password' => 'sippass',
         ]);
     }
 
@@ -55,6 +57,25 @@ class VicidialSessionApiTest extends TestCase
             ? OperationResult::success(['raw_response' => 'SUCCESS', 'rows' => []])
             : OperationResult::failure('Error');
         $mock->shouldReceive('execute')->andReturn($result);
+        $mock->shouldReceive('getServerForCampaign')->andReturn(null);
+        $this->instance(VicidialNonAgentApiService::class, $mock);
+    }
+
+    private function mockNonAgentApiWithServer(bool $success = true): void
+    {
+        $server = VicidialServer::factory()->create([
+            'campaign_code' => 'testcamp',
+            'api_url'       => 'https://vici.example.com/agc/api.php',
+            'is_active'     => true,
+            'is_default'    => true,
+        ]);
+
+        $mock = Mockery::mock(VicidialNonAgentApiService::class);
+        $result = $success
+            ? OperationResult::success(['raw_response' => 'SUCCESS', 'rows' => []])
+            : OperationResult::failure('Error');
+        $mock->shouldReceive('execute')->andReturn($result);
+        $mock->shouldReceive('getServerForCampaign')->andReturn($server);
         $this->instance(VicidialNonAgentApiService::class, $mock);
     }
 
@@ -79,13 +100,35 @@ class VicidialSessionApiTest extends TestCase
         $this->assertStringContainsString('credentials', $msg);
     }
 
+    public function test_login_fails_when_phone_login_missing(): void
+    {
+        $user = User::factory()->create([
+            'role'      => 'Agent',
+            'vici_user' => 'agentx',
+            'vici_pass' => 'passx',
+            'extension' => null,
+        ]);
+
+        $response = $this->actingAs($user)
+             ->withSession($this->campaignSession())
+             ->postJson('/api/vicidial/session/login', ['campaign' => 'testcamp'])
+             ->assertUnprocessable();
+
+        $msg = strtolower($response->json('message') ?? '');
+        $this->assertStringContainsString('phone login', $msg);
+    }
+
     public function test_login_fails_when_agent_api_rejects(): void
     {
         $this->mockNonAgentApi();
         $mock = Mockery::mock(VicidialProxyService::class);
         $mock->shouldReceive('execute')
              ->once()
-             ->andReturn(['success' => false, 'raw_response' => 'ERROR: INVALID USERNAME/PASSWORD', 'message' => 'credentials rejected']);
+             ->andReturn([
+                 'success'      => false,
+                 'raw_response' => 'ERROR: INVALID USERNAME/PASSWORD',
+                 'message'      => 'credentials rejected',
+             ]);
         $this->instance(VicidialProxyService::class, $mock);
 
         $this->actingAs($this->agent)
@@ -94,23 +137,110 @@ class VicidialSessionApiTest extends TestCase
              ->assertUnprocessable();
     }
 
-    public function test_login_succeeds_and_returns_session(): void
+    public function test_login_succeeds_returns_pending_and_iframe_url(): void
     {
         $this->mockAgentApi(true, 'SUCCESS: agent logged in');
-        $this->mockNonAgentApi(true);
+        $this->mockNonAgentApiWithServer(true);
 
         $response = $this->actingAs($this->agent)
              ->withSession($this->campaignSession())
-             ->postJson('/api/vicidial/session/login', ['campaign' => 'testcamp']);
+             ->postJson('/api/vicidial/session/login', [
+                 'campaign'    => 'testcamp',
+                 'phone_login' => '6001',
+                 'phone_pass'  => 'sippass',
+             ]);
 
         $response->assertOk()
-                 ->assertJsonPath('success', true);
+                 ->assertJsonPath('success', true)
+                 ->assertJsonPath('login_state', 'login_pending');
 
-        // Verify session was persisted to DB
+        // After login the session must be in login_pending state (not yet ready)
+        $this->assertDatabaseHas('vicidial_agent_sessions', [
+            'user_id'        => $this->agent->id,
+            'session_status' => 'login_pending',
+        ]);
+
+        // iframe_url must be in the response with canonical params
+        $iframeUrl = $response->json('iframe_url');
+        $this->assertNotNull($iframeUrl);
+        $this->assertStringContainsString('phone_login=6001', $iframeUrl);
+        $this->assertStringContainsString('VD_login=testagent', $iframeUrl);
+        $this->assertStringContainsString('relogin=YES', $iframeUrl);
+    }
+
+    public function test_login_response_contract_contains_required_fields(): void
+    {
+        $this->mockAgentApi(true);
+        $this->mockNonAgentApiWithServer();
+
+        $response = $this->actingAs($this->agent)
+             ->withSession($this->campaignSession())
+             ->postJson('/api/vicidial/session/login', [
+                 'campaign'    => 'testcamp',
+                 'phone_login' => '6001',
+             ]);
+
+        $response->assertOk()
+                 ->assertJsonStructure(['success', 'message', 'iframe_url', 'login_state', 'data']);
+    }
+
+    // ── POST /api/vicidial/session/verify ─────────────────────────────────────
+
+    public function test_verify_requires_auth(): void
+    {
+        $this->postJson('/api/vicidial/session/verify', ['campaign' => 'testcamp'])
+             ->assertUnauthorized();
+    }
+
+    public function test_verify_promotes_session_to_ready_when_agent_live(): void
+    {
+        VicidialAgentSession::factory()->create([
+            'user_id'        => $this->agent->id,
+            'campaign_code'  => 'testcamp',
+            'session_status' => 'login_pending',
+        ]);
+
+        $mock = Mockery::mock(VicidialNonAgentApiService::class);
+        $mock->shouldReceive('execute')
+             ->andReturn(OperationResult::success(['raw_response' => 'STATUS|ACTIVE', 'rows' => []]));
+        $mock->shouldReceive('getServerForCampaign')->andReturn(null);
+        $this->instance(VicidialNonAgentApiService::class, $mock);
+
+        $response = $this->actingAs($this->agent)
+             ->withSession($this->campaignSession())
+             ->postJson('/api/vicidial/session/verify', ['campaign' => 'testcamp']);
+
+        $response->assertOk()
+                 ->assertJsonPath('success', true)
+                 ->assertJsonPath('login_state', 'ready');
+
         $this->assertDatabaseHas('vicidial_agent_sessions', [
             'user_id'        => $this->agent->id,
             'session_status' => 'ready',
         ]);
+    }
+
+    public function test_verify_returns_pending_when_agent_not_yet_live(): void
+    {
+        VicidialAgentSession::factory()->create([
+            'user_id'        => $this->agent->id,
+            'campaign_code'  => 'testcamp',
+            'session_status' => 'login_pending',
+        ]);
+
+        $mock = Mockery::mock(VicidialNonAgentApiService::class);
+        $mock->shouldReceive('execute')
+             ->andReturn(OperationResult::failure('ERROR: agent_status AGENT NOT LOGGED IN: 9999|9999'));
+        $mock->shouldReceive('getServerForCampaign')->andReturn(null);
+        $this->instance(VicidialNonAgentApiService::class, $mock);
+
+        $response = $this->actingAs($this->agent)
+             ->withSession($this->campaignSession())
+             ->postJson('/api/vicidial/session/verify', ['campaign' => 'testcamp']);
+
+        // 202 Accepted – still pending, frontend should keep polling
+        $this->assertContains($response->status(), [200, 202]);
+        $this->assertFalse((bool) $response->json('success'));
     }
 
     // ── POST /api/vicidial/session/pause ──────────────────────────────────────
@@ -142,7 +272,6 @@ class VicidialSessionApiTest extends TestCase
 
     public function test_set_pause_code_retries_after_auto_pause(): void
     {
-        // First call fails "not paused" → then external_pause → then retry succeeds
         $mock = Mockery::mock(VicidialProxyService::class);
         $mock->shouldReceive('execute')
              ->with($this->agent, 'testcamp', 'pause_code', ['value' => 'LUNCH'])
@@ -220,13 +349,13 @@ class VicidialSessionApiTest extends TestCase
                  'raw_response' => "status|agent_id|campaign\nACTIVE|6001|testcamp",
                  'rows' => [['status' => 'ACTIVE', 'agent_id' => '6001', 'campaign' => 'testcamp']],
              ]));
+        $mock->shouldReceive('getServerForCampaign')->andReturn(null);
         $this->instance(VicidialNonAgentApiService::class, $mock);
 
         $response = $this->actingAs($this->agent)
              ->withSession($this->campaignSession())
              ->getJson('/api/reports/agent-status?campaign=testcamp&agent_user=testagent');
 
-        // Validates the endpoint is routed and delegates to the service layer (200 or 422 are both acceptable)
         $this->assertContains($response->status(), [200, 422]);
     }
 }

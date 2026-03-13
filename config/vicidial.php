@@ -18,6 +18,15 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | SSL Verification
+    |--------------------------------------------------------------------------
+    | Set to false when connecting to an on-premise ViciDial server that uses
+    | a self-signed certificate. Never disable in production with public certs.
+    */
+    'verify_ssl' => env('VICI_VERIFY_SSL', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Disposition code mapping (Laravel code => VICIdial status)
     |--------------------------------------------------------------------------
     */
@@ -38,7 +47,15 @@ return [
     | Agent session defaults
     |--------------------------------------------------------------------------
     */
-    'pause_codes' => ['BREAK', 'LUNCH', 'MEETING', 'COACHING', 'SYSTEM'],
+    'pause_codes' => ['BREAK', 'LUNCH', 'MEET', 'COACH', 'SYSTEM'],
     'session_status_poll_seconds' => (int) env('VICI_SESSION_STATUS_POLL_SECONDS', 15),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Agent Events Push webhook secret
+    |--------------------------------------------------------------------------
+    | Optional shared secret to validate ViciDial push event POSTs.
+    */
+    'events_webhook_secret' => env('VICIDIAL_EVENTS_WEBHOOK_SECRET', ''),
 
 ];

@@ -54,7 +54,8 @@ class TelephonyDiagnosticsController extends Controller
         }
 
         try {
-            $response = Http::connectTimeout(4)->timeout(6)->get($url);
+            $response = Http::when(! config('vicidial.verify_ssl', true), fn ($h) => $h->withoutVerifying())
+                ->connectTimeout(4)->timeout(6)->get($url);
             // ViciDial returns a plain text error when no credentials are sent – that's fine,
             // it still means the server is reachable.
             $reachable = $response->status() < 500;
@@ -86,7 +87,8 @@ class TelephonyDiagnosticsController extends Controller
         }
 
         try {
-            $response = Http::connectTimeout(4)->timeout(6)->get($url);
+            $response = Http::when(! config('vicidial.verify_ssl', true), fn ($h) => $h->withoutVerifying())
+                ->connectTimeout(4)->timeout(6)->get($url);
             $reachable = $response->status() < 500;
             return [
                 'label'   => 'ViciDial Non-Agent API',
@@ -142,6 +144,7 @@ class TelephonyDiagnosticsController extends Controller
         $httpUrl = preg_replace('#/ws$#', '', $httpUrl);
 
         try {
+            // WebRTC probes always skip SSL verification since Asterisk typically uses self-signed certs.
             $response = Http::withoutVerifying()->connectTimeout(4)->timeout(6)->get($httpUrl);
             return [
                 'label'   => 'WebRTC WSS',

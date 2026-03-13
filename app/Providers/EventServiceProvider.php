@@ -11,6 +11,7 @@ use App\Events\UserLoggedIn;
 use App\Events\UserLoggedOut;
 use App\Listeners\InvalidateDashboardCache;
 use App\Listeners\LogCallOriginated;
+use App\Listeners\LogCallStateChanged;
 use App\Listeners\LogDispositionSaved;
 use App\Listeners\LogFormSubmission;
 use App\Listeners\LogSecurityEvent;

@@ -4,6 +4,7 @@ namespace Tests\Unit\Services;
 
 use App\Models\User;
 use App\Models\VicidialAgentSession;
+use App\Models\VicidialServer;
 use App\Services\Telephony\VicidialNonAgentApiService;
 use App\Services\Telephony\VicidialProxyService;
 use App\Services\Telephony\VicidialSessionService;
@@ -30,10 +31,11 @@ class VicidialSessionServiceTest extends TestCase
         $this->service         = new VicidialSessionService($this->agentApiMock, $this->nonAgentApiMock);
 
         $this->user = User::factory()->create([
-            'role'      => 'Agent',
-            'vici_user' => 'testagent',
-            'vici_pass' => 'testpass',
-            'extension' => '6001',
+            'role'         => 'Agent',
+            'vici_user'    => 'testagent',
+            'vici_pass'    => 'testpass',
+            'extension'    => '6001',
+            'sip_password' => 'sippass',
         ]);
     }
 
@@ -55,6 +57,21 @@ class VicidialSessionServiceTest extends TestCase
         $this->assertStringContainsStringIgnoringCase('credentials are not set', $result->message);
     }
 
+    public function test_login_fails_when_phone_login_missing(): void
+    {
+        $user = User::factory()->create([
+            'role'      => 'Agent',
+            'vici_user' => 'agentx',
+            'vici_pass' => 'passx',
+            'extension' => null,
+        ]);
+
+        $result = $this->service->loginAgent($user, 'testcamp', null, null);
+
+        $this->assertFalse($result->success);
+        $this->assertStringContainsStringIgnoringCase('phone login is required', $result->message);
+    }
+
     public function test_login_fails_when_agent_api_rejects_credentials(): void
     {
         $this->agentApiMock
@@ -71,9 +88,13 @@ class VicidialSessionServiceTest extends TestCase
 
         $this->assertFalse($result->success);
         $this->assertStringContainsStringIgnoringCase('rejected', $result->message);
+        $this->assertDatabaseHas('vicidial_agent_sessions', [
+            'user_id'        => $this->user->id,
+            'session_status' => 'login_failed',
+        ]);
     }
 
-    public function test_login_succeeds_and_creates_local_session(): void
+    public function test_login_succeeds_with_pending_status_and_iframe_url(): void
     {
         $this->agentApiMock
             ->shouldReceive('execute')
@@ -85,22 +106,34 @@ class VicidialSessionServiceTest extends TestCase
                 'message'      => null,
             ]);
 
+        VicidialServer::factory()->create([
+            'campaign_code' => 'testcamp',
+            'api_url'       => 'https://vici.example.com/agc/api.php',
+            'is_active'     => true,
+            'is_default'    => true,
+        ]);
+
         $this->nonAgentApiMock
-            ->shouldReceive('execute')
-            ->once()
-            ->andReturn(OperationResult::success(['raw_response' => 'SUCCESS', 'rows' => []]));
+            ->shouldReceive('getServerForCampaign')
+            ->andReturn(VicidialServer::first());
 
         $result = $this->service->loginAgent($this->user, 'testcamp');
 
         $this->assertTrue($result->success);
+        // After login, session must be pending – not yet ready (needs iframe verification).
         $this->assertDatabaseHas('vicidial_agent_sessions', [
             'user_id'        => $this->user->id,
             'campaign_code'  => 'testcamp',
-            'session_status' => 'ready',
+            'session_status' => 'login_pending',
         ]);
+        // iframe_url must be present in data.
+        $this->assertNotNull($result->data['iframe_url'] ?? null);
+        $this->assertStringContainsString('phone_login=6001', $result->data['iframe_url']);
+        $this->assertStringContainsString('VD_login=testagent', $result->data['iframe_url']);
+        $this->assertStringContainsString('relogin=YES', $result->data['iframe_url']);
     }
 
-    public function test_login_partial_when_api_unreachable_but_credentials_not_rejected(): void
+    public function test_login_pending_when_api_unreachable(): void
     {
         $this->agentApiMock
             ->shouldReceive('execute')
@@ -113,18 +146,107 @@ class VicidialSessionServiceTest extends TestCase
             ]);
 
         $this->nonAgentApiMock
-            ->shouldReceive('execute')
-            ->once()
-            ->andReturn(OperationResult::failure('Connection refused'));
+            ->shouldReceive('getServerForCampaign')
+            ->andReturn(null);
 
         $result = $this->service->loginAgent($this->user, 'testcamp');
 
-        // Should NOT hard-fail – partial login is acceptable when ViciDial is unreachable
+        // Network errors must NOT hard-fail – iframe can still recover.
         $this->assertTrue($result->success);
         $this->assertDatabaseHas('vicidial_agent_sessions', [
             'user_id'        => $this->user->id,
-            'session_status' => 'ready_partial',
+            'session_status' => 'login_pending',
         ]);
+    }
+
+    // ── verifyLogin ───────────────────────────────────────────────────────────
+
+    public function test_verify_login_marks_session_ready_when_agent_live(): void
+    {
+        VicidialAgentSession::factory()->create([
+            'user_id'        => $this->user->id,
+            'campaign_code'  => 'testcamp',
+            'session_status' => 'login_pending',
+        ]);
+
+        $this->nonAgentApiMock
+            ->shouldReceive('execute')
+            ->andReturn(OperationResult::success([
+                'raw_response' => 'STATUS|ACTIVE|6001|testcamp',
+                'rows' => [['STATUS', 'ACTIVE', '6001', 'testcamp']],
+            ]));
+
+        $result = $this->service->verifyLogin($this->user, 'testcamp');
+
+        $this->assertTrue($result->success);
+        $this->assertEquals('ready', $result->data['login_state'] ?? '');
+        $this->assertDatabaseHas('vicidial_agent_sessions', [
+            'user_id'        => $this->user->id,
+            'session_status' => 'ready',
+        ]);
+    }
+
+    public function test_verify_login_returns_failure_when_still_not_logged_in(): void
+    {
+        VicidialAgentSession::factory()->create([
+            'user_id'        => $this->user->id,
+            'campaign_code'  => 'testcamp',
+            'session_status' => 'login_pending',
+        ]);
+
+        $this->nonAgentApiMock
+            ->shouldReceive('execute')
+            ->andReturn(OperationResult::failure('ERROR: agent_status AGENT NOT LOGGED IN: 9999|9999'));
+
+        $result = $this->service->verifyLogin($this->user, 'testcamp');
+
+        $this->assertFalse($result->success);
+        $this->assertDatabaseHas('vicidial_agent_sessions', [
+            'user_id'        => $this->user->id,
+            'session_status' => 'login_pending',
+        ]);
+    }
+
+    // ── buildIframeUrl ────────────────────────────────────────────────────────
+
+    public function test_build_iframe_url_uses_canonical_params(): void
+    {
+        $server = VicidialServer::factory()->create([
+            'campaign_code' => 'testcamp',
+            'api_url'       => 'https://vici.example.com/agc/api.php',
+            'is_active'     => true,
+        ]);
+
+        $this->nonAgentApiMock
+            ->shouldReceive('getServerForCampaign')
+            ->once()
+            ->with('testcamp')
+            ->andReturn($server);
+
+        $url = $this->service->buildIframeUrl($this->user, 'testcamp', '6001', 'sippass');
+
+        $this->assertNotNull($url);
+        $this->assertStringContainsString('agc/vicidial.php', $url);
+        $this->assertStringContainsString('phone_login=6001', $url);
+        $this->assertStringContainsString('phone_pass=sippass', $url);
+        $this->assertStringContainsString('VD_login=testagent', $url);
+        $this->assertStringContainsString('VD_pass=testpass', $url);
+        $this->assertStringContainsString('VD_campaign=testcamp', $url);
+        $this->assertStringContainsString('relogin=YES', $url);
+        // Must NOT contain vici_user as phone_login fallback
+        $this->assertStringNotContainsString('phone_login=testagent', $url);
+    }
+
+    public function test_build_iframe_url_returns_null_when_no_server(): void
+    {
+        $this->nonAgentApiMock
+            ->shouldReceive('getServerForCampaign')
+            ->once()
+            ->andReturn(null);
+
+        $url = $this->service->buildIframeUrl($this->user, 'testcamp', '6001', 'sippass');
+
+        $this->assertNull($url);
     }
 
     // ── pauseAgent ────────────────────────────────────────────────────────────
@@ -243,7 +365,6 @@ class VicidialSessionServiceTest extends TestCase
 
         $result = $this->service->logoutAgent($this->user, 'testcamp');
 
-        // Should still succeed locally
         $this->assertTrue($result->success);
         $this->assertDatabaseHas('vicidial_agent_sessions', [
             'user_id'        => $this->user->id,

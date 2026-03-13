@@ -16,14 +16,14 @@ class CallOrchestrationService
         protected VicidialProxyService $vicidialProxy,
         protected CallStateService $callStateService,
         protected DispositionService $dispositionService,
-        protected AsteriskAmiService $amiService,
         protected TelephonyLogger $telephonyLogger,
     ) {}
 
     /**
-     * Start an outbound call via WebRTC (SIP).
-     * AMI Originates to agent's SIP extension; SIP.js auto-answers; Asterisk bridges to GoIP trunk.
-     * Blocks if agent has a call requiring disposition.
+     * Start an outbound call via ViciDial external_dial.
+     * ViciDial rings the agent's registered phone, then dials the customer through its own trunk.
+     * This replaces the direct AMI originate path which caused single-ping AMI connections and
+     * failed to ring the agent when using ViciDial's SIP registration.
      *
      * @return OperationResult with data: ['session_id' => int] on success
      */
@@ -46,9 +46,9 @@ class CallOrchestrationService
             );
         }
 
-        if (empty($user->extension)) {
+        if (empty($user->vici_user) || empty($user->vici_pass)) {
             return OperationResult::failure(
-                'No SIP extension assigned. Contact administrator.',
+                'ViciDial credentials are not set. Contact administrator.',
                 CallErrors::toJson(CallErrors::EXTENSION_OFFLINE)
             );
         }
@@ -74,37 +74,33 @@ class CallOrchestrationService
             return OperationResult::failure($e->getMessage());
         }
 
-        // Originate via AMI: SIP/{extension} -> SIP/goip-trunk/{number}
-        try {
-            $amiResult = $this->amiService->originateWebRtc(
-                $user->extension,
-                $phoneNumber,
-                $user->full_name ?: $user->username,
-                config('webrtc.no_answer_timeout', 45)
-            );
-        } catch (\Throwable $e) {
-            $this->telephonyLogger->error('CallOrchestrationService', 'AMI exception during originate', [
-                'error' => $e->getMessage(),
-                'extension' => $user->extension,
-                'number' => $phoneNumber,
+        // Dial via ViciDial external_dial API – ViciDial handles ringing the agent and
+        // bridging through the configured trunk, avoiding direct AMI originate spam.
+        $dialParams = [
+            'value'        => $phoneNumber,
+            'phone_number' => $phoneNumber,
+            'phone_code'   => $phoneCode,
+            'search'       => 'YES',
+            'preview'      => 'NO',
+            'focus'        => 'YES',
+        ];
+        if ($leadId) {
+            $dialParams['lead_id'] = $leadId;
+        }
+        $dialResult = $this->vicidialProxy->execute($user, $campaign, 'external_dial', $dialParams);
+
+        if (! $dialResult['success']) {
+            $this->telephonyLogger->warning('CallOrchestrationService', 'ViciDial external_dial failed', [
+                'user_id'  => $user->id,
+                'number'   => $phoneNumber,
+                'response' => $dialResult['raw_response'],
             ]);
             $this->callStateService->transition($session, CallSession::STATUS_FAILED, [
-                'end_reason' => 'ami_originate_failed',
+                'end_reason' => 'vicidial_dial_failed',
             ], true);
 
             return OperationResult::failure(
-                'Call setup failed. Please try again.',
-                CallErrors::toJson(CallErrors::CHANNEL_UNAVAILABLE)
-            );
-        }
-
-        if (! $amiResult['success']) {
-            $this->callStateService->transition($session, CallSession::STATUS_FAILED, [
-                'end_reason' => 'ami_originate_failed',
-            ], true);
-
-            return OperationResult::failure(
-                $amiResult['message'] ?? 'AMI originate failed',
+                $dialResult['message'] ?? 'ViciDial dial request failed.',
                 CallErrors::toJson(CallErrors::CHANNEL_UNAVAILABLE)
             );
         }
@@ -123,7 +119,7 @@ class CallOrchestrationService
                 'error' => $e->getMessage(),
             ]);
             $this->callStateService->transition($session, CallSession::STATUS_FAILED, [
-                'end_reason' => 'ami_originate_failed',
+                'end_reason' => 'vicidial_dial_failed',
             ], true);
 
             return OperationResult::failure(
@@ -137,6 +133,9 @@ class CallOrchestrationService
 
     /**
      * Record hangup for the agent's active call. Idempotent.
+     *
+     * ViciDial prescribed sequence: PAUSE → HANGUP → (dispo) → STATUS.
+     * Each ViciDial call is wrapped so unreachability never blocks the CRM.
      */
     public function hangup(User $user, ?int $sessionId = null): OperationResult
     {
@@ -148,6 +147,33 @@ class CallOrchestrationService
             return OperationResult::failure('No active call found');
         }
 
+        $campaign = $session->campaign_code;
+
+        // Step 1: Auto-pause the agent so ViciDial stops routing new calls.
+        try {
+            $this->vicidialProxy->execute($user, $campaign, 'external_pause', [
+                'value' => 'PAUSE',
+            ]);
+        } catch (\Throwable $e) {
+            $this->telephonyLogger->warning('CallOrchestrationService', 'external_pause failed (non-blocking)', [
+                'session_id' => $session->id,
+                'error'      => $e->getMessage(),
+            ]);
+        }
+
+        // Step 2: Tell ViciDial to hang up the customer call leg.
+        try {
+            $this->vicidialProxy->execute($user, $campaign, 'external_hangup', [
+                'value' => '1',
+            ]);
+        } catch (\Throwable $e) {
+            $this->telephonyLogger->warning('CallOrchestrationService', 'external_hangup failed (non-blocking)', [
+                'session_id' => $session->id,
+                'error'      => $e->getMessage(),
+            ]);
+        }
+
+        // Step 3: Transition CRM call state to wrapup / ended.
         return $this->callStateService->recordHangup($session, ['end_reason' => 'agent_hangup']);
     }
 

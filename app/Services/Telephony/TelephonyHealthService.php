@@ -99,7 +99,8 @@ class TelephonyHealthService
 
         try {
             $url = rtrim((string) $server->api_url, '?&');
-            $response = Http::connectTimeout(3)->timeout(5)->get($url);
+            $response = Http::when(! config('vicidial.verify_ssl', true), fn ($h) => $h->withoutVerifying())
+                ->connectTimeout(3)->timeout(5)->get($url);
             return $response->status() < 500;
         } catch (\Throwable) {
             return false;

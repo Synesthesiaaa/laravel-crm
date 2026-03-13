@@ -140,7 +140,20 @@ Alpine.store('call', {
     },
 });
 
+// WebSocket connection health store
+Alpine.store('ws', {
+    state: 'connecting', // connected | connecting | disconnected | unavailable | failed
+    get isConnected() { return this.state === 'connected'; },
+    get isDisconnected() { return ['disconnected', 'unavailable', 'failed'].includes(this.state); },
+    dismissed: false,
+    dismiss() { this.dismissed = true; },
+});
+
 // Global VICIdial session store
+// loggedIn is true ONLY for statuses that represent a fully usable telephony session.
+// Transitional values (login_pending, ready_partial) must NOT enable dial/pause actions.
+const VICI_USABLE_STATUSES = ['ready', 'paused', 'in_call'];
+
 Alpine.store('vicidial', {
     loggedIn: false,
     status: 'logged_out',
@@ -156,8 +169,10 @@ Alpine.store('vicidial', {
             const { data } = await window.axios.get('/api/vicidial/session/status', { params });
             const session = data.local_session || {};
             const queue = data.queue?.data?.count ?? 0;
-            this.loggedIn = session.session_status && session.session_status !== 'logged_out';
-            this.status = session.session_status || 'logged_out';
+            const s = session.session_status || 'logged_out';
+            // Only set loggedIn for statuses where the agent is truly functional.
+            this.loggedIn = VICI_USABLE_STATUSES.includes(s);
+            this.status = s;
             this.pauseCode = session.pause_code || '';
             this.queueCount = Number(queue) || 0;
             this.campaign = session.campaign_code || campaign || this.campaign;

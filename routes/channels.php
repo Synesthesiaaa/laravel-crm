@@ -19,3 +19,14 @@ Broadcast::channel('agent.{agent_id}', function ($user, $agentId) {
 Broadcast::channel('telephony.supervisor', function ($user) {
     return in_array($user->role ?? '', ['Super Admin', 'Admin', 'Team Leader'], true);
 });
+
+/**
+ * Presence channel: real-time agent online/offline tracking for supervisors.
+ */
+Broadcast::channel('agents.online', function ($user) {
+    return [
+        'id'   => $user->id,
+        'name' => $user->name,
+        'role' => $user->role ?? 'Agent',
+    ];
+});

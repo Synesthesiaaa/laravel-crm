@@ -71,10 +71,28 @@ class TransferService
         return $this->parkCall($user, $campaign, 'PARK_IVR_CUSTOMER');
     }
 
+    /**
+     * Swap-park is available only on newer ViciDial builds (svn 3600+).
+     * Older versions return an error for SWAP_PARK_* values; we catch
+     * that and return a user-friendly message instead of a raw API error.
+     */
     public function swapPark(User $user, string $campaign, string $target): OperationResult
     {
         $value = strtoupper($target) === 'XFER' ? 'SWAP_PARK_XFER' : 'SWAP_PARK_CUSTOMER';
-        return $this->parkCall($user, $campaign, $value);
+
+        $result = $this->agentApi->execute($user, $campaign, 'park_call', ['value' => $value]);
+
+        if (! $result['success']) {
+            $raw = strtolower($result['raw_response'] ?? '');
+            if (str_contains($raw, 'invalid value') || str_contains($raw, 'not allowed') || str_contains($raw, 'error')) {
+                return OperationResult::failure(
+                    'Swap-park is not supported on this ViciDial version. Use Park/Grab instead.'
+                );
+            }
+            return OperationResult::failure($result['message'] ?: 'Swap-park request failed.');
+        }
+
+        return OperationResult::success(['raw_response' => $result['raw_response']]);
     }
 
     protected function transferConference(

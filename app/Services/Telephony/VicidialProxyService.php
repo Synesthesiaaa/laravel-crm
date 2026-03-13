@@ -79,7 +79,8 @@ class VicidialProxyService
         $retryTimes = config('vicidial.retry_times', 2);
         $retrySleepMs = config('vicidial.retry_sleep_ms', 500);
 
-        $response = Http::connectTimeout($connectTimeout)
+        $response = Http::when(! config('vicidial.verify_ssl', true), fn ($h) => $h->withoutVerifying())
+            ->connectTimeout($connectTimeout)
             ->timeout($timeout)
             ->retry($retryTimes, $retrySleepMs, function (\Throwable $e, $request) use ($action, $campaign) {
                 $this->telephonyLogger->warning('VicidialProxyService', 'Retrying after failure', [
@@ -99,6 +100,17 @@ class VicidialProxyService
             if (stripos($body, 'INVALID USERNAME/PASSWORD') !== false || stripos($body, '|BAD|') !== false) {
                 $message = 'VICIdial credentials were rejected.';
                 $this->telephonyLogger->warning('VicidialProxyService', 'Credentials rejected', ['campaign' => $campaign, 'user_id' => $user->id]);
+            } elseif (
+                stripos($body, 'AGENT NOT LOGGED IN') !== false
+                || stripos($body, 'NO LIVE AGENT') !== false
+                || stripos($body, 'LOGIN') !== false
+            ) {
+                $message = 'Agent is not logged into an active VICIdial session. Please use VICIdial Session Login first.';
+                $this->telephonyLogger->warning('VicidialProxyService', 'Agent not logged in for action', [
+                    'campaign' => $campaign,
+                    'user_id' => $user->id,
+                    'action' => $action,
+                ]);
             } else {
                 $message = trim($body) ?: 'Request failed';
                 $this->telephonyLogger->warning('VicidialProxyService', 'Request failed', [

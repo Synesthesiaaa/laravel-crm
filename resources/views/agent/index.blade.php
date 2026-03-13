@@ -7,6 +7,19 @@
 @section('content')
 <div x-data="agentScreen()" x-init="init()" data-campaign="{{ session('campaign', 'mbsales') }}" data-user-id="{{ auth()->id() }}" class="flex flex-col lg:flex-row gap-6 h-full">
 
+    {{-- WebSocket health banner --}}
+    <div x-show="$store.ws.isDisconnected && !$store.ws.dismissed"
+         x-transition.opacity
+         class="fixed top-0 left-0 right-0 z-50 flex items-center justify-center gap-3 px-4 py-2 text-sm font-medium text-amber-900 bg-amber-100 border-b border-amber-300 shadow-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-amber-600 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
+        </svg>
+        <span>Real-time updates unavailable &mdash; reconnecting<span class="animate-pulse">...</span></span>
+        <button @click="$store.ws.dismiss()" class="ml-2 text-amber-700 hover:text-amber-900 underline text-xs">Dismiss</button>
+    </div>
+    {{-- Reset dismissed when connection restored --}}
+    <template x-effect="if ($store.ws.isConnected) $store.ws.dismissed = false"></template>
+
     {{-- LEFT: Lead info + form --}}
     <div class="flex-1 min-w-0 space-y-4">
 
@@ -37,7 +50,7 @@
                     <div class="flex gap-2">
                         <input type="text" x-model="phoneNumber" class="form-input flex-1" placeholder="+63 XXX XXX XXXX" />
                         <button type="button" class="phone-dial-btn" @click="dial()" title="Call"
-                                :disabled="callState !== 'idle'" :class="{ 'opacity-50 cursor-not-allowed': callState !== 'idle' }">
+                                :disabled="callState !== 'idle' || dialBlocked || !phoneNumber">
                             <x-icon name="phone" class="w-5 h-5" />
                         </button>
                     </div>
@@ -166,7 +179,8 @@
                     <button class="phone-dial-btn"
                             @click="dial()"
                             x-show="callState === 'idle'"
-                            :disabled="!phoneNumber || dialBlocked">
+                            :disabled="!phoneNumber || dialBlocked"
+                            :title="!phoneNumber ? 'Enter a phone number first' : dialBlocked ? 'Complete disposition before dialing' : 'Click to dial'">
                         <x-icon name="phone" class="w-6 h-6" />
                     </button>
                     <button class="phone-hangup-btn"
@@ -185,8 +199,26 @@
         </div>
 
         {{-- Disposition --}}
-        <div class="md-card p-5" x-show="callState === 'wrapup' || callState === 'idle'">
-            <h3 class="text-sm font-semibold text-[var(--color-on-surface)] mb-3">Disposition</h3>
+        <div class="md-card p-5" x-show="callState === 'wrapup'">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Disposition</h3>
+                {{-- Show dismiss only when there is an error so agent is never stuck --}}
+                <button type="button"
+                        class="btn-ghost text-xs text-[var(--color-danger)]"
+                        x-show="dispositionError"
+                        @click="dismissDisposition()"
+                        title="Dismiss and return to idle">
+                    <x-icon name="x-mark" class="w-3.5 h-3.5" />
+                    Dismiss
+                </button>
+            </div>
+
+            {{-- Error banner with retry hint --}}
+            <div x-show="dispositionError" class="mb-3 rounded-md border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/5 px-3 py-2">
+                <p class="text-xs text-[var(--color-danger)]" x-text="dispositionError"></p>
+                <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">Select a code and retry, or click Dismiss to return to idle.</p>
+            </div>
+
             <div class="form-field mb-3">
                 <label class="form-label">Code</label>
                 <select x-model="dispositionCode" class="form-select">
@@ -206,7 +238,7 @@
             </div>
             <button class="btn-primary w-full" @click="saveDisposition()" :disabled="!dispositionCode || savingDisposition">
                 <x-icon name="check" class="w-4 h-4" />
-                <span x-text="savingDisposition ? 'Saving...' : 'Save Disposition'">Save Disposition</span>
+                <span x-text="savingDisposition ? 'Saving...' : (dispositionError ? 'Retry Save' : 'Save Disposition')">Save Disposition</span>
             </button>
         </div>
 
@@ -249,6 +281,15 @@
 
     </div>
 </div>
+
+{{-- Hidden ViciDial iframe: keeps the agent's ViciDial session alive in the background --}}
+<iframe id="vici-session-frame"
+        src="about:blank"
+        width="0" height="0"
+        style="position:absolute;top:-9999px;left:-9999px;border:none;"
+        title="ViciDial Session (hidden)">
+</iframe>
+
 @endsection
 
 @push('scripts')
@@ -265,6 +306,8 @@ window.agentScreen = function() {
         muted: false,
         saving: false,
         savingDisposition: false,
+        dispositionError: null,
+        hasDispositionPending: false,
         dispositionCode: '',
         dispositionNotes: '',
         recentCalls: [],
@@ -275,12 +318,18 @@ window.agentScreen = function() {
         _predictiveTimer: null,
         vici: {
             loading: false,
+            // Login phase state machine: idle | requesting | iframe_loading | syncing | ready | failed | timeout
+            phase: 'idle',
             phone_login: '',
             phone_pass: '',
             pause_code: 'BREAK',
             pause_codes: @js(config('vicidial.pause_codes', ['BREAK'])),
             ingroups_raw: '',
             blended: true,
+            _verifyPollTimer: null,
+            _verifyPollCount: 0,
+            _verifyPollMax: 15,      // max 1s polls = 15 seconds
+            _verifyTimeout: null,
         },
         transfer: {
             phone_number: '',
@@ -320,45 +369,34 @@ window.agentScreen = function() {
             if (this.featureEnabled('session_controls')) {
                 this.syncVicidialStatus();
             }
+
             const te = window.TelephonyEcho;
-            if (te && te.initEcho && te.isBroadcastEnabled()) {
+            const wsAvailable = te && te.initEcho && te.isBroadcastEnabled();
+            if (wsAvailable) {
                 te.initEcho();
                 const userId = parseInt(this.$el.dataset.userId, 10);
                 if (userId) {
-                    this._echoUnsubscribe = te.subscribeAgentChannel(userId, (p) => {
-                        if (String(p.session_id) === String(this.sessionId)) {
-                            if (['completed','failed','abandoned'].includes(p.to_status)) {
-                                clearInterval(this.timer);
-                                this.timer = null;
-                                Alpine.store('call').stopTimer();
-                                this.callState = 'wrapup';
-                                Alpine.store('call').state = 'wrapup';
-                                if (p.to_status === 'failed') {
-                                    Alpine.store('toast').warning('Call failed or ended before answer.');
-                                } else {
-                                    Alpine.store('toast').info('Call ended. Please save disposition.');
-                                }
-                                if (this.predictiveMode && p.to_status === 'failed') {
-                                    this.schedulePredictiveDial();
-                                }
-                            } else if (p.to_status === 'ringing') {
-                                this.callState = 'ringing';
-                                Alpine.store('call').state = 'ringing';
-                                Alpine.store('toast').info('Call is ringing...');
-                            } else if (['answered','in_call','on_hold'].includes(p.to_status)) {
-                                this.callState = 'connected';
-                                Alpine.store('call').state = 'connected';
-                                Alpine.store('call').startTimer();
-                                Alpine.store('toast').success('Call connected.');
-                            }
-                        }
-                    });
+                    this._echoUnsubscribe = te.subscribeAgentChannel(
+                        userId,
+                        // onCallStateChanged
+                        (p) => this._handleCallStateWs(p),
+                        // onVicidialEvent
+                        (p) => this._handleVicidialEventWs(p),
+                        // onInboundCall (screen pop)
+                        (p) => this._handleInboundCallWs(p),
+                    );
+                }
+                // With WS active, use a slow 60s heartbeat fallback instead of 15s polling
+                this._statusPollInterval = setInterval(() => this.syncCallStatus(), 60000);
+                if (this.featureEnabled('session_controls')) {
+                    setInterval(() => this.syncVicidialStatus(), 60000);
                 }
             } else {
+                // No WebSocket — use 15s polling as before
                 this._statusPollInterval = setInterval(() => this.syncCallStatus(), 15000);
-            }
-            if (this.featureEnabled('session_controls')) {
-                setInterval(() => this.syncVicidialStatus(), 15000);
+                if (this.featureEnabled('session_controls')) {
+                    setInterval(() => this.syncVicidialStatus(), 15000);
+                }
             }
 
             window.addEventListener('telephony-shortcut-dial', () => this.dial());
@@ -378,6 +416,77 @@ window.agentScreen = function() {
             });
         },
 
+        /** WebSocket handler: call state changed (from AMI listener or backend) */
+        _handleCallStateWs(p) {
+            if (String(p.session_id) === String(this.sessionId)) {
+                if (['completed','failed','abandoned'].includes(p.to_status)) {
+                    clearInterval(this.timer);
+                    this.timer = null;
+                    Alpine.store('call').stopTimer();
+                    this.callState = 'wrapup';
+                    Alpine.store('call').state = 'wrapup';
+                    if (p.to_status === 'failed') {
+                        Alpine.store('toast').warning('Call failed or ended before answer.');
+                    } else {
+                        Alpine.store('toast').info('Call ended. Please save disposition.');
+                    }
+                    if (this.predictiveMode && p.to_status === 'failed') {
+                        this.schedulePredictiveDial();
+                    }
+                } else if (p.to_status === 'ringing') {
+                    this.callState = 'ringing';
+                    Alpine.store('call').state = 'ringing';
+                    Alpine.store('toast').info('Call is ringing...');
+                } else if (['answered','in_call','on_hold'].includes(p.to_status)) {
+                    this.callState = 'connected';
+                    Alpine.store('call').state = 'connected';
+                    Alpine.store('call').startTimer();
+                    Alpine.store('toast').success('Call connected.');
+                }
+            }
+        },
+
+        /** WebSocket handler: ViciDial agent events (state changes, login, etc.) */
+        _handleVicidialEventWs(p) {
+            const store = Alpine.store('vicidial');
+            if (p.event === 'state_ready') {
+                store.loggedIn = true;
+                store.status = 'ready';
+                this.vici.phase = 'ready';
+                if (window.TelephonyCore?.register) {
+                    window.TelephonyCore.register().catch(() => {});
+                }
+            } else if (p.event === 'state_paused') {
+                store.loggedIn = true;
+                store.status = 'paused';
+            } else if (p.event === 'logged_out' || p.event === 'logged_out_complete') {
+                store.loggedIn = false;
+                store.status = 'logged_out';
+                this.vici.phase = 'idle';
+                if (window.TelephonyCore?.destroy) {
+                    window.TelephonyCore.destroy().catch(() => {});
+                }
+            } else if (p.event === 'dispo_set') {
+                // ViciDial confirmed disposition — no action needed if CRM already saved
+            }
+            store.lastSyncAt = p.timestamp || new Date().toISOString();
+        },
+
+        /** WebSocket handler: inbound/dialer call screen pop */
+        _handleInboundCallWs(p) {
+            if (p.phone_number) {
+                this.phoneNumber = p.phone_number;
+                Alpine.store('call').number = p.phone_number;
+            }
+            if (p.lead_id) {
+                this.leadId = String(p.lead_id);
+            }
+            if (p.client_name) {
+                this.clientName = p.client_name;
+            }
+            Alpine.store('toast').info('Incoming call: ' + (p.phone_number || 'unknown'));
+        },
+
         featureEnabled(key) {
             return !!this.features[key];
         },
@@ -395,32 +504,63 @@ window.agentScreen = function() {
                     Alpine.store('call').number = this.phoneNumber;
                     Alpine.store('call').setSessionId(this.sessionId);
                     if (this.callState === 'connected') Alpine.store('call').startTimer();
-                } else if (res.data.disposition_pending && res.data.pending_call) {
+                } else if (res.data.disposition_pending && res.data.pending_call && res.data.pending_call.session_id) {
                     this.dialBlocked = true;
+                    this.hasDispositionPending = true;
                     this.callState = 'wrapup';
                     this.sessionId = res.data.pending_call.session_id;
                     this.phoneNumber = res.data.pending_call.phone_number || this.phoneNumber;
                     Alpine.store('call').state = 'wrapup';
                 } else {
                     this.dialBlocked = false;
+                    this.hasDispositionPending = false;
                     this.callState = 'idle';
                     Alpine.store('call').state = 'idle';
                 }
-            } catch {}
+            } catch (e) {
+                // On network/auth error, reset to idle so the UI is never
+                // permanently stuck in a non-interactive state.
+                if (this.callState !== 'connected' && this.callState !== 'dialing' && this.callState !== 'ringing') {
+                    this.dialBlocked = false;
+                    this.hasDispositionPending = false;
+                    this.callState = 'idle';
+                    Alpine.store('call').state = 'idle';
+                }
+            }
         },
 
         async syncVicidialStatus() {
             try {
                 const data = await Alpine.store('vicidial').sync(this.$el.dataset.campaign || 'mbsales');
                 const raw = data?.agent_status?.data?.raw_response || '';
+                const localStatus = data?.local_session?.session_status || '';
+
+                // Reconcile phase with actual session status from backend.
+                if (['ready','paused','in_call'].includes(localStatus)) {
+                    if (!['syncing','iframe_loading','requesting'].includes(this.vici.phase)) {
+                        this.vici.phase = 'ready';
+                    }
+                } else if (localStatus === 'logged_out' && this.vici.phase === 'idle') {
+                    this.vici.phase = 'idle';
+                }
+
                 if (!this.sessionId && typeof raw === 'string' && raw.includes('INCALL')) {
                     this.callState = 'connected';
                     Alpine.store('call').state = 'connected';
+
+                    // ViciDial agent_status pipe format (index 10 = phone_number):
+                    // status|call_id|lead_id|campaign|calls_today|full_name|
+                    // user_group|user_level|pause_code|rt_sub_status|phone_number|...
                     if (raw.includes('|')) {
-                        const parts = raw.split('|');
-                        if (parts[10]) {
-                            this.phoneNumber = parts[10];
-                            Alpine.store('call').number = parts[10];
+                        const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+                        const dataLine = lines.find(l => l.includes('INCALL') && l.includes('|'));
+                        if (dataLine) {
+                            const parts = dataLine.split('|');
+                            const phone = (parts[10] || '').trim();
+                            if (phone && /^\d+$/.test(phone)) {
+                                this.phoneNumber = phone;
+                                Alpine.store('call').number = phone;
+                            }
                         }
                     }
                 }
@@ -429,22 +569,123 @@ window.agentScreen = function() {
 
         async viciLogin() {
             if (!this.featureEnabled('session_controls')) return;
+            this._viciCancelVerify();
+            this.vici.phase   = 'requesting';
             this.vici.loading = true;
+
+            const campaign = this.$el.dataset.campaign || 'mbsales';
             try {
-                await window.axios.post('/api/vicidial/session/login', {
-                    campaign: this.$el.dataset.campaign || 'mbsales',
+                const res = await window.axios.post('/api/vicidial/session/login', {
+                    campaign,
                     phone_login: this.vici.phone_login || null,
-                    phone_pass: this.vici.phone_pass || null,
-                    blended: this.vici.blended,
-                    ingroups: this.parseIngroups(this.vici.ingroups_raw),
+                    phone_pass:  this.vici.phone_pass  || null,
+                    blended:     this.vici.blended,
+                    ingroups:    this.parseIngroups(this.vici.ingroups_raw),
                 });
-                Alpine.store('toast').success('VICIdial session initialized.');
-                await this.syncVicidialStatus();
+
+                const iframeUrl = res.data?.iframe_url;
+                if (!iframeUrl) {
+                    // Login failed backend-side (missing phone credentials, etc.)
+                    this.vici.phase   = 'failed';
+                    this.vici.loading = false;
+                    Alpine.store('toast').error(res.data?.message || 'Could not build VICIdial login URL. Set a phone extension first.');
+                    return;
+                }
+
+                // Load the VICIdial vicidial.php auto-login URL into the hidden iframe.
+                // The iframe onload fires when the page loads; we then start fast-polling
+                // the verify endpoint to confirm the agent appeared in vicidial_live_agents.
+                this.vici.phase = 'iframe_loading';
+                const frame = document.getElementById('vici-session-frame');
+                if (frame) {
+                    // Attach one-time handlers so we can track iframe lifecycle.
+                    frame.onload = () => this._viciOnIframeLoad(campaign);
+                    frame.onerror = () => this._viciOnIframeError();
+                    frame.src = iframeUrl;
+                }
+
+                // Safety timeout: if iframe never fires load/error, give up after 20s.
+                this.vici._verifyTimeout = setTimeout(() => {
+                    if (this.vici.phase === 'iframe_loading' || this.vici.phase === 'syncing') {
+                        this._viciCancelVerify();
+                        this.vici.phase   = 'timeout';
+                        this.vici.loading = false;
+                        Alpine.store('toast').warning(
+                            'VICIdial session timed out. Check your phone credentials and try again.'
+                        );
+                        Alpine.store('vicidial').loggedIn = false;
+                    }
+                }, 20_000);
+
             } catch (e) {
-                Alpine.store('toast').error(e.response?.data?.message || 'VICIdial login failed.');
-            } finally {
+                this.vici.phase   = 'failed';
                 this.vici.loading = false;
+                Alpine.store('toast').error(e.response?.data?.message || 'VICIdial login request failed.');
             }
+        },
+
+        _viciOnIframeLoad(campaign) {
+            if (!['iframe_loading', 'requesting'].includes(this.vici.phase)) return;
+            this.vici.phase = 'syncing';
+            this.vici._verifyPollCount = 0;
+            this._viciPollVerify(campaign);
+        },
+
+        _viciOnIframeError() {
+            this._viciCancelVerify();
+            this.vici.phase   = 'failed';
+            this.vici.loading = false;
+            Alpine.store('toast').error('Hidden VICIdial session frame failed to load. Check VICIdial URL configuration.');
+        },
+
+        _viciPollVerify(campaign) {
+            const maxAttempts = this.vici._verifyPollMax;
+            if (this.vici._verifyPollCount >= maxAttempts) {
+                this._viciCancelVerify();
+                this.vici.phase   = 'timeout';
+                this.vici.loading = false;
+                Alpine.store('toast').warning(
+                    'VICIdial session did not confirm in time. It may become available shortly — check your credentials if it persists.'
+                );
+                return;
+            }
+
+            this.vici._verifyPollTimer = setTimeout(async () => {
+                this.vici._verifyPollCount++;
+                try {
+                    const res = await window.axios.post('/api/vicidial/session/verify', { campaign });
+                    const state = res.data?.login_state;
+
+                    if (state === 'ready') {
+                        this._viciCancelVerify();
+                        this.vici.phase   = 'ready';
+                        this.vici.loading = false;
+                        Alpine.store('toast').success('VICIdial session is live and ready.');
+                        await this.syncVicidialStatus();
+                        // Auto-register SIP softphone when ViciDial session is live
+                        if (window.TelephonyCore?.register) {
+                            window.TelephonyCore.register().catch(() => {});
+                        }
+                        return;
+                    }
+                } catch (_) {
+                    // 202 = still pending, any other error: keep polling
+                }
+                // Not ready yet – schedule next poll.
+                this._viciPollVerify(campaign);
+            }, 1_500);
+        },
+
+        _viciCancelVerify() {
+            if (this.vici._verifyPollTimer) {
+                clearTimeout(this.vici._verifyPollTimer);
+                this.vici._verifyPollTimer = null;
+            }
+            if (this.vici._verifyTimeout) {
+                clearTimeout(this.vici._verifyTimeout);
+                this.vici._verifyTimeout = null;
+            }
+            this.vici._verifyPollCount = 0;
         },
 
         async viciPause(value) {
@@ -481,11 +722,20 @@ window.agentScreen = function() {
 
         async viciLogout() {
             if (!this.featureEnabled('session_controls')) return;
+            this._viciCancelVerify();
             this.vici.loading = true;
             try {
                 await window.axios.post('/api/vicidial/session/logout', {
                     campaign: this.$el.dataset.campaign || 'mbsales',
                 });
+                this.vici.phase = 'idle';
+                // Clear the hidden iframe so the VICIdial session actually terminates.
+                const frame = document.getElementById('vici-session-frame');
+                if (frame) { frame.onload = null; frame.onerror = null; frame.src = 'about:blank'; }
+                // Destroy SIP registration with ViciDial session
+                if (window.TelephonyCore?.destroy) {
+                    window.TelephonyCore.destroy().catch(() => {});
+                }
                 Alpine.store('toast').info('VICIdial session logged out.');
                 await this.syncVicidialStatus();
             } catch (e) {
@@ -735,6 +985,16 @@ window.agentScreen = function() {
             Alpine.store('call').stopTimer();
             this.callState = 'wrapup';
             Alpine.store('call').state = 'wrapup';
+
+            // Notify backend so the call session is closed and ViciDial
+            // receives external_pause + external_hangup.
+            try {
+                await window.axios.post('/api/call/hangup', {
+                    session_id: this.sessionId || null,
+                });
+            } catch (e) {
+                Alpine.store('toast').warning('Backend hangup request failed — disposition may still be required.');
+            }
         },
 
         async toggleHold() {
@@ -778,6 +1038,7 @@ window.agentScreen = function() {
         async saveDisposition() {
             if (!this.dispositionCode) return;
             this.savingDisposition = true;
+            this.dispositionError = null;
             const campaign = this.$el.dataset.campaign || 'mbsales';
             try {
                 await window.axios.post('/api/disposition/save', {
@@ -797,22 +1058,35 @@ window.agentScreen = function() {
                 });
                 if (this.recentCalls.length > 10) this.recentCalls.pop();
                 Alpine.store('toast').success('Disposition saved.');
-                this.callState = 'idle';
-                this.sessionId = null;
-                this.dispositionCode = '';
-                this.dispositionNotes = '';
-                this.duration = 0;
-                this.dialBlocked = false;
-                Alpine.store('call').state = 'idle';
-                if (this.predictiveMode) {
-                    this.schedulePredictiveDial();
-                } else {
-                    this.fetchNextLead();
-                }
+                this.resetAfterDisposition();
             } catch (e) {
-                Alpine.store('toast').error(e.response?.data?.message || 'Failed to save disposition.');
+                const msg = e.response?.data?.message || 'Failed to save disposition. You may retry or dismiss.';
+                this.dispositionError = msg;
+                Alpine.store('toast').error(msg);
             } finally {
                 this.savingDisposition = false;
+            }
+        },
+
+        dismissDisposition() {
+            Alpine.store('toast').warning('Disposition dismissed. Call has been logged without a code.');
+            this.resetAfterDisposition();
+        },
+
+        resetAfterDisposition() {
+            this.callState = 'idle';
+            this.sessionId = null;
+            this.dispositionCode = '';
+            this.dispositionNotes = '';
+            this.dispositionError = null;
+            this.hasDispositionPending = false;
+            this.duration = 0;
+            this.dialBlocked = false;
+            Alpine.store('call').state = 'idle';
+            if (this.predictiveMode) {
+                this.schedulePredictiveDial();
+            } else {
+                this.fetchNextLead();
             }
         },
 

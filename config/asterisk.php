@@ -13,4 +13,8 @@ return [
     // SIP-only enforcement for CRM telephony routing.
     'agent_channel'   => 'SIP',
 
+    // AMI persistent listener (ami:listen command)
+    'reconnect_delay'     => (int) env('AMI_LISTENER_RECONNECT_DELAY', 5),
+    'max_reconnect_delay' => (int) env('AMI_LISTENER_MAX_RECONNECT_DELAY', 60),
+
 ];

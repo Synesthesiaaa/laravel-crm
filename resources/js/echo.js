@@ -49,15 +49,39 @@ export function initEcho() {
         host: config.wsHost || null,
         port: config.wsPort || null,
     });
+
+    monitorConnectionState();
+
     return window.Echo;
 }
 
 /**
- * Subscribe to agent's private channel for call state updates.
- * @param {number} userId - Authenticated user ID
- * @param {(payload: object) => void} onCallStateChanged - Callback for call.state.changed
+ * Monitor WebSocket connection state and surface it via Alpine store.
  */
-export function subscribeAgentChannel(userId, onCallStateChanged) {
+function monitorConnectionState() {
+    if (!window.Echo?.connector?.pusher?.connection) return;
+
+    const conn = window.Echo.connector.pusher.connection;
+    const update = (state) => {
+        const store = window.Alpine?.store?.('ws');
+        if (store) store.state = state;
+    };
+
+    conn.bind('connected',     () => update('connected'));
+    conn.bind('connecting',    () => update('connecting'));
+    conn.bind('disconnected',  () => update('disconnected'));
+    conn.bind('unavailable',   () => update('unavailable'));
+    conn.bind('failed',        () => update('failed'));
+
+    if (conn.state) update(conn.state);
+}
+
+/**
+ * Subscribe to agent's private channel for all telephony push events.
+ * @param {number} userId
+ * @param {object} handlers - { onCallStateChanged, onVicidialEvent, onInboundCall }
+ */
+export function subscribeAgentChannel(userId, onCallStateChanged, onVicidialEvent, onInboundCall) {
     if (!window.Echo || !userId) {
         TelephonyLogger.warn('TelephonyEcho', 'Agent channel subscription skipped', { has_echo: !!window.Echo, user_id: userId });
         return () => {};
@@ -65,24 +89,25 @@ export function subscribeAgentChannel(userId, onCallStateChanged) {
 
     const channel = window.Echo.private(`App.Models.User.${userId}`);
     channel.listen('.call.state.changed', onCallStateChanged);
+
+    if (onVicidialEvent) {
+        channel.listen('.vicidial.agent.event', onVicidialEvent);
+    }
+    if (onInboundCall) {
+        channel.listen('.inbound.call.received', onInboundCall);
+    }
+
     TelephonyLogger.info('TelephonyEcho', 'Subscribed to agent channel', { user_id: userId });
 
-    return () => channel.stopListening('.call.state.changed');
+    return () => {
+        channel.stopListening('.call.state.changed');
+        channel.stopListening('.vicidial.agent.event');
+        channel.stopListening('.inbound.call.received');
+    };
 }
-
-// Expose for inline scripts (agent/supervisor blade)
-window.TelephonyEcho = {
-    initEcho,
-    subscribeAgentChannel,
-    subscribeSupervisorChannel,
-    isBroadcastEnabled,
-};
 
 /**
  * Subscribe to supervisor channel for telephony and disposition updates.
- * @param {(payload: object) => void} onCallStateChanged - Callback for call.state.changed
- * @param {(payload: object) => void} onDispositionSaved - Callback for disposition.saved
- * @param {(payload: object) => void} onTelephonyEventLogged - Callback for telephony.event.logged
  */
 export function subscribeSupervisorChannel(onCallStateChanged, onDispositionSaved, onTelephonyEventLogged) {
     if (!window.Echo) {
@@ -107,10 +132,27 @@ export function subscribeSupervisorChannel(onCallStateChanged, onDispositionSave
     };
 }
 
+/**
+ * Join the agents presence channel for real-time online/offline tracking.
+ * @param {object} handlers - { onHere, onJoining, onLeaving }
+ */
+export function joinAgentsPresence(handlers = {}) {
+    if (!window.Echo) return () => {};
+
+    const channel = window.Echo.join('agents.online');
+    if (handlers.onHere)    channel.here(handlers.onHere);
+    if (handlers.onJoining) channel.joining(handlers.onJoining);
+    if (handlers.onLeaving) channel.leaving(handlers.onLeaving);
+
+    TelephonyLogger.info('TelephonyEcho', 'Joined agents presence channel');
+    return () => window.Echo.leave('agents.online');
+}
+
 // Expose for inline scripts (agent/supervisor blade)
 window.TelephonyEcho = {
     initEcho,
     subscribeAgentChannel,
     subscribeSupervisorChannel,
+    joinAgentsPresence,
     isBroadcastEnabled,
 };
