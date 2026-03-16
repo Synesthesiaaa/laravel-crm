@@ -1,51 +1,179 @@
 @extends('layouts.app')
 
 @section('title', 'Field Logic - Admin')
-
 @section('header-icon')
-    <span class="mr-3 text-indigo-600">📋</span>
+    <x-icon name="cog-6-tooth" class="w-5 h-5 text-[var(--color-primary)]" />
 @endsection
-
-@section('header-title')
-    Field Logic
-@endsection
+@section('header-title', 'Field Logic')
 
 @section('content')
-    @if(session('success'))
-        <div class="mb-4 p-4 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm">{{ session('success') }}</div>
-    @endif
-    <x-validation-errors />
-    <div class="bg-white rounded-xl shadow border border-gray-100 overflow-hidden mb-6">
-        <div class="p-6 border-b border-gray-100">
-            <form method="GET" action="{{ route('admin.field-logic.index') }}" class="flex flex-wrap gap-4 items-end">
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Form</label>
-                    <select name="form" class="px-3 py-2 border border-gray-200 rounded">
-                        @foreach($forms as $code => $config)
-                            <option value="{{ $code }}" {{ $formType === $code ? 'selected' : '' }}>{{ $config['name'] ?? $code }}</option>
-                        @endforeach
-                    </select>
+<x-page-header title="Field Logic"
+    :breadcrumbs="['Admin' => route('admin.dashboard'), 'Field Logic' => null]" />
+
+@if(session('success'))
+    <div class="mb-4 p-4 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm">{{ session('success') }}</div>
+@endif
+<x-validation-errors />
+
+{{-- Form selector --}}
+<div class="md-card mb-6">
+    <div class="p-4">
+        <form method="GET" action="{{ route('admin.field-logic.index') }}" class="flex flex-wrap gap-4 items-end">
+            <div class="form-field">
+                <label class="form-label">Form</label>
+                <select name="form" class="form-input max-w-xs">
+                    @foreach($forms as $code => $config)
+                        <option value="{{ $code }}" {{ $formType === $code ? 'selected' : '' }}>{{ $config['name'] ?? $code }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="form-field">
+                <label class="form-label">&nbsp;</label>
+                <button type="submit" class="btn-primary">
+                    <x-icon name="funnel" class="w-4 h-4" />
+                    Load
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Add field --}}
+<div class="md-card mb-6">
+    <div class="px-6 py-4 border-b border-[var(--color-border)]">
+        <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Add field</h3>
+    </div>
+    <div class="p-6">
+        <form method="POST" action="{{ route('admin.field-logic.store') }}" class="flex flex-wrap gap-4 items-end" x-data="{ submitting: false }" @submit="submitting = true">
+            @csrf
+            <input type="hidden" name="campaign_code" value="{{ $campaign }}">
+            <input type="hidden" name="form_type" value="{{ $formType }}">
+            <div class="form-field">
+                <label class="form-label">Field name</label>
+                <input type="text" name="field_name" required class="form-input" placeholder="column_name" pattern="[a-zA-Z0-9_]+" title="Letters, numbers, underscores only">
+            </div>
+            <div class="form-field">
+                <label class="form-label">Label</label>
+                <input type="text" name="field_label" required class="form-input" placeholder="Display Label">
+            </div>
+            <div class="form-field">
+                <label class="form-label">Type</label>
+                <select name="field_type" class="form-input">
+                    <option value="text">Text</option>
+                    <option value="textarea">Textarea</option>
+                    <option value="number">Number</option>
+                    <option value="date">Date</option>
+                    <option value="select">Select</option>
+                </select>
+            </div>
+            <div class="form-field">
+                <label class="form-label">Width</label>
+                <select name="field_width" class="form-input">
+                    <option value="full">Full</option>
+                    <option value="half">Half</option>
+                    <option value="third">Third</option>
+                </select>
+            </div>
+            <div class="form-field">
+                <label class="form-label">Order</label>
+                <input type="number" name="field_order" class="form-input w-24" value="" placeholder="auto" min="0" step="1">
+            </div>
+            <div class="form-field flex items-center gap-2 pt-6">
+                <input type="checkbox" name="is_required" value="1" id="add_req" class="rounded border-gray-300">
+                <label for="add_req" class="text-sm text-[var(--color-on-surface)]">Required</label>
+            </div>
+            <div class="form-field">
+                <label class="form-label">&nbsp;</label>
+                <button type="submit" class="btn-primary" :disabled="submitting">
+                    <x-icon name="plus" class="w-4 h-4" />
+                    Add
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Fields table --}}
+<div class="md-card overflow-hidden">
+    <x-table.index caption="Form fields">
+        <x-table.head :columns="[
+            ['label' => 'Order'],
+            ['label' => 'Name'],
+            ['label' => 'Label'],
+            ['label' => 'Type'],
+            ['label' => 'Width'],
+            ['label' => 'Required'],
+            ['label' => 'Actions', 'align' => 'right'],
+        ]" />
+        <tbody>
+            @forelse($fields as $f)
+                <tr class="border-b border-[var(--color-border)]">
+                    <td class="py-3 px-4 text-[var(--color-on-surface-dim)]">{{ $f->field_order }}</td>
+                    <td class="py-3 px-4 font-mono text-sm">{{ $f->field_name }}</td>
+                    <td class="py-3 px-4">{{ $f->field_label }}</td>
+                    <td class="py-3 px-4">{{ $f->field_type }}</td>
+                    <td class="py-3 px-4">{{ $f->field_width ?? 'full' }}</td>
+                    <td class="py-3 px-4">
+                        <x-badge :type="$f->is_required ? 'info' : 'inactive'">
+                            {{ $f->is_required ? 'Yes' : 'No' }}
+                        </x-badge>
+                    </td>
+                    <td class="py-3 px-4">
+                        <div class="table-actions flex justify-end gap-2"
+                             x-data="{ async doDelete(el) {
+                                const ok = await Alpine.store('confirm').ask('Delete field?', 'Remove this field? This cannot be undone.');
+                                if (ok) el.submit();
+                             }}">
+                            <button type="button"
+                                    class="btn-secondary text-xs px-2 py-1"
+                                    @click="$store.modal.show('edit-field-logic', {{ json_encode($f->only(['id','field_name','field_label','field_type','is_required','field_order','field_width'])) }})">
+                                <x-icon name="pencil" class="w-3.5 h-3.5" />
+                                Edit
+                            </button>
+                            <form method="POST" action="{{ route('admin.field-logic.destroy') }}" x-ref="delForm" class="inline">
+                                @csrf
+                                <input type="hidden" name="id" value="{{ $f->id }}">
+                                <button type="button" class="btn-danger text-xs px-2 py-1"
+                                        @click="doDelete($refs.delForm)">
+                                    <x-icon name="trash" class="w-3.5 h-3.5" />
+                                    Delete
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+            @empty
+                <tr>
+                    <td colspan="7" class="py-8 px-4 text-center text-[var(--color-on-surface-dim)]">No fields. Add one above.</td>
+                </tr>
+            @endforelse
+        </tbody>
+    </x-table.index>
+</div>
+
+{{-- Edit field modal --}}
+<x-modal name="edit-field-logic" title="Edit field" maxWidth="lg">
+    <div x-data="{
+        edit: { id: null, field_name: '', field_label: '', field_type: 'text', field_width: 'full', field_order: 0, is_required: false }
+    }" x-effect="$store.modal.is('edit-field-logic') && $store.modal.data && $store.modal.data.id && (edit = { id: $store.modal.data.id, field_name: $store.modal.data.field_name || '', field_label: $store.modal.data.field_label || '', field_type: $store.modal.data.field_type || 'text', field_width: $store.modal.data.field_width || 'full', field_order: $store.modal.data.field_order ?? 0, is_required: !!$store.modal.data.is_required })">
+        <form method="POST" x-show="edit.id"
+              :action="'{{ url('admin/field-logic') }}/' + edit.id"
+              x-data="{ submitting: false }"
+              @submit="submitting = true">
+            @csrf
+            @method('PUT')
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="form-field sm:col-span-2">
+                    <label class="form-label">Field name</label>
+                    <input type="text" name="field_name" class="form-input" x-model="edit.field_name" pattern="[a-zA-Z0-9_]+" required>
                 </div>
-                <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Load</button>
-            </form>
-        </div>
-        <div class="p-6 border-b border-gray-100 bg-gray-50">
-            <h3 class="font-bold text-gray-900 mb-2">Add field</h3>
-            <form method="POST" action="{{ route('admin.field-logic.store') }}" class="flex flex-wrap gap-4 items-end">
-                @csrf
-                <input type="hidden" name="campaign_code" value="{{ $campaign }}">
-                <input type="hidden" name="form_type" value="{{ $formType }}">
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Field name</label>
-                    <input type="text" name="field_name" required class="px-3 py-2 border border-gray-200 rounded" placeholder="column_name">
+                <div class="form-field sm:col-span-2">
+                    <label class="form-label">Label</label>
+                    <input type="text" name="field_label" class="form-input" x-model="edit.field_label" required>
                 </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Label</label>
-                    <input type="text" name="field_label" required class="px-3 py-2 border border-gray-200 rounded" placeholder="Display Label">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Type</label>
-                    <select name="field_type" class="px-3 py-2 border border-gray-200 rounded">
+                <div class="form-field">
+                    <label class="form-label">Type</label>
+                    <select name="field_type" class="form-input" x-model="edit.field_type">
                         <option value="text">Text</option>
                         <option value="textarea">Textarea</option>
                         <option value="number">Number</option>
@@ -53,52 +181,33 @@
                         <option value="select">Select</option>
                     </select>
                 </div>
-                <div class="flex items-center gap-2">
-                    <input type="checkbox" name="is_required" value="1" id="req">
-                    <label for="req" class="text-sm">Required</label>
+                <div class="form-field">
+                    <label class="form-label">Width</label>
+                    <select name="field_width" class="form-input" x-model="edit.field_width">
+                        <option value="full">Full</option>
+                        <option value="half">Half</option>
+                        <option value="third">Third</option>
+                    </select>
                 </div>
-                <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Add</button>
-            </form>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Name</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Label</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Type</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Required</th>
-                        <th class="text-right py-3 px-4 font-semibold text-gray-700">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($fields as $f)
-                        <tr class="border-b border-gray-100">
-                            <td class="py-3 px-4">{{ $f->field_name }}</td>
-                            <td class="py-3 px-4">{{ $f->field_label }}</td>
-                            <td class="py-3 px-4">{{ $f->field_type }}</td>
-                            <td class="py-3 px-4">{{ $f->is_required ? 'Yes' : 'No' }}</td>
-                            <td class="py-3 px-4 text-right">
-                                <form method="POST" action="{{ route('admin.field-logic.update', $f->id) }}" class="inline-block mr-2">
-                                    @csrf
-                                    @method('PUT')
-                                    <input type="text" name="field_label" value="{{ $f->field_label }}" class="px-2 py-1 border rounded text-xs w-32">
-                                    <button type="submit" class="px-2 py-1 bg-gray-200 rounded text-xs">Update</button>
-                                </form>
-                                <form method="POST" action="{{ route('admin.field-logic.destroy') }}" class="inline-block" onsubmit="return confirm('Delete this field?');">
-                                    @csrf
-                                    <input type="hidden" name="id" value="{{ $f->id }}">
-                                    <button type="submit" class="px-2 py-1 bg-red-100 text-red-700 rounded text-xs">Delete</button>
-                                </form>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="5" class="py-8 px-4 text-center text-gray-500">No fields. Add one above.</td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
+                <div class="form-field">
+                    <label class="form-label">Order</label>
+                    <input type="number" name="field_order" class="form-input" x-model.number="edit.field_order" min="0" step="1">
+                </div>
+                <div class="form-field flex items-center gap-2 pt-6">
+                    <input type="checkbox" name="is_required" value="1" id="edit_req"
+                           x-model="edit.is_required"
+                           class="rounded border-gray-300">
+                    <label for="edit_req" class="text-sm text-[var(--color-on-surface)]">Required</label>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end gap-2">
+                <button type="button" class="btn-secondary" @click="$store.modal.hide()">Cancel</button>
+                <button type="submit" class="btn-primary" :disabled="submitting">
+                    <x-icon name="check" class="w-4 h-4" />
+                    Update
+                </button>
+            </div>
+        </form>
     </div>
+</x-modal>
 @endsection

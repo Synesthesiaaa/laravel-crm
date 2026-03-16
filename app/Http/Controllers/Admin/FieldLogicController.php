@@ -68,6 +68,7 @@ class FieldLogicController extends Controller
         $field->update([
             'field_label' => $validated['field_label'],
             'field_name'  => $validated['field_name'] ?? $field->field_name,
+            'field_type'  => $validated['field_type'] ?? $field->field_type,
             'is_required' => $request->boolean('is_required'),
             'field_order' => $validated['field_order'] ?? $field->field_order,
             'field_width' => $validated['field_width'] ?? $field->field_width,
