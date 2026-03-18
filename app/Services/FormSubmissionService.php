@@ -29,13 +29,8 @@ class FormSubmissionService
         if (!$this->formFieldRepository->validateTableName($tableName, $this->campaignService->getAllFormTableNames())) {
             return OperationResult::failure('Invalid table.');
         }
-        if (!Schema::hasTable($tableName)) {
-            return OperationResult::failure("Form storage table '{$tableName}' does not exist.");
-        }
-        if (!Schema::hasColumn($tableName, 'request_id')) {
-            return OperationResult::failure("Form storage table '{$tableName}' is missing required column 'request_id'.");
-        }
         $fields  = $this->formFieldRepository->getFieldsForForm($campaign, $formType);
+        $this->ensureStorageTableAndColumns($tableName, $fields);
         $prepared = $this->prepareFormRow($fields, $data, $agent);
         if ($prepared === null) {
             return OperationResult::failure('Date and Request ID are required.');
@@ -89,9 +84,93 @@ class FormSubmissionService
             if ($field->is_required && (string) $value === '') {
                 throw new \InvalidArgumentException("Field '{$colName}' is required.");
             }
+            // If it's optional and empty, store NULL (better than empty string for numeric/date columns).
+            if (! $field->is_required && (string) $value === '') {
+                $value = null;
+            }
             $row[$colName] = $value;
         }
         return $row;
+    }
+
+    /**
+     * Ensure the per-form storage table exists and contains columns for all active form fields.
+     * This allows creating new forms (e.g. table_name = 'ploan') without manually running migrations.
+     */
+    protected function ensureStorageTableAndColumns(string $tableName, Collection $fields): void
+    {
+        $systemColumns = ['date', 'request_id', 'agent', 'id', 'created_at', 'updated_at'];
+
+        if (!Schema::hasTable($tableName)) {
+            Schema::create($tableName, function ($table) {
+                $table->id();
+                $table->date('date')->index();
+                $table->string('request_id', 255)->index();
+                $table->string('agent', 255)->index();
+                $table->timestamps();
+            });
+        } else {
+            // Base table safety: create missing required base columns.
+            if (!Schema::hasColumn($tableName, 'date')) {
+                Schema::table($tableName, function ($table) {
+                    $table->date('date')->index();
+                });
+            }
+            if (!Schema::hasColumn($tableName, 'request_id')) {
+                Schema::table($tableName, function ($table) {
+                    $table->string('request_id', 255)->index();
+                });
+            }
+            if (!Schema::hasColumn($tableName, 'agent')) {
+                Schema::table($tableName, function ($table) {
+                    $table->string('agent', 255)->index();
+                });
+            }
+        }
+
+        $missingFieldCols = [];
+        foreach ($fields as $field) {
+            $colName = $field->field_name;
+            if (in_array($colName, $systemColumns, true)) {
+                continue;
+            }
+            if (!Schema::hasColumn($tableName, $colName)) {
+                $missingFieldCols[] = $field;
+            }
+        }
+
+        if (empty($missingFieldCols)) {
+            return;
+        }
+
+        Schema::table($tableName, function ($table) use ($missingFieldCols) {
+            foreach ($missingFieldCols as $field) {
+                /** @var \App\Models\FormField $field */
+                $colName = $field->field_name;
+                $nullable = ! $field->is_required;
+                $type = (string) $field->field_type;
+
+                switch ($type) {
+                    case 'textarea':
+                        $table->text($colName)->nullable($nullable);
+                        break;
+                    case 'date':
+                        $table->date($colName)->nullable($nullable);
+                        break;
+                    case 'select':
+                        $table->string($colName, 255)->nullable($nullable);
+                        break;
+                    case 'number':
+                        // Most of your known numeric fields (amount/rate) use 2 decimals.
+                        $table->decimal($colName, 10, 2)->nullable($nullable);
+                        break;
+                    case 'text':
+                    default:
+                        $table->string($colName, 255)->nullable($nullable);
+                        break;
+                }
+            }
+        });
     }
 
     public function generateRequestId(string $tableName): string

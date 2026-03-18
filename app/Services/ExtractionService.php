@@ -48,6 +48,10 @@ class ExtractionService
     public function streamCsv($handle, array $tables, ?string $startDate, ?string $endDate): void
     {
         foreach ($tables as $tableName => $friendlyName) {
+            // If the form table doesn't exist yet, skip it (prevents 500s).
+            if (!Schema::hasTable($tableName)) {
+                continue;
+            }
             $query = DB::table($tableName);
             if (Schema::hasColumn($tableName, 'id')) {
                 $query->orderBy('id');
