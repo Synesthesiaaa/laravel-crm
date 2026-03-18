@@ -98,6 +98,7 @@
                             <label class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
                             <input type="{{ $field->field_type ?? 'text' }}" class="form-input"
                                    name="{{ $field->field_name }}"
+                                   @if(($field->field_type ?? '') === 'number') step="any" inputmode="decimal" @endif
                                    @if($field->required) required @endif />
                         </div>
                     @endif

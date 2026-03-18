@@ -48,6 +48,7 @@ class ExtractionService
     {
         foreach ($tables as $tableName => $friendlyName) {
             $query = DB::table($tableName)->orderBy('id');
+
             if ($startDate && $endDate) {
                 $query->whereBetween('date', [$startDate, $endDate]);
             } elseif ($startDate) {
@@ -55,13 +56,17 @@ class ExtractionService
             } elseif ($endDate) {
                 $query->where('date', '<=', $endDate);
             }
-            $rows = $query->get();
-            if ($rows->isEmpty()) {
-                continue;
-            }
-            fputcsv($handle, array_keys((array) $rows->first()));
-            foreach ($rows as $row) {
+
+            // Stream rows to avoid loading the entire dataset into memory.
+            // This prevents production 500 errors caused by timeouts/memory exhaustion.
+            $headerWritten = false;
+            foreach ($query->cursor() as $row) {
+                if (! $headerWritten) {
+                    fputcsv($handle, array_keys((array) $row));
+                    $headerWritten = true;
+                }
                 fputcsv($handle, (array) $row);
+                fflush($handle);
             }
         }
     }

@@ -76,6 +76,7 @@
                     <x-form.input :name="$field['name']" :label="$field['label']"
                         :type="$field['type'] ?? 'text'"
                         :value="$prefill[$field['name']] ?? ''"
+                        @if(($field['type'] ?? '') === 'number') step="any" inputmode="decimal" @endif
                         :required="$field['required'] ?? false" />
                 @endif
             </div>
