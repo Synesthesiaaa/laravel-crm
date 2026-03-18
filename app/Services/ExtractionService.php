@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ExtractionService
 {
@@ -47,14 +48,20 @@ class ExtractionService
     public function streamCsv($handle, array $tables, ?string $startDate, ?string $endDate): void
     {
         foreach ($tables as $tableName => $friendlyName) {
-            $query = DB::table($tableName)->orderBy('id');
+            $query = DB::table($tableName);
+            if (Schema::hasColumn($tableName, 'id')) {
+                $query->orderBy('id');
+            }
 
-            if ($startDate && $endDate) {
-                $query->whereBetween('date', [$startDate, $endDate]);
-            } elseif ($startDate) {
-                $query->where('date', '>=', $startDate);
-            } elseif ($endDate) {
-                $query->where('date', '<=', $endDate);
+            // Some form tables may not use a `date` column. Guard to prevent 500s.
+            if (Schema::hasColumn($tableName, 'date')) {
+                if ($startDate && $endDate) {
+                    $query->whereBetween('date', [$startDate, $endDate]);
+                } elseif ($startDate) {
+                    $query->where('date', '>=', $startDate);
+                } elseif ($endDate) {
+                    $query->where('date', '<=', $endDate);
+                }
             }
 
             // Stream rows to avoid loading the entire dataset into memory.
