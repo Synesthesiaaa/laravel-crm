@@ -5,7 +5,6 @@ namespace Tests\Unit\Services;
 use App\Models\User;
 use App\Models\VicidialAgentSession;
 use App\Models\VicidialServer;
-use App\Contracts\Repositories\AttendanceRepositoryInterface;
 use App\Services\Telephony\VicidialNonAgentApiService;
 use App\Services\Telephony\VicidialProxyService;
 use App\Services\Telephony\VicidialSessionService;
@@ -20,7 +19,6 @@ class VicidialSessionServiceTest extends TestCase
 
     private VicidialProxyService $agentApiMock;
     private VicidialNonAgentApiService $nonAgentApiMock;
-    private AttendanceRepositoryInterface $attendanceRepoMock;
     private VicidialSessionService $service;
     private User $user;
 
@@ -28,11 +26,9 @@ class VicidialSessionServiceTest extends TestCase
     {
         parent::setUp();
 
-        $this->agentApiMock       = Mockery::mock(VicidialProxyService::class);
-        $this->nonAgentApiMock    = Mockery::mock(VicidialNonAgentApiService::class);
-        $this->attendanceRepoMock = Mockery::mock(AttendanceRepositoryInterface::class);
-        $this->attendanceRepoMock->shouldReceive('log')->zeroOrMoreTimes()->andReturn(new \App\Models\AttendanceLog);
-        $this->service = new VicidialSessionService($this->agentApiMock, $this->nonAgentApiMock, $this->attendanceRepoMock);
+        $this->agentApiMock    = Mockery::mock(VicidialProxyService::class);
+        $this->nonAgentApiMock = Mockery::mock(VicidialNonAgentApiService::class);
+        $this->service         = new VicidialSessionService($this->agentApiMock, $this->nonAgentApiMock);
 
         $this->user = User::factory()->create([
             'role'         => 'Agent',

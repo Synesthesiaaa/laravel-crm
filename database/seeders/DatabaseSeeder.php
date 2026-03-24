@@ -18,7 +18,6 @@ class DatabaseSeeder extends Seeder
         $this->call([
             CampaignSeeder::class,
             DispositionCodesSeeder::class,
-            PauseCodesSeeder::class,
             FormFieldsSeeder::class,
         ]);
 

@@ -35,19 +35,18 @@
 </div>
 
 <x-table.index caption="Attendance events">
-    <x-table.head :columns="[['label' => 'Event'], ['label' => 'Pause code'], ['label' => 'Time'], ['label' => 'IP']]" />
+    <x-table.head :columns="[['label' => 'Event'], ['label' => 'Time'], ['label' => 'IP']]" />
     @if(!isset($logs) || $logs->isEmpty())
-        <x-table.empty :colspan="4" message="No attendance events for this date." />
+        <x-table.empty :colspan="3" message="No attendance events for this date." />
     @else
     <tbody>
         @foreach($logs as $log)
             <tr>
                 <td>
-                    <x-badge :type="$log->event_type === 'login' ? 'active' : ($log->event_type === 'logout' ? 'inactive' : ($log->event_type === 'pause' ? 'pending' : 'info'))">
+                    <x-badge :type="$log->event_type === 'login' ? 'active' : ($log->event_type === 'logout' ? 'inactive' : 'info')">
                         {{ strtoupper($log->event_type) }}
                     </x-badge>
                 </td>
-                <td class="font-mono text-sm text-[var(--color-on-surface-muted)]">{{ $log->pause_code ?? '—' }}</td>
                 <td class="font-mono text-sm text-[var(--color-on-surface-muted)]">{{ $log->event_time?->format('Y-m-d H:i:s') }}</td>
                 <td class="font-mono text-sm text-[var(--color-on-surface-dim)]">{{ $log->ip_address ?? '—' }}</td>
             </tr>
