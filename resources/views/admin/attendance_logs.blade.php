@@ -20,25 +20,24 @@
 </div>
 
 <x-table.index caption="Attendance log entries">
-    <x-table.head :columns="[['label' => 'User'], ['label' => 'Event'], ['label' => 'Pause code'], ['label' => 'Time'], ['label' => 'IP']]" />
+    <x-table.head :columns="[['label' => 'User'], ['label' => 'Event'], ['label' => 'Time'], ['label' => 'IP']]" />
     @if(isset($logs) && $logs->isEmpty())
-        <x-table.empty :colspan="5" message="No attendance logs." />
+        <x-table.empty :colspan="4" message="No attendance logs." />
     @else
     <tbody>
         @forelse($logs as $log)
             <tr>
                 <td class="font-medium">{{ $log->user->full_name ?? $log->user->username ?? $log->user_id }}</td>
                 <td>
-                    <x-badge :type="$log->event_type === 'login' ? 'active' : ($log->event_type === 'logout' ? 'inactive' : ($log->event_type === 'pause' ? 'pending' : 'info'))">
+                    <x-badge :type="$log->event_type === 'login' ? 'active' : ($log->event_type === 'logout' ? 'inactive' : 'info')">
                         {{ strtoupper($log->event_type) }}
                     </x-badge>
                 </td>
-                <td class="font-mono text-sm text-[var(--color-on-surface-muted)]">{{ $log->pause_code ?? '—' }}</td>
                 <td class="font-mono text-sm text-[var(--color-on-surface-muted)]">{{ $log->event_time?->format('Y-m-d H:i:s') }}</td>
                 <td class="font-mono text-sm text-[var(--color-on-surface-dim)]">{{ $log->ip_address ?? '—' }}</td>
             </tr>
         @empty
-            <x-table.empty :colspan="5" message="No attendance logs." />
+            <x-table.empty :colspan="4" message="No attendance logs." />
         @endforelse
     </tbody>
     @endif

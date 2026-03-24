@@ -72,7 +72,6 @@ class GlobalSearchController extends Controller
             'campaigns'   => ['title' => 'Campaigns',          'url' => route('admin.campaigns.index'),     'keywords' => ['campaign']],
             'disposition' => ['title' => 'Disposition Records','url' => route('admin.disposition-records.index'), 'keywords' => ['disposition', 'disp']],
             'extraction'  => ['title' => 'Data Extraction',    'url' => route('admin.extraction.index'),   'keywords' => ['extract', 'export', 'csv']],
-            'pause_codes' => ['title' => 'Pause Codes',        'url' => route('admin.pause-codes.index'),  'keywords' => ['pause', 'break', 'vicidial']],
         ];
 
         $navMatches = [];
