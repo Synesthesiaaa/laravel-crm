@@ -21,6 +21,7 @@
         ['route' => 'reports.index',                  'label' => 'Reports',             'icon' => 'chart-pie'],
         ['route' => 'admin.disposition-records.index','label' => 'Disposition Records', 'icon' => 'clipboard-document-list'],
         ['route' => 'admin.disposition-codes.index',  'label' => 'Disposition Codes',   'icon' => 'tag'],
+        ['route' => 'admin.pause-codes.index',        'label' => 'Pause Codes',         'icon' => 'pause'],
         ['route' => 'admin.field-logic.index',        'label' => 'Field Logic',         'icon' => 'cog-6-tooth'],
         ['route' => 'admin.extraction.index',         'label' => 'Extraction',          'icon' => 'arrow-down-tray'],
     ];

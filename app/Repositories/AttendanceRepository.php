@@ -8,11 +8,12 @@ use Illuminate\Support\Collection;
 
 class AttendanceRepository implements AttendanceRepositoryInterface
 {
-    public function log(int $userId, string $eventType, ?string $ipAddress = null): AttendanceLog
+    public function log(int $userId, string $eventType, ?string $ipAddress = null, ?string $pauseCode = null): AttendanceLog
     {
         return AttendanceLog::create([
             'user_id' => $userId,
             'event_type' => $eventType,
+            'pause_code' => $pauseCode !== null && $pauseCode !== '' ? $pauseCode : null,
             'event_time' => now(),
             'ip_address' => $ipAddress,
         ]);

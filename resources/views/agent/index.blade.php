@@ -322,8 +322,8 @@ window.agentScreen = function() {
             phase: 'idle',
             phone_login: '',
             phone_pass: '',
-            pause_code: 'BREAK',
-            pause_codes: @js(config('vicidial.pause_codes', ['BREAK'])),
+            pause_code: @json($defaultPauseCode ?? 'BREAK'),
+            pause_codes: @json($pauseCodesForAgent ?? [['code' => 'BREAK', 'label' => 'BREAK']]),
             ingroups_raw: '',
             blended: true,
             _verifyPollTimer: null,
@@ -532,6 +532,9 @@ window.agentScreen = function() {
         async syncVicidialStatus() {
             try {
                 const data = await Alpine.store('vicidial').sync(this.$el.dataset.campaign || 'mbsales');
+                if (data?.pause_codes && Array.isArray(data.pause_codes) && data.pause_codes.length) {
+                    this.vici.pause_codes = data.pause_codes;
+                }
                 const raw = data?.agent_status?.data?.raw_response || '';
                 const localStatus = data?.local_session?.session_status || '';
 

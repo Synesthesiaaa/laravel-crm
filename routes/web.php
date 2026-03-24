@@ -126,6 +126,10 @@ Route::middleware(['auth', 'campaign'])->group(function () {
         Route::post('field-logic/delete', [\App\Http\Controllers\Admin\FieldLogicController::class, 'destroy'])->name('field-logic.destroy');
         Route::get('extraction', [\App\Http\Controllers\Admin\ExtractionController::class, 'index'])->name('extraction.index');
         Route::post('extraction', [\App\Http\Controllers\Admin\ExtractionController::class, 'export'])->name('extraction.export');
+        Route::get('pause-codes', [\App\Http\Controllers\Admin\PauseCodesController::class, 'index'])->name('pause-codes.index');
+        Route::post('pause-codes', [\App\Http\Controllers\Admin\PauseCodesController::class, 'store'])->name('pause-codes.store');
+        Route::put('pause-codes/{pauseCode}', [\App\Http\Controllers\Admin\PauseCodesController::class, 'update'])->name('pause-codes.update');
+        Route::post('pause-codes/delete', [\App\Http\Controllers\Admin\PauseCodesController::class, 'destroy'])->name('pause-codes.destroy');
 
         // Super Admin only
         Route::middleware('role:Super Admin')->group(function () {

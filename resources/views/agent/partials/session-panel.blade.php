@@ -80,8 +80,8 @@
         <label class="form-label">Pause Code</label>
         <div class="flex gap-2">
             <select class="form-select" x-model="vici.pause_code">
-                <template x-for="code in vici.pause_codes" :key="code">
-                    <option :value="code" x-text="code"></option>
+                <template x-for="item in vici.pause_codes" :key="item.code || item">
+                    <option :value="item.code || item" x-text="item.label || item.code || item"></option>
                 </template>
             </select>
             <button class="btn-secondary text-xs"

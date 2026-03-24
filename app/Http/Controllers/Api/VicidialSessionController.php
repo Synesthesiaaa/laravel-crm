@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\PauseCodeService;
 use App\Services\Telephony\VicidialSessionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -114,7 +115,7 @@ class VicidialSessionController extends Controller
         ], $result->success ? 200 : 422);
     }
 
-    public function status(Request $request, VicidialSessionService $service): JsonResponse
+    public function status(Request $request, VicidialSessionService $service, PauseCodeService $pauseCodeService): JsonResponse
     {
         $campaign = (string) $request->input('campaign', $request->session()->get('campaign', 'mbsales'));
         $status   = $service->getAgentStatus($request->user(), $campaign);
@@ -140,7 +141,7 @@ class VicidialSessionController extends Controller
                 'message' => $ingroups->message,
                 'data'    => $ingroups->data,
             ],
-            'pause_codes' => config('vicidial.pause_codes', []),
+            'pause_codes' => $pauseCodeService->codesForAgentSelect(),
         ]);
     }
 

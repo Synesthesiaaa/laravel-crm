@@ -2,6 +2,7 @@
 
 namespace App\Services\Telephony;
 
+use App\Contracts\Repositories\AttendanceRepositoryInterface;
 use App\Models\User;
 use App\Models\VicidialAgentSession;
 use App\Support\OperationResult;
@@ -23,7 +24,8 @@ class VicidialSessionService
 
     public function __construct(
         protected VicidialProxyService $agentApi,
-        protected VicidialNonAgentApiService $nonAgentApi
+        protected VicidialNonAgentApiService $nonAgentApi,
+        protected AttendanceRepositoryInterface $attendanceRepository
     ) {}
 
     public function loginAgent(
@@ -194,6 +196,17 @@ class VicidialSessionService
             'session_status' => 'paused',
             'last_synced_at' => now(),
         ]);
+
+        try {
+            $this->attendanceRepository->log(
+                $user->id,
+                'pause',
+                request()?->ip(),
+                strtoupper($code)
+            );
+        } catch (\Throwable) {
+            // Non-blocking: attendance log must not break telephony flow
+        }
 
         return OperationResult::success(['raw_response' => $response['raw_response']]);
     }
