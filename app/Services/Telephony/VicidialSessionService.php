@@ -142,7 +142,7 @@ class VicidialSessionService
         );
     }
 
-    public function pauseAgent(User $user, string $campaign, string $value, bool $logAttendance = true): OperationResult
+    public function pauseAgent(User $user, string $campaign, string $value): OperationResult
     {
         $value = strtoupper(trim($value));
         if (!in_array($value, ['PAUSE', 'RESUME'], true)) {
@@ -159,18 +159,6 @@ class VicidialSessionService
             'session_status' => $value === 'PAUSE' ? 'paused' : 'ready',
             'last_synced_at' => now(),
         ]);
-
-        if ($logAttendance) {
-            try {
-                if ($value === 'PAUSE') {
-                    $this->attendanceRepository->log($user->id, 'pause', request()?->ip(), null);
-                } else {
-                    $this->attendanceRepository->log($user->id, 'resume', request()?->ip(), null);
-                }
-            } catch (\Throwable) {
-                // Non-blocking: attendance log must not break telephony flow
-            }
-        }
 
         return OperationResult::success(['raw_response' => $response['raw_response']]);
     }
@@ -189,7 +177,7 @@ class VicidialSessionService
             // VICIdial requires the agent to be paused before setting pause_code.
             // Auto-pause once, then retry pause_code for better UX.
             if (str_contains($message, 'not paused')) {
-                $pauseResult = $this->pauseAgent($user, $campaign, 'PAUSE', false);
+                $pauseResult = $this->pauseAgent($user, $campaign, 'PAUSE');
                 if (! $pauseResult->success) {
                     return OperationResult::failure($pauseResult->message ?: 'Unable to pause agent before setting pause code.');
                 }

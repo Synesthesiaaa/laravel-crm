@@ -13,7 +13,7 @@
     @if($lastEvent)
         <p class="text-[var(--color-on-surface-muted)] mt-3 text-sm">
             Last event:
-            <x-badge :type="$lastEvent->event_type === 'login' ? 'active' : ($lastEvent->event_type === 'logout' ? 'inactive' : ($lastEvent->event_type === 'pause' ? 'pending' : ($lastEvent->event_type === 'resume' ? 'primary' : 'info')))">{{ strtoupper($lastEvent->event_type) }}</x-badge>
+            <x-badge :type="$lastEvent->event_type === 'login' ? 'active' : 'inactive'">{{ strtoupper($lastEvent->event_type) }}</x-badge>
             <span class="ml-1">{{ $lastEvent->event_time?->format('M j, Y g:i A') }}</span>
         </p>
     @endif
@@ -43,7 +43,7 @@
         @foreach($logs as $log)
             <tr>
                 <td>
-                    <x-badge :type="$log->event_type === 'login' ? 'active' : ($log->event_type === 'logout' ? 'inactive' : ($log->event_type === 'pause' ? 'pending' : ($log->event_type === 'resume' ? 'primary' : 'info')))">
+                    <x-badge :type="$log->event_type === 'login' ? 'active' : ($log->event_type === 'logout' ? 'inactive' : ($log->event_type === 'pause' ? 'pending' : 'info'))">
                         {{ strtoupper($log->event_type) }}
                     </x-badge>
                 </td>

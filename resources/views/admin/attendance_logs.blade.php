@@ -29,7 +29,7 @@
             <tr>
                 <td class="font-medium">{{ $log->user->full_name ?? $log->user->username ?? $log->user_id }}</td>
                 <td>
-                    <x-badge :type="$log->event_type === 'login' ? 'active' : ($log->event_type === 'logout' ? 'inactive' : ($log->event_type === 'pause' ? 'pending' : ($log->event_type === 'resume' ? 'primary' : 'info')))">
+                    <x-badge :type="$log->event_type === 'login' ? 'active' : ($log->event_type === 'logout' ? 'inactive' : ($log->event_type === 'pause' ? 'pending' : 'info'))">
                         {{ strtoupper($log->event_type) }}
                     </x-badge>
                 </td>
