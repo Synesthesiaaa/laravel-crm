@@ -11,6 +11,7 @@ class AttendanceLog extends Model
     protected $fillable = [
         'user_id',
         'event_type',
+        'pause_code',
         'event_time',
         'ip_address',
     ];
