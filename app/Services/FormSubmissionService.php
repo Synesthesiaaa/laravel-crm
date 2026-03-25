@@ -88,6 +88,35 @@ class FormSubmissionService
             if (in_array($colName, ['date', 'request_id', 'agent', 'id', 'created_at', 'updated_at'], true)) {
                 continue;
             }
+            if ($field->field_type === 'multiselect') {
+                $raw = $data[$colName] ?? [];
+                if (! is_array($raw)) {
+                    $raw = [];
+                }
+                $allowed = $field->optionValues();
+                $picked = [];
+                foreach ($raw as $item) {
+                    $s = is_string($item) ? trim($item) : (string) $item;
+                    if ($s === '') {
+                        continue;
+                    }
+                    if ($allowed === [] || in_array($s, $allowed, true)) {
+                        $picked[] = $s;
+                    }
+                }
+                $picked = array_values(array_unique($picked));
+                sort($picked);
+                if ($field->is_required && $picked === []) {
+                    throw new \InvalidArgumentException("Field '{$colName}' is required.");
+                }
+                if (! $field->is_required && $picked === []) {
+                    $row[$colName] = null;
+                } else {
+                    $row[$colName] = json_encode($picked);
+                }
+                continue;
+            }
+
             $value = $data[$colName] ?? '';
             $value = is_string($value) ? trim($value) : $value;
             if ($field->field_type === 'number') {
@@ -171,6 +200,9 @@ class FormSubmissionService
                         break;
                     case 'select':
                         $table->string($colName, 255)->nullable($nullable);
+                        break;
+                    case 'multiselect':
+                        $table->text($colName)->nullable($nullable);
                         break;
                     case 'number':
                         // Most of your known numeric fields (amount/rate) use 2 decimals.

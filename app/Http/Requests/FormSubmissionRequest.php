@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Repositories\FormFieldRepository;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class FormSubmissionRequest extends FormRequest
 {
@@ -31,6 +32,20 @@ class FormSubmissionRequest extends FormRequest
                 if (in_array($name, ['date', 'request_id', 'agent', 'id', 'created_at', 'updated_at'], true)) {
                     continue;
                 }
+                if ($field->field_type === 'multiselect') {
+                    if ($field->is_required) {
+                        $rules[$name] = ['required', 'array', 'min:1'];
+                    } else {
+                        $rules[$name] = ['nullable', 'array'];
+                    }
+                    $allowed = $field->optionValues();
+                    if ($allowed !== []) {
+                        $rules[$name.'.*'] = ['string', 'max:255', Rule::in($allowed)];
+                    } else {
+                        $rules[$name.'.*'] = ['string', 'max:255'];
+                    }
+                    continue;
+                }
                 $fieldRules = [];
                 if ($field->is_required) {
                     $fieldRules[] = 'required';
@@ -48,6 +63,14 @@ class FormSubmissionRequest extends FormRequest
                         $fieldRules[] = 'string';
                         $fieldRules[] = 'max:65535';
                         break;
+                    case 'select':
+                        $fieldRules[] = 'string';
+                        $fieldRules[] = 'max:255';
+                        $allowed = $field->optionValues();
+                        if ($allowed !== []) {
+                            $fieldRules[] = Rule::in($allowed);
+                        }
+                        break;
                     default:
                         $fieldRules[] = 'string';
                         $fieldRules[] = 'max:255';
@@ -62,8 +85,28 @@ class FormSubmissionRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $this->merge(array_map(function ($value) {
-            return is_string($value) ? trim($value) : $value;
-        }, $this->all()));
+        $merged = [];
+        foreach ($this->all() as $key => $value) {
+            if (is_array($value)) {
+                $merged[$key] = $value;
+            } elseif (is_string($value)) {
+                $merged[$key] = trim($value);
+            } else {
+                $merged[$key] = $value;
+            }
+        }
+
+        $campaign = is_string($merged['campaign'] ?? null) ? trim($merged['campaign']) : '';
+        $formType = is_string($merged['form_type'] ?? null) ? trim($merged['form_type']) : '';
+        if ($campaign !== '' && $formType !== '') {
+            $repo = app(FormFieldRepository::class);
+            foreach ($repo->getFieldsForForm($campaign, $formType) as $field) {
+                if ($field->field_type === 'multiselect' && ! array_key_exists($field->field_name, $merged)) {
+                    $merged[$field->field_name] = [];
+                }
+            }
+        }
+
+        $this->merge($merged);
     }
 }

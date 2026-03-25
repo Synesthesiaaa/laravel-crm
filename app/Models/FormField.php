@@ -30,6 +30,42 @@ class FormField extends Model
         ];
     }
 
+    /**
+     * Normalized list of option values for select / multiselect (from JSON in `options`).
+     *
+     * @return list<string>
+     */
+    public function optionValues(): array
+    {
+        $raw = $this->options;
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+        $decoded = is_string($raw) ? json_decode($raw, true) : $raw;
+        if (! is_array($decoded)) {
+            return [];
+        }
+        $out = [];
+        foreach ($decoded as $item) {
+            if (is_string($item) || is_numeric($item)) {
+                $out[] = (string) $item;
+            } elseif (is_array($item)) {
+                $v = $item['value'] ?? $item['label'] ?? null;
+                if ($v !== null && $v !== '') {
+                    $out[] = (string) $v;
+                }
+            }
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    /** One option per line for admin textarea. */
+    public function optionsTextForAdmin(): string
+    {
+        return implode("\n", $this->optionValues());
+    }
+
     public function campaign(): BelongsTo
     {
         return $this->belongsTo(Campaign::class, 'campaign_code', 'code');

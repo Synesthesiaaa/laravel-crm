@@ -70,6 +70,26 @@ class FormSubmissionServiceTest extends TestCase
         $this->assertEquals('639123456789', $result['phone']);
     }
 
+    public function test_prepare_form_row_encodes_multiselect_as_json(): void
+    {
+        $field = new FormField([
+            'field_name' => 'tags',
+            'field_type' => 'multiselect',
+            'is_required' => true,
+            'options' => json_encode(['a', 'b', 'c']),
+        ]);
+        $fields = collect([$field]);
+
+        $result = $this->service->prepareFormRow($fields, [
+            'date' => '2026-01-15',
+            'request_id' => '01HZX1234567890ABCDEFGHJK',
+            'tags' => ['b', 'a'],
+        ], 'agent1');
+
+        $this->assertNotNull($result);
+        $this->assertSame('["a","b"]', $result['tags']);
+    }
+
     public function test_prepare_form_row_accepts_ulid_request_id(): void
     {
         $ulid = (string) Str::ulid();
