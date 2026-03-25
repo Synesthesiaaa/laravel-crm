@@ -9,6 +9,7 @@ use App\Support\OperationResult;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class FormSubmissionService
 {
@@ -29,15 +30,25 @@ class FormSubmissionService
         if (!$this->formFieldRepository->validateTableName($tableName, $this->campaignService->getAllFormTableNames())) {
             return OperationResult::failure('Invalid table.');
         }
-        $fields  = $this->formFieldRepository->getFieldsForForm($campaign, $formType);
+        $fields = $this->formFieldRepository->getFieldsForForm($campaign, $formType);
         $this->ensureStorageTableAndColumns($tableName, $fields);
-        $prepared = $this->prepareFormRow($fields, $data, $agent);
-        if ($prepared === null) {
-            return OperationResult::failure('Date and Request ID are required.');
+
+        $date = $this->sanitizeDate($data['date'] ?? '');
+        if ($date === '') {
+            return OperationResult::failure('Date is required.');
         }
 
         try {
-            $recordId = DB::transaction(function () use ($tableName, $prepared, $campaign, $formType, $agent, $data): int {
+            $recordId = DB::transaction(function () use ($tableName, $fields, $data, $agent, $campaign, $formType, $date): int {
+                $merged = array_merge($data, [
+                    'date' => $date,
+                    'request_id' => (string) Str::ulid(),
+                ]);
+                $prepared = $this->prepareFormRow($fields, $merged, $agent);
+                if ($prepared === null) {
+                    throw new \RuntimeException('Invalid submission data.');
+                }
+
                 $id = $this->formSubmissionRepository->insert($tableName, $prepared);
                 $this->callHistoryService->logFormSubmission(
                     $campaign,
@@ -47,6 +58,7 @@ class FormSubmissionService
                     isset($data['lead_id']) && $data['lead_id'] !== '' ? (int) $data['lead_id'] : null,
                     $data['phone_number'] ?? null
                 );
+
                 return $id;
             });
 
@@ -171,21 +183,6 @@ class FormSubmissionService
                 }
             }
         });
-    }
-
-    public function generateRequestId(string $tableName): string
-    {
-        $allowed = $this->campaignService->getAllFormTableNames();
-        if (!in_array($tableName, $allowed, true)) {
-            $tableName = 'ezycash';
-        }
-        $datePrefix = now()->format('ymd');
-        if (!Schema::hasTable($tableName) || !Schema::hasColumn($tableName, 'request_id')) {
-            return $datePrefix . '001';
-        }
-        $count      = DB::table($tableName)->where('request_id', 'like', $datePrefix . '%')->count();
-        $nextId     = $count + 1;
-        return $datePrefix . str_pad((string) $nextId, 3, '0', STR_PAD_LEFT);
     }
 
     private function sanitizeDate(string $input): string

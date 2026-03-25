@@ -21,7 +21,7 @@ class FormSubmissionRequest extends FormRequest
             'campaign' => ['required', 'string', 'max:50'],
             'form_type' => ['required', 'string', 'max:50'],
             'date' => ['required', 'string', 'date'],
-            'request_id' => ['required', 'string', 'max:255'],
+            'request_id' => ['nullable', 'string', 'max:255'],
         ];
 
         if ($campaign !== '' && $formType !== '') {

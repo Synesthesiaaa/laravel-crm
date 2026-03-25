@@ -9,6 +9,7 @@ use App\Services\CallHistoryService;
 use App\Services\CampaignService;
 use App\Services\FormSubmissionService;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class FormSubmissionServiceTest extends TestCase
@@ -69,19 +70,17 @@ class FormSubmissionServiceTest extends TestCase
         $this->assertEquals('639123456789', $result['phone']);
     }
 
-    public function test_generate_request_id_returns_default_when_table_missing(): void
+    public function test_prepare_form_row_accepts_ulid_request_id(): void
     {
-        $campaignService = \Mockery::mock(CampaignService::class);
-        $campaignService->shouldReceive('getAllFormTableNames')->once()->andReturn([]);
+        $ulid = (string) Str::ulid();
+        $this->assertTrue(Str::isUlid($ulid));
 
-        $service = new FormSubmissionService(
-            $campaignService,
-            \Mockery::mock(FormFieldRepository::class),
-            \Mockery::mock(FormSubmissionRepository::class),
-            \Mockery::mock(CallHistoryService::class)
-        );
+        $result = $this->service->prepareFormRow(collect(), [
+            'date' => '2026-01-01',
+            'request_id' => $ulid,
+        ], 'agent1');
 
-        $requestId = $service->generateRequestId('table_that_does_not_exist');
-        $this->assertStringEndsWith('001', $requestId);
+        $this->assertNotNull($result);
+        $this->assertSame($ulid, $result['request_id']);
     }
 }
