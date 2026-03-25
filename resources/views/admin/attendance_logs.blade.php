@@ -7,6 +7,10 @@
 @section('content')
 <x-page-header title="Staff Attendance" :breadcrumbs="['Admin' => route('admin.dashboard'), 'Attendance' => null]" />
 
+<div class="mb-4">
+    <x-app-live-clock />
+</div>
+
 <div class="md-card mb-4">
     <div class="p-4">
         <form method="GET" action="{{ route('admin.attendance.index') }}" class="flex flex-wrap items-end gap-4">
@@ -33,7 +37,7 @@
                         {{ strtoupper($log->event_type) }}
                     </x-badge>
                 </td>
-                <td class="font-mono text-sm text-[var(--color-on-surface-muted)]">{{ $log->event_time?->format('Y-m-d H:i:s') }}</td>
+                <td class="font-mono text-sm text-[var(--color-on-surface-muted)]">{{ $log->event_time?->timezone(config('app.timezone'))->format('Y-m-d H:i:s T') }}</td>
                 <td class="font-mono text-sm text-[var(--color-on-surface-dim)]">{{ $log->ip_address ?? '—' }}</td>
             </tr>
         @empty
