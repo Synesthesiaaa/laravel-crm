@@ -8,15 +8,20 @@
 <x-page-header title="My Attendance" :breadcrumbs="['Attendance' => null]" />
 
 <div class="md-hero mb-6">
-    <h2 class="text-lg font-bold text-[var(--color-on-surface)]">{{ $user->full_name ?? $user->name ?? $user->username }}</h2>
-    <p class="text-[var(--color-on-surface-muted)] text-sm mt-1">Your login and attendance events.</p>
-    @if($lastEvent)
-        <p class="text-[var(--color-on-surface-muted)] mt-3 text-sm">
-            Last event:
-            <x-badge :type="$lastEvent->event_type === 'login' ? 'active' : 'inactive'">{{ strtoupper($lastEvent->event_type) }}</x-badge>
-            <span class="ml-1">{{ $lastEvent->event_time?->format('M j, Y g:i A') }}</span>
-        </p>
-    @endif
+    <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div class="min-w-0 flex-1">
+            <h2 class="text-lg font-bold text-[var(--color-on-surface)]">{{ $user->full_name ?? $user->name ?? $user->username }}</h2>
+            <p class="text-[var(--color-on-surface-muted)] text-sm mt-1">Your login and attendance events.</p>
+            @if($lastEvent)
+                <p class="text-[var(--color-on-surface-muted)] mt-3 text-sm">
+                    Last event:
+                    <x-badge :type="$lastEvent->event_type === 'login' ? 'active' : 'inactive'">{{ strtoupper($lastEvent->event_type) }}</x-badge>
+                    <span class="ml-1">{{ $lastEvent->event_time?->timezone(config('app.timezone'))->format('M j, Y g:i A T') }}</span>
+                </p>
+            @endif
+        </div>
+        <x-app-live-clock class="w-full shrink-0 md:max-w-sm" />
+    </div>
 </div>
 
 <div class="md-card mb-4">
@@ -47,7 +52,7 @@
                         {{ strtoupper($log->event_type) }}
                     </x-badge>
                 </td>
-                <td class="font-mono text-sm text-[var(--color-on-surface-muted)]">{{ $log->event_time?->format('Y-m-d H:i:s') }}</td>
+                <td class="font-mono text-sm text-[var(--color-on-surface-muted)]">{{ $log->event_time?->timezone(config('app.timezone'))->format('Y-m-d H:i:s T') }}</td>
                 <td class="font-mono text-sm text-[var(--color-on-surface-dim)]">{{ $log->ip_address ?? '—' }}</td>
             </tr>
         @endforeach
