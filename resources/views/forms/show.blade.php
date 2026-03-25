@@ -39,12 +39,65 @@
             @foreach ($viciFields as $field)
                 @if (!in_array($field['name'], ['request_id', 'date', 'agent']))
                 <div @if(($field['field_width'] ?? '') === 'full') class="md:col-span-2" @endif>
-                    <x-form.input
-                        :name="$field['name']"
-                        :label="$field['label']"
-                        :type="$field['type'] === 'number' ? 'text' : ($field['type'] ?? 'text')"
-                        :value="$prefill[$field['name']] ?? ''"
-                        :required="$field['required'] ?? false" />
+                    @if(($field['type'] ?? 'text') === 'textarea')
+                        <x-form.textarea :name="$field['name']" :label="$field['label']"
+                            :value="$prefill[$field['name']] ?? ''"
+                            :required="$field['required'] ?? false" />
+                    @elseif(($field['type'] ?? 'text') === 'select')
+                        <div class="form-field">
+                            <label class="form-label">
+                                {{ $field['label'] }}
+                                @if($field['required'] ?? false)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif
+                            </label>
+                            <select name="{{ $field['name'] }}" class="form-select" @if($field['required'] ?? false) required @endif>
+                                <option value="">-- Select --</option>
+                                @foreach(($field['options'] ?? []) as $opt)
+                                    @php
+                                        $val     = is_array($opt) ? ($opt['value'] ?? $opt['label'] ?? '') : $opt;
+                                        $display = is_array($opt) ? ($opt['label'] ?? $opt['value'] ?? '') : $opt;
+                                    @endphp
+                                    <option value="{{ $val }}" @selected(($prefill[$field['name']] ?? '') == $val)>{{ $display }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @elseif(($field['type'] ?? 'text') === 'multiselect')
+                        @php
+                            $viciMultiSel = [];
+                            $viciRaw = $prefill[$field['name']] ?? '';
+                            if (is_string($viciRaw) && $viciRaw !== '') {
+                                $viciDec = json_decode($viciRaw, true);
+                                $viciMultiSel = is_array($viciDec) ? $viciDec : [];
+                            }
+                        @endphp
+                        <fieldset class="form-field min-w-0">
+                            <legend class="form-label mb-2">
+                                {{ $field['label'] }}
+                                @if($field['required'] ?? false)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif
+                            </legend>
+                            <div class="flex flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                                @foreach(($field['options'] ?? []) as $opt)
+                                    @php
+                                        $val     = is_array($opt) ? ($opt['value'] ?? $opt['label'] ?? '') : $opt;
+                                        $display = is_array($opt) ? ($opt['label'] ?? $opt['value'] ?? '') : $opt;
+                                        $cid = 'vici-ms-' . $field['name'] . '-' . md5((string) $val);
+                                    @endphp
+                                    <label class="flex items-center gap-2 cursor-pointer text-sm text-[var(--color-on-surface)]">
+                                        <input type="checkbox" name="{{ $field['name'] }}[]" value="{{ $val }}" id="{{ $cid }}"
+                                            class="rounded border-[var(--color-border)]"
+                                            @checked(in_array((string) $val, array_map('strval', $viciMultiSel), true))>
+                                        <span>{{ $display }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </fieldset>
+                    @else
+                        <x-form.input
+                            :name="$field['name']"
+                            :label="$field['label']"
+                            :type="$field['type'] === 'number' ? 'text' : ($field['type'] ?? 'text')"
+                            :value="$prefill[$field['name']] ?? ''"
+                            :required="$field['required'] ?? false" />
+                    @endif
                 </div>
                 @endif
             @endforeach
@@ -76,6 +129,36 @@
                             @endforeach
                         </select>
                     </div>
+                @elseif(($field['type'] ?? 'text') === 'multiselect')
+                    @php
+                        $multiSelected = [];
+                        $multiRaw = $prefill[$field['name']] ?? '';
+                        if (is_string($multiRaw) && $multiRaw !== '') {
+                            $multiDec = json_decode($multiRaw, true);
+                            $multiSelected = is_array($multiDec) ? $multiDec : [];
+                        }
+                    @endphp
+                    <fieldset class="form-field min-w-0">
+                        <legend class="form-label mb-2">
+                            {{ $field['label'] }}
+                            @if($field['required'] ?? false)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif
+                        </legend>
+                        <div class="flex flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                            @foreach(($field['options'] ?? []) as $opt)
+                                @php
+                                    $val     = is_array($opt) ? ($opt['value'] ?? $opt['label'] ?? '') : $opt;
+                                    $display = is_array($opt) ? ($opt['label'] ?? $opt['value'] ?? '') : $opt;
+                                    $cbId = 'ms-' . $field['name'] . '-' . md5((string) $val);
+                                @endphp
+                                <label class="flex items-center gap-2 cursor-pointer text-sm text-[var(--color-on-surface)]">
+                                    <input type="checkbox" name="{{ $field['name'] }}[]" value="{{ $val }}" id="{{ $cbId }}"
+                                        class="rounded border-[var(--color-border)]"
+                                        @checked(in_array((string) $val, array_map('strval', $multiSelected), true))>
+                                    <span>{{ $display }}</span>
+                                </label>
+                            @endforeach
+                        </div>
+                    </fieldset>
                 @else
                     <x-form.input :name="$field['name']" :label="$field['label']"
                         :type="$field['type'] === 'number' ? 'text' : ($field['type'] ?? 'text')"

@@ -44,26 +44,28 @@
         <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Add field</h3>
     </div>
     <div class="p-6">
-        <form method="POST" action="{{ route('admin.field-logic.store') }}" class="flex flex-wrap gap-4 items-end" x-data="{ submitting: false }" @submit="submitting = true">
+        <form method="POST" action="{{ route('admin.field-logic.store') }}" class="space-y-4" x-data="{ submitting: false, ft: @js(old('field_type', 'text')) }" @submit="submitting = true">
             @csrf
             <input type="hidden" name="campaign_code" value="{{ $campaign }}">
             <input type="hidden" name="form_type" value="{{ $formType }}">
+            <div class="flex flex-wrap gap-4 items-end">
             <div class="form-field">
                 <label class="form-label">Field name</label>
-                <input type="text" name="field_name" required class="form-input" placeholder="column_name" pattern="[a-zA-Z0-9_]+" title="Letters, numbers, underscores only">
+                <input type="text" name="field_name" value="{{ old('field_name') }}" required class="form-input" placeholder="column_name" pattern="[a-zA-Z0-9_]+" title="Letters, numbers, underscores only">
             </div>
             <div class="form-field">
                 <label class="form-label">Label</label>
-                <input type="text" name="field_label" required class="form-input" placeholder="Display Label">
+                <input type="text" name="field_label" value="{{ old('field_label') }}" required class="form-input" placeholder="Display Label">
             </div>
             <div class="form-field">
                 <label class="form-label">Type</label>
-                <select name="field_type" class="form-input">
+                <select name="field_type" class="form-input" x-model="ft">
                     <option value="text">Text</option>
                     <option value="textarea">Textarea</option>
                     <option value="number">Number</option>
                     <option value="date">Date</option>
                     <option value="select">Select</option>
+                    <option value="multiselect">Multi-select (checkboxes)</option>
                 </select>
             </div>
             <div class="form-field">
@@ -88,6 +90,12 @@
                     <x-icon name="plus" class="w-4 h-4" />
                     Add
                 </button>
+            </div>
+            </div>
+            <div class="form-field max-w-xl" x-show="ft === 'select' || ft === 'multiselect'" x-cloak>
+                <label class="form-label">Options <span class="text-[var(--color-on-surface-muted)] font-normal">(one per line)</span></label>
+                <textarea name="options" rows="4" class="form-textarea font-mono text-sm" placeholder="Option A&#10;Option B&#10;Option C">{{ old('options') }}</textarea>
+                <p class="form-help mt-1">Required for single select and multi-select fields.</p>
             </div>
         </form>
     </div>
@@ -126,7 +134,7 @@
                              }}">
                             <button type="button"
                                     class="btn-secondary text-xs px-2 py-1"
-                                    @click="$store.modal.show('edit-field-logic', {{ json_encode($f->only(['id','field_name','field_label','field_type','is_required','field_order','field_width'])) }})">
+                                    @click="$store.modal.show('edit-field-logic', {{ json_encode(array_merge($f->only(['id','field_name','field_label','field_type','is_required','field_order','field_width']), ['options_text' => $f->optionsTextForAdmin()])) }})">
                                 <x-icon name="pencil" class="w-3.5 h-3.5" />
                                 Edit
                             </button>
@@ -154,8 +162,8 @@
 {{-- Edit field modal --}}
 <x-modal name="edit-field-logic" title="Edit field" maxWidth="lg">
     <div x-data="{
-        edit: { id: null, field_name: '', field_label: '', field_type: 'text', field_width: 'full', field_order: 0, is_required: false }
-    }" x-effect="$store.modal.is('edit-field-logic') && $store.modal.data && $store.modal.data.id && (edit = { id: $store.modal.data.id, field_name: $store.modal.data.field_name || '', field_label: $store.modal.data.field_label || '', field_type: $store.modal.data.field_type || 'text', field_width: $store.modal.data.field_width || 'full', field_order: $store.modal.data.field_order ?? 0, is_required: !!$store.modal.data.is_required })">
+        edit: { id: null, field_name: '', field_label: '', field_type: 'text', field_width: 'full', field_order: 0, is_required: false, options_text: '' }
+    }" x-effect="$store.modal.is('edit-field-logic') && $store.modal.data && $store.modal.data.id && (edit = { id: $store.modal.data.id, field_name: $store.modal.data.field_name || '', field_label: $store.modal.data.field_label || '', field_type: $store.modal.data.field_type || 'text', field_width: $store.modal.data.field_width || 'full', field_order: $store.modal.data.field_order ?? 0, is_required: !!$store.modal.data.is_required, options_text: $store.modal.data.options_text || '' })">
         <form method="POST" x-show="edit.id"
               :action="'{{ url('admin/field-logic') }}/' + edit.id"
               x-data="{ submitting: false }"
@@ -179,6 +187,7 @@
                         <option value="number">Number</option>
                         <option value="date">Date</option>
                         <option value="select">Select</option>
+                        <option value="multiselect">Multi-select (checkboxes)</option>
                     </select>
                 </div>
                 <div class="form-field">
@@ -198,6 +207,10 @@
                            x-model="edit.is_required"
                            class="rounded border-gray-300">
                     <label for="edit_req" class="text-sm text-[var(--color-on-surface)]">Required</label>
+                </div>
+                <div class="form-field sm:col-span-2" x-show="edit.field_type === 'select' || edit.field_type === 'multiselect'">
+                    <label class="form-label">Options <span class="text-[var(--color-on-surface-muted)] font-normal">(one per line)</span></label>
+                    <textarea name="options" rows="4" class="form-textarea font-mono text-sm" x-model="edit.options_text" placeholder="Option A&#10;Option B"></textarea>
                 </div>
             </div>
             <div class="mt-6 flex justify-end gap-2">
