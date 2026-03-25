@@ -25,7 +25,11 @@
 
         {{-- System fields --}}
         <x-form.group title="Reference" cols="2">
-            <x-form.input name="request_id" label="Request ID" :value="$prefill['request_id'] ?? ''" readonly />
+            <div class="form-field">
+                <span class="form-label">Request ID</span>
+                <input type="hidden" name="request_id" value="">
+                <p class="form-help text-[var(--color-on-surface-muted)] mt-1">A unique reference (ULID) is assigned when you save.</p>
+            </div>
             <x-form.input name="date" type="date" label="Date" :value="$prefill['date'] ?? date('Y-m-d')" required />
         </x-form.group>
 

@@ -58,7 +58,7 @@ class ImportLeadsCsvJob implements ShouldQueue
         foreach ($reader->getRecords() as $record) {
             $data = is_array($record) ? $record : iterator_to_array($record);
             $data['date'] = $data['date'] ?? now()->format('Y-m-d');
-            $data['request_id'] = $data['request_id'] ?? $formSubmissionService->generateRequestId($formConfig['table_name']);
+            unset($data['request_id']);
             $result = $formSubmissionService->submit($this->campaignCode, $this->formType, $data, $this->agent);
             if ($result->success) {
                 $count++;

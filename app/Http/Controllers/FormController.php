@@ -30,12 +30,9 @@ class FormController extends Controller
             return redirect()->route('dashboard')->with('error', 'No forms available for this campaign.');
         }
         $formConfig = $campaignConfig['forms'][$type];
-        $tableName = $formConfig['table_name'] ?? $formConfig['table'] ?? '';
-        $requestId = $this->formSubmissionService->generateRequestId($tableName);
         $categorized = $this->formFieldRepository->getCategorizedFields($campaign, $type);
         $prefill = array_merge($request->query(), [
             'date' => now()->format('Y-m-d'),
-            'request_id' => $requestId,
         ]);
         return view('forms.show', [
             'campaign' => $campaign,

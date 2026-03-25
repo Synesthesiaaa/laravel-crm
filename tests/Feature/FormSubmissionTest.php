@@ -7,6 +7,8 @@ use App\Models\Form;
 use App\Models\FormField;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class FormSubmissionTest extends TestCase
@@ -52,7 +54,7 @@ class FormSubmissionTest extends TestCase
             'campaign' => 'mbsales',
             'form_type' => 'ezycash',
             'date' => now()->format('Y-m-d'),
-            'request_id' => '250101001',
+            'request_id' => 'client-should-be-ignored',
             'cardholder_name' => 'John Doe',
             'mpi_credit_card_no' => '4111111111111111',
             'bank' => 'Test Bank',
@@ -70,5 +72,9 @@ class FormSubmissionTest extends TestCase
             'agent' => $user->full_name ?? $user->username,
             'cardholder_name' => 'John Doe',
         ]);
+        $requestId = DB::table('ezycash')->where('cardholder_name', 'John Doe')->value('request_id');
+        $this->assertIsString($requestId);
+        $this->assertNotSame('client-should-be-ignored', $requestId);
+        $this->assertTrue(Str::isUlid($requestId));
     }
 }
