@@ -10,6 +10,7 @@ use App\Repositories\UserRepository;
 use App\Services\Telephony\CallOrchestrationService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class AuthService
 {
@@ -69,6 +70,9 @@ class AuthService
 
     public function logout(): void
     {
+        $request = request();
+        $sessionId = $request->session()->getId();
+
         $user = Auth::user();
         if ($user) {
             $this->callOrchestration->forceCompleteAllForUser($user);
@@ -77,8 +81,25 @@ class AuthService
                 event(new UserLoggedOut($user->id));
             });
         }
+
         Auth::logout();
-        request()->session()->invalidate();
-        request()->session()->regenerateToken();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        // Ensure the old session row is gone immediately (invalidate() also destroys; this is a safety net).
+        $this->destroySessionRow($sessionId);
+    }
+
+    /** Remove the session row immediately when using the database session driver. */
+    private function destroySessionRow(string $sessionId): void
+    {
+        if (config('session.driver') !== 'database') {
+            return;
+        }
+        $table = (string) config('session.table', 'sessions');
+        if ($table === '' || ! Schema::hasTable($table)) {
+            return;
+        }
+        DB::table($table)->where('id', $sessionId)->delete();
     }
 }
