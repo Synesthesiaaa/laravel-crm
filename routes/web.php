@@ -17,6 +17,9 @@ Route::get('/', function () {
 Route::middleware('guest')->group(function () {
     Route::get('login', [LoginController::class, 'showLoginForm'])->name('login');
     Route::post('login', [LoginController::class, 'login'])->middleware('throttle:login');
+    Route::get('login/pending', [LoginController::class, 'showPendingLogin'])->name('login.pending');
+    Route::post('login/pending', [LoginController::class, 'confirmPendingLogin'])->middleware('throttle:login')->name('login.pending.confirm');
+    Route::post('login/pending/cancel', [LoginController::class, 'cancelPendingLogin'])->name('login.pending.cancel');
 });
 
 Route::post('logout', [LoginController::class, 'logout'])->name('logout')->middleware('auth');

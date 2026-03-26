@@ -3,8 +3,6 @@
 namespace Tests\Unit\Services;
 
 use App\Models\User;
-use App\Repositories\AttendanceRepository;
-use App\Repositories\UserRepository;
 use App\Services\AuthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
@@ -16,15 +14,11 @@ class AuthServiceTest extends TestCase
     use RefreshDatabase;
 
     private AuthService $service;
-    private UserRepository $userRepo;
-    private AttendanceRepository $attendanceRepo;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->userRepo       = $this->app->make(UserRepository::class);
-        $this->attendanceRepo = $this->app->make(AttendanceRepository::class);
-        $this->service        = new AuthService($this->userRepo, $this->attendanceRepo);
+        $this->service = $this->app->make(AuthService::class);
     }
 
     public function test_attempt_returns_null_for_invalid_credentials(): void

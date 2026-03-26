@@ -19,20 +19,48 @@ class AuthService
         protected CallOrchestrationService $callOrchestration
     ) {}
 
+    public function validateCredentials(string $username, string $password): ?User
+    {
+        return $this->userRepository->validateCredentials($username, $password);
+    }
+
     public function attempt(string $username, string $password): ?User
     {
-        $user = $this->userRepository->validateCredentials($username, $password);
+        $user = $this->validateCredentials($username, $password);
         if ($user) {
-            Auth::login($user, true);
-            return $user;
+            $this->loginUserAndInvalidateOthers($user);
         }
-        return null;
+
+        return $user;
+    }
+
+    /** Whether there is at least one session row for this user (another device/browser). */
+    public function hasOtherActiveSessions(int $userId): bool
+    {
+        return DB::table('sessions')->where('user_id', $userId)->count() > 0;
+    }
+
+    /** Sign in and end other database sessions for this user (remember-me disabled). */
+    public function loginUserAndInvalidateOthers(User $user): void
+    {
+        Auth::login($user, false);
+        $this->invalidateOtherSessions($user->id);
+    }
+
+    /** Delete other rows in `sessions` for this user; keep the current session id. */
+    public function invalidateOtherSessions(int $userId): void
+    {
+        $currentId = session()->getId();
+        DB::table('sessions')
+            ->where('user_id', $userId)
+            ->where('id', '!=', $currentId)
+            ->delete();
     }
 
     public function logAttendance(int $userId, string $eventType, ?string $ip = null): void
     {
         DB::transaction(function () use ($userId, $eventType, $ip): void {
-            $log = $this->attendanceRepository->log($userId, $eventType, $ip);
+            $this->attendanceRepository->log($userId, $eventType, $ip);
             if ($eventType === 'login') {
                 event(new UserLoggedIn($userId, $ip));
             }
