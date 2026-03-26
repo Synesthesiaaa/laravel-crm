@@ -98,6 +98,9 @@
         <div class="login-card">
             <h1>Sign in</h1>
             <p class="sub">Enter your credentials to continue</p>
+            @if (session('status'))
+                <div class="login-error" style="background: rgba(34, 197, 94, 0.12); border-color: rgba(34, 197, 94, 0.35); color: #86efac;">{{ session('status') }}</div>
+            @endif
             @if ($errors->any())
                 <div class="login-error">{{ $errors->first() }}</div>
             @endif
