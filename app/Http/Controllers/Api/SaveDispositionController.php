@@ -10,6 +10,14 @@ use Illuminate\Http\Request;
 
 class SaveDispositionController extends Controller
 {
+    /**
+     * Persist disposition in CRM and trigger server-mediated VICIdial sync when applicable.
+     *
+     * **200:** `{ "success": true, "vicidial_sync": { "status": "skipped"|"synced"|"partial"|"failed", "message"?: string } }`
+     * — `message` is user-safe (no dialer secrets or raw API bodies).
+     *
+     * **422:** `{ "success": false, "message": string }` on validation or business rule failure.
+     */
     public function __invoke(Request $request, DispositionService $dispositionService): JsonResponse
     {
         $request->validate([
@@ -45,12 +53,17 @@ class SaveDispositionController extends Controller
             $request->input('phone_number'),
             $request->input('remarks') ?: $request->input('notes'),
             $request->input('call_duration_seconds') ? (int) $request->input('call_duration_seconds') : null,
-            $request->input('lead_data_json')
+            $request->input('lead_data_json'),
         );
         if (! $result->success) {
             return response()->json(['success' => false, 'message' => $result->message], 422);
         }
 
-        return response()->json(['success' => true]);
+        $payload = ['success' => true];
+        if (is_array($result->data) && isset($result->data['vicidial_sync'])) {
+            $payload['vicidial_sync'] = $result->data['vicidial_sync'];
+        }
+
+        return response()->json($payload);
     }
 }

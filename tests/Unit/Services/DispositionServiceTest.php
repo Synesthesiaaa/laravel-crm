@@ -3,9 +3,7 @@
 namespace Tests\Unit\Services;
 
 use App\Models\DispositionCode;
-use App\Repositories\DispositionRepository;
 use App\Services\DispositionService;
-use App\Services\Telephony\VicidialDispositionSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -18,10 +16,7 @@ class DispositionServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new DispositionService(
-            $this->app->make(DispositionRepository::class),
-            $this->app->make(VicidialDispositionSyncService::class)
-        );
+        $this->service = $this->app->make(DispositionService::class);
     }
 
     public function test_get_codes_returns_empty_for_unknown_campaign(): void
@@ -34,17 +29,17 @@ class DispositionServiceTest extends TestCase
     {
         DispositionCode::create([
             'campaign_code' => 'test',
-            'code'          => 'SALE',
-            'label'         => 'Sale',
-            'is_active'     => true,
-            'sort_order'    => 1,
+            'code' => 'SALE',
+            'label' => 'Sale',
+            'is_active' => true,
+            'sort_order' => 1,
         ]);
         DispositionCode::create([
             'campaign_code' => 'test',
-            'code'          => 'DNC',
-            'label'         => 'Do Not Call',
-            'is_active'     => false,
-            'sort_order'    => 2,
+            'code' => 'DNC',
+            'label' => 'Do Not Call',
+            'is_active' => false,
+            'sort_order' => 2,
         ]);
 
         $codes = $this->service->getCodesForCampaign('test');

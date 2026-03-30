@@ -5,23 +5,191 @@
 @section('header-title', 'Agent Screen')
 
 @section('content')
-<div x-data="agentScreen()" x-init="init()" data-campaign="{{ session('campaign', 'mbsales') }}" data-user-id="{{ auth()->id() }}" class="flex flex-col lg:flex-row gap-6 h-full">
+<div x-data="agentScreen()" x-init="init()" data-campaign="{{ session('campaign', 'mbsales') }}" data-user-id="{{ auth()->id() }}" class="flex flex-col lg:flex-row-reverse gap-6 h-full">
 
     {{-- WebSocket health banner --}}
     <div x-show="$store.ws.isDisconnected && !$store.ws.dismissed"
          x-transition.opacity
+         role="region"
+         aria-label="Connection status"
          class="fixed top-0 left-0 right-0 z-50 flex items-center justify-center gap-3 px-4 py-2 text-sm font-medium text-amber-900 bg-amber-100 border-b border-amber-300 shadow-sm">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-amber-600 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-amber-600 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
         </svg>
         <span>Real-time updates unavailable &mdash; reconnecting<span class="animate-pulse">...</span></span>
-        <button @click="$store.ws.dismiss()" class="ml-2 text-amber-700 hover:text-amber-900 underline text-xs">Dismiss</button>
+        <button type="button"
+                @click="$store.ws.dismiss()"
+                class="ml-2 text-amber-700 hover:text-amber-900 underline text-xs rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-100">Dismiss</button>
     </div>
     {{-- Reset dismissed when connection restored --}}
     <template x-effect="if ($store.ws.isConnected) $store.ws.dismissed = false"></template>
 
+    {{-- Telephony session recovery (repeated session/status failures; Story 1.3) --}}
+    <div x-show="featureEnabled('session_controls') && $store.vicidial._hardSessionFailCount >= 2 && $store.vicidial.syncState === 'error' && !$store.vicidial.sessionRecoveryDismissed"
+         x-transition.opacity
+         role="region"
+         aria-live="polite"
+         aria-label="Telephony session recovery"
+         class="fixed left-0 right-0 z-50 flex flex-wrap items-center justify-center gap-3 px-4 py-2 text-sm font-medium text-amber-900 bg-amber-100 border-b border-amber-300 shadow-sm"
+         :class="$store.ws.isDisconnected && !$store.ws.dismissed ? 'top-10' : 'top-0'">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
+        </svg>
+        <span class="text-center min-w-0">Telephony status could not be refreshed. You can retry or end the session from here.</span>
+        <div class="flex items-center gap-2 shrink-0">
+            <button type="button" class="text-xs px-2 py-1 rounded border border-amber-600 text-amber-900 hover:bg-amber-200/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-100"
+                    @click="retrySessionRecovery()">Retry</button>
+            <button type="button" class="text-xs px-2 py-1 rounded border border-amber-600 text-amber-900 hover:bg-amber-200/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-100"
+                    @click="sessionRecoveryLogout()">Logout</button>
+            <button type="button" @click="$store.vicidial.dismissSessionRecoveryBanner()" class="text-amber-700 hover:text-amber-900 underline text-xs rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-100">Dismiss</button>
+        </div>
+    </div>
+
+    {{-- RIGHT: Session + call controls (DOM first for keyboard order: session → dial → …; lg:flex-row-reverse keeps this column on the visual right) --}}
+    <aside class="lg:w-72 xl:w-80 shrink-0 space-y-4" aria-label="Telephony and call controls">
+
+        @if(($telephonyFeatures['session_controls'] ?? true) === true)
+            @include('agent.partials.session-panel')
+        @endif
+
+        {{-- Call status --}}
+        <div class="md-card p-5">
+            <h3 class="text-sm font-semibold text-[var(--color-on-surface)] mb-4">Call Controls</h3>
+
+            <div class="text-center py-4">
+                {{-- Status indicator --}}
+                <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold mb-4"
+                     :class="{
+                         'call-connected': callState === 'connected',
+                         'call-ringing':   callState === 'dialing' || callState === 'ringing',
+                         'call-hold':      callState === 'hold',
+                         'call-wrapup':    callState === 'wrapup',
+                         'bg-[var(--color-surface-2)] text-[var(--color-on-surface-dim)] border border-[var(--color-border)]': callState === 'idle',
+                     }">
+                    <x-icon name="phone" class="w-3.5 h-3.5" />
+                    <span x-show="callState === 'idle'">Ready</span>
+                    <span x-show="callState === 'dialing'">Dialing...</span>
+                    <span x-show="callState === 'ringing'">Ringing...</span>
+                    <span x-show="callState === 'connected'" x-text="'Connected · ' + formatDuration(duration)"></span>
+                    <span x-show="callState === 'hold'">On Hold</span>
+                    <span x-show="callState === 'wrapup'">Wrap-up</span>
+                </div>
+
+                {{-- Phone number display --}}
+                <div class="text-2xl font-bold text-[var(--color-on-surface)] mb-4 font-mono min-h-[2rem]"
+                     x-text="phoneNumber || '—'"></div>
+
+                {{-- Dial / Hangup buttons --}}
+                <div class="flex items-center justify-center gap-4">
+                    <button type="button"
+                            class="phone-dial-btn"
+                            @click="dial()"
+                            x-show="callState === 'idle'"
+                            :disabled="!phoneNumber || dialBlocked || telephonyDialGateBlocked()"
+                            :title="dialHelpTitle()"
+                            :aria-label="dialHelpTitle()"
+                            :aria-disabled="(!phoneNumber || dialBlocked || telephonyDialGateBlocked()) ? 'true' : 'false'">
+                        <x-icon name="phone" class="w-6 h-6" aria-hidden="true" />
+                    </button>
+                    <button class="phone-hangup-btn"
+                            @click="hangup()"
+                            x-show="callState !== 'idle' && callState !== 'wrapup'">
+                        <x-icon name="phone-x-mark" class="w-6 h-6" />
+                    </button>
+                    <button class="btn-secondary text-sm px-3 py-2"
+                            @click="toggleHold()"
+                            x-show="callState === 'connected'">
+                        <x-icon name="pause" class="w-4 h-4" />
+                        Hold
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        {{-- Disposition --}}
+        <div class="md-card p-5" x-show="callState === 'wrapup'">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Disposition</h3>
+                {{-- Show dismiss only when there is an error so agent is never stuck --}}
+                <button type="button"
+                        class="btn-ghost text-xs text-[var(--color-danger)]"
+                        x-show="dispositionError"
+                        @click="dismissDisposition()"
+                        title="Dismiss and return to idle">
+                    <x-icon name="x-mark" class="w-3.5 h-3.5" />
+                    Dismiss
+                </button>
+            </div>
+
+            {{-- Error banner with retry hint --}}
+            <div x-show="dispositionError" class="mb-3 rounded-md border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/5 px-3 py-2">
+                <p class="text-xs text-[var(--color-danger)]" x-text="dispositionError"></p>
+                <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">Select a code and retry, or click Dismiss to return to idle.</p>
+            </div>
+
+            <div class="form-field mb-3">
+                <label class="form-label">Code</label>
+                <select x-model="dispositionCode" class="form-select">
+                    <option value="">-- Select disposition --</option>
+                    @foreach($dispositionCodes ?? [] as $dc)
+                        @php
+                            $code = is_array($dc) ? ($dc['code'] ?? '') : ($dc->code ?? '');
+                            $label = is_array($dc) ? ($dc['label'] ?? $code) : ($dc->label ?? $code);
+                        @endphp
+                        <option value="{{ $code }}">{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="form-field mb-3">
+                <label class="form-label">Notes</label>
+                <textarea x-model="dispositionNotes" class="form-textarea" rows="3" placeholder="Optional call notes..."></textarea>
+            </div>
+            <button class="btn-primary w-full" @click="saveDisposition()" :disabled="!dispositionCode || savingDisposition">
+                <x-icon name="check" class="w-4 h-4" />
+                <span x-text="savingDisposition ? 'Saving...' : (dispositionError ? 'Retry Save' : 'Save Disposition')">Save Disposition</span>
+            </button>
+        </div>
+
+        {{-- Mute / controls --}}
+        <div class="md-card p-5" x-show="callState === 'connected' || callState === 'hold'">
+            <h3 class="text-sm font-semibold text-[var(--color-on-surface)] mb-3">Audio Controls</h3>
+            <div class="grid grid-cols-2 gap-2">
+                <button class="btn-secondary text-sm" @click="toggleMute()" :class="muted ? 'btn-danger' : ''">
+                    <x-icon name="microphone" class="w-4 h-4" />
+                    <span x-text="muted ? 'Unmute' : 'Mute'">Mute</span>
+                </button>
+                <button class="btn-secondary text-sm" @click="toggleHold()" :class="{ 'btn-warning': callState === 'hold' }">
+                    <x-icon name="pause" class="w-4 h-4" />
+                    <span x-text="callState === 'hold' ? 'Resume' : 'Hold'">Hold</span>
+                </button>
+            </div>
+        </div>
+
+        @if(($telephonyFeatures['ingroup_management'] ?? true) === true && ($ingroupCampaignAllowed ?? true) === true)
+            @include('agent.partials.ingroup-panel')
+        @endif
+        @if(($telephonyFeatures['transfer_controls'] ?? true) === true)
+            @include('agent.partials.transfer-panel')
+        @endif
+        @if(($telephonyFeatures['recording_controls'] ?? true) === true)
+            @include('agent.partials.recording-controls')
+        @endif
+        @if(($telephonyFeatures['dtmf_controls'] ?? true) === true)
+            @include('agent.partials.dtmf-keypad')
+        @endif
+        @if(($telephonyFeatures['callback_controls'] ?? true) === true)
+            @include('agent.partials.callback-form')
+        @endif
+        @if(($telephonyFeatures['lead_tools'] ?? true) === true)
+            @include('agent.partials.lead-search')
+        @endif
+
+    </aside>
+
     {{-- LEFT: Lead info + form --}}
     <div class="flex-1 min-w-0 space-y-4">
+
+        @include('agent.partials.single-pane-help')
 
         {{-- Current lead card --}}
         <div class="md-card p-5">
@@ -32,7 +200,10 @@
                         <button type="button"
                                 class="text-xs px-2 py-1 rounded-md border"
                                 :class="predictiveMode ? 'border-emerald-500 text-emerald-600 bg-emerald-50' : 'border-[var(--color-border)] text-[var(--color-on-surface-dim)]'"
-                                @click="togglePredictiveMode()">
+                                @click="togglePredictiveMode()"
+                                :disabled="!predictiveMode && predictiveDialBlocked()"
+                                :title="predictiveToggleTitle()"
+                                :aria-label="predictiveToggleTitle()">
                             <span x-text="predictiveMode ? 'Predictive: ON' : 'Predictive: OFF'">Predictive: OFF</span>
                         </button>
                     </template>
@@ -49,9 +220,12 @@
                     <label class="form-label">Phone Number</label>
                     <div class="flex gap-2">
                         <input type="text" x-model="phoneNumber" class="form-input flex-1" placeholder="+63 XXX XXX XXXX" />
-                        <button type="button" class="phone-dial-btn" @click="dial()" title="Call"
-                                :disabled="callState !== 'idle' || dialBlocked || !phoneNumber">
-                            <x-icon name="phone" class="w-5 h-5" />
+                        <button type="button" class="phone-dial-btn" @click="dial()"
+                                :title="dialHelpTitle()"
+                                :aria-label="dialHelpTitle()"
+                                :aria-disabled="(callState !== 'idle' || dialBlocked || !phoneNumber || telephonyDialGateBlocked()) ? 'true' : 'false'"
+                                :disabled="callState !== 'idle' || dialBlocked || !phoneNumber || telephonyDialGateBlocked()">
+                            <x-icon name="phone" class="w-5 h-5" aria-hidden="true" />
                         </button>
                     </div>
                 </div>
@@ -144,150 +318,23 @@
         </div>
     </div>
 
-    {{-- RIGHT: Call controls --}}
-    <div class="lg:w-72 xl:w-80 shrink-0 space-y-4">
-
-        {{-- Call status --}}
-        <div class="md-card p-5">
-            <h3 class="text-sm font-semibold text-[var(--color-on-surface)] mb-4">Call Controls</h3>
-
-            <div class="text-center py-4">
-                {{-- Status indicator --}}
-                <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold mb-4"
-                     :class="{
-                         'call-connected': callState === 'connected',
-                         'call-ringing':   callState === 'dialing' || callState === 'ringing',
-                         'call-hold':      callState === 'hold',
-                         'call-wrapup':    callState === 'wrapup',
-                         'bg-[var(--color-surface-2)] text-[var(--color-on-surface-dim)] border border-[var(--color-border)]': callState === 'idle',
-                     }">
-                    <x-icon name="phone" class="w-3.5 h-3.5" />
-                    <span x-show="callState === 'idle'">Ready</span>
-                    <span x-show="callState === 'dialing'">Dialing...</span>
-                    <span x-show="callState === 'ringing'">Ringing...</span>
-                    <span x-show="callState === 'connected'" x-text="'Connected · ' + formatDuration(duration)"></span>
-                    <span x-show="callState === 'hold'">On Hold</span>
-                    <span x-show="callState === 'wrapup'">Wrap-up</span>
-                </div>
-
-                {{-- Phone number display --}}
-                <div class="text-2xl font-bold text-[var(--color-on-surface)] mb-4 font-mono min-h-[2rem]"
-                     x-text="phoneNumber || '—'"></div>
-
-                {{-- Dial / Hangup buttons --}}
-                <div class="flex items-center justify-center gap-4">
-                    <button class="phone-dial-btn"
-                            @click="dial()"
-                            x-show="callState === 'idle'"
-                            :disabled="!phoneNumber || dialBlocked"
-                            :title="!phoneNumber ? 'Enter a phone number first' : dialBlocked ? 'Complete disposition before dialing' : 'Click to dial'">
-                        <x-icon name="phone" class="w-6 h-6" />
-                    </button>
-                    <button class="phone-hangup-btn"
-                            @click="hangup()"
-                            x-show="callState !== 'idle' && callState !== 'wrapup'">
-                        <x-icon name="phone-x-mark" class="w-6 h-6" />
-                    </button>
-                    <button class="btn-secondary text-sm px-3 py-2"
-                            @click="toggleHold()"
-                            x-show="callState === 'connected'">
-                        <x-icon name="pause" class="w-4 h-4" />
-                        Hold
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        {{-- Disposition --}}
-        <div class="md-card p-5" x-show="callState === 'wrapup'">
-            <div class="flex items-center justify-between mb-3">
-                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Disposition</h3>
-                {{-- Show dismiss only when there is an error so agent is never stuck --}}
-                <button type="button"
-                        class="btn-ghost text-xs text-[var(--color-danger)]"
-                        x-show="dispositionError"
-                        @click="dismissDisposition()"
-                        title="Dismiss and return to idle">
-                    <x-icon name="x-mark" class="w-3.5 h-3.5" />
-                    Dismiss
-                </button>
-            </div>
-
-            {{-- Error banner with retry hint --}}
-            <div x-show="dispositionError" class="mb-3 rounded-md border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/5 px-3 py-2">
-                <p class="text-xs text-[var(--color-danger)]" x-text="dispositionError"></p>
-                <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">Select a code and retry, or click Dismiss to return to idle.</p>
-            </div>
-
-            <div class="form-field mb-3">
-                <label class="form-label">Code</label>
-                <select x-model="dispositionCode" class="form-select">
-                    <option value="">-- Select disposition --</option>
-                    @foreach($dispositionCodes ?? [] as $dc)
-                        @php
-                            $code = is_array($dc) ? ($dc['code'] ?? '') : ($dc->code ?? '');
-                            $label = is_array($dc) ? ($dc['label'] ?? $code) : ($dc->label ?? $code);
-                        @endphp
-                        <option value="{{ $code }}">{{ $label }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="form-field mb-3">
-                <label class="form-label">Notes</label>
-                <textarea x-model="dispositionNotes" class="form-textarea" rows="3" placeholder="Optional call notes..."></textarea>
-            </div>
-            <button class="btn-primary w-full" @click="saveDisposition()" :disabled="!dispositionCode || savingDisposition">
-                <x-icon name="check" class="w-4 h-4" />
-                <span x-text="savingDisposition ? 'Saving...' : (dispositionError ? 'Retry Save' : 'Save Disposition')">Save Disposition</span>
-            </button>
-        </div>
-
-        {{-- Mute / controls --}}
-        <div class="md-card p-5" x-show="callState === 'connected' || callState === 'hold'">
-            <h3 class="text-sm font-semibold text-[var(--color-on-surface)] mb-3">Audio Controls</h3>
-            <div class="grid grid-cols-2 gap-2">
-                <button class="btn-secondary text-sm" @click="toggleMute()" :class="muted ? 'btn-danger' : ''">
-                    <x-icon name="microphone" class="w-4 h-4" />
-                    <span x-text="muted ? 'Unmute' : 'Mute'">Mute</span>
-                </button>
-                <button class="btn-secondary text-sm" @click="toggleHold()" :class="{ 'btn-warning': callState === 'hold' }">
-                    <x-icon name="pause" class="w-4 h-4" />
-                    <span x-text="callState === 'hold' ? 'Resume' : 'Hold'">Hold</span>
-                </button>
-            </div>
-        </div>
-
-        @if(($telephonyFeatures['session_controls'] ?? true) === true)
-            @include('agent.partials.session-panel')
-        @endif
-        @if(($telephonyFeatures['ingroup_management'] ?? true) === true)
-            @include('agent.partials.ingroup-panel')
-        @endif
-        @if(($telephonyFeatures['transfer_controls'] ?? true) === true)
-            @include('agent.partials.transfer-panel')
-        @endif
-        @if(($telephonyFeatures['recording_controls'] ?? true) === true)
-            @include('agent.partials.recording-controls')
-        @endif
-        @if(($telephonyFeatures['dtmf_controls'] ?? true) === true)
-            @include('agent.partials.dtmf-keypad')
-        @endif
-        @if(($telephonyFeatures['callback_controls'] ?? true) === true)
-            @include('agent.partials.callback-form')
-        @endif
-        @if(($telephonyFeatures['lead_tools'] ?? true) === true)
-            @include('agent.partials.lead-search')
-        @endif
-
+    {{-- Screen reader summary: telephony + call (agent workspace; Epic 1.4, Story 3.2). Human-readable labels, no secrets. --}}
+    <div class="sr-only" aria-live="polite" aria-atomic="true">
+        <span x-text="srTelephonySummary()"></span>
+        <span x-text="' ' + srCallSummary()"></span>
     </div>
+
 </div>
 
-{{-- Hidden ViciDial iframe: keeps the agent's ViciDial session alive in the background --}}
+{{-- Hidden ViciDial iframe: session binding only — not a second-tab workflow; agents use CRM controls (Story 1.2). --}}
 <iframe id="vici-session-frame"
         src="about:blank"
-        width="0" height="0"
-        style="position:absolute;top:-9999px;left:-9999px;border:none;"
-        title="ViciDial Session (hidden)">
+        width="0"
+        height="0"
+        tabindex="-1"
+        aria-hidden="true"
+        style="position:absolute;top:-9999px;left:-9999px;border:none;width:0;height:0;overflow:hidden;visibility:hidden;"
+        title="VICIdial session binding (hidden, not for manual use)">
 </iframe>
 
 @endsection
@@ -399,6 +446,12 @@ window.agentScreen = function() {
                 }
             }
 
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    this.syncCallStatus();
+                }
+            });
+
             window.addEventListener('telephony-shortcut-dial', () => this.dial());
             window.addEventListener('telephony-shortcut-hangup', () => this.hangup());
             window.addEventListener('telephony-shortcut-transfer', () => {
@@ -491,40 +544,126 @@ window.agentScreen = function() {
             return !!this.features[key];
         },
 
+        /** When session controls are on, require a live VICIdial session before manual dial (Story 3.1). */
+        telephonyDialGateBlocked() {
+            return this.featureEnabled('session_controls') && !Alpine.store('vicidial').loggedIn;
+        },
+
+        /** Same “cannot place calls” rules as manual dial + disposition (Story 3.3). */
+        predictiveDialBlocked() {
+            return this.dialBlocked || this.telephonyDialGateBlocked();
+        },
+
+        predictiveToggleTitle() {
+            if (!this.featureEnabled('predictive_dialing')) {
+                return 'Predictive dialing is disabled';
+            }
+            if (this.dialBlocked) {
+                return 'Complete disposition before predictive dialing';
+            }
+            if (this.telephonyDialGateBlocked()) {
+                return 'Log in to telephony in the session panel before predictive dialing';
+            }
+
+            return this.predictiveMode ? 'Turn predictive dialing off' : 'Turn predictive dialing on';
+        },
+
+        dialHelpTitle() {
+            if (!this.phoneNumber) return 'Enter a phone number first';
+            if (this.dialBlocked) return 'Complete disposition before dialing';
+            if (this.telephonyDialGateBlocked()) return 'Log in to telephony in the session panel before dialing';
+            return 'Click to dial';
+        },
+
+        /** Screen reader line (matches visible Call Controls chip labels). */
+        srCallSummary() {
+            const m = {
+                idle: 'Call: Ready.',
+                dialing: 'Call: Dialing.',
+                ringing: 'Call: Ringing.',
+                connected: 'Call: Connected.',
+                hold: 'Call: On hold.',
+                wrapup: 'Call: Wrap-up — save disposition.',
+            };
+            return m[this.callState] || ('Call: ' + (this.callState || 'unknown') + '.');
+        },
+
+        srTelephonySummary() {
+            const v = Alpine.store('vicidial');
+            if (v.syncState === 'error') return 'Telephony: unavailable.';
+            if (!v.loggedIn) return 'Telephony: not logged in.';
+            return 'Telephony: ' + v.displayStatus() + '.';
+        },
+
         async syncCallStatus() {
             try {
                 const res = await window.axios.get('/api/call/status');
+                const st = Alpine.store('call');
                 if (res.data.active && res.data.call) {
+                    const prevSid = this.sessionId;
                     this.sessionId = res.data.call.session_id;
                     this.phoneNumber = res.data.call.phone_number || this.phoneNumber;
-                    this.duration = res.data.call.duration_seconds || 0;
-                    const statusMap = { dialing: 'dialing', ringing: 'ringing', answered: 'connected', in_call: 'connected', on_hold: 'hold' };
-                    this.callState = statusMap[res.data.call.status] || 'connected';
-                    Alpine.store('call').state = this.callState;
-                    Alpine.store('call').number = this.phoneNumber;
-                    Alpine.store('call').setSessionId(this.sessionId);
-                    if (this.callState === 'connected') Alpine.store('call').startTimer();
+                    if (res.data.call.lead_id != null && res.data.call.lead_id !== '') {
+                        this.leadId = String(res.data.call.lead_id);
+                    }
+                    const serverDuration = Math.max(0, Number(res.data.call.duration_seconds) || 0);
+                    const statusMap = {
+                        dialing: 'dialing',
+                        ringing: 'ringing',
+                        answered: 'connected',
+                        in_call: 'connected',
+                        on_hold: 'hold',
+                        transferring: 'connected',
+                    };
+                    const crm = res.data.call.status || '';
+                    this.callState = statusMap[crm] || 'connected';
+                    st.state = this.callState;
+                    st.number = this.phoneNumber;
+                    st.setSessionId(this.sessionId);
+                    if (this.callState === 'connected' || this.callState === 'hold') {
+                        const sessionChanged = String(prevSid) !== String(this.sessionId);
+                        if (sessionChanged || !st.timer) {
+                            st.startTimer(serverDuration);
+                        } else {
+                            st.duration = serverDuration;
+                        }
+                    } else {
+                        st.stopTimer();
+                        st.duration = 0;
+                    }
                 } else if (res.data.disposition_pending && res.data.pending_call && res.data.pending_call.session_id) {
+                    st.stopTimer();
                     this.dialBlocked = true;
                     this.hasDispositionPending = true;
                     this.callState = 'wrapup';
                     this.sessionId = res.data.pending_call.session_id;
                     this.phoneNumber = res.data.pending_call.phone_number || this.phoneNumber;
-                    Alpine.store('call').state = 'wrapup';
+                    st.state = 'wrapup';
+                    st.setSessionId(this.sessionId);
                 } else {
+                    st.stopTimer();
                     this.dialBlocked = false;
                     this.hasDispositionPending = false;
+                    this.sessionId = null;
                     this.callState = 'idle';
-                    Alpine.store('call').state = 'idle';
+                    st.state = 'idle';
+                    st.setSessionId(null);
                 }
             } catch (e) {
                 // On network/auth error, reset to idle so the UI is never
                 // permanently stuck in a non-interactive state.
-                if (this.callState !== 'connected' && this.callState !== 'dialing' && this.callState !== 'ringing') {
+                const http = e.response?.status;
+                if (http === 401 || http === 403) {
+                    Alpine.store('toast').error(e.response?.data?.message || 'Your session expired or access was denied. Refresh the page or sign in again.');
+                }
+                if (this.callState !== 'connected' && this.callState !== 'dialing' && this.callState !== 'ringing' && this.callState !== 'hold' && this.callState !== 'wrapup') {
+                    const st = Alpine.store('call');
+                    st.stopTimer();
                     this.dialBlocked = false;
                     this.hasDispositionPending = false;
                     this.callState = 'idle';
-                    Alpine.store('call').state = 'idle';
+                    st.state = 'idle';
+                    st.setSessionId(null);
                 }
             }
         },
@@ -532,8 +671,19 @@ window.agentScreen = function() {
         async syncVicidialStatus() {
             try {
                 const data = await Alpine.store('vicidial').sync(this.$el.dataset.campaign || 'mbsales');
+                if (data === null) {
+                    return;
+                }
+                const ls = data?.local_session;
+                if (ls && typeof ls.blended === 'boolean') {
+                    this.vici.blended = ls.blended;
+                }
+                const ig = (ls?.ingroup_choices || '').trim();
+                if (ig && !(this.vici.ingroups_raw || '').trim()) {
+                    this.vici.ingroups_raw = ig;
+                }
                 const raw = data?.agent_status?.data?.raw_response || '';
-                const localStatus = data?.local_session?.session_status || '';
+                const localStatus = ls?.session_status || '';
 
                 // Reconcile phase with actual session status from backend.
                 if (['ready','paused','in_call'].includes(localStatus)) {
@@ -564,7 +714,44 @@ window.agentScreen = function() {
                         }
                     }
                 }
-            } catch {}
+            } catch (e) {
+                Alpine.store('toast').warning(e.response?.data?.message || 'Could not refresh telephony status.');
+            }
+        },
+
+        async retrySessionRecovery() {
+            const campaign = this.$el.dataset.campaign || 'mbsales';
+            Alpine.store('vicidial').sessionRecoveryDismissed = false;
+            await Alpine.store('vicidial').sync(campaign);
+            if (Alpine.store('vicidial').syncState === 'ok') {
+                Alpine.store('toast').success('Telephony status updated.');
+            } else if (Alpine.store('vicidial').lastError) {
+                Alpine.store('toast').error(Alpine.store('vicidial').lastError);
+            }
+            if (this.featureEnabled('session_controls')) {
+                await this.syncVicidialStatus();
+            }
+        },
+
+        async sessionRecoveryLogout() {
+            await this.viciLogout();
+        },
+
+        async viciRetryVerify() {
+            if (!this.featureEnabled('session_controls')) return;
+            const campaign = this.$el.dataset.campaign || 'mbsales';
+            if (this.vici.phase === 'failed' || this.vici.phase === 'timeout' || this.vici.phase === 'idle') {
+                await this.viciLogin();
+                return;
+            }
+            if (this.vici.phase === 'syncing' || this.vici.phase === 'iframe_loading') {
+                this._viciCancelVerify();
+                this.vici.phase = 'syncing';
+                this.vici._verifyPollCount = 0;
+                this.vici.loading = true;
+                Alpine.store('toast').info('Checking VICIdial session again…');
+                this._viciPollVerify(campaign);
+            }
         },
 
         async viciLogin() {
@@ -650,7 +837,7 @@ window.agentScreen = function() {
                 return;
             }
 
-            this.vici._verifyPollTimer = setTimeout(async () => {
+                this.vici._verifyPollTimer = setTimeout(async () => {
                 this.vici._verifyPollCount++;
                 try {
                     const res = await window.axios.post('/api/vicidial/session/verify', { campaign });
@@ -668,8 +855,20 @@ window.agentScreen = function() {
                         }
                         return;
                     }
-                } catch (_) {
-                    // 202 = still pending, any other error: keep polling
+                } catch (e) {
+                    const st = e.response?.status;
+                    const msg = e.response?.data?.message || e.message || 'Could not confirm VICIdial session.';
+                    const fatal = !e.response
+                        || st === 401 || st === 403 || st === 419 || st === 422
+                        || (typeof st === 'number' && st >= 500 && st < 600);
+                    if (fatal) {
+                        this._viciCancelVerify();
+                        this.vici.phase   = 'failed';
+                        this.vici.loading = false;
+                        Alpine.store('toast').error(msg);
+                        Alpine.store('vicidial').loggedIn = false;
+                        return;
+                    }
                 }
                 // Not ready yet – schedule next poll.
                 this._viciPollVerify(campaign);
@@ -951,6 +1150,10 @@ window.agentScreen = function() {
 
         async dial() {
             if (!this.phoneNumber || this.callState !== 'idle' || this.dialBlocked) return;
+            if (this.telephonyDialGateBlocked()) {
+                Alpine.store('toast').warning('Log in to telephony before dialing.');
+                return;
+            }
             this.callState = 'dialing';
             Alpine.store('call').state = 'dialing';
             Alpine.store('call').number = this.phoneNumber;
@@ -968,6 +1171,7 @@ window.agentScreen = function() {
                     this.callState = 'idle';
                     Alpine.store('call').state = 'idle';
                     Alpine.store('toast').error(res.data.message || 'Call failed.');
+                    await this.syncCallStatus();
                     return;
                 }
                 // Wait for SIP.js state + AMI events to transition dialing -> ringing -> connected.
@@ -975,6 +1179,7 @@ window.agentScreen = function() {
                 this.callState = 'idle';
                 Alpine.store('call').state = 'idle';
                 Alpine.store('toast').error(e.response?.data?.message || 'Failed to originate call. Check connection.');
+                await this.syncCallStatus();
             }
         },
 
@@ -1041,7 +1246,7 @@ window.agentScreen = function() {
             this.dispositionError = null;
             const campaign = this.$el.dataset.campaign || 'mbsales';
             try {
-                await window.axios.post('/api/disposition/save', {
+                const res = await window.axios.post('/api/disposition/save', {
                     campaign_code:    campaign,
                     call_session_id:  this.sessionId,
                     lead_id:          this.leadId,
@@ -1057,7 +1262,17 @@ window.agentScreen = function() {
                     disposition: this.dispositionCode,
                 });
                 if (this.recentCalls.length > 10) this.recentCalls.pop();
-                Alpine.store('toast').success('Disposition saved.');
+                const sync = res.data?.vicidial_sync;
+                if (sync && (sync.status === 'partial' || sync.status === 'failed')) {
+                    Alpine.store('toast').success('Disposition saved.');
+                    Alpine.store('toast').warning(sync.message || 'The dialer may not have received this disposition.');
+                } else if (sync && sync.status === 'synced') {
+                    Alpine.store('toast').success('Disposition saved and confirmed with the dialer.');
+                } else if (sync && sync.status === 'skipped' && sync.message) {
+                    Alpine.store('toast').success('Disposition saved. ' + sync.message);
+                } else {
+                    Alpine.store('toast').success('Disposition saved.');
+                }
                 this.resetAfterDisposition();
             } catch (e) {
                 const msg = e.response?.data?.message || 'Failed to save disposition. You may retry or dismiss.';
@@ -1092,7 +1307,12 @@ window.agentScreen = function() {
 
         togglePredictiveMode() {
             if (!this.featureEnabled('predictive_dialing')) return;
-            this.predictiveMode = !this.predictiveMode;
+            const next = !this.predictiveMode;
+            if (next && this.predictiveDialBlocked()) {
+                Alpine.store('toast').warning('Log in to telephony or complete disposition before predictive dialing.');
+                return;
+            }
+            this.predictiveMode = next;
             if (!this.predictiveMode && this._predictiveTimer) {
                 clearTimeout(this._predictiveTimer);
                 this._predictiveTimer = null;
@@ -1107,17 +1327,26 @@ window.agentScreen = function() {
             if (!this.featureEnabled('predictive_dialing')) return;
             if (!this.predictiveMode || this.callState !== 'idle') return;
             if (this._predictiveTimer) clearTimeout(this._predictiveTimer);
+            if (this.predictiveDialBlocked()) {
+                this._predictiveTimer = null;
+                return;
+            }
             this._predictiveTimer = setTimeout(() => this.predictiveDial(), Math.max(1, this.predictiveDelay) * 1000);
         },
 
         async predictiveDial() {
             if (!this.featureEnabled('predictive_dialing')) return;
             if (!this.predictiveMode || this.callState !== 'idle' || this.dialBlocked) return;
+            if (this.telephonyDialGateBlocked()) {
+                Alpine.store('toast').warning('Log in to telephony before predictive dialing.');
+                return;
+            }
             try {
                 const campaign = this.$el.dataset.campaign || 'mbsales';
                 const res = await window.axios.post('/api/call/predictive-dial?campaign=' + encodeURIComponent(campaign));
                 if (!res.data.success) {
                     Alpine.store('toast').warning(res.data.message || 'Predictive dial failed.');
+                    await this.syncCallStatus();
                     return;
                 }
                 if (!res.data.lead) {
@@ -1135,6 +1364,7 @@ window.agentScreen = function() {
                 Alpine.store('call').state = 'dialing';
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Predictive dial request failed.');
+                await this.syncCallStatus();
             }
         },
 

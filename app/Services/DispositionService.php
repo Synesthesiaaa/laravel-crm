@@ -44,7 +44,7 @@ class DispositionService
         ?string $phoneNumber = null,
         ?string $remarks = null,
         ?int $callDurationSeconds = null,
-        ?string $leadDataJson = null
+        ?string $leadDataJson = null,
     ): OperationResult {
         $code = $this->resolveAndValidateCode($campaignCode, $dispositionCode, $dispositionLabel);
         if (! $code) {
@@ -83,6 +83,11 @@ class DispositionService
             }
         }
 
+        $vicidialSync = [
+            'status' => 'skipped',
+            'message' => 'No call session linked; dialer sync was not sent.',
+        ];
+
         try {
             DB::transaction(function () use (
                 $campaignCode,
@@ -94,7 +99,8 @@ class DispositionService
                 $phoneNumber,
                 $remarks,
                 $callDurationSeconds,
-                $leadDataJson
+                $leadDataJson,
+                &$vicidialSync
             ) {
                 $record = CampaignDispositionRecord::create([
                     'call_session_id' => $callSessionId,
@@ -120,14 +126,14 @@ class DispositionService
                             'disposition_at' => now(),
                             'call_duration_seconds' => $callDurationSeconds ?? $session->call_duration_seconds,
                         ]);
-                        $this->vicidialSync->syncDispositionToVicidial($session->fresh());
+                        $vicidialSync = $this->vicidialSync->syncDispositionToVicidial($session->fresh());
                     }
                 }
 
                 event(new DispositionSaved($campaignCode, $agent, $dispositionCode, $leadId));
             });
 
-            return OperationResult::success();
+            return OperationResult::success(['vicidial_sync' => $vicidialSync]);
         } catch (\Throwable $e) {
             $this->telephonyLogger->error('DispositionService', 'Save failed', [
                 'error' => $e->getMessage(),
