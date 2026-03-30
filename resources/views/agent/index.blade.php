@@ -103,13 +103,30 @@
                         Hold
                     </button>
                 </div>
+
+                {{-- Story 4.3: keyboard path to disposition (UX-DR7 / NFR8); complement to tab order vs UX §8 — see Completion Notes --}}
+                <div class="mt-3" x-show="callState === 'wrapup'">
+                    <a href="#agent-disposition-panel"
+                       id="agent-go-to-disposition-link"
+                       class="inline-flex text-xs font-medium text-[var(--color-primary)] underline underline-offset-2 rounded px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface-card)]"
+                       aria-label="Go to disposition code field"
+                       @click.prevent="focusDispositionCode()">
+                        Go to disposition
+                    </a>
+                </div>
             </div>
         </div>
 
         {{-- Disposition --}}
-        <div class="md-card p-5" x-show="callState === 'wrapup'">
+        <div class="md-card p-5"
+             id="agent-disposition-panel"
+             x-ref="dispositionPanel"
+             x-show="callState === 'wrapup'"
+             role="region"
+             tabindex="-1"
+             aria-labelledby="agent-disposition-heading">
             <div class="flex items-center justify-between mb-3">
-                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Disposition</h3>
+                <h3 id="agent-disposition-heading" class="text-sm font-semibold text-[var(--color-on-surface)]">Disposition</h3>
                 {{-- Show dismiss only when there is an error so agent is never stuck --}}
                 <button type="button"
                         class="btn-ghost text-xs text-[var(--color-danger)]"
@@ -128,8 +145,11 @@
             </div>
 
             <div class="form-field mb-3">
-                <label class="form-label">Code</label>
-                <select x-model="dispositionCode" class="form-select">
+                <label class="form-label" for="agent-disposition-code">Code</label>
+                <select id="agent-disposition-code"
+                        x-ref="dispositionCodeSelect"
+                        x-model="dispositionCode"
+                        class="form-select">
                     <option value="">-- Select disposition --</option>
                     @foreach($dispositionCodes ?? [] as $dc)
                         @php
@@ -1249,6 +1269,20 @@ window.agentScreen = function() {
             const m = String(Math.floor(s / 60)).padStart(2, '0');
             const sec = String(s % 60).padStart(2, '0');
             return `${m}:${sec}`;
+        },
+
+        focusDispositionCode() {
+            this.$nextTick(() => {
+                const sel = this.$refs.dispositionCodeSelect;
+                if (sel && typeof sel.focus === 'function') {
+                    sel.focus();
+                    return;
+                }
+                const panel = this.$refs.dispositionPanel;
+                if (panel && typeof panel.focus === 'function') {
+                    panel.focus();
+                }
+            });
         },
 
         async fetchNextLead() {
