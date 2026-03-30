@@ -191,10 +191,13 @@
 
         @include('agent.partials.single-pane-help')
 
-        {{-- Current lead card --}}
-        <div class="md-card p-5">
+        {{-- Current lead card — active context when call in progress or lead loaded (Story 4.2) --}}
+        <div class="md-card p-5 transition-shadow"
+             :class="leadInformationPanelClass()"
+             role="region"
+             :aria-label="leadInformationAriaLabel()">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Lead Information</h3>
+                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]" x-text="leadInformationHeading()">Lead Information</h3>
                 <div class="flex items-center gap-2">
                     <template x-if="featureEnabled('predictive_dialing')">
                         <button type="button"
@@ -399,6 +402,9 @@ window.agentScreen = function() {
             raw: '',
         },
 
+        /** Field keys allowed for capture + optional dialer sync (`AgentScreenField` mapping). */
+        captureFieldKeysAllowed: @json(isset($fields) && $fields->isNotEmpty() ? $fields->pluck('field_name')->values()->all() : []),
+
         _echoUnsubscribe: null,
         _statusPollInterval: null,
         features: @js($telephonyFeatures ?? []),
@@ -585,7 +591,34 @@ window.agentScreen = function() {
                 hold: 'Call: On hold.',
                 wrapup: 'Call: Wrap-up — save disposition.',
             };
-            return m[this.callState] || ('Call: ' + (this.callState || 'unknown') + '.');
+            let line = m[this.callState] || ('Call: ' + (this.callState || 'unknown') + '.');
+            if (this.leadId && String(this.leadId).trim()) {
+                line += ' Lead ' + String(this.leadId).trim() + '.';
+            }
+            return line;
+        },
+
+        /** Story 4.2: highlight lead card when on a call or a lead is loaded for work. */
+        leadPanelActiveContext() {
+            const inCall = ['dialing', 'ringing', 'connected', 'hold', 'wrapup'].includes(this.callState);
+            const hasLead = !!(this.leadId && String(this.leadId).trim());
+            return inCall || hasLead;
+        },
+
+        leadInformationPanelClass() {
+            return this.leadPanelActiveContext()
+                ? 'ring-2 ring-[var(--color-primary)]/35 border border-[var(--color-primary)]/25 shadow-md'
+                : '';
+        },
+
+        leadInformationHeading() {
+            return this.leadPanelActiveContext() ? 'Lead information — active' : 'Lead information';
+        },
+
+        leadInformationAriaLabel() {
+            return this.leadPanelActiveContext()
+                ? 'Lead information, active call or lead loaded'
+                : 'Lead information';
         },
 
         srTelephonySummary() {
@@ -1376,15 +1409,48 @@ window.agentScreen = function() {
             form.querySelectorAll('input, select, textarea').forEach(el => {
                 if (el.name && !el.name.startsWith('_')) captureData[el.name] = el.value ?? '';
             });
+            const campaign = this.$el.dataset.campaign || 'mbsales';
             try {
                 await window.axios.post('/api/agent/capture', {
-                    campaign_code: this.$el.dataset.campaign || 'mbsales',
+                    campaign_code: campaign,
                     call_session_id: this.sessionId,
                     lead_id: this.leadId,
                     phone_number: this.phoneNumber,
                     capture_data: captureData,
                 });
-                Alpine.store('toast').success('Record saved.');
+                let crmToastDone = false;
+                if (this.featureEnabled('lead_tools') && this.leadId && String(this.leadId).trim() && !this.telephonyDialGateBlocked()) {
+                    const leadIdNum = parseInt(String(this.leadId).trim(), 10);
+                    const fields = {};
+                    if (!Number.isNaN(leadIdNum)) {
+                        fields.lead_id = leadIdNum;
+                    }
+                    for (const key of this.captureFieldKeysAllowed || []) {
+                        if (Object.prototype.hasOwnProperty.call(captureData, key) && captureData[key] !== '') {
+                            fields[key] = captureData[key];
+                        }
+                    }
+                    const hasFieldPayload = Object.keys(fields).some(k => k !== 'lead_id');
+                    if (hasFieldPayload && fields.lead_id != null) {
+                        try {
+                            const ur = await window.axios.post('/api/leads/update-fields?campaign=' + encodeURIComponent(campaign), { fields });
+                            if (ur.data && ur.data.success) {
+                                Alpine.store('toast').success('Record saved and synced to dialer.');
+                            } else {
+                                Alpine.store('toast').success('Record saved.');
+                                Alpine.store('toast').warning(ur.data?.message || 'Dialer did not confirm field updates.');
+                            }
+                            crmToastDone = true;
+                        } catch (e) {
+                            Alpine.store('toast').success('Record saved.');
+                            Alpine.store('toast').warning(e.response?.data?.message || 'Dialer did not accept field updates.');
+                            crmToastDone = true;
+                        }
+                    }
+                }
+                if (!crmToastDone) {
+                    Alpine.store('toast').success('Record saved.');
+                }
                 this.clearForm();
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Failed to save record.');
