@@ -21,6 +21,39 @@
         </span>
     </div>
 
+    @if(config('vicidial.session_iframe_agent_api_only') && ! config('vicidial.session_iframe_confirm_non_agent_live'))
+        <p class="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 leading-snug">
+            Iframe-only mode without Non-Agent confirmation: the CRM may show Online before VICIdial has a live agent. Enable
+            <span class="font-mono text-[10px]">VICI_SESSION_IFRAME_CONFIRM_NON_AGENT_LIVE</span> or turn off iframe-only mode.
+        </p>
+    @elseif(config('vicidial.session_iframe_agent_api_only'))
+        <p class="text-[11px] text-[var(--color-on-surface-dim)] leading-snug">
+            When Non-Agent API is configured for this campaign, verify confirms your agent is in VICIdial live_agents (VD_login must match <span class="font-mono">vici_user</span>).
+        </p>
+    @endif
+
+    <div class="form-field col-span-2">
+        <label class="form-label">Login campaign</label>
+        <select class="form-select w-full"
+                x-show="vici.agent_campaigns?.length"
+                x-model="vici.vici_campaign"
+                @change="onViciCampaignChange()"
+                :disabled="['requesting','iframe_loading','syncing'].includes(vici.phase) || vici.agent_campaigns_loading">
+            <template x-for="c in (vici.agent_campaigns || [])" :key="c.id">
+                <option :value="c.id" x-text="c.name && c.name !== c.id ? (c.id + ' — ' + c.name) : c.id"></option>
+            </template>
+        </select>
+        <input type="text" class="form-input w-full" readonly
+               x-show="!vici.agent_campaigns?.length && !vici.agent_campaigns_loading"
+               :value="vici.vici_campaign"
+               title="CRM session campaign. VICIdial allowed list unavailable — check Non-Agent API user permissions or DB credentials." />
+        <p x-show="vici.agent_campaigns_loading" class="text-[11px] text-amber-600 mt-1">Loading campaigns from VICIdial…</p>
+        <p class="text-[11px] text-red-600 mt-1" x-show="vici.agent_campaigns_error" x-text="vici.agent_campaigns_error"></p>
+        <p class="text-[11px] text-[var(--color-on-surface-dim)] mt-1" x-show="vici.agent_campaigns?.length && !vici.agent_campaigns_error">
+            Allowed campaigns for your VICIdial user (Non-Agent API or database). Changing this updates your CRM session for dialing and iframe login.
+        </p>
+    </div>
+
     <div class="grid grid-cols-2 gap-2">
         <div class="form-field col-span-2">
             <label class="form-label">

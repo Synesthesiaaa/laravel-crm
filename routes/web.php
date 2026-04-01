@@ -1,13 +1,13 @@
 <?php
 
-use App\Http\Controllers\Api\VicidialProxyController;
 use App\Http\Controllers\AgentController;
+use App\Http\Controllers\Api\VicidialProxyController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FormController;
-use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\RecordsController;
+use App\Http\Controllers\ReportsController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -72,6 +72,8 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::post('api/vicidial/session/logout', [\App\Http\Controllers\Api\VicidialSessionController::class, 'logout'])->name('api.vicidial.session.logout')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
     Route::post('api/vicidial/session/ingroups', [\App\Http\Controllers\Api\VicidialSessionController::class, 'ingroups'])->name('api.vicidial.session.ingroups')->middleware(['throttle:vicidial', 'telephony_feature:ingroup_management']);
     Route::get('api/vicidial/session/status', [\App\Http\Controllers\Api\VicidialSessionController::class, 'status'])->name('api.vicidial.session.status')->middleware(['throttle:api', 'telephony_feature:session_controls']);
+    Route::get('api/vicidial/session/agent-campaigns', [\App\Http\Controllers\Api\VicidialSessionController::class, 'agentCampaigns'])->name('api.vicidial.session.agent-campaigns')->middleware(['throttle:api', 'telephony_feature:session_controls']);
+    Route::post('api/vicidial/session/select-campaign', [\App\Http\Controllers\Api\VicidialSessionController::class, 'selectCampaign'])->name('api.vicidial.session.select-campaign')->middleware(['throttle:api', 'telephony_feature:session_controls']);
     Route::get('api/leads/search', [\App\Http\Controllers\Api\LeadController::class, 'search'])->name('api.leads.search')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
     Route::get('api/leads/info', [\App\Http\Controllers\Api\LeadController::class, 'info'])->name('api.leads.info')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
     Route::get('api/leads/field', [\App\Http\Controllers\Api\LeadController::class, 'field'])->name('api.leads.field')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
@@ -96,7 +98,7 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::get('api/supervisor/agents', \App\Http\Controllers\Api\SupervisorAgentsController::class)->name('api.supervisor.agents')->middleware('throttle:api');
     Route::post('api/notifications/read-all', \App\Http\Controllers\Api\MarkNotificationsReadController::class)->name('api.notifications.read-all')->middleware('throttle:api');
     Route::post('api/disposition/save', \App\Http\Controllers\Api\SaveDispositionController::class)->name('api.disposition.save')->middleware('throttle:api');
-    Route::post('api/client-errors', fn() => response()->json(['ok' => true]))->name('api.client-errors');
+    Route::post('api/client-errors', fn () => response()->json(['ok' => true]))->name('api.client-errors');
     Route::get('attendance', [AttendanceController::class, 'index'])->name('attendance.index');
     Route::middleware('role:Team Leader,Admin,Super Admin')->group(function () {
         Route::get('reports', [ReportsController::class, 'index'])->name('reports.index');

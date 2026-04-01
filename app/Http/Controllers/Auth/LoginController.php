@@ -7,6 +7,7 @@ use App\Http\Requests\Auth\LoginRequest;
 use App\Models\User;
 use App\Services\AuthService;
 use App\Services\CampaignService;
+use App\Services\Telephony\TelephonyBootstrapService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,7 +18,8 @@ class LoginController extends Controller
 {
     public function __construct(
         protected AuthService $authService,
-        protected CampaignService $campaignService
+        protected CampaignService $campaignService,
+        protected TelephonyBootstrapService $telephonyBootstrap,
     ) {}
 
     public function showLoginForm(): View|RedirectResponse
@@ -26,6 +28,7 @@ class LoginController extends Controller
             return redirect()->route('dashboard');
         }
         $campaigns = $this->campaignService->getCampaigns();
+
         return view('auth.login', ['campaigns' => $campaigns]);
     }
 
@@ -40,6 +43,7 @@ class LoginController extends Controller
         $user = $this->authService->validateCredentials($username, $password);
         if (! $user) {
             $request->incrementAttempts();
+
             throw ValidationException::withMessages([
                 'username' => [__('auth.failed')],
             ]);
@@ -127,6 +131,7 @@ class LoginController extends Controller
             }
         }
         $request->session()->put('login_time', now()->toDateTimeString());
+        $this->telephonyBootstrap->storeBootstrapPayload($request, $user);
 
         $request->session()->regenerate();
 
@@ -136,6 +141,7 @@ class LoginController extends Controller
     public function logout(Request $request): RedirectResponse
     {
         $this->authService->logout();
+
         return redirect()->route('login');
     }
 }

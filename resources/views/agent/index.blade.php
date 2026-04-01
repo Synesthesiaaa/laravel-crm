@@ -282,14 +282,6 @@
     </div>
 </div>
 
-{{-- Hidden ViciDial iframe: keeps the agent's ViciDial session alive in the background --}}
-<iframe id="vici-session-frame"
-        src="about:blank"
-        width="0" height="0"
-        style="position:absolute;top:-9999px;left:-9999px;border:none;"
-        title="ViciDial Session (hidden)">
-</iframe>
-
 @endsection
 
 @push('scripts')
@@ -320,7 +312,12 @@ window.agentScreen = function() {
             loading: false,
             // Login phase state machine: idle | requesting | iframe_loading | syncing | ready | failed | timeout
             phase: 'idle',
-            phone_login: '',
+            /** VICIdial VD_campaign — aligned with VICIdial allowed campaigns when loaded */
+            vici_campaign: @js((string) session('campaign', 'mbsales')),
+            agent_campaigns: [],
+            agent_campaigns_loading: false,
+            agent_campaigns_error: null,
+            phone_login: @js((string) ($user->extension ?? '')),
             phone_pass: '',
             pause_code: 'BREAK',
             pause_codes: @js(config('vicidial.pause_codes', ['BREAK'])),
@@ -368,6 +365,7 @@ window.agentScreen = function() {
             this.syncCallStatus();
             if (this.featureEnabled('session_controls')) {
                 this.syncVicidialStatus();
+                this.loadViciAgentCampaigns();
             }
 
             const te = window.TelephonyEcho;
@@ -414,6 +412,55 @@ window.agentScreen = function() {
                 if (Alpine.store('vicidial').status === 'paused') this.viciPause('RESUME');
                 else this.viciPause('PAUSE');
             });
+        },
+
+        currentCampaign() {
+            return this.vici.vici_campaign || this.$el.dataset.campaign || 'mbsales';
+        },
+
+        async loadViciAgentCampaigns() {
+            if (!this.featureEnabled('session_controls')) return;
+            this.vici.agent_campaigns_loading = true;
+            this.vici.agent_campaigns_error = null;
+            try {
+                const res = await window.axios.get('/api/vicidial/session/agent-campaigns', {
+                    params: { context_campaign: this.currentCampaign() },
+                });
+                if (res.data?.success && Array.isArray(res.data.campaigns)) {
+                    this.vici.agent_campaigns = res.data.campaigns;
+                    const ids = this.vici.agent_campaigns.map((c) => c.id);
+                    if (ids.length && !ids.includes(this.vici.vici_campaign)) {
+                        this.vici.vici_campaign = this.vici.agent_campaigns[0].id;
+                        await this.persistViciCampaignToSession();
+                    } else {
+                        this.$el.dataset.campaign = this.vici.vici_campaign;
+                        if (document.body?.dataset) document.body.dataset.campaign = this.vici.vici_campaign;
+                    }
+                }
+            } catch (e) {
+                this.vici.agent_campaigns_error =
+                    e.response?.data?.message || 'Could not load VICIdial campaigns.';
+            } finally {
+                this.vici.agent_campaigns_loading = false;
+            }
+        },
+
+        async persistViciCampaignToSession() {
+            const code = this.vici.vici_campaign;
+            const row = (this.vici.agent_campaigns || []).find((c) => c.id === code);
+            try {
+                await window.axios.post('/api/vicidial/session/select-campaign', {
+                    campaign: code,
+                    campaign_name: row?.name || code,
+                });
+                this.$el.dataset.campaign = code;
+                if (document.body?.dataset) document.body.dataset.campaign = code;
+                Alpine.store('vicidial').campaign = code;
+            } catch (_) {}
+        },
+
+        async onViciCampaignChange() {
+            await this.persistViciCampaignToSession();
         },
 
         /** WebSocket handler: call state changed (from AMI listener or backend) */
@@ -531,7 +578,7 @@ window.agentScreen = function() {
 
         async syncVicidialStatus() {
             try {
-                const data = await Alpine.store('vicidial').sync(this.$el.dataset.campaign || 'mbsales');
+                const data = await Alpine.store('vicidial').sync(this.currentCampaign());
                 const raw = data?.agent_status?.data?.raw_response || '';
                 const localStatus = data?.local_session?.session_status || '';
 
@@ -569,195 +616,63 @@ window.agentScreen = function() {
 
         async viciLogin() {
             if (!this.featureEnabled('session_controls')) return;
-            this._viciCancelVerify();
-            this.vici.phase   = 'requesting';
-            this.vici.loading = true;
-
-            const campaign = this.$el.dataset.campaign || 'mbsales';
-            try {
-                const res = await window.axios.post('/api/vicidial/session/login', {
-                    campaign,
-                    phone_login: this.vici.phone_login || null,
-                    phone_pass:  this.vici.phone_pass  || null,
-                    blended:     this.vici.blended,
-                    ingroups:    this.parseIngroups(this.vici.ingroups_raw),
-                });
-
-                const iframeUrl = res.data?.iframe_url;
-                if (!iframeUrl) {
-                    // Login failed backend-side (missing phone credentials, etc.)
-                    this.vici.phase   = 'failed';
-                    this.vici.loading = false;
-                    Alpine.store('toast').error(res.data?.message || 'Could not build VICIdial login URL. Set a phone extension first.');
-                    return;
-                }
-
-                // Load the VICIdial vicidial.php auto-login URL into the hidden iframe.
-                // The iframe onload fires when the page loads; we then start fast-polling
-                // the verify endpoint to confirm the agent appeared in vicidial_live_agents.
-                this.vici.phase = 'iframe_loading';
-                const frame = document.getElementById('vici-session-frame');
-                if (frame) {
-                    // Attach one-time handlers so we can track iframe lifecycle.
-                    frame.onload = () => this._viciOnIframeLoad(campaign);
-                    frame.onerror = () => this._viciOnIframeError();
-                    frame.src = iframeUrl;
-                }
-
-                // Safety timeout: if iframe never fires load/error, give up after 20s.
-                this.vici._verifyTimeout = setTimeout(() => {
-                    if (this.vici.phase === 'iframe_loading' || this.vici.phase === 'syncing') {
-                        this._viciCancelVerify();
-                        this.vici.phase   = 'timeout';
-                        this.vici.loading = false;
-                        Alpine.store('toast').warning(
-                            'VICIdial session timed out. Check your phone credentials and try again.'
-                        );
-                        Alpine.store('vicidial').loggedIn = false;
-                    }
-                }, 20_000);
-
-            } catch (e) {
-                this.vici.phase   = 'failed';
-                this.vici.loading = false;
-                Alpine.store('toast').error(e.response?.data?.message || 'VICIdial login request failed.');
-            }
-        },
-
-        _viciOnIframeLoad(campaign) {
-            if (!['iframe_loading', 'requesting'].includes(this.vici.phase)) return;
-            this.vici.phase = 'syncing';
-            this.vici._verifyPollCount = 0;
-            this._viciPollVerify(campaign);
-        },
-
-        _viciOnIframeError() {
-            this._viciCancelVerify();
-            this.vici.phase   = 'failed';
-            this.vici.loading = false;
-            Alpine.store('toast').error('Hidden VICIdial session frame failed to load. Check VICIdial URL configuration.');
-        },
-
-        _viciPollVerify(campaign) {
-            const maxAttempts = this.vici._verifyPollMax;
-            if (this.vici._verifyPollCount >= maxAttempts) {
-                this._viciCancelVerify();
-                this.vici.phase   = 'timeout';
-                this.vici.loading = false;
-                Alpine.store('toast').warning(
-                    'VICIdial session did not confirm in time. It may become available shortly — check your credentials if it persists.'
-                );
+            if (!window.VicidialSession) {
+                Alpine.store('toast').error('VICIdial session module is not loaded.');
                 return;
             }
-
-            this.vici._verifyPollTimer = setTimeout(async () => {
-                this.vici._verifyPollCount++;
-                try {
-                    const res = await window.axios.post('/api/vicidial/session/verify', { campaign });
-                    const state = res.data?.login_state;
-
-                    if (state === 'ready') {
-                        this._viciCancelVerify();
-                        this.vici.phase   = 'ready';
-                        this.vici.loading = false;
-                        Alpine.store('toast').success('VICIdial session is live and ready.');
-                        await this.syncVicidialStatus();
-                        // Auto-register SIP softphone when ViciDial session is live
-                        if (window.TelephonyCore?.register) {
-                            window.TelephonyCore.register().catch(() => {});
-                        }
-                        return;
-                    }
-                } catch (_) {
-                    // 202 = still pending, any other error: keep polling
-                }
-                // Not ready yet – schedule next poll.
-                this._viciPollVerify(campaign);
-            }, 1_500);
+            await window.VicidialSession.login({
+                campaign: this.currentCampaign(),
+                phoneLogin: this.vici.phone_login || null,
+                phonePass: this.vici.phone_pass || null,
+                blended: this.vici.blended,
+                ingroups: this.parseIngroups(this.vici.ingroups_raw),
+                ctx: this,
+                maxAttempts: this.vici._verifyPollMax || 15,
+            });
         },
 
         _viciCancelVerify() {
-            if (this.vici._verifyPollTimer) {
-                clearTimeout(this.vici._verifyPollTimer);
-                this.vici._verifyPollTimer = null;
+            if (window.VicidialSession?.cancelVerify) {
+                window.VicidialSession.cancelVerify(this);
             }
-            if (this.vici._verifyTimeout) {
-                clearTimeout(this.vici._verifyTimeout);
-                this.vici._verifyTimeout = null;
-            }
-            this.vici._verifyPollCount = 0;
         },
 
         async viciPause(value) {
             if (!this.featureEnabled('session_controls')) return;
-            this.vici.loading = true;
-            try {
-                await window.axios.post('/api/vicidial/session/pause', {
-                    campaign: this.$el.dataset.campaign || 'mbsales',
-                    value,
-                });
-                Alpine.store('toast').info(value === 'PAUSE' ? 'Agent paused.' : 'Agent resumed.');
-                await this.syncVicidialStatus();
-            } catch (e) {
-                Alpine.store('toast').error(e.response?.data?.message || 'Unable to change pause state.');
-            } finally {
-                this.vici.loading = false;
+            if (window.VicidialSession?.pause) {
+                await window.VicidialSession.pause(value, this.currentCampaign(), this);
             }
         },
 
         async setPauseCode() {
             if (!this.featureEnabled('session_controls')) return;
             if (!this.vici.pause_code) return;
-            try {
-                await window.axios.post('/api/vicidial/session/pause-code', {
-                    campaign: this.$el.dataset.campaign || 'mbsales',
-                    pause_code: this.vici.pause_code,
-                });
-                Alpine.store('toast').success('Pause code set.');
-                await this.syncVicidialStatus();
-            } catch (e) {
-                Alpine.store('toast').error(e.response?.data?.message || 'Unable to set pause code.');
+            if (window.VicidialSession?.setPauseCode) {
+                await window.VicidialSession.setPauseCode(
+                    this.vici.pause_code,
+                    this.currentCampaign(),
+                    this
+                );
             }
         },
 
         async viciLogout() {
             if (!this.featureEnabled('session_controls')) return;
-            this._viciCancelVerify();
-            this.vici.loading = true;
-            try {
-                await window.axios.post('/api/vicidial/session/logout', {
-                    campaign: this.$el.dataset.campaign || 'mbsales',
-                });
-                this.vici.phase = 'idle';
-                // Clear the hidden iframe so the VICIdial session actually terminates.
-                const frame = document.getElementById('vici-session-frame');
-                if (frame) { frame.onload = null; frame.onerror = null; frame.src = 'about:blank'; }
-                // Destroy SIP registration with ViciDial session
-                if (window.TelephonyCore?.destroy) {
-                    window.TelephonyCore.destroy().catch(() => {});
-                }
-                Alpine.store('toast').info('VICIdial session logged out.');
-                await this.syncVicidialStatus();
-            } catch (e) {
-                Alpine.store('toast').error(e.response?.data?.message || 'VICIdial logout failed.');
-            } finally {
-                this.vici.loading = false;
+            if (window.VicidialSession?.logout) {
+                await window.VicidialSession.logout(this.currentCampaign(), this);
             }
         },
 
         async updateIngroups(action) {
             if (!this.featureEnabled('ingroup_management')) return;
-            try {
-                await window.axios.post('/api/vicidial/session/ingroups', {
-                    campaign: this.$el.dataset.campaign || 'mbsales',
+            if (window.VicidialSession?.updateIngroups) {
+                await window.VicidialSession.updateIngroups(
                     action,
-                    blended: this.vici.blended,
-                    ingroups: this.parseIngroups(this.vici.ingroups_raw),
-                });
-                Alpine.store('toast').success('In-group settings updated.');
-                await this.syncVicidialStatus();
-            } catch (e) {
-                Alpine.store('toast').error(e.response?.data?.message || 'Unable to update in-groups.');
+                    this.parseIngroups(this.vici.ingroups_raw),
+                    this.vici.blended,
+                    this.currentCampaign(),
+                    this
+                );
             }
         },
 
@@ -803,7 +718,7 @@ window.agentScreen = function() {
 
         async transferAction(url, data = {}) {
             try {
-                await window.axios.post(url, { campaign: this.$el.dataset.campaign || 'mbsales', ...data });
+                await window.axios.post(url, { campaign: this.currentCampaign(), ...data });
                 Alpine.store('toast').success('Transfer action sent.');
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Transfer action failed.');
@@ -813,7 +728,7 @@ window.agentScreen = function() {
         async startRecording() {
             if (!this.featureEnabled('recording_controls')) return;
             try {
-                const res = await window.axios.post('/api/call/recording/start', { campaign: this.$el.dataset.campaign || 'mbsales' });
+                const res = await window.axios.post('/api/call/recording/start', { campaign: this.currentCampaign() });
                 this.recording.statusText = res.data?.data?.raw_response || 'Recording started.';
                 Alpine.store('toast').success('Recording start sent.');
             } catch (e) {
@@ -824,7 +739,7 @@ window.agentScreen = function() {
         async stopRecording() {
             if (!this.featureEnabled('recording_controls')) return;
             try {
-                const res = await window.axios.post('/api/call/recording/stop', { campaign: this.$el.dataset.campaign || 'mbsales' });
+                const res = await window.axios.post('/api/call/recording/stop', { campaign: this.currentCampaign() });
                 this.recording.statusText = res.data?.data?.raw_response || 'Recording stopped.';
                 Alpine.store('toast').info('Recording stop sent.');
             } catch (e) {
@@ -835,7 +750,7 @@ window.agentScreen = function() {
         async recordingStatus() {
             if (!this.featureEnabled('recording_controls')) return;
             try {
-                const res = await window.axios.get('/api/call/recording/status', { params: { campaign: this.$el.dataset.campaign || 'mbsales' } });
+                const res = await window.axios.get('/api/call/recording/status', { params: { campaign: this.currentCampaign() } });
                 this.recording.statusText = res.data?.data?.raw_response || 'No status';
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Failed to fetch recording status.');
@@ -848,7 +763,7 @@ window.agentScreen = function() {
             if (!digits) return;
             try {
                 await window.axios.post('/api/call/dtmf', {
-                    campaign: this.$el.dataset.campaign || 'mbsales',
+                    campaign: this.currentCampaign(),
                     digits,
                 });
                 Alpine.store('toast').info('DTMF sent: ' + digits);
@@ -862,7 +777,7 @@ window.agentScreen = function() {
             if (!this.leadId || !this.callback.datetime) return;
             try {
                 await window.axios.post('/api/callbacks/schedule', {
-                    campaign: this.$el.dataset.campaign || 'mbsales',
+                    campaign: this.currentCampaign(),
                     lead_id: this.leadId,
                     callback_datetime: this.callback.datetime.replace('T', '+') + ':00',
                     callback_type: this.callback.type,
@@ -880,7 +795,7 @@ window.agentScreen = function() {
             if (!this.leadId) return;
             try {
                 await window.axios.post('/api/callbacks/remove', {
-                    campaign: this.$el.dataset.campaign || 'mbsales',
+                    campaign: this.currentCampaign(),
                     lead_id: this.leadId,
                 });
                 Alpine.store('toast').info('Callback removed.');
@@ -895,7 +810,7 @@ window.agentScreen = function() {
             try {
                 const res = await window.axios.get('/api/callbacks/info', {
                     params: {
-                        campaign: this.$el.dataset.campaign || 'mbsales',
+                        campaign: this.currentCampaign(),
                         lead_id: this.leadId,
                     },
                 });
@@ -911,7 +826,7 @@ window.agentScreen = function() {
             try {
                 const res = await window.axios.get('/api/leads/search', {
                     params: {
-                        campaign: this.$el.dataset.campaign || 'mbsales',
+                        campaign: this.currentCampaign(),
                         phone_number: this.leadTools.phone_search,
                     },
                 });
@@ -924,7 +839,7 @@ window.agentScreen = function() {
         async loadLeadInfo() {
             if (!this.featureEnabled('lead_tools')) return;
             try {
-                const params = { campaign: this.$el.dataset.campaign || 'mbsales' };
+                const params = { campaign: this.currentCampaign() };
                 if (this.leadId) params.lead_id = this.leadId;
                 if (!this.leadId && this.leadTools.phone_search) params.phone_number = this.leadTools.phone_search;
                 const res = await window.axios.get('/api/leads/info', { params });
@@ -939,7 +854,7 @@ window.agentScreen = function() {
             if (!this.leadId) return;
             try {
                 const res = await window.axios.post('/api/leads/switch', {
-                    campaign: this.$el.dataset.campaign || 'mbsales',
+                    campaign: this.currentCampaign(),
                     lead_id: this.leadId,
                 });
                 this.leadTools.raw = res.data?.data?.raw_response || '';
@@ -951,11 +866,15 @@ window.agentScreen = function() {
 
         async dial() {
             if (!this.phoneNumber || this.callState !== 'idle' || this.dialBlocked) return;
+            if (this.featureEnabled('session_controls') && !Alpine.store('vicidial').loggedIn) {
+                Alpine.store('toast').error('Log into VICIdial for this campaign (session panel) before dialing.');
+                return;
+            }
             this.callState = 'dialing';
             Alpine.store('call').state = 'dialing';
             Alpine.store('call').number = this.phoneNumber;
             try {
-                const campaign = this.$el.dataset.campaign || 'mbsales';
+                const campaign = this.currentCampaign();
                 const res = await window.axios.post('/api/call/dial?campaign=' + encodeURIComponent(campaign), {
                     phone_number: this.phoneNumber,
                     lead_id: this.leadId || null,
@@ -1017,7 +936,7 @@ window.agentScreen = function() {
             if (this.loadingNextLead || (this.callState !== 'idle' && this.callState !== 'wrapup')) return;
             this.loadingNextLead = true;
             try {
-                const campaign = this.$el.dataset.campaign || 'mbsales';
+                const campaign = this.currentCampaign();
                 const res = await window.axios.get('/api/leads/next', { params: { campaign } });
                 if (res.data.lead) {
                     this.leadId = res.data.lead.lead_id || '';
@@ -1039,7 +958,7 @@ window.agentScreen = function() {
             if (!this.dispositionCode) return;
             this.savingDisposition = true;
             this.dispositionError = null;
-            const campaign = this.$el.dataset.campaign || 'mbsales';
+            const campaign = this.currentCampaign();
             try {
                 await window.axios.post('/api/disposition/save', {
                     campaign_code:    campaign,
@@ -1114,7 +1033,7 @@ window.agentScreen = function() {
             if (!this.featureEnabled('predictive_dialing')) return;
             if (!this.predictiveMode || this.callState !== 'idle' || this.dialBlocked) return;
             try {
-                const campaign = this.$el.dataset.campaign || 'mbsales';
+                const campaign = this.currentCampaign();
                 const res = await window.axios.post('/api/call/predictive-dial?campaign=' + encodeURIComponent(campaign));
                 if (!res.data.success) {
                     Alpine.store('toast').warning(res.data.message || 'Predictive dial failed.');
@@ -1148,7 +1067,7 @@ window.agentScreen = function() {
             });
             try {
                 await window.axios.post('/api/agent/capture', {
-                    campaign_code: this.$el.dataset.campaign || 'mbsales',
+                    campaign_code: this.currentCampaign(),
                     call_session_id: this.sessionId,
                     lead_id: this.leadId,
                     phone_number: this.phoneNumber,

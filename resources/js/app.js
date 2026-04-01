@@ -1,6 +1,7 @@
 import './bootstrap';
 import './echo';
 import './components';
+import './vicidial-session';
 import TelephonyCore from './telephony-core';
 
 // Make ApexCharts available for dynamic import in views

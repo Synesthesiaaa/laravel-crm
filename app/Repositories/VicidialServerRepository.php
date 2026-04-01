@@ -18,6 +18,7 @@ class VicidialServerRepository implements VicidialServerRepositoryInterface
         if ($default) {
             return $default;
         }
+
         return VicidialServer::where('campaign_code', $campaignCode)
             ->where('is_active', true)
             ->orderBy('priority')
@@ -32,5 +33,31 @@ class VicidialServerRepository implements VicidialServerRepositoryInterface
             ->orderBy('priority')
             ->orderBy('id')
             ->get();
+    }
+
+    public function getFirstActiveWithNonAgentCredentials(): ?VicidialServer
+    {
+        return VicidialServer::query()
+            ->where('is_active', true)
+            ->whereNotNull('api_user')
+            ->where('api_user', '!=', '')
+            ->whereNotNull('api_pass')
+            ->where('api_pass', '!=', '')
+            ->orderByDesc('priority')
+            ->orderBy('id')
+            ->first();
+    }
+
+    public function getFirstActiveWithDatabaseCredentials(): ?VicidialServer
+    {
+        return VicidialServer::query()
+            ->where('is_active', true)
+            ->whereNotNull('db_host')
+            ->where('db_host', '!=', '')
+            ->whereNotNull('db_username')
+            ->where('db_username', '!=', '')
+            ->orderByDesc('priority')
+            ->orderBy('id')
+            ->first();
     }
 }

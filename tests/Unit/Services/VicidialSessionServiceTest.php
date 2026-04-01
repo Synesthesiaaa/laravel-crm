@@ -18,23 +18,26 @@ class VicidialSessionServiceTest extends TestCase
     use RefreshDatabase;
 
     private VicidialProxyService $agentApiMock;
+
     private VicidialNonAgentApiService $nonAgentApiMock;
+
     private VicidialSessionService $service;
+
     private User $user;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->agentApiMock    = Mockery::mock(VicidialProxyService::class);
+        $this->agentApiMock = Mockery::mock(VicidialProxyService::class);
         $this->nonAgentApiMock = Mockery::mock(VicidialNonAgentApiService::class);
-        $this->service         = new VicidialSessionService($this->agentApiMock, $this->nonAgentApiMock);
+        $this->service = new VicidialSessionService($this->agentApiMock, $this->nonAgentApiMock);
 
         $this->user = User::factory()->create([
-            'role'         => 'Agent',
-            'vici_user'    => 'testagent',
-            'vici_pass'    => 'testpass',
-            'extension'    => '6001',
+            'role' => 'Agent',
+            'vici_user' => 'testagent',
+            'vici_pass' => 'testpass',
+            'extension' => '6001',
             'sip_password' => 'sippass',
         ]);
     }
@@ -60,7 +63,7 @@ class VicidialSessionServiceTest extends TestCase
     public function test_login_fails_when_phone_login_missing(): void
     {
         $user = User::factory()->create([
-            'role'      => 'Agent',
+            'role' => 'Agent',
             'vici_user' => 'agentx',
             'vici_pass' => 'passx',
             'extension' => null,
@@ -79,9 +82,9 @@ class VicidialSessionServiceTest extends TestCase
             ->once()
             ->with($this->user, 'testcamp', 'login', Mockery::any())
             ->andReturn([
-                'success'      => false,
+                'success' => false,
                 'raw_response' => 'ERROR: INVALID USERNAME/PASSWORD',
-                'message'      => 'VICIdial credentials were rejected.',
+                'message' => 'VICIdial credentials were rejected.',
             ]);
 
         $result = $this->service->loginAgent($this->user, 'testcamp');
@@ -89,7 +92,7 @@ class VicidialSessionServiceTest extends TestCase
         $this->assertFalse($result->success);
         $this->assertStringContainsStringIgnoringCase('rejected', $result->message);
         $this->assertDatabaseHas('vicidial_agent_sessions', [
-            'user_id'        => $this->user->id,
+            'user_id' => $this->user->id,
             'session_status' => 'login_failed',
         ]);
     }
@@ -101,16 +104,16 @@ class VicidialSessionServiceTest extends TestCase
             ->once()
             ->with($this->user, 'testcamp', 'login', Mockery::any())
             ->andReturn([
-                'success'      => true,
+                'success' => true,
                 'raw_response' => 'SUCCESS: agent logged in',
-                'message'      => null,
+                'message' => null,
             ]);
 
         VicidialServer::factory()->create([
             'campaign_code' => 'testcamp',
-            'api_url'       => 'https://vici.example.com/agc/api.php',
-            'is_active'     => true,
-            'is_default'    => true,
+            'api_url' => 'https://vici.example.com/agc/api.php',
+            'is_active' => true,
+            'is_default' => true,
         ]);
 
         $this->nonAgentApiMock
@@ -122,8 +125,8 @@ class VicidialSessionServiceTest extends TestCase
         $this->assertTrue($result->success);
         // After login, session must be pending – not yet ready (needs iframe verification).
         $this->assertDatabaseHas('vicidial_agent_sessions', [
-            'user_id'        => $this->user->id,
-            'campaign_code'  => 'testcamp',
+            'user_id' => $this->user->id,
+            'campaign_code' => 'testcamp',
             'session_status' => 'login_pending',
         ]);
         // iframe_url must be present in data.
@@ -131,6 +134,11 @@ class VicidialSessionServiceTest extends TestCase
         $this->assertStringContainsString('phone_login=6001', $result->data['iframe_url']);
         $this->assertStringContainsString('VD_login=testagent', $result->data['iframe_url']);
         $this->assertStringContainsString('relogin=YES', $result->data['iframe_url']);
+        $this->assertDatabaseHas('vicidial_agent_sessions', [
+            'user_id' => $this->user->id,
+            'campaign_code' => 'testcamp',
+            'last_iframe_url' => $result->data['iframe_url'],
+        ]);
     }
 
     public function test_login_pending_when_api_unreachable(): void
@@ -140,9 +148,9 @@ class VicidialSessionServiceTest extends TestCase
             ->once()
             ->with($this->user, 'testcamp', 'login', Mockery::any())
             ->andReturn([
-                'success'      => false,
+                'success' => false,
                 'raw_response' => '',
-                'message'      => 'Connection timed out',
+                'message' => 'Connection timed out',
             ]);
 
         $this->nonAgentApiMock
@@ -154,18 +162,41 @@ class VicidialSessionServiceTest extends TestCase
         // Network errors must NOT hard-fail – iframe can still recover.
         $this->assertTrue($result->success);
         $this->assertDatabaseHas('vicidial_agent_sessions', [
-            'user_id'        => $this->user->id,
+            'user_id' => $this->user->id,
             'session_status' => 'login_pending',
         ]);
     }
 
     // ── verifyLogin ───────────────────────────────────────────────────────────
 
+    public function test_verify_login_iframe_agent_api_only_skips_non_agent_and_promotes(): void
+    {
+        config(['vicidial.session_iframe_agent_api_only' => true]);
+
+        VicidialAgentSession::factory()->create([
+            'user_id' => $this->user->id,
+            'campaign_code' => 'testcamp',
+            'session_status' => 'login_pending',
+        ]);
+
+        $this->nonAgentApiMock->shouldNotReceive('execute');
+
+        $result = $this->service->verifyLogin($this->user, 'testcamp');
+
+        $this->assertTrue($result->success);
+        $this->assertSame('ready', $result->data['login_state'] ?? '');
+        $this->assertTrue($result->data['iframe_trust_mode'] ?? false);
+        $this->assertDatabaseHas('vicidial_agent_sessions', [
+            'user_id' => $this->user->id,
+            'session_status' => 'ready',
+        ]);
+    }
+
     public function test_verify_login_marks_session_ready_when_agent_live(): void
     {
         VicidialAgentSession::factory()->create([
-            'user_id'        => $this->user->id,
-            'campaign_code'  => 'testcamp',
+            'user_id' => $this->user->id,
+            'campaign_code' => 'testcamp',
             'session_status' => 'login_pending',
         ]);
 
@@ -181,7 +212,7 @@ class VicidialSessionServiceTest extends TestCase
         $this->assertTrue($result->success);
         $this->assertEquals('ready', $result->data['login_state'] ?? '');
         $this->assertDatabaseHas('vicidial_agent_sessions', [
-            'user_id'        => $this->user->id,
+            'user_id' => $this->user->id,
             'session_status' => 'ready',
         ]);
     }
@@ -189,8 +220,8 @@ class VicidialSessionServiceTest extends TestCase
     public function test_verify_login_returns_failure_when_still_not_logged_in(): void
     {
         VicidialAgentSession::factory()->create([
-            'user_id'        => $this->user->id,
-            'campaign_code'  => 'testcamp',
+            'user_id' => $this->user->id,
+            'campaign_code' => 'testcamp',
             'session_status' => 'login_pending',
         ]);
 
@@ -202,7 +233,7 @@ class VicidialSessionServiceTest extends TestCase
 
         $this->assertFalse($result->success);
         $this->assertDatabaseHas('vicidial_agent_sessions', [
-            'user_id'        => $this->user->id,
+            'user_id' => $this->user->id,
             'session_status' => 'login_pending',
         ]);
     }
@@ -213,8 +244,8 @@ class VicidialSessionServiceTest extends TestCase
     {
         $server = VicidialServer::factory()->create([
             'campaign_code' => 'testcamp',
-            'api_url'       => 'https://vici.example.com/agc/api.php',
-            'is_active'     => true,
+            'api_url' => 'https://vici.example.com/agc/api.php',
+            'is_active' => true,
         ]);
 
         $this->nonAgentApiMock
@@ -263,7 +294,7 @@ class VicidialSessionServiceTest extends TestCase
 
         $this->assertTrue($result->success);
         $this->assertDatabaseHas('vicidial_agent_sessions', [
-            'user_id'        => $this->user->id,
+            'user_id' => $this->user->id,
             'session_status' => 'paused',
         ]);
     }
@@ -279,7 +310,7 @@ class VicidialSessionServiceTest extends TestCase
 
         $this->assertTrue($result->success);
         $this->assertDatabaseHas('vicidial_agent_sessions', [
-            'user_id'        => $this->user->id,
+            'user_id' => $this->user->id,
             'session_status' => 'ready',
         ]);
     }
@@ -336,9 +367,10 @@ class VicidialSessionServiceTest extends TestCase
     public function test_logout_agent_marks_session_logged_out(): void
     {
         VicidialAgentSession::factory()->create([
-            'user_id'        => $this->user->id,
-            'campaign_code'  => 'testcamp',
+            'user_id' => $this->user->id,
+            'campaign_code' => 'testcamp',
             'session_status' => 'ready',
+            'last_iframe_url' => 'https://vici.example.com/agc/vicidial.php?x=1',
         ]);
 
         $this->agentApiMock
@@ -351,8 +383,9 @@ class VicidialSessionServiceTest extends TestCase
 
         $this->assertTrue($result->success);
         $this->assertDatabaseHas('vicidial_agent_sessions', [
-            'user_id'        => $this->user->id,
+            'user_id' => $this->user->id,
             'session_status' => 'logged_out',
+            'last_iframe_url' => null,
         ]);
     }
 
@@ -367,7 +400,7 @@ class VicidialSessionServiceTest extends TestCase
 
         $this->assertTrue($result->success);
         $this->assertDatabaseHas('vicidial_agent_sessions', [
-            'user_id'        => $this->user->id,
+            'user_id' => $this->user->id,
             'session_status' => 'logged_out',
         ]);
     }

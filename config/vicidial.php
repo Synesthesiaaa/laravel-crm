@@ -49,6 +49,50 @@ return [
     */
     'pause_codes' => ['BREAK', 'LUNCH', 'MEET', 'COACH', 'SYSTEM'],
     'session_status_poll_seconds' => (int) env('VICI_SESSION_STATUS_POLL_SECONDS', 15),
+    'auto_bootstrap_on_crm_login' => env('VICI_AUTO_BOOTSTRAP', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Session: iframe + Agent API only (no Non-Agent for verify / status)
+    |--------------------------------------------------------------------------
+    | When true, the CRM does not call non_agent_api.php for session verify or
+    | for agent_status / agent_ingroup_info on GET session/status. The browser
+    | treats iframe load + one POST /verify as "ready" (verify promotes the local
+    | row without polling VICIdial live_agents). Queue count still uses Agent API.
+    | Reporting, leads, and other features keep using Non-Agent until migrated.
+    */
+    'session_iframe_agent_api_only' => env('VICI_SESSION_IFRAME_AGENT_API_ONLY', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Iframe-only mode: confirm live agent via Non-Agent agent_status when possible
+    |--------------------------------------------------------------------------
+    | When session_iframe_agent_api_only is true AND a vicidial_servers row exists for
+    | the campaign with non_agent_api access, POST /verify calls agent_status once.
+    | If VICIdial reports the agent is not in live_agents, verify fails (no false ready).
+    | If Non-Agent is unreachable or not configured, verify still promotes (trust iframe).
+    */
+    'session_iframe_confirm_non_agent_live' => env('VICI_SESSION_IFRAME_CONFIRM_NON_AGENT_LIVE', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Block outbound dial until CRM vicidial_agent_sessions is usable
+    |--------------------------------------------------------------------------
+    | When true, startOutboundCall requires session_status in ready, paused, or in_call for
+    | the same campaign (HTTP and PHPUnit). Artisan CLI skips this (e.g. telephony:smoke-dial).
+    | Set VICI_REQUIRE_VICIDIAL_SESSION_BEFORE_DIAL=false to disable the check entirely.
+    */
+    'require_vicidial_agent_session_before_dial' => env('VICI_REQUIRE_VICIDIAL_SESSION_BEFORE_DIAL', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Agent allowed campaigns (Non-Agent API agent_campaigns + DB fallback)
+    |--------------------------------------------------------------------------
+    | When true, GET /api/vicidial/session/agent-campaigns resolves campaigns the
+    | VICIdial user may log into (requires api_user/api_pass with permission, or
+    | MySQL access to vicidial_users / vicidial_campaigns).
+    */
+    'agent_campaigns_lookup_enabled' => env('VICI_AGENT_CAMPAIGNS_LOOKUP', true),
 
     /*
     |--------------------------------------------------------------------------

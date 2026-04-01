@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Hash;
 class UserService
 {
     public function __construct(
-        protected VicidialCredentialSyncService $credentialSync
+        protected VicidialCredentialSyncService $credentialSync,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -18,16 +18,22 @@ class UserService
     {
         $user = DB::transaction(function () use ($data): User {
             return User::create([
-                'username'     => $data['username'],
-                'name'         => $data['name'] ?? $data['full_name'] ?? $data['username'],
-                'full_name'    => $data['full_name'],
-                'email'        => $data['email'] ?? ($data['username'] . '@' . parse_url(config('app.url', 'http://localhost'), PHP_URL_HOST) ?: 'local'),
-                'password'     => Hash::make($data['password']),
-                'role'         => $data['role'],
-                'vici_user'    => $data['vici_user'] ?? null,
-                'vici_pass'    => $data['vici_pass'] ?? null,
-                'extension'    => $data['extension'] ?? null,
+                'username' => $data['username'],
+                'name' => $data['name'] ?? $data['full_name'] ?? $data['username'],
+                'full_name' => $data['full_name'],
+                'email' => $data['email'] ?? ($data['username'].'@'.parse_url(config('app.url', 'http://localhost'), PHP_URL_HOST) ?: 'local'),
+                'password' => Hash::make($data['password']),
+                'role' => $data['role'],
+                'vici_user' => $data['vici_user'] ?? null,
+                'vici_pass' => $data['vici_pass'] ?? null,
+                'extension' => $data['extension'] ?? null,
                 'sip_password' => $data['sip_password'] ?? null,
+                'default_campaign' => ! empty($data['default_campaign']) ? (string) $data['default_campaign'] : null,
+                'auto_vici_login' => (bool) ($data['auto_vici_login'] ?? false),
+                'default_blended' => (bool) ($data['default_blended'] ?? true),
+                'default_ingroups' => isset($data['default_ingroups']) && trim((string) $data['default_ingroups']) !== ''
+                    ? trim((string) $data['default_ingroups'])
+                    : null,
             ]);
         });
 
@@ -45,11 +51,17 @@ class UserService
     public function update(User $user, array $data): User
     {
         $user = DB::transaction(function () use ($user, $data): User {
-            $user->username  = $data['username'];
+            $user->username = $data['username'];
             $user->full_name = $data['full_name'];
-            $user->role      = $data['role'];
+            $user->role = $data['role'];
             $user->vici_user = $data['vici_user'] ?? null;
             $user->extension = $data['extension'] ?? null;
+            $user->default_campaign = ! empty($data['default_campaign']) ? (string) $data['default_campaign'] : null;
+            $user->auto_vici_login = (bool) ($data['auto_vici_login'] ?? false);
+            $user->default_blended = (bool) ($data['default_blended'] ?? true);
+            $user->default_ingroups = isset($data['default_ingroups']) && trim((string) $data['default_ingroups']) !== ''
+                ? trim((string) $data['default_ingroups'])
+                : null;
 
             if (! empty($data['vici_pass'])) {
                 $user->vici_pass = $data['vici_pass'];
@@ -61,6 +73,7 @@ class UserService
                 $user->password = Hash::make($data['password']);
             }
             $user->save();
+
             return $user;
         });
 
@@ -80,6 +93,7 @@ class UserService
             return false;
         }
         $user->delete();
+
         return true;
     }
 }
