@@ -134,6 +134,9 @@ class VicidialSessionServiceTest extends TestCase
         $this->assertStringContainsString('phone_login=6001', $result->data['iframe_url']);
         $this->assertStringContainsString('VD_login=testagent', $result->data['iframe_url']);
         $this->assertStringContainsString('relogin=YES', $result->data['iframe_url']);
+        $this->assertSame('testagent', $result->data['iframe_alignment']['vd_login'] ?? null);
+        $this->assertSame('testcamp', $result->data['iframe_alignment']['vd_campaign'] ?? null);
+        $this->assertSame('6001', $result->data['iframe_alignment']['phone_login'] ?? null);
         $this->assertDatabaseHas('vicidial_agent_sessions', [
             'user_id' => $this->user->id,
             'campaign_code' => 'testcamp',
@@ -179,6 +182,10 @@ class VicidialSessionServiceTest extends TestCase
             'session_status' => 'login_pending',
         ]);
 
+        $this->nonAgentApiMock
+            ->shouldReceive('getServerForCampaign')
+            ->with('testcamp')
+            ->andReturn(null);
         $this->nonAgentApiMock->shouldNotReceive('execute');
 
         $result = $this->service->verifyLogin($this->user, 'testcamp');
@@ -186,6 +193,33 @@ class VicidialSessionServiceTest extends TestCase
         $this->assertTrue($result->success);
         $this->assertSame('ready', $result->data['login_state'] ?? '');
         $this->assertTrue($result->data['iframe_trust_mode'] ?? false);
+        $this->assertFalse($result->data['non_agent_live_check_skipped'] ?? true);
+        $this->assertDatabaseHas('vicidial_agent_sessions', [
+            'user_id' => $this->user->id,
+            'session_status' => 'ready',
+        ]);
+    }
+
+    public function test_verify_login_iframe_skips_non_agent_when_skip_config_enabled(): void
+    {
+        config(['vicidial.session_iframe_agent_api_only' => true]);
+        config(['vicidial.session_iframe_confirm_non_agent_live' => true]);
+        config(['vicidial.session_iframe_skip_non_agent_live_check' => true]);
+
+        VicidialAgentSession::factory()->create([
+            'user_id' => $this->user->id,
+            'campaign_code' => 'testcamp',
+            'session_status' => 'login_pending',
+        ]);
+
+        $this->nonAgentApiMock->shouldNotReceive('getServerForCampaign');
+        $this->nonAgentApiMock->shouldNotReceive('execute');
+
+        $result = $this->service->verifyLogin($this->user, 'testcamp');
+
+        $this->assertTrue($result->success);
+        $this->assertTrue($result->data['non_agent_live_check_skipped'] ?? false);
+        $this->assertStringContainsString('skipped', strtolower($result->message ?? ''));
         $this->assertDatabaseHas('vicidial_agent_sessions', [
             'user_id' => $this->user->id,
             'session_status' => 'ready',
@@ -278,6 +312,69 @@ class VicidialSessionServiceTest extends TestCase
         $url = $this->service->buildIframeUrl($this->user, 'testcamp', '6001', 'sippass');
 
         $this->assertNull($url);
+    }
+
+    public function test_resolve_effective_phone_credentials_prefers_explicit_values(): void
+    {
+        $creds = $this->service->resolveEffectivePhoneCredentials($this->user, '7000', 'custompass');
+
+        $this->assertSame('7000', $creds['phone_login']);
+        $this->assertSame('custompass', $creds['phone_pass']);
+    }
+
+    public function test_resolve_effective_phone_credentials_falls_back_to_user_extension_and_sip(): void
+    {
+        $creds = $this->service->resolveEffectivePhoneCredentials($this->user, null, null);
+
+        $this->assertSame('6001', $creds['phone_login']);
+        $this->assertSame('sippass', $creds['phone_pass']);
+    }
+
+    public function test_get_aligned_iframe_url_matches_login_without_phone_overrides(): void
+    {
+        VicidialAgentSession::factory()->create([
+            'user_id' => $this->user->id,
+            'campaign_code' => 'testcamp',
+            'phone_login' => '6001',
+            'session_status' => 'login_pending',
+        ]);
+
+        $server = VicidialServer::factory()->create([
+            'campaign_code' => 'testcamp',
+            'api_url' => 'https://vici.example.com/agc/api.php',
+            'is_active' => true,
+        ]);
+
+        $this->nonAgentApiMock
+            ->shouldReceive('getServerForCampaign')
+            ->with('testcamp')
+            ->andReturn($server);
+
+        $fromHelper = $this->service->getAlignedIframeUrlForCampaign($this->user, 'testcamp');
+        $fromBuild = $this->service->buildIframeUrl($this->user, 'testcamp', '6001', 'sippass');
+
+        $this->assertNotNull($fromHelper);
+        $this->assertSame($fromBuild, $fromHelper);
+    }
+
+    public function test_get_aligned_iframe_url_returns_null_without_phone_login(): void
+    {
+        $userNoExt = User::factory()->create([
+            'role' => 'Agent',
+            'vici_user' => 'x',
+            'vici_pass' => 'y',
+            'extension' => null,
+            'sip_password' => 'z',
+        ]);
+
+        VicidialAgentSession::factory()->create([
+            'user_id' => $userNoExt->id,
+            'campaign_code' => 'testcamp',
+            'phone_login' => null,
+            'session_status' => 'login_pending',
+        ]);
+
+        $this->assertNull($this->service->getAlignedIframeUrlForCampaign($userNoExt, 'testcamp'));
     }
 
     // ── pauseAgent ────────────────────────────────────────────────────────────

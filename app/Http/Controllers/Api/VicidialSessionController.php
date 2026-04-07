@@ -52,6 +52,40 @@ class VicidialSessionController extends Controller
     }
 
     /**
+     * Rebuild vicidial.php URL from the current CRM user (VD_login/VD_pass) and session phone_login
+     * plus sip_password — same alignment as POST /session/login without overriding phone fields.
+     */
+    public function iframeUrl(Request $request, VicidialSessionService $service): JsonResponse
+    {
+        $validated = $request->validate([
+            'campaign' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $campaign = $validated['campaign'] ?? $request->session()->get('campaign', 'mbsales');
+        $user = $request->user();
+        $session = $service->getLocalSession($user, $campaign);
+        $creds = $service->resolveEffectivePhoneCredentials($user, $session->phone_login, null);
+        $iframeUrl = $service->getAlignedIframeUrlForCampaign($user, $campaign);
+
+        if ($iframeUrl === null || $iframeUrl === '') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Could not build VICIdial iframe URL. Check campaign server configuration, vici_user/vici_pass, and phone login.',
+                'iframe_url' => null,
+                'vd_login' => (string) ($user->vici_user ?? ''),
+                'phone_login' => $creds['phone_login'],
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'iframe_url' => $iframeUrl,
+            'vd_login' => (string) $user->vici_user,
+            'phone_login' => $creds['phone_login'],
+        ]);
+    }
+
+    /**
      * Called by the frontend (after iframe loads) to verify the VICIdial session
      * is actually live in vicidial_live_agents. Returns `login_state: ready` on success
      * or `login_state: login_pending` if not yet usable.

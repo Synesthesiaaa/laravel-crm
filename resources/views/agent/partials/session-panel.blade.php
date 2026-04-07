@@ -21,10 +21,14 @@
         </span>
     </div>
 
-    @if(config('vicidial.session_iframe_agent_api_only') && ! config('vicidial.session_iframe_confirm_non_agent_live'))
+    @if(config('vicidial.session_iframe_agent_api_only') && (! config('vicidial.session_iframe_confirm_non_agent_live') || config('vicidial.session_iframe_skip_non_agent_live_check')))
         <p class="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 leading-snug">
-            Iframe-only mode without Non-Agent confirmation: the CRM may show Online before VICIdial has a live agent. Enable
-            <span class="font-mono text-[10px]">VICI_SESSION_IFRAME_CONFIRM_NON_AGENT_LIVE</span> or turn off iframe-only mode.
+            @if(config('vicidial.session_iframe_skip_non_agent_live_check'))
+                Non-Agent live check is skipped in this environment (<span class="font-mono text-[10px]">VICI_SESSION_SKIP_NON_AGENT_LIVE_CHECK</span>). The CRM may show Online before VICIdial lists a live agent.
+            @else
+                Iframe-only mode without Non-Agent confirmation: the CRM may show Online before VICIdial has a live agent. Enable
+                <span class="font-mono text-[10px]">VICI_SESSION_IFRAME_CONFIRM_NON_AGENT_LIVE</span> or turn off iframe-only mode.
+            @endif
         </p>
     @elseif(config('vicidial.session_iframe_agent_api_only'))
         <p class="text-[11px] text-[var(--color-on-surface-dim)] leading-snug">
@@ -68,6 +72,12 @@
             <input type="password" class="form-input" x-model="vici.phone_pass" placeholder="SIP password"
                    :disabled="['requesting','iframe_loading','syncing'].includes(vici.phase)" />
         </div>
+        <p class="text-[10px] text-[var(--color-on-surface-dim)] leading-relaxed col-span-2 mt-1">
+            <span class="font-medium text-[var(--color-on-surface)]">Identity:</span>
+            CRM <code class="text-[10px]">vici_user</code> / <code class="text-[10px]">vici_pass</code> must match VICIdial VD_login / VD_pass.
+            <strong>Phone Login</strong> must match your dialer extension (phone_login).
+            <strong>Login campaign</strong> above must match the campaign you open in the iframe (VD_campaign).
+        </p>
     </div>
 
     {{-- Phase-aware progress text --}}
@@ -107,6 +117,20 @@
                 :disabled="vici.loading || !$store.vicidial.loggedIn">
             <x-icon name="arrow-right-on-rectangle" class="w-3.5 h-3.5" /> Logout
         </button>
+    </div>
+
+    {{-- Re-open hint: shown after login so agent can reopen the VICIdial window if they closed it --}}
+    <div x-show="vici.phase === 'ready' || vici.phase === 'syncing' || vici.phase === 'iframe_loading'"
+         x-transition class="space-y-1.5">
+        <button class="btn-ghost text-xs w-full flex items-center gap-1.5 justify-center border border-[var(--color-border)] rounded-lg py-1.5"
+                @click="viciPopout()"
+                title="Re-open the VICIdial window if you closed it">
+            <x-icon name="arrow-top-right-on-square" class="w-3.5 h-3.5" />
+            Re-open VICIdial window
+        </button>
+        <p class="text-[10px] text-[var(--color-on-surface-dim)] leading-snug text-center">
+            VICIdial opens automatically on Login. Click above if you accidentally closed it.
+        </p>
     </div>
 
     <div class="form-field">

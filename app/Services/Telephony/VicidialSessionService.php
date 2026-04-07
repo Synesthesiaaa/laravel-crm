@@ -27,6 +27,94 @@ class VicidialSessionService
         protected VicidialNonAgentApiService $nonAgentApi,
     ) {}
 
+    /**
+     * Same rules for Agent API login, iframe vicidial.php, and reconnect:
+     * phone_login from request/session row, else user extension; phone_pass from request, else sip_password.
+     *
+     * @return array{phone_login: string, phone_pass: string}
+     */
+    public function resolveEffectivePhoneCredentials(User $user, ?string $phoneLogin, ?string $phonePass): array
+    {
+        $effectivePhoneLogin = ($phoneLogin !== null && trim((string) $phoneLogin) !== '')
+            ? trim((string) $phoneLogin)
+            : (string) ($user->extension ?? '');
+        $effectivePhonePass = ($phonePass !== null && (string) $phonePass !== '')
+            ? (string) $phonePass
+            : (string) ($user->sip_password ?? '');
+
+        return [
+            'phone_login' => $effectivePhoneLogin,
+            'phone_pass' => $effectivePhonePass,
+        ];
+    }
+
+    /**
+     * Rebuild vicidial.php URL using current CRM user (VD_login/VD_pass) and session-stored phone_login
+     * (same alignment as loginAgent when the form is not overriding phone fields).
+     */
+    public function getAlignedIframeUrlForCampaign(User $user, string $campaign): ?string
+    {
+        if (empty($user->vici_user) || empty($user->vici_pass)) {
+            return null;
+        }
+
+        $session = $this->getOrCreateSession($user, $campaign);
+        $creds = $this->resolveEffectivePhoneCredentials($user, $session->phone_login, null);
+
+        if ($creds['phone_login'] === '') {
+            return null;
+        }
+
+        return $this->buildIframeUrl($user, $campaign, $creds['phone_login'], $creds['phone_pass']);
+    }
+
+    /**
+     * User-facing copy when Non-Agent agent_status says the agent is not in live_agents.
+     */
+    protected function liveAgentMismatchMessage(User $user, string $campaign, VicidialAgentSession $session): string
+    {
+        $vu = (string) ($user->vici_user ?? '');
+        $pl = (string) ($session->phone_login ?? '');
+
+        return 'VICIdial does not report a live agent for agent_user «'.$vu.'» on campaign «'.$campaign.'» '.
+            '(session phone_login: «'.$pl.'»). '.
+            'Align VD_login with CRM vici_user, Phone Login with your VICIdial extension, '.
+            'finish logging in on the hidden iframe for this campaign, then verify again.';
+    }
+
+    /**
+     * Structured hints for the API / UI (no secrets).
+     *
+     * @return array<string, mixed>
+     */
+    /**
+     * Non-Agent agent_status confirmation on verify (iframe-only mode only).
+     */
+    protected function shouldConfirmNonAgentLiveOnVerify(): bool
+    {
+        return config('vicidial.session_iframe_confirm_non_agent_live', true)
+            && ! config('vicidial.session_iframe_skip_non_agent_live_check', false);
+    }
+
+    protected function liveAgentMismatchPayload(User $user, string $campaign, VicidialAgentSession $session): array
+    {
+        return [
+            'login_state' => 'login_pending',
+            'stop_verify_poll' => true,
+            'vicidial_context' => [
+                'campaign' => $campaign,
+                'crm_vici_user' => (string) ($user->vici_user ?? ''),
+                'phone_login' => (string) ($session->phone_login ?? ''),
+                'checks' => [
+                    'VD_login / VD_pass on the iframe must match CRM fields vici_user / vici_pass.',
+                    'Phone Login (extension) must match the station VICIdial expects for this user.',
+                    'VD_campaign must be this campaign — use Login campaign on the agent screen if needed.',
+                    'In VICIdial, confirm this agent appears under Live agents for this campaign.',
+                ],
+            ],
+        ];
+    }
+
     public function loginAgent(
         User $user,
         string $campaign,
@@ -42,10 +130,9 @@ class VicidialSessionService
             );
         }
 
-        // Resolve effective phone login (must come from session-panel form or user.extension).
-        // Never fall back to vici_user – it is not a phones.login value.
-        $effectivePhoneLogin = $phoneLogin ?: (string) ($user->extension ?? '');
-        $effectivePhonePass = $phonePass ?: (string) ($user->sip_password ?? '');
+        $creds = $this->resolveEffectivePhoneCredentials($user, $phoneLogin, $phonePass);
+        $effectivePhoneLogin = $creds['phone_login'];
+        $effectivePhonePass = $creds['phone_pass'];
 
         if ($effectivePhoneLogin === '') {
             return OperationResult::failure(
@@ -100,7 +187,7 @@ class VicidialSessionService
             // Network/server errors – mark pending so iframe can still recover.
         }
 
-        // Build canonical auto-login URL for the frontend iframe.
+        // Iframe uses the same VD_login/VD_pass (user) + phone_login/phone_pass as Agent API login above.
         $iframeUrl = $this->buildIframeUrl($user, $campaign, $effectivePhoneLogin, $effectivePhonePass);
 
         if ($iframeUrl !== null && $iframeUrl !== '') {
@@ -112,6 +199,11 @@ class VicidialSessionService
             'iframe_url' => $iframeUrl,
             'login_state' => 'login_pending',
             'vici_login_raw' => $loginResult['raw_response'] ?? null,
+            'iframe_alignment' => [
+                'vd_login' => (string) $user->vici_user,
+                'vd_campaign' => $campaign,
+                'phone_login' => $effectivePhoneLogin,
+            ],
         ], 'VICIdial login initiated. Awaiting session confirmation.');
     }
 
@@ -130,7 +222,7 @@ class VicidialSessionService
                 );
             }
 
-            if (config('vicidial.session_iframe_confirm_non_agent_live', true)) {
+            if ($this->shouldConfirmNonAgentLiveOnVerify()) {
                 $server = $this->nonAgentApi->getServerForCampaign($campaign);
                 if ($server !== null) {
                     $naResult = $this->nonAgentApi->execute($user, $campaign, 'agent_status', [
@@ -152,8 +244,8 @@ class VicidialSessionService
                             ]);
 
                             return OperationResult::failure(
-                                'VICIdial does not show a live agent for this campaign. Confirm VD_login matches vici_user, '.
-                                'Phone Login matches your extension, and finish logging in on the iframe.',
+                                $this->liveAgentMismatchMessage($user, $campaign, $session),
+                                $this->liveAgentMismatchPayload($user, $campaign, $session),
                             );
                         }
 
@@ -177,8 +269,8 @@ class VicidialSessionService
                         ]);
 
                         return OperationResult::failure(
-                            'VICIdial does not show a live agent for this campaign. Confirm VD_login matches vici_user, '.
-                            'Phone Login matches your extension, and finish logging in on the iframe.',
+                            $this->liveAgentMismatchMessage($user, $campaign, $session),
+                            $this->liveAgentMismatchPayload($user, $campaign, $session),
                         );
                     }
                 }
@@ -191,11 +283,17 @@ class VicidialSessionService
                 ]);
             }
 
+            $skippedByConfig = config('vicidial.session_iframe_skip_non_agent_live_check', false);
+            $message = $skippedByConfig
+                ? 'Session marked ready (Non-Agent live check skipped for this environment — enable VICI_SESSION_SKIP_NON_AGENT_LIVE_CHECK=false to require live_agents confirmation).'
+                : 'Session marked ready (iframe + Agent API; Non-Agent unavailable or skipped — confirm login on the iframe).';
+
             return OperationResult::success([
                 'session' => $session->fresh(),
                 'login_state' => 'ready',
                 'iframe_trust_mode' => true,
-            ], 'Session marked ready (iframe + Agent API; Non-Agent unavailable or skipped — confirm login on the iframe).');
+                'non_agent_live_check_skipped' => $skippedByConfig,
+            ], $message);
         }
 
         for ($i = 0; $i < self::VERIFY_ATTEMPTS; $i++) {

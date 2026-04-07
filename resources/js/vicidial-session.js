@@ -78,6 +78,14 @@ async function pollVerify(campaign, ctx = null, maxAttempts = DEFAULT_VERIFY_MAX
 
         try {
             const res = await window.axios.post('/api/vicidial/session/verify', { campaign });
+            if (res.data?.success === false && res.data?.data?.stop_verify_poll) {
+                cancelVerify(ctx);
+                phaseSet(ctx, 'failed');
+                loadingSet(ctx, false);
+                state.inflight = false;
+                window.Alpine.store('toast').error(res.data?.message || 'VICIdial verify failed.');
+                return;
+            }
             const loginState = res.data?.login_state;
             if (loginState === 'ready') {
                 cancelVerify(ctx);
@@ -114,9 +122,17 @@ async function verifyOnceAfterIframeLoad(campaign, ctx = null) {
 
     try {
         const res = await window.axios.post('/api/vicidial/session/verify', { campaign: effectiveCampaign });
-        const loginState = res.data?.login_state;
         cancelVerify(ctx);
 
+        if (res.data?.success === false && res.data?.data?.stop_verify_poll) {
+            phaseSet(ctx, 'failed');
+            loadingSet(ctx, false);
+            state.inflight = false;
+            window.Alpine.store('toast').error(res.data?.message || 'VICIdial verify failed.');
+            return;
+        }
+
+        const loginState = res.data?.login_state;
         if (loginState === 'ready') {
             phaseSet(ctx, 'ready');
             loadingSet(ctx, false);
@@ -173,7 +189,21 @@ async function maybeReconnectPending(localSession, campaign, ctx = null) {
     if (!localSession || localSession.session_status !== 'login_pending') {
         return false;
     }
-    const url = localSession.last_iframe_url;
+
+    let url = null;
+    try {
+        const res = await window.axios.get('/api/vicidial/session/iframe-url', {
+            params: { campaign: effectiveCampaign },
+        });
+        if (res.data?.success && res.data?.iframe_url) {
+            url = res.data.iframe_url;
+        }
+    } catch (_) {
+        // Fall back to stored URL below.
+    }
+    if (!url) {
+        url = localSession.last_iframe_url;
+    }
     if (!url || typeof url !== 'string') {
         return false;
     }

@@ -185,6 +185,56 @@ class VicidialSessionApiTest extends TestCase
             ->assertJsonStructure(['success', 'message', 'iframe_url', 'login_state', 'data']);
     }
 
+    // ── GET /api/vicidial/session/iframe-url ──────────────────────────────────
+
+    public function test_iframe_url_requires_auth(): void
+    {
+        $this->getJson('/api/vicidial/session/iframe-url?campaign=testcamp')
+            ->assertUnauthorized();
+    }
+
+    public function test_iframe_url_returns_aligned_url(): void
+    {
+        $this->mockNonAgentApiWithServer(true);
+        VicidialAgentSession::factory()->create([
+            'user_id' => $this->agent->id,
+            'campaign_code' => 'testcamp',
+            'session_status' => 'login_pending',
+            'phone_login' => '6001',
+        ]);
+
+        $response = $this->actingAs($this->agent)
+            ->withSession($this->campaignSession())
+            ->getJson('/api/vicidial/session/iframe-url?campaign=testcamp');
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('vd_login', 'testagent')
+            ->assertJsonPath('phone_login', '6001');
+
+        $url = $response->json('iframe_url');
+        $this->assertNotNull($url);
+        $this->assertStringContainsString('VD_login=testagent', $url);
+        $this->assertStringContainsString('phone_login=6001', $url);
+    }
+
+    public function test_iframe_url_returns_422_when_no_server(): void
+    {
+        $this->mockNonAgentApi();
+        VicidialAgentSession::factory()->create([
+            'user_id' => $this->agent->id,
+            'campaign_code' => 'testcamp',
+            'session_status' => 'login_pending',
+            'phone_login' => '6001',
+        ]);
+
+        $this->actingAs($this->agent)
+            ->withSession($this->campaignSession())
+            ->getJson('/api/vicidial/session/iframe-url?campaign=testcamp')
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false);
+    }
+
     // ── POST /api/vicidial/session/verify ─────────────────────────────────────
 
     public function test_verify_requires_auth(): void
@@ -276,6 +326,7 @@ class VicidialSessionApiTest extends TestCase
     {
         config(['vicidial.session_iframe_agent_api_only' => true]);
         config(['vicidial.session_iframe_confirm_non_agent_live' => true]);
+        config(['vicidial.session_iframe_skip_non_agent_live_check' => false]);
 
         $server = VicidialServer::factory()->create([
             'campaign_code' => 'testcamp',
@@ -295,20 +346,49 @@ class VicidialSessionApiTest extends TestCase
         $mock = Mockery::mock(VicidialNonAgentApiService::class);
         $mock->shouldReceive('getServerForCampaign')->with('testcamp')->andReturn($server);
         $mock->shouldReceive('execute')->andReturn(
-            OperationResult::failure('ERROR: agent_status AGENT NOT LOGGED IN: 1|1')
+            OperationResult::failure('ERROR: agent_status AGENT NOT LOGGED IN: 1|1'),
         );
         $this->instance(VicidialNonAgentApiService::class, $mock);
 
-        $this->actingAs($this->agent)
+        $response = $this->actingAs($this->agent)
             ->withSession($this->campaignSession())
             ->postJson('/api/vicidial/session/verify', ['campaign' => 'testcamp'])
             ->assertStatus(202)
-            ->assertJsonPath('success', false);
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('data.stop_verify_poll', true);
+
+        $this->assertStringContainsString('testcamp', (string) $response->json('message'));
+        $this->assertStringContainsString('testagent', (string) $response->json('message'));
 
         $this->assertDatabaseHas('vicidial_agent_sessions', [
             'user_id' => $this->agent->id,
             'session_status' => 'login_pending',
         ]);
+    }
+
+    public function test_verify_iframe_skips_non_agent_when_skip_config_enabled(): void
+    {
+        config(['vicidial.session_iframe_agent_api_only' => true]);
+        config(['vicidial.session_iframe_confirm_non_agent_live' => true]);
+        config(['vicidial.session_iframe_skip_non_agent_live_check' => true]);
+
+        VicidialAgentSession::factory()->create([
+            'user_id' => $this->agent->id,
+            'campaign_code' => 'testcamp',
+            'session_status' => 'login_pending',
+        ]);
+
+        $mock = Mockery::mock(VicidialNonAgentApiService::class);
+        $mock->shouldNotReceive('execute');
+        $mock->shouldNotReceive('getServerForCampaign');
+        $this->instance(VicidialNonAgentApiService::class, $mock);
+
+        $this->actingAs($this->agent)
+            ->withSession($this->campaignSession())
+            ->postJson('/api/vicidial/session/verify', ['campaign' => 'testcamp'])
+            ->assertOk()
+            ->assertJsonPath('data.non_agent_live_check_skipped', true)
+            ->assertJsonPath('login_state', 'ready');
     }
 
     // ── POST /api/vicidial/session/pause ──────────────────────────────────────

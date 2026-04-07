@@ -76,6 +76,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Skip Non-Agent live_agents check on verify (local / explicit override)
+    |--------------------------------------------------------------------------
+    | When true, POST /verify never calls Non-Agent agent_status in iframe-only mode;
+    | session is promoted like when Non-Agent is unavailable (trust iframe).
+    | Default: true when APP_ENV is local or development; otherwise false. Set
+    | VICI_SESSION_SKIP_NON_AGENT_LIVE_CHECK=true|false to override any environment.
+    */
+    'session_iframe_skip_non_agent_live_check' => env('VICI_SESSION_SKIP_NON_AGENT_LIVE_CHECK') !== null
+        ? filter_var(env('VICI_SESSION_SKIP_NON_AGENT_LIVE_CHECK'), FILTER_VALIDATE_BOOLEAN)
+        : in_array(env('APP_ENV', 'production'), ['local', 'development'], true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Block outbound dial until CRM vicidial_agent_sessions is usable
     |--------------------------------------------------------------------------
     | When true, startOutboundCall requires session_status in ready, paused, or in_call for
