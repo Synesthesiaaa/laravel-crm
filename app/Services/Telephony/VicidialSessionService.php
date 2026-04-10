@@ -49,12 +49,34 @@ class VicidialSessionService
     }
 
     /**
+     * Same rules for VD credentials used by Agent API and iframe URL:
+     * vd_login/vd_pass from request override, else CRM user vici_user/vici_pass.
+     *
+     * @return array{vd_login: string, vd_pass: string}
+     */
+    public function resolveEffectiveVdCredentials(User $user, ?string $vdLogin, ?string $vdPass): array
+    {
+        $effectiveVdLogin = ($vdLogin !== null && trim((string) $vdLogin) !== '')
+            ? trim((string) $vdLogin)
+            : (string) ($user->vici_user ?? '');
+        $effectiveVdPass = ($vdPass !== null && (string) $vdPass !== '')
+            ? (string) $vdPass
+            : (string) ($user->vici_pass ?? '');
+
+        return [
+            'vd_login' => $effectiveVdLogin,
+            'vd_pass' => $effectiveVdPass,
+        ];
+    }
+
+    /**
      * Rebuild vicidial.php URL using current CRM user (VD_login/VD_pass) and session-stored phone_login
      * (same alignment as loginAgent when the form is not overriding phone fields).
      */
     public function getAlignedIframeUrlForCampaign(User $user, string $campaign): ?string
     {
-        if (empty($user->vici_user) || empty($user->vici_pass)) {
+        $vd = $this->resolveEffectiveVdCredentials($user, null, null);
+        if ($vd['vd_login'] === '' || $vd['vd_pass'] === '') {
             return null;
         }
 
@@ -65,7 +87,14 @@ class VicidialSessionService
             return null;
         }
 
-        return $this->buildIframeUrl($user, $campaign, $creds['phone_login'], $creds['phone_pass']);
+        return $this->buildIframeUrl(
+            $user,
+            $campaign,
+            $creds['phone_login'],
+            $creds['phone_pass'],
+            $vd['vd_login'],
+            $vd['vd_pass'],
+        );
     }
 
     /**
@@ -78,7 +107,7 @@ class VicidialSessionService
 
         return 'VICIdial does not report a live agent for agent_user «'.$vu.'» on campaign «'.$campaign.'» '.
             '(session phone_login: «'.$pl.'»). '.
-            'Align VD_login with CRM vici_user, Phone Login with your VICIdial extension, '.
+            'Align VD_login (widget or CRM profile) and Phone Login with your VICIdial extension, '.
             'finish logging in on the hidden iframe for this campaign, then verify again.';
     }
 
@@ -100,7 +129,7 @@ class VicidialSessionService
     {
         return [
             'login_state' => 'login_pending',
-            'stop_verify_poll' => true,
+            'stop_verify_poll' => false,
             'vicidial_context' => [
                 'campaign' => $campaign,
                 'crm_vici_user' => (string) ($user->vici_user ?? ''),
@@ -122,9 +151,12 @@ class VicidialSessionService
         ?string $phonePass = null,
         bool $blended = true,
         array $ingroups = [],
+        ?string $vdLoginOverride = null,
+        ?string $vdPassOverride = null,
     ): OperationResult {
         // Validate VICIdial credentials are present.
-        if (empty($user->vici_user) || empty($user->vici_pass)) {
+        $vd = $this->resolveEffectiveVdCredentials($user, $vdLoginOverride, $vdPassOverride);
+        if ($vd['vd_login'] === '' || $vd['vd_pass'] === '') {
             return OperationResult::failure(
                 'ViciDial credentials are not set for your account. Contact your administrator.',
             );
@@ -156,6 +188,10 @@ class VicidialSessionService
         // via the browser iframe pointing at vicidial.php.
         $loginResult = $this->agentApi->execute($user, $campaign, 'login', [
             'value' => $campaign,
+            'credentials' => [
+                'vici_user' => $vd['vd_login'],
+                'vici_pass' => $vd['vd_pass'],
+            ],
             'query' => array_filter([
                 'phone_login' => $effectivePhoneLogin,
                 'phone_pass' => $effectivePhonePass,
@@ -188,7 +224,14 @@ class VicidialSessionService
         }
 
         // Iframe uses the same VD_login/VD_pass (user) + phone_login/phone_pass as Agent API login above.
-        $iframeUrl = $this->buildIframeUrl($user, $campaign, $effectivePhoneLogin, $effectivePhonePass);
+        $iframeUrl = $this->buildIframeUrl(
+            $user,
+            $campaign,
+            $effectivePhoneLogin,
+            $effectivePhonePass,
+            $vd['vd_login'],
+            $vd['vd_pass'],
+        );
 
         if ($iframeUrl !== null && $iframeUrl !== '') {
             $session->update(['last_iframe_url' => $iframeUrl]);
@@ -200,7 +243,7 @@ class VicidialSessionService
             'login_state' => 'login_pending',
             'vici_login_raw' => $loginResult['raw_response'] ?? null,
             'iframe_alignment' => [
-                'vd_login' => (string) $user->vici_user,
+                'vd_login' => $vd['vd_login'],
                 'vd_campaign' => $campaign,
                 'phone_login' => $effectivePhoneLogin,
             ],
@@ -243,9 +286,12 @@ class VicidialSessionService
                                 'last_synced_at' => now(),
                             ]);
 
-                            return OperationResult::failure(
+                            return OperationResult::success(
+                                array_merge(
+                                    $this->liveAgentMismatchPayload($user, $campaign, $session),
+                                    ['login_state' => 'login_pending']
+                                ),
                                 $this->liveAgentMismatchMessage($user, $campaign, $session),
-                                $this->liveAgentMismatchPayload($user, $campaign, $session),
                             );
                         }
 
@@ -268,9 +314,12 @@ class VicidialSessionService
                             'last_synced_at' => now(),
                         ]);
 
-                        return OperationResult::failure(
+                        return OperationResult::success(
+                            array_merge(
+                                $this->liveAgentMismatchPayload($user, $campaign, $session),
+                                ['login_state' => 'login_pending']
+                            ),
                             $this->liveAgentMismatchMessage($user, $campaign, $session),
-                            $this->liveAgentMismatchPayload($user, $campaign, $session),
                         );
                     }
                 }
@@ -520,6 +569,8 @@ class VicidialSessionService
         string $campaign,
         string $phoneLogin,
         string $phonePass,
+        ?string $vdLogin = null,
+        ?string $vdPass = null,
     ): ?string {
         // Resolve the vicidial.php base URL from the active server record.
         $server = $this->nonAgentApi->getServerForCampaign($campaign);
@@ -545,13 +596,18 @@ class VicidialSessionService
             return null;
         }
 
+        $effectiveVd = $this->resolveEffectiveVdCredentials($user, $vdLogin, $vdPass);
+        if ($effectiveVd['vd_login'] === '' || $effectiveVd['vd_pass'] === '') {
+            return null;
+        }
+
         // Use canonical long-form params: phone_login, phone_pass, VD_login, VD_pass, VD_campaign.
         // `relogin=YES` is required on VICIdial >= 2.14b0.5 to trigger the login sequence.
         return $vicidialPhpUrl.'?'.http_build_query([
             'phone_login' => $phoneLogin,
             'phone_pass' => $phonePass !== '' ? $phonePass : $phoneLogin, // VD default: pass=login
-            'VD_login' => $user->vici_user,
-            'VD_pass' => $user->vici_pass,
+            'VD_login' => $effectiveVd['vd_login'],
+            'VD_pass' => $effectiveVd['vd_pass'],
             'VD_campaign' => $campaign,
             'relogin' => 'YES',
         ]);

@@ -144,6 +144,51 @@ class VicidialSessionServiceTest extends TestCase
         ]);
     }
 
+    public function test_login_uses_vd_overrides_for_agent_api_and_iframe_alignment(): void
+    {
+        $this->agentApiMock
+            ->shouldReceive('execute')
+            ->once()
+            ->with($this->user, 'testcamp', 'login', Mockery::on(function (array $params): bool {
+                $creds = (array) ($params['credentials'] ?? []);
+
+                return ($creds['vici_user'] ?? null) === '9999'
+                    && ($creds['vici_pass'] ?? null) === 'typedpass';
+            }))
+            ->andReturn([
+                'success' => true,
+                'raw_response' => 'SUCCESS: agent logged in',
+                'message' => null,
+            ]);
+
+        VicidialServer::factory()->create([
+            'campaign_code' => 'testcamp',
+            'api_url' => 'https://vici.example.com/agc/api.php',
+            'is_active' => true,
+            'is_default' => true,
+        ]);
+
+        $this->nonAgentApiMock
+            ->shouldReceive('getServerForCampaign')
+            ->andReturn(VicidialServer::first());
+
+        $result = $this->service->loginAgent(
+            $this->user,
+            'testcamp',
+            '6001',
+            'sippass',
+            true,
+            [],
+            '9999',
+            'typedpass',
+        );
+
+        $this->assertTrue($result->success);
+        $this->assertSame('9999', $result->data['iframe_alignment']['vd_login'] ?? null);
+        $this->assertStringContainsString('VD_login=9999', (string) ($result->data['iframe_url'] ?? ''));
+        $this->assertStringContainsString('VD_pass=typedpass', (string) ($result->data['iframe_url'] ?? ''));
+    }
+
     public function test_login_pending_when_api_unreachable(): void
     {
         $this->agentApiMock
@@ -251,8 +296,21 @@ class VicidialSessionServiceTest extends TestCase
         ]);
     }
 
-    public function test_verify_login_returns_failure_when_still_not_logged_in(): void
+    public function test_verify_login_iframe_non_agent_mismatch_keeps_pending_without_hard_fail(): void
     {
+        config(['vicidial.session_iframe_agent_api_only' => true]);
+        config(['vicidial.session_iframe_confirm_non_agent_live' => true]);
+        config(['vicidial.session_iframe_skip_non_agent_live_check' => false]);
+
+        $server = VicidialServer::factory()->create([
+            'campaign_code' => 'testcamp',
+            'api_url' => 'https://vici.example.com/agc/api.php',
+            'api_user' => 'apiu',
+            'api_pass' => 'apip',
+            'is_active' => true,
+            'is_default' => true,
+        ]);
+
         VicidialAgentSession::factory()->create([
             'user_id' => $this->user->id,
             'campaign_code' => 'testcamp',
@@ -260,12 +318,18 @@ class VicidialSessionServiceTest extends TestCase
         ]);
 
         $this->nonAgentApiMock
+            ->shouldReceive('getServerForCampaign')
+            ->with('testcamp')
+            ->andReturn($server);
+        $this->nonAgentApiMock
             ->shouldReceive('execute')
             ->andReturn(OperationResult::failure('ERROR: agent_status AGENT NOT LOGGED IN: 9999|9999'));
 
         $result = $this->service->verifyLogin($this->user, 'testcamp');
 
-        $this->assertFalse($result->success);
+        $this->assertTrue($result->success);
+        $this->assertSame('login_pending', $result->data['login_state'] ?? null);
+        $this->assertFalse((bool) ($result->data['stop_verify_poll'] ?? true));
         $this->assertDatabaseHas('vicidial_agent_sessions', [
             'user_id' => $this->user->id,
             'session_status' => 'login_pending',

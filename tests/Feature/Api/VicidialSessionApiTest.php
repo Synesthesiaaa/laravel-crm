@@ -169,6 +169,30 @@ class VicidialSessionApiTest extends TestCase
         $this->assertStringContainsString('relogin=YES', $iframeUrl);
     }
 
+    public function test_login_accepts_vd_overrides_from_widget(): void
+    {
+        $this->mockAgentApi(true, 'SUCCESS: agent logged in');
+        $this->mockNonAgentApiWithServer(true);
+
+        $response = $this->actingAs($this->agent)
+            ->withSession($this->campaignSession())
+            ->postJson('/api/vicidial/session/login', [
+                'campaign' => 'testcamp',
+                'phone_login' => '6001',
+                'vd_login' => '9999',
+                'vd_pass' => 'typedpass',
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('login_state', 'login_pending')
+            ->assertJsonPath('data.iframe_alignment.vd_login', '9999');
+
+        $iframeUrl = (string) $response->json('iframe_url');
+        $this->assertStringContainsString('VD_login=9999', $iframeUrl);
+        $this->assertStringContainsString('VD_pass=typedpass', $iframeUrl);
+    }
+
     public function test_login_response_contract_contains_required_fields(): void
     {
         $this->mockAgentApi(true);
@@ -273,6 +297,8 @@ class VicidialSessionApiTest extends TestCase
 
     public function test_verify_returns_pending_when_agent_not_yet_live(): void
     {
+        config(['vicidial.session_iframe_agent_api_only' => false]);
+
         VicidialAgentSession::factory()->create([
             'user_id' => $this->agent->id,
             'campaign_code' => 'testcamp',
@@ -322,7 +348,7 @@ class VicidialSessionApiTest extends TestCase
         ]);
     }
 
-    public function test_verify_iframe_non_agent_rejects_when_agent_not_in_live_agents(): void
+    public function test_verify_iframe_non_agent_keeps_pending_when_agent_not_in_live_agents(): void
     {
         config(['vicidial.session_iframe_agent_api_only' => true]);
         config(['vicidial.session_iframe_confirm_non_agent_live' => true]);
@@ -353,9 +379,10 @@ class VicidialSessionApiTest extends TestCase
         $response = $this->actingAs($this->agent)
             ->withSession($this->campaignSession())
             ->postJson('/api/vicidial/session/verify', ['campaign' => 'testcamp'])
-            ->assertStatus(202)
-            ->assertJsonPath('success', false)
-            ->assertJsonPath('data.stop_verify_poll', true);
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('login_state', 'login_pending')
+            ->assertJsonPath('data.stop_verify_poll', false);
 
         $this->assertStringContainsString('testcamp', (string) $response->json('message'));
         $this->assertStringContainsString('testagent', (string) $response->json('message'));

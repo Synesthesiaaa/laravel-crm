@@ -9,14 +9,14 @@
 #
 
 # The full URL to the Vicidial Agent Screen, (usually something like "http://server/agc/vicidial.php")
-$agent_screen_url = '';
+$agent_screen_url = 'https://dial.cidglobal.ph/agc/vicidial.php';
 
 # The full URL to the Vicidial Agent API, (usually something like "http://server/agc/api.php")
-$api_url = '';
+$api_url = 'https://dial.cidglobal.ph/agc/api.php';
 
 # The user and pass of a level 8 user that has API and modify lead permissions
-$api_user = '';
-$api_pass = '';
+$api_user = '9999';
+$api_pass = 'test';
 
 
 # The name of the CRM IFRAME that will be used for the CRM portion(default is 'crmagent')

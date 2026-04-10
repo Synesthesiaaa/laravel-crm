@@ -32,8 +32,9 @@ class VicidialProxyService
                 'failure_code' => CallErrors::VICIDIAL_UNAVAILABLE,
             ];
         }
-        $viciUser = $user->vici_user ?? '';
-        $viciPass = $user->vici_pass ?? '';
+        $overrideCreds = is_array($params['credentials'] ?? null) ? $params['credentials'] : [];
+        $viciUser = (string) ($overrideCreds['vici_user'] ?? ($user->vici_user ?? ''));
+        $viciPass = (string) ($overrideCreds['vici_pass'] ?? ($user->vici_pass ?? ''));
         if ($viciUser === '' || $viciPass === '') {
             return [
                 'success' => false,
@@ -58,7 +59,7 @@ class VicidialProxyService
 
         $extraQuery = $params['query'] ?? [];
         foreach ($params as $k => $v) {
-            if (in_array($k, ['value', 'phone_code', 'phone_number', 'query'], true)) {
+            if (in_array($k, ['value', 'phone_code', 'phone_number', 'query', 'credentials'], true)) {
                 continue;
             }
             if (! array_key_exists($k, $extraQuery)) {

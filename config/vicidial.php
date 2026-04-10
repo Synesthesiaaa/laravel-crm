@@ -61,7 +61,7 @@ return [
     | row without polling VICIdial live_agents). Queue count still uses Agent API.
     | Reporting, leads, and other features keep using Non-Agent until migrated.
     */
-    'session_iframe_agent_api_only' => env('VICI_SESSION_IFRAME_AGENT_API_ONLY', false),
+    'session_iframe_agent_api_only' => env('VICI_SESSION_IFRAME_AGENT_API_ONLY', true),
 
     /*
     |--------------------------------------------------------------------------
@@ -72,7 +72,7 @@ return [
     | If VICIdial reports the agent is not in live_agents, verify fails (no false ready).
     | If Non-Agent is unreachable or not configured, verify still promotes (trust iframe).
     */
-    'session_iframe_confirm_non_agent_live' => env('VICI_SESSION_IFRAME_CONFIRM_NON_AGENT_LIVE', true),
+    'session_iframe_confirm_non_agent_live' => env('VICI_SESSION_IFRAME_CONFIRM_NON_AGENT_LIVE', false),
 
     /*
     |--------------------------------------------------------------------------
@@ -114,5 +114,14 @@ return [
     | Optional shared secret to validate ViciDial push event POSTs.
     */
     'events_webhook_secret' => env('VICIDIAL_EVENTS_WEBHOOK_SECRET', ''),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Embedded agent iframe panel (phone widget, expanded)
+    |--------------------------------------------------------------------------
+    | Mirrors crm_settings.php agent_screen_width / height for the Laravel UI.
+    */
+    'session_iframe_panel_width_px' => (int) env('VICI_IFRAME_WIDTH', 440),
+    'session_iframe_panel_height_px' => (int) env('VICI_IFRAME_HEIGHT', 360),
 
 ];

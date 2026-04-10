@@ -2,6 +2,8 @@ import './bootstrap';
 import './echo';
 import './components';
 import './vicidial-session';
+import './phone-widget';
+import './soft-navigate';
 import TelephonyCore from './telephony-core';
 
 // Make ApexCharts available for dynamic import in views
@@ -162,6 +164,8 @@ Alpine.store('vicidial', {
     queueCount: 0,
     campaign: '',
     blended: true,
+    /** Space/comma-separated in-groups string (shared with phone widget + ingroup panel) */
+    ingroupsRaw: '',
     ingroups: [],
     lastSyncAt: null,
     async sync(campaign = null) {
@@ -180,6 +184,9 @@ Alpine.store('vicidial', {
             this.blended = typeof session.blended === 'boolean' ? session.blended : this.blended;
             const choices = (session.ingroup_choices || '').trim();
             this.ingroups = choices ? choices.split(/\s+/) : [];
+            if (choices) {
+                this.ingroupsRaw = choices;
+            }
             this.lastSyncAt = new Date().toISOString();
             return data;
         } catch (_) {

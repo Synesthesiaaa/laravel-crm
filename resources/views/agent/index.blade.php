@@ -257,9 +257,6 @@
             </div>
         </div>
 
-        @if(($telephonyFeatures['session_controls'] ?? true) === true)
-            @include('agent.partials.session-panel')
-        @endif
         @if(($telephonyFeatures['ingroup_management'] ?? true) === true)
             @include('agent.partials.ingroup-panel')
         @endif
@@ -308,26 +305,6 @@ window.agentScreen = function() {
         predictiveMode: false,
         predictiveDelay: 3,
         _predictiveTimer: null,
-        vici: {
-            loading: false,
-            // Login phase state machine: idle | requesting | iframe_loading | syncing | ready | failed | timeout
-            phase: 'idle',
-            /** VICIdial VD_campaign — aligned with VICIdial allowed campaigns when loaded */
-            vici_campaign: @js((string) session('campaign', 'mbsales')),
-            agent_campaigns: [],
-            agent_campaigns_loading: false,
-            agent_campaigns_error: null,
-            phone_login: @js((string) ($user->extension ?? '')),
-            phone_pass: '',
-            pause_code: 'BREAK',
-            pause_codes: @js(config('vicidial.pause_codes', ['BREAK'])),
-            ingroups_raw: '',
-            blended: true,
-            _verifyPollTimer: null,
-            _verifyPollCount: 0,
-            _verifyPollMax: 15,      // max 1s polls = 15 seconds
-            _verifyTimeout: null,
-        },
         transfer: {
             phone_number: '',
             ingroup: '',
@@ -365,7 +342,6 @@ window.agentScreen = function() {
             this.syncCallStatus();
             if (this.featureEnabled('session_controls')) {
                 this.syncVicidialStatus();
-                this.loadViciAgentCampaigns();
             }
 
             const te = window.TelephonyEcho;
@@ -407,60 +383,15 @@ window.agentScreen = function() {
                 if (!this.featureEnabled('recording_controls')) return;
                 this.startRecording();
             });
-            window.addEventListener('telephony-shortcut-pause', () => {
-                if (!this.featureEnabled('session_controls')) return;
-                if (Alpine.store('vicidial').status === 'paused') this.viciPause('RESUME');
-                else this.viciPause('PAUSE');
-            });
         },
 
         currentCampaign() {
-            return this.vici.vici_campaign || this.$el.dataset.campaign || 'mbsales';
-        },
-
-        async loadViciAgentCampaigns() {
-            if (!this.featureEnabled('session_controls')) return;
-            this.vici.agent_campaigns_loading = true;
-            this.vici.agent_campaigns_error = null;
-            try {
-                const res = await window.axios.get('/api/vicidial/session/agent-campaigns', {
-                    params: { context_campaign: this.currentCampaign() },
-                });
-                if (res.data?.success && Array.isArray(res.data.campaigns)) {
-                    this.vici.agent_campaigns = res.data.campaigns;
-                    const ids = this.vici.agent_campaigns.map((c) => c.id);
-                    if (ids.length && !ids.includes(this.vici.vici_campaign)) {
-                        this.vici.vici_campaign = this.vici.agent_campaigns[0].id;
-                        await this.persistViciCampaignToSession();
-                    } else {
-                        this.$el.dataset.campaign = this.vici.vici_campaign;
-                        if (document.body?.dataset) document.body.dataset.campaign = this.vici.vici_campaign;
-                    }
-                }
-            } catch (e) {
-                this.vici.agent_campaigns_error =
-                    e.response?.data?.message || 'Could not load VICIdial campaigns.';
-            } finally {
-                this.vici.agent_campaigns_loading = false;
-            }
-        },
-
-        async persistViciCampaignToSession() {
-            const code = this.vici.vici_campaign;
-            const row = (this.vici.agent_campaigns || []).find((c) => c.id === code);
-            try {
-                await window.axios.post('/api/vicidial/session/select-campaign', {
-                    campaign: code,
-                    campaign_name: row?.name || code,
-                });
-                this.$el.dataset.campaign = code;
-                if (document.body?.dataset) document.body.dataset.campaign = code;
-                Alpine.store('vicidial').campaign = code;
-            } catch (_) {}
-        },
-
-        async onViciCampaignChange() {
-            await this.persistViciCampaignToSession();
+            return (
+                document.body?.dataset?.campaign ||
+                Alpine.store('vicidial').campaign ||
+                this.$el?.dataset?.campaign ||
+                'mbsales'
+            );
         },
 
         /** WebSocket handler: call state changed (from AMI listener or backend) */
@@ -499,7 +430,7 @@ window.agentScreen = function() {
             if (p.event === 'state_ready') {
                 store.loggedIn = true;
                 store.status = 'ready';
-                this.vici.phase = 'ready';
+                window.dispatchEvent(new CustomEvent('vicidial-ws-phase', { detail: { phase: 'ready' } }));
                 if (window.TelephonyCore?.register) {
                     window.TelephonyCore.register().catch(() => {});
                 }
@@ -509,7 +440,7 @@ window.agentScreen = function() {
             } else if (p.event === 'logged_out' || p.event === 'logged_out_complete') {
                 store.loggedIn = false;
                 store.status = 'logged_out';
-                this.vici.phase = 'idle';
+                window.dispatchEvent(new CustomEvent('vicidial-ws-phase', { detail: { phase: 'idle' } }));
                 if (window.TelephonyCore?.destroy) {
                     window.TelephonyCore.destroy().catch(() => {});
                 }
@@ -580,16 +511,6 @@ window.agentScreen = function() {
             try {
                 const data = await Alpine.store('vicidial').sync(this.currentCampaign());
                 const raw = data?.agent_status?.data?.raw_response || '';
-                const localStatus = data?.local_session?.session_status || '';
-
-                // Reconcile phase with actual session status from backend.
-                if (['ready','paused','in_call'].includes(localStatus)) {
-                    if (!['syncing','iframe_loading','requesting'].includes(this.vici.phase)) {
-                        this.vici.phase = 'ready';
-                    }
-                } else if (localStatus === 'logged_out' && this.vici.phase === 'idle') {
-                    this.vici.phase = 'idle';
-                }
 
                 if (!this.sessionId && typeof raw === 'string' && raw.includes('INCALL')) {
                     this.callState = 'connected';
@@ -614,64 +535,16 @@ window.agentScreen = function() {
             } catch {}
         },
 
-        async viciLogin() {
-            if (!this.featureEnabled('session_controls')) return;
-            if (!window.VicidialSession) {
-                Alpine.store('toast').error('VICIdial session module is not loaded.');
-                return;
-            }
-            await window.VicidialSession.login({
-                campaign: this.currentCampaign(),
-                phoneLogin: this.vici.phone_login || null,
-                phonePass: this.vici.phone_pass || null,
-                blended: this.vici.blended,
-                ingroups: this.parseIngroups(this.vici.ingroups_raw),
-                ctx: this,
-                maxAttempts: this.vici._verifyPollMax || 15,
-            });
-        },
-
-        _viciCancelVerify() {
-            if (window.VicidialSession?.cancelVerify) {
-                window.VicidialSession.cancelVerify(this);
-            }
-        },
-
-        async viciPause(value) {
-            if (!this.featureEnabled('session_controls')) return;
-            if (window.VicidialSession?.pause) {
-                await window.VicidialSession.pause(value, this.currentCampaign(), this);
-            }
-        },
-
-        async setPauseCode() {
-            if (!this.featureEnabled('session_controls')) return;
-            if (!this.vici.pause_code) return;
-            if (window.VicidialSession?.setPauseCode) {
-                await window.VicidialSession.setPauseCode(
-                    this.vici.pause_code,
-                    this.currentCampaign(),
-                    this
-                );
-            }
-        },
-
-        async viciLogout() {
-            if (!this.featureEnabled('session_controls')) return;
-            if (window.VicidialSession?.logout) {
-                await window.VicidialSession.logout(this.currentCampaign(), this);
-            }
-        },
-
         async updateIngroups(action) {
             if (!this.featureEnabled('ingroup_management')) return;
             if (window.VicidialSession?.updateIngroups) {
+                const ctx = typeof window.getPhoneWidgetCtx === 'function' ? window.getPhoneWidgetCtx() : null;
                 await window.VicidialSession.updateIngroups(
                     action,
-                    this.parseIngroups(this.vici.ingroups_raw),
-                    this.vici.blended,
+                    this.parseIngroups(Alpine.store('vicidial').ingroupsRaw || ''),
+                    Alpine.store('vicidial').blended,
                     this.currentCampaign(),
-                    this
+                    ctx
                 );
             }
         },
@@ -867,7 +740,7 @@ window.agentScreen = function() {
         async dial() {
             if (!this.phoneNumber || this.callState !== 'idle' || this.dialBlocked) return;
             if (this.featureEnabled('session_controls') && !Alpine.store('vicidial').loggedIn) {
-                Alpine.store('toast').error('Log into VICIdial for this campaign (session panel) before dialing.');
+                Alpine.store('toast').error('Log into VICIdial for this campaign (phone button, bottom-right) before dialing.');
                 return;
             }
             this.callState = 'dialing';

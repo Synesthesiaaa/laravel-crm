@@ -149,10 +149,13 @@ async function verifyOnceAfterIframeLoad(campaign, ctx = null) {
             return;
         }
 
-        phaseSet(ctx, 'timeout');
-        loadingSet(ctx, false);
-        state.inflight = false;
-        window.Alpine.store('toast').warning('VICIdial session did not confirm. Try Login again.');
+        // Keep polling instead of hard-timing out on first non-ready response.
+        phaseSet(ctx, 'syncing');
+        state.verifyCount = 1;
+        if (ctx?.vici) {
+            ctx.vici._verifyPollCount = 1;
+        }
+        await pollVerify(effectiveCampaign, ctx, DEFAULT_VERIFY_MAX);
     } catch (e) {
         cancelVerify(ctx);
         phaseSet(ctx, 'failed');
@@ -175,7 +178,7 @@ function clearFrame() {
 }
 
 /**
- * Reload the hidden iframe from a stored URL when the server session is still login_pending
+ * Reload the session iframe from a stored URL when the server session is still login_pending
  * (e.g. after full page refresh mid-login). Avoids a second POST /session/login.
  */
 async function maybeReconnectPending(localSession, campaign, ctx = null) {
@@ -218,7 +221,7 @@ async function maybeReconnectPending(localSession, campaign, ctx = null) {
         phaseSet(ctx, 'failed');
         loadingSet(ctx, false);
         state.inflight = false;
-        window.Alpine.store('toast').error('Hidden VICIdial session frame is missing.');
+        window.Alpine.store('toast').error('VICIdial session frame is missing from the page.');
         return false;
     }
 
@@ -239,8 +242,11 @@ async function maybeReconnectPending(localSession, campaign, ctx = null) {
         phaseSet(ctx, 'failed');
         loadingSet(ctx, false);
         state.inflight = false;
-        window.Alpine.store('toast').error('Hidden VICIdial session frame failed to load. Check VICIdial URL configuration.');
+        window.Alpine.store('toast').error('VICIdial session frame failed to load. Check VICIdial URL configuration.');
     };
+    if (ctx?.vici) {
+        ctx.vici.last_iframe_url = url;
+    }
     frame.src = url;
 
     state.verifyTimeout = setTimeout(() => {
@@ -264,6 +270,8 @@ async function login({
     campaign = null,
     phoneLogin = null,
     phonePass = null,
+    vdLogin = null,
+    vdPass = null,
     blended = true,
     ingroups = [],
     ctx = null,
@@ -282,11 +290,22 @@ async function login({
             campaign: effectiveCampaign,
             phone_login: phoneLogin || null,
             phone_pass: phonePass || null,
+            vd_login: vdLogin || null,
+            vd_pass: vdPass || null,
             blended: Boolean(blended),
             ingroups: Array.isArray(ingroups) ? ingroups : [],
         });
 
         const iframeUrl = res.data?.iframe_url;
+        const alignment = res.data?.data?.iframe_alignment || {};
+        if (ctx?.vici) {
+            if (alignment.phone_login) {
+                ctx.vici.phone_login = alignment.phone_login;
+            }
+            if (alignment.vd_login) {
+                ctx.vici.vd_login = alignment.vd_login;
+            }
+        }
         if (!iframeUrl) {
             phaseSet(ctx, 'failed');
             loadingSet(ctx, false);
@@ -302,11 +321,14 @@ async function login({
             phaseSet(ctx, 'failed');
             loadingSet(ctx, false);
             state.inflight = false;
-            window.Alpine.store('toast').error('Hidden VICIdial session frame is missing.');
+            window.Alpine.store('toast').error('VICIdial session frame is missing from the page.');
             return false;
         }
 
         phaseSet(ctx, 'iframe_loading');
+        if (ctx?.vici) {
+            ctx.vici.last_iframe_url = iframeUrl;
+        }
         frame.onload = () => {
             if (isIframeAgentApiOnly()) {
                 verifyOnceAfterIframeLoad(effectiveCampaign, ctx).catch(() => {});
@@ -324,7 +346,7 @@ async function login({
             phaseSet(ctx, 'failed');
             loadingSet(ctx, false);
             state.inflight = false;
-            window.Alpine.store('toast').error('Hidden VICIdial session frame failed to load. Check VICIdial URL configuration.');
+            window.Alpine.store('toast').error('VICIdial session frame failed to load. Check VICIdial URL configuration.');
         };
         frame.src = iframeUrl;
 
@@ -400,6 +422,9 @@ async function logout(campaign = null, ctx = null) {
             window.TelephonyCore.destroy().catch(() => {});
         }
         window.Alpine.store('toast').info('VICIdial session logged out.');
+        if (ctx?.vici) {
+            ctx.vici.last_iframe_url = null;
+        }
         await syncStatus(effectiveCampaign, ctx);
         return true;
     } catch (e) {
@@ -409,6 +434,51 @@ async function logout(campaign = null, ctx = null) {
         loadingSet(ctx, false);
         state.inflight = false;
     }
+}
+
+/**
+ * Open VICIdial agent screen in a new window (mic / audio in a normal browsing context).
+ * Uses last login URL when available; otherwise GET /api/vicidial/session/iframe-url.
+ */
+async function popout(campaign = null, ctx = null) {
+    const effectiveCampaign = getCampaign(campaign);
+    let url = ctx?.vici?.last_iframe_url || null;
+
+    if (!url) {
+        try {
+            const res = await window.axios.get('/api/vicidial/session/iframe-url', {
+                params: { campaign: effectiveCampaign },
+            });
+            url = res.data?.iframe_url || null;
+        } catch (_) {}
+    }
+
+    if (!url) {
+        window.Alpine?.store('toast')?.error(
+            'No VICIdial URL available. Click Login first, or set Phone Login and campaign.'
+        );
+        return false;
+    }
+
+    const w = 1080;
+    const h = 620;
+    const left = Math.round((screen.width - w) / 2);
+    const top = Math.round((screen.height - h) / 4);
+    const win = window.open(
+        url,
+        'vicidial_agent_screen',
+        `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`,
+    );
+
+    if (!win) {
+        window.Alpine?.store('toast')?.error(
+            'Pop-up was blocked. Allow pop-ups for this site and try again.',
+        );
+        return false;
+    }
+
+    win.focus();
+    return true;
 }
 
 async function updateIngroups(action, ingroups, blended = true, campaign = null, ctx = null) {
@@ -437,6 +507,7 @@ const VicidialSession = {
     setPauseCode,
     syncStatus,
     updateIngroups,
+    popout,
     cancelVerify,
     clearFrame,
     get inflight() {

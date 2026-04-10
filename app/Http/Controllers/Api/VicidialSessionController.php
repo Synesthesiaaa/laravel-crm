@@ -16,6 +16,8 @@ class VicidialSessionController extends Controller
             'campaign' => ['nullable', 'string', 'max:50'],
             'phone_login' => ['nullable', 'string', 'max:32'],
             'phone_pass' => ['nullable', 'string', 'max:32'],
+            'vd_login' => ['nullable', 'string', 'max:32'],
+            'vd_pass' => ['nullable', 'string', 'max:32'],
             'blended' => ['nullable', 'boolean'],
             'ingroups' => ['nullable', 'array'],
             'ingroups.*' => ['string', 'max:32'],
@@ -31,6 +33,8 @@ class VicidialSessionController extends Controller
             $validated['phone_pass'] ?? null,
             (bool) ($validated['blended'] ?? true),
             $validated['ingroups'] ?? [],
+            $validated['vd_login'] ?? null,
+            $validated['vd_pass'] ?? null,
         );
 
         if (! $result->success) {

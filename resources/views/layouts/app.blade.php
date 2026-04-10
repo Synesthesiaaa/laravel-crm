@@ -448,11 +448,7 @@
     @auth
     @if(in_array(auth()->user()->role ?? '', ['Agent', 'Team Leader']))
     <audio id="remoteAudio" autoplay playsinline style="display:none;" aria-hidden="true"></audio>
-    <iframe id="vici-session-frame"
-            src="about:blank"
-            width="0" height="0"
-            style="position:absolute;top:-9999px;left:-9999px;border:none;"
-            title="ViciDial Session (hidden)"></iframe>
+    @include('partials.phone-widget')
     @php
         $telephonyBootstrap = session()->pull('telephony_bootstrap');
     @endphp
@@ -467,7 +463,6 @@
     @if(in_array(auth()->user()->role ?? '', ['Agent', 'Team Leader']))
     <script>
     document.addEventListener('alpine:init', function() {
-        window.__VICIDIAL_SESSION_IFRAME_ONLY = @json((bool) config('vicidial.session_iframe_agent_api_only', false));
         const store = Alpine.store('call');
         const userId = @js(auth()->id());
 
@@ -506,30 +501,7 @@
                 const res = await window.axios.get('/api/call/status');
                 if (res.data?.success) rehydrateFromStatus(res.data);
             } catch {}
-            let viciStatusData = null;
-            try {
-                viciStatusData = await Alpine.store('vicidial').sync(document.body.dataset.campaign || 'mbsales');
-            } catch {}
-            try {
-                let reconnected = false;
-                if (window.VicidialSession?.maybeReconnectPending) {
-                    reconnected = await window.VicidialSession.maybeReconnectPending(
-                        viciStatusData?.local_session,
-                        document.body.dataset.campaign,
-                        null
-                    );
-                }
-                const bootstrap = window.__telephonyBootstrap;
-                if (!reconnected && bootstrap?.campaign && window.VicidialSession && !window.Alpine.store('vicidial').loggedIn) {
-                    await window.VicidialSession.login({
-                        campaign: bootstrap.campaign,
-                        phoneLogin: bootstrap.phone_login || null,
-                        phonePass: null,
-                        blended: typeof bootstrap.blended === 'boolean' ? bootstrap.blended : true,
-                        ingroups: Array.isArray(bootstrap.ingroups) ? bootstrap.ingroups : [],
-                    });
-                }
-            } catch {}
+            // VICIdial session iframe + reconnect/bootstrap: phone widget (phone-widget.js init)
 
             // 2. Subscribe Reverb channel for real-time state updates
             if (window.TelephonyEcho?.initEcho && window.TelephonyEcho.isBroadcastEnabled()) {
@@ -582,6 +554,8 @@
       })();
     </script>
 
+    {{-- Marker for soft-navigate.js: page-specific scripts from @stack follow this node --}}
+    <div id="soft-nav-scripts-marker" class="hidden" aria-hidden="true"></div>
     @stack('scripts')
 </body>
 </html>
