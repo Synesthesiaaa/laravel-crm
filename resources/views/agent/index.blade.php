@@ -426,28 +426,12 @@ window.agentScreen = function() {
 
         /** WebSocket handler: ViciDial agent events (state changes, login, etc.) */
         _handleVicidialEventWs(p) {
-            const store = Alpine.store('vicidial');
-            if (p.event === 'state_ready') {
-                store.loggedIn = true;
-                store.status = 'ready';
-                window.dispatchEvent(new CustomEvent('vicidial-ws-phase', { detail: { phase: 'ready' } }));
-                if (window.TelephonyCore?.register) {
-                    window.TelephonyCore.register().catch(() => {});
-                }
-            } else if (p.event === 'state_paused') {
-                store.loggedIn = true;
-                store.status = 'paused';
-            } else if (p.event === 'logged_out' || p.event === 'logged_out_complete') {
-                store.loggedIn = false;
-                store.status = 'logged_out';
-                window.dispatchEvent(new CustomEvent('vicidial-ws-phase', { detail: { phase: 'idle' } }));
-                if (window.TelephonyCore?.destroy) {
-                    window.TelephonyCore.destroy().catch(() => {});
-                }
-            } else if (p.event === 'dispo_set') {
+            if (typeof window.applyVicidialAgentEventToStore === 'function') {
+                window.applyVicidialAgentEventToStore(p);
+            }
+            if (p.event === 'dispo_set') {
                 // ViciDial confirmed disposition — no action needed if CRM already saved
             }
-            store.lastSyncAt = p.timestamp || new Date().toISOString();
         },
 
         /** WebSocket handler: inbound/dialer call screen pop */

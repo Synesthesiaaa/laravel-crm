@@ -512,7 +512,7 @@
                     } else if (['answered', 'in_call'].includes(payload.to_status)) {
                         store.startTimer();
                     }
-                });
+                }, typeof window.applyVicidialAgentEventToStore === 'function' ? window.applyVicidialAgentEventToStore : undefined);
                 @endunless
             }
 

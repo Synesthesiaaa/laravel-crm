@@ -196,6 +196,49 @@ Alpine.store('vicidial', {
     },
 });
 
+/**
+ * Apply Reverb broadcast `.vicidial.agent.event` payload to Alpine.store('vicidial').
+ * Keeps CRM (phone widget, header) in sync when pause/ready/etc. change inside ViciDial.
+ * @param {{ event: string, timestamp?: string, message?: string, extra?: object }} p
+ */
+window.applyVicidialAgentEventToStore = function applyVicidialAgentEventToStore(p) {
+    if (!p || typeof p.event !== 'string') {
+        return;
+    }
+    const store = Alpine.store('vicidial');
+
+    if (p.event === 'state_ready') {
+        store.loggedIn = true;
+        store.status = 'ready';
+        window.dispatchEvent(new CustomEvent('vicidial-ws-phase', { detail: { phase: 'ready' } }));
+        if (window.TelephonyCore?.register) {
+            window.TelephonyCore.register().catch(() => {});
+        }
+    } else if (p.event === 'state_paused') {
+        store.loggedIn = true;
+        store.status = 'paused';
+    } else if (p.event === 'logged_in') {
+        store.loggedIn = true;
+        if (store.status === 'logged_out') {
+            store.status = 'ready';
+        }
+    } else if (p.event === 'logged_out' || p.event === 'logged_out_complete') {
+        store.loggedIn = false;
+        store.status = 'logged_out';
+        window.dispatchEvent(new CustomEvent('vicidial-ws-phase', { detail: { phase: 'idle' } }));
+        if (window.TelephonyCore?.destroy) {
+            window.TelephonyCore.destroy().catch(() => {});
+        }
+    } else {
+        return;
+    }
+
+    store.lastSyncAt = p.timestamp || new Date().toISOString();
+    queueMicrotask(() => {
+        Alpine.store('vicidial').sync().catch(() => {});
+    });
+};
+
 window.Alpine = Alpine;
 window.TelephonyCore = TelephonyCore;
 Alpine.start();
