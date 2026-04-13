@@ -7,8 +7,8 @@ cd /d "%PROJECT_DIR%"
 echo Starting Laravel CRM services in one window...
 echo.
 
-start /b php artisan serve --host=mb.cidglobal.ph --port=8000
-timeout /t 2 /nobreak >nul
+start /b php artisan serve --host=localhost --port=8000
+timeout /t 1 /nobreak >nul
 
 start /b php artisan reverb:start
 timeout /t 1 /nobreak >nul

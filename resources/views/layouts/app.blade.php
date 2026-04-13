@@ -384,11 +384,9 @@
         </div>
     </div>
 
-    {{-- Click-to-call widget (agents) --}}
+    {{-- Click-to-call widget --}}
     @auth
-    @if(auth()->user()->role === 'Agent' || auth()->user()->role === 'Team Leader')
     <x-click-to-call />
-    @endif
     @endauth
 
     {{-- Disposition modal (post-call wrap-up) --}}
@@ -446,7 +444,6 @@
 
     {{-- WebRTC remote audio element (hidden, managed by TelephonyCore) --}}
     @auth
-    @if(in_array(auth()->user()->role ?? '', ['Agent', 'Team Leader']))
     <audio id="remoteAudio" autoplay playsinline style="display:none;" aria-hidden="true"></audio>
     @include('partials.phone-widget')
     @php
@@ -455,12 +452,10 @@
     <script>
         window.__telephonyBootstrap = @json($telephonyBootstrap);
     </script>
-    @endif
     @endauth
 
     {{-- Global telephony: rehydrate call state + Echo subscription + SIP.js registration (persists across navigation) --}}
     @auth
-    @if(in_array(auth()->user()->role ?? '', ['Agent', 'Team Leader']))
     <script>
     document.addEventListener('alpine:init', function() {
         const store = Alpine.store('call');
@@ -503,9 +498,10 @@
             } catch {}
             // VICIdial session iframe + reconnect/bootstrap: phone widget (phone-widget.js init)
 
-            // 2. Subscribe Reverb channel for real-time state updates
+            // 2. Subscribe Reverb channel for real-time state updates (agent route uses agentScreen() for a full subscription)
             if (window.TelephonyEcho?.initEcho && window.TelephonyEcho.isBroadcastEnabled()) {
                 window.TelephonyEcho.initEcho();
+                @unless(request()->routeIs('agent.index'))
                 window.TelephonyEcho.subscribeAgentChannel(userId, (payload) => {
                     store.state = mapBackendToUI(payload.to_status);
                     if (payload.session_id) store.sessionId = payload.session_id;
@@ -517,6 +513,7 @@
                         store.startTimer();
                     }
                 });
+                @endunless
             }
 
             // 3. Register SIP.js with Asterisk SIP (WebRTC)
@@ -530,7 +527,6 @@
         })();
     });
     </script>
-    @endif
     @endauth
 
     {{-- Theme toggle script --}}

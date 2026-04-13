@@ -200,7 +200,7 @@
                     class="block border-0 bg-transparent"
                     :class="open ? 'h-full min-h-[200px] w-full' : 'h-px w-px'"
                     style="min-width: 1px; min-height: 1px;"
-                    allow="microphone *; autoplay *; speaker-selection *"
+                    allow="microphone *; autoplay *"
                     title="VICIdial agent session"></iframe>
         </div>
     </div>

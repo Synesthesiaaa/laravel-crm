@@ -87,4 +87,35 @@ class TelephonyBootstrapServiceTest extends TestCase
         $payload = $request->session()->get('telephony_bootstrap');
         $this->assertSame('other', $payload['campaign']);
     }
+
+    public function test_store_bootstrap_payload_applies_for_non_agent_roles_when_configured(): void
+    {
+        config(['vicidial.auto_bootstrap_on_crm_login' => true]);
+
+        $campaignService = Mockery::mock(CampaignService::class);
+        $campaignService->shouldReceive('getCampaigns')->andReturn([
+            'mbsales' => ['name' => 'Main'],
+        ]);
+
+        $service = new TelephonyBootstrapService($campaignService);
+
+        $user = User::factory()->create([
+            'role' => 'Admin',
+            'vici_user' => 'admin1',
+            'vici_pass' => 'secret',
+            'extension' => '7001',
+            'auto_vici_login' => true,
+            'default_campaign' => 'mbsales',
+        ]);
+
+        $request = Request::create('/login', 'POST');
+        $request->setLaravelSession($this->app['session.store']);
+
+        $service->storeBootstrapPayload($request, $user);
+
+        $payload = $request->session()->get('telephony_bootstrap');
+        $this->assertNotNull($payload);
+        $this->assertSame('mbsales', $payload['campaign']);
+        $this->assertSame('7001', $payload['phone_login']);
+    }
 }

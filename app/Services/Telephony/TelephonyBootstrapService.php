@@ -23,10 +23,6 @@ class TelephonyBootstrapService
             return;
         }
 
-        if (! in_array((string) ($user->role ?? ''), ['Agent', 'Team Leader'], true)) {
-            return;
-        }
-
         if (! $user->auto_vici_login) {
             return;
         }

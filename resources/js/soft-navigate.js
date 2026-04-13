@@ -97,6 +97,10 @@ async function softNavigate(url, { push = true } = {}) {
         document.title = titleEl.textContent;
     }
 
+    // Run @stack('scripts') (e.g. window.agentScreen) before initTree so x-data
+    // expressions resolve against defined component factories.
+    executeScriptsAfterMarker(doc);
+
     try {
         if (typeof Alpine.initTree === 'function') {
             Alpine.initTree(mainLayout);
@@ -104,8 +108,6 @@ async function softNavigate(url, { push = true } = {}) {
     } catch (e) {
         console.warn('[soft-navigate] Alpine.initTree failed', e);
     }
-
-    executeScriptsAfterMarker(doc);
 
     if (push) {
         try {

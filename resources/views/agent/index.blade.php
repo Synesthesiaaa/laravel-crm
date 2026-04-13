@@ -315,7 +315,7 @@ window.agentScreen = function() {
         dtmf: {
             custom: '',
         },
-        callback: {
+        callbackForm: {
             datetime: '',
             type: 'ANYONE',
             user: '',
@@ -647,15 +647,15 @@ window.agentScreen = function() {
 
         async scheduleCallback() {
             if (!this.featureEnabled('callback_controls')) return;
-            if (!this.leadId || !this.callback.datetime) return;
+            if (!this.leadId || !this.callbackForm.datetime) return;
             try {
                 await window.axios.post('/api/callbacks/schedule', {
                     campaign: this.currentCampaign(),
                     lead_id: this.leadId,
-                    callback_datetime: this.callback.datetime.replace('T', '+') + ':00',
-                    callback_type: this.callback.type,
-                    callback_user: this.callback.user || null,
-                    callback_comments: this.callback.comments || null,
+                    callback_datetime: this.callbackForm.datetime.replace('T', '+') + ':00',
+                    callback_type: this.callbackForm.type,
+                    callback_user: this.callbackForm.user || null,
+                    callback_comments: this.callbackForm.comments || null,
                 });
                 Alpine.store('toast').success('Callback scheduled.');
             } catch (e) {

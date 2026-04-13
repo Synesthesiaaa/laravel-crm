@@ -8,6 +8,11 @@ import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 import TelephonyLogger from './telephony-logger';
 
+/** Tear down the last subscribeAgentChannel() so layout + agent screen do not stack duplicate listeners. */
+let _teardownAgentChannel = null;
+/** Skip redundant subscribe when userId + handler slots match the active subscription (duplicate inits). */
+let _agentChannelSig = null;
+
 const key = import.meta.env.VITE_REVERB_APP_KEY || import.meta.env.VITE_PUSHER_APP_KEY;
 const broadcaster = import.meta.env.VITE_BROADCAST_DRIVER || 'reverb';
 
@@ -87,6 +92,20 @@ export function subscribeAgentChannel(userId, onCallStateChanged, onVicidialEven
         return () => {};
     }
 
+    const sig = `${userId}|${onVicidialEvent ? 1 : 0}|${onInboundCall ? 1 : 0}`;
+    if (typeof _teardownAgentChannel === 'function' && _agentChannelSig === sig) {
+        TelephonyLogger.debug('TelephonyEcho', 'Agent channel subscription unchanged (deduped)', { user_id: userId });
+        return _teardownAgentChannel;
+    }
+
+    if (typeof _teardownAgentChannel === 'function') {
+        try {
+            _teardownAgentChannel();
+        } catch (_) {}
+        _teardownAgentChannel = null;
+        _agentChannelSig = null;
+    }
+
     const channel = window.Echo.private(`App.Models.User.${userId}`);
     channel.listen('.call.state.changed', onCallStateChanged);
 
@@ -99,11 +118,20 @@ export function subscribeAgentChannel(userId, onCallStateChanged, onVicidialEven
 
     TelephonyLogger.info('TelephonyEcho', 'Subscribed to agent channel', { user_id: userId });
 
-    return () => {
+    _agentChannelSig = sig;
+
+    const teardown = () => {
         channel.stopListening('.call.state.changed');
         channel.stopListening('.vicidial.agent.event');
         channel.stopListening('.inbound.call.received');
+        if (_teardownAgentChannel === teardown) {
+            _teardownAgentChannel = null;
+            _agentChannelSig = null;
+        }
     };
+    _teardownAgentChannel = teardown;
+
+    return teardown;
 }
 
 /**
