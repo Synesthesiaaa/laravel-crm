@@ -11,11 +11,15 @@
       })();
     </script>
     <title>@yield('title', config('app.name'))</title>
+    @inertiaHead
     {{-- Self-hosted DM Sans font (fallback to system) --}}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @if (isset($page))
+        @vite(['resources/js/app-inertia.js'])
+    @endif
     @stack('styles')
 </head>
 <body class="min-h-screen flex" style="margin: 0;" x-data x-cloak data-campaign="{{ session('campaign', 'mbsales') }}">
@@ -550,8 +554,8 @@
       })();
     </script>
 
-    {{-- Marker for soft-navigate.js: page-specific scripts from @stack follow this node --}}
-    <div id="soft-nav-scripts-marker" class="hidden" aria-hidden="true"></div>
+    {{-- Marker: @stack('scripts') follows this node --}}
+    <div id="page-scripts-marker" class="hidden" aria-hidden="true"></div>
     @stack('scripts')
 </body>
 </html>

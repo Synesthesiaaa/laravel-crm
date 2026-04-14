@@ -9,7 +9,7 @@ use App\Models\DispositionCode;
 use App\Services\CampaignService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Inertia\Response;
 
 class DispositionCodesController extends Controller
 {
@@ -17,7 +17,7 @@ class DispositionCodesController extends Controller
         protected CampaignService $campaignService
     ) {}
 
-    public function index(Request $request): View
+    public function index(Request $request): Response
     {
         $campaign       = $request->session()->get('campaign', 'mbsales');
         $filterCampaign = $request->query('campaign', $campaign);
@@ -26,12 +26,13 @@ class DispositionCodesController extends Controller
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get();
-        return view('admin.disposition_codes', [
+
+        return $this->inertiaAdmin('admin.inline-disposition_codes', [
             'codes'          => $codes,
             'campaigns'      => $campaigns,
             'filterCampaign' => $filterCampaign,
             'campaignName'   => $request->session()->get('campaign_name', 'CRM'),
-        ]);
+        ], 'Disposition Codes');
     }
 
     public function store(StoreDispositionCodeRequest $request): RedirectResponse

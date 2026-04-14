@@ -44,6 +44,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->web(append: [
+            \App\Http\Middleware\HandleInertiaRequests::class,
+        ]);
         $middleware->validateCsrfTokens(except: [
             'api/webhooks/ami',
             'api/webhooks/vicidial-events',

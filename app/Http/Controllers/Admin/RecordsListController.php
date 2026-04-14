@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Services\CallHistoryService;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Inertia\Response;
 
 class RecordsListController extends Controller
 {
@@ -13,7 +13,7 @@ class RecordsListController extends Controller
         protected CallHistoryService $callHistoryService
     ) {}
 
-    public function index(Request $request): View
+    public function index(Request $request): Response
     {
         $campaign = $request->session()->get('campaign', 'mbsales');
         $history = $this->callHistoryService->getHistoryForCampaign(
@@ -23,10 +23,11 @@ class RecordsListController extends Controller
             $request->query('agent'),
             25
         );
-        return view('admin.records_list', [
+
+        return $this->inertiaAdmin('admin.inline-records_list', [
             'history' => $history,
             'campaign' => $campaign,
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
-        ]);
+        ], 'Records');
     }
 }

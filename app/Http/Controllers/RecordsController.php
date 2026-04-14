@@ -4,7 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Services\CallHistoryService;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class RecordsController extends Controller
 {
@@ -12,7 +13,7 @@ class RecordsController extends Controller
         protected CallHistoryService $callHistoryService
     ) {}
 
-    public function index(Request $request): View
+    public function index(Request $request): Response
     {
         $campaign = $request->session()->get('campaign', 'mbsales');
         $history = $this->callHistoryService->getHistoryForCampaign(
@@ -22,9 +23,14 @@ class RecordsController extends Controller
             $request->query('agent'),
             15
         );
-        return view('records.index', [
+
+        return Inertia::render('Records/Index', [
             'history' => $history,
-            'campaign' => $campaign,
+            'filters' => [
+                'start_date' => $request->query('start_date', ''),
+                'end_date' => $request->query('end_date', ''),
+                'agent' => $request->query('agent', ''),
+            ],
         ]);
     }
 }

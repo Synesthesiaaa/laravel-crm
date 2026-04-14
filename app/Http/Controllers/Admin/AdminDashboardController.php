@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\AdminDashboardService;
 use App\Services\CampaignService;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Inertia\Response;
 
 class AdminDashboardController extends Controller
 {
@@ -15,17 +15,17 @@ class AdminDashboardController extends Controller
         protected AdminDashboardService $dashboardService
     ) {}
 
-    public function index(Request $request): View
+    public function index(Request $request): Response
     {
         $campaign       = $request->session()->get('campaign', 'mbsales');
         $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['name' => $campaign, 'forms' => []];
 
-        return view('admin.dashboard', [
+        return $this->inertiaAdmin('admin.inline-dashboard', [
             'campaign'     => $campaign,
             'campaignName' => $campaignConfig['name'] ?? $campaign,
             'stats'        => $this->dashboardService->getFormStats($campaign),
             'userCount'    => $this->dashboardService->getTotalUserCount(),
             'user'         => $request->user(),
-        ]);
+        ], 'Admin Dashboard');
     }
 }

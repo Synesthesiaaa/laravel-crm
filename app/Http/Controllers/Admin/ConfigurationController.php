@@ -7,7 +7,7 @@ use App\Services\CampaignService;
 use App\Services\TelephonyFeatureService;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\View\View;
+use Inertia\Response;
 
 class ConfigurationController extends Controller
 {
@@ -16,15 +16,16 @@ class ConfigurationController extends Controller
         protected TelephonyFeatureService $telephonyFeatureService
     ) {}
 
-    public function index(Request $request): View
+    public function index(Request $request): Response
     {
         $tab = $request->query('tab', 'general');
         $campaigns = $this->campaignService->getCampaigns();
-        return view('admin.configuration', [
+
+        return $this->inertiaAdmin('admin.inline-configuration', [
             'tab' => $tab,
             'campaigns' => $campaigns,
             'telephonyFeatures' => $this->telephonyFeatureService->getAll(),
-        ]);
+        ], 'Configuration');
     }
 
     public function updateTelephonyFeatures(Request $request): RedirectResponse

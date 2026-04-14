@@ -9,7 +9,7 @@ use App\Models\AgentScreenField;
 use App\Services\CampaignService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Inertia\Response;
 
 class AgentScreenController extends Controller
 {
@@ -17,7 +17,7 @@ class AgentScreenController extends Controller
         protected CampaignService $campaignService
     ) {}
 
-    public function index(Request $request): View
+    public function index(Request $request): Response
     {
         $campaigns        = $this->campaignService->getCampaigns();
         $selectedCampaign = $request->query('campaign', array_key_first($campaigns) ?? '');
@@ -28,12 +28,13 @@ class AgentScreenController extends Controller
             ->orderBy('field_order')
             ->orderBy('id')
             ->get();
-        return view('admin.agent_screen', [
+
+        return $this->inertiaAdmin('admin.inline-agent_screen', [
             'campaigns'        => $campaigns,
             'fields'           => $fields,
             'selectedCampaign' => $selectedCampaign,
             'campaignName'     => $request->session()->get('campaign_name', 'CRM'),
-        ]);
+        ], 'Agent Screen');
     }
 
     public function store(StoreAgentScreenFieldRequest $request): RedirectResponse

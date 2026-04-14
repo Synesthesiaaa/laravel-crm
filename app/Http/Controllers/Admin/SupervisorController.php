@@ -4,11 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\DispositionCode;
-use Illuminate\View\View;
+use Inertia\Response;
 
 class SupervisorController extends Controller
 {
-    public function index(): View
+    public function index(): Response
     {
         $campaign = session('campaign');
 
@@ -16,6 +16,6 @@ class SupervisorController extends Controller
             $q->where('campaign_code', $campaign)->orWhereNull('campaign_code');
         })->where('is_active', true)->orderBy('sort_order')->get();
 
-        return view('admin.supervisor', compact('dispositionCodes'));
+        return $this->inertiaAdmin('admin.inline-supervisor', compact('dispositionCodes'), 'Supervisor');
     }
 }

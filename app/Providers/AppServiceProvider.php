@@ -37,7 +37,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(DispositionCode::class, DispositionCodePolicy::class);
         Gate::policy(VicidialServer::class, VicidialServerPolicy::class);
 
-        View::composer(['layouts.app', 'layouts.sidebar'], function ($view) {
+        View::composer(['layouts.app', 'layouts.sidebar', 'app'], function ($view) {
             $view->with('user', Auth::user());
             $view->with('campaignConfig', app(CampaignService::class)->getCampaign(session('campaign', 'mbsales')) ?? ['forms' => []]);
             $view->with('dispositionCodes', Auth::user()

@@ -4,7 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Repositories\AttendanceRepository;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class AttendanceController extends Controller
 {
@@ -12,19 +13,26 @@ class AttendanceController extends Controller
         protected AttendanceRepository $attendanceRepository
     ) {}
 
-    public function index(Request $request): View
+    public function index(Request $request): Response
     {
         $user = $request->user();
         $date = $request->get('date', now()->format('Y-m-d'));
         $logs = $this->attendanceRepository->getLogs($user->id, $date, 50);
         $lastEvent = $this->attendanceRepository->getLastEvent($user->id);
 
-        return view('attendance.index', [
-            'user' => $user,
-            'logs' => $logs,
-            'lastEvent' => $lastEvent,
+        $tz = config('app.timezone');
+
+        return Inertia::render('Attendance/Index', [
+            'logs' => $logs->map(fn ($log) => [
+                'event_type' => $log->event_type,
+                'event_time' => $log->event_time?->timezone($tz)->format('Y-m-d H:i:s T'),
+                'ip_address' => $log->ip_address,
+            ])->values()->all(),
+            'lastEvent' => $lastEvent ? [
+                'event_type' => $lastEvent->event_type,
+                'event_time' => $lastEvent->event_time?->timezone($tz)->format('M j, Y g:i A T'),
+            ] : null,
             'date' => $date,
-            'campaignName' => $request->session()->get('campaign_name', 'CRM'),
         ]);
     }
 }

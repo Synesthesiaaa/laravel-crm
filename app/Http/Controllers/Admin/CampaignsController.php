@@ -9,19 +9,20 @@ use App\Models\Campaign;
 use App\Services\CampaignService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Inertia\Response;
 
 class CampaignsController extends Controller
 {
     public function __construct(protected CampaignService $campaignService) {}
 
-    public function index(Request $request): View
+    public function index(Request $request): Response
     {
         $campaigns = Campaign::withCount('forms')->orderBy('display_order')->orderBy('id')->get();
-        return view('admin.campaigns', [
+
+        return $this->inertiaAdmin('admin.inline-campaigns', [
             'campaigns'    => $campaigns,
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
-        ]);
+        ], 'Campaigns');
     }
 
     public function store(StoreCampaignRequest $request): RedirectResponse

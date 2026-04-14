@@ -9,7 +9,7 @@ use App\Models\FormField;
 use App\Services\CampaignService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Inertia\Response;
 
 class FieldLogicController extends Controller
 {
@@ -17,7 +17,7 @@ class FieldLogicController extends Controller
         protected CampaignService $campaignService
     ) {}
 
-    public function index(Request $request): View
+    public function index(Request $request): Response
     {
         $campaign       = $request->session()->get('campaign', 'mbsales');
         $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['forms' => []];
@@ -31,13 +31,14 @@ class FieldLogicController extends Controller
             ->orderBy('field_order')
             ->orderBy('id')
             ->get();
-        return view('admin.field_logic', [
+
+        return $this->inertiaAdmin('admin.inline-field_logic', [
             'campaign'     => $campaign,
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
             'forms'        => $forms,
             'formType'     => $formType,
             'fields'       => $fields,
-        ]);
+        ], 'Field Logic');
     }
 
     public function store(StoreFieldLogicRequest $request): RedirectResponse

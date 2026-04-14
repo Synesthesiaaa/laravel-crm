@@ -10,13 +10,13 @@ use App\Models\Form;
 use App\Services\CampaignService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Inertia\Response;
 
 class FormsController extends Controller
 {
     public function __construct(protected CampaignService $campaignService) {}
 
-    public function index(Request $request): View
+    public function index(Request $request): Response
     {
         $campaigns       = Campaign::where('is_active', true)->orderBy('display_order')->get();
         $selectedCampaign = $request->query('campaign', $campaigns->first()?->code ?? '');
@@ -25,12 +25,13 @@ class FormsController extends Controller
             ->orderBy('display_order')
             ->orderBy('id')
             ->get();
-        return view('admin.forms', [
+
+        return $this->inertiaAdmin('admin.inline-forms', [
             'campaigns'        => $campaigns,
             'forms'            => $forms,
             'selectedCampaign' => $selectedCampaign,
             'campaignName'     => $request->session()->get('campaign_name', 'CRM'),
-        ]);
+        ], 'Forms');
     }
 
     public function store(StoreFormRequest $request): RedirectResponse

@@ -8,7 +8,7 @@ use App\Services\CampaignService;
 use App\Services\ExtractionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ExtractionController extends Controller
@@ -18,15 +18,16 @@ class ExtractionController extends Controller
         protected ExtractionService $extractionService
     ) {}
 
-    public function index(Request $request): View
+    public function index(Request $request): Response
     {
         $campaign       = $request->session()->get('campaign', 'mbsales');
         $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['forms' => []];
-        return view('admin.extraction', [
+
+        return $this->inertiaAdmin('admin.inline-extraction', [
             'campaign'     => $campaign,
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
             'forms'        => $campaignConfig['forms'] ?? [],
-        ]);
+        ], 'Data Extraction');
     }
 
     public function export(ExtractionRequest $request): StreamedResponse|RedirectResponse

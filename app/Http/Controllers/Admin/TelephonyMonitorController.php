@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\TelephonyAlert;
 use App\Services\Telephony\TelephonyHealthService;
-use Illuminate\View\View;
+use Inertia\Response;
 
 /**
  * Telephony monitoring dashboard for admins.
@@ -16,7 +16,7 @@ class TelephonyMonitorController extends Controller
         protected TelephonyHealthService $health
     ) {}
 
-    public function index(): View
+    public function index(): Response
     {
         $metrics = $this->health->getMetrics();
         $status = $this->health->getStatus($metrics);
@@ -25,10 +25,10 @@ class TelephonyMonitorController extends Controller
             ->limit(50)
             ->get();
 
-        return view('admin.telephony-monitor', [
+        return $this->inertiaAdmin('admin.inline-telephony-monitor', [
             'status' => $status,
             'metrics' => $metrics,
             'recentAlerts' => $recentAlerts,
-        ]);
+        ], 'Telephony Monitor');
     }
 }

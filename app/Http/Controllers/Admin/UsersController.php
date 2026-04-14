@@ -10,7 +10,7 @@ use App\Services\CampaignService;
 use App\Services\UserService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Inertia\Response;
 
 class UsersController extends Controller
 {
@@ -19,15 +19,15 @@ class UsersController extends Controller
         protected CampaignService $campaignService,
     ) {}
 
-    public function index(Request $request): View
+    public function index(Request $request): Response
     {
         $users = User::withCount('attendanceLogs')->orderBy('username')->get();
 
-        return view('admin.users', [
+        return $this->inertiaAdmin('admin.inline-users', [
             'users' => $users,
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
             'campaignOptions' => $this->campaignService->getCampaigns(),
-        ]);
+        ], 'User Access');
     }
 
     public function store(StoreUserRequest $request): RedirectResponse

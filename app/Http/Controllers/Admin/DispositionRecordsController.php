@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CampaignDispositionRecord;
 use App\Repositories\DispositionRepository;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Inertia\Response;
 
 class DispositionRecordsController extends Controller
 {
@@ -14,7 +14,7 @@ class DispositionRecordsController extends Controller
         protected DispositionRepository $dispositionRepository
     ) {}
 
-    public function index(Request $request): View
+    public function index(Request $request): Response
     {
         $campaign = $request->session()->get('campaign', 'mbsales');
         $query = CampaignDispositionRecord::with('campaign')->where('campaign_code', $campaign)->orderByDesc('called_at');
@@ -32,11 +32,12 @@ class DispositionRecordsController extends Controller
         }
         $records = $query->paginate(50);
         $dispositionCodes = $this->dispositionRepository->getForCampaign($campaign);
-        return view('admin.disposition_records', [
+
+        return $this->inertiaAdmin('admin.inline-disposition_records', [
             'records' => $records,
             'dispositionCodes' => $dispositionCodes,
             'campaign' => $campaign,
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
-        ]);
+        ], 'Disposition Records');
     }
 }

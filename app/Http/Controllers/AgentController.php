@@ -7,7 +7,8 @@ use App\Models\AgentScreenField;
 use App\Services\CampaignService;
 use App\Services\TelephonyFeatureService;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class AgentController extends Controller
 {
@@ -17,10 +18,9 @@ class AgentController extends Controller
         protected TelephonyFeatureService $telephonyFeatureService
     ) {}
 
-    public function index(Request $request): View
+    public function index(Request $request): Response
     {
         $campaign = $request->session()->get('campaign', 'mbsales');
-        $campaignName = $request->session()->get('campaign_name', 'CRM');
         $dispositionCodes = $this->dispositionRepository->getForCampaign($campaign);
 
         $rawFields = AgentScreenField::forCampaign($campaign)->ordered()->get();
@@ -36,13 +36,17 @@ class AgentController extends Controller
             ];
         });
 
-        return view('agent.index', [
-            'campaign' => $campaign,
-            'campaignName' => $campaignName,
-            'user' => $request->user(),
-            'dispositionCodes' => $dispositionCodes,
+        $telephonyFeatures = $this->telephonyFeatureService->getAll();
+
+        $agentMarkup = view('agent.alpine-markup', [
             'fields' => $fields,
-            'telephonyFeatures' => $this->telephonyFeatureService->getAll(),
+            'dispositionCodes' => $dispositionCodes,
+            'telephonyFeatures' => $telephonyFeatures,
+        ])->render();
+
+        return Inertia::render('Agent/Index', [
+            'agentMarkup' => $agentMarkup,
+            'telephonyFeatures' => $telephonyFeatures,
         ]);
     }
 }

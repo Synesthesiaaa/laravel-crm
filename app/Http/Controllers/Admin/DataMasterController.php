@@ -7,7 +7,7 @@ use App\Services\CampaignService;
 use App\Services\DataMasterService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Inertia\Response;
 
 class DataMasterController extends Controller
 {
@@ -16,7 +16,7 @@ class DataMasterController extends Controller
         protected DataMasterService $dataMasterService
     ) {}
 
-    public function index(Request $request): View
+    public function index(Request $request): Response
     {
         $campaign       = $request->session()->get('campaign', 'mbsales');
         $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['forms' => []];
@@ -34,7 +34,7 @@ class DataMasterController extends Controller
             $columns = array_keys((array) $first);
         }
 
-        return view('admin.data_master', [
+        return $this->inertiaAdmin('admin.inline-data_master', [
             'campaign'     => $campaign,
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
             'forms'        => $forms,
@@ -42,10 +42,10 @@ class DataMasterController extends Controller
             'tableName'    => $tableName,
             'records'      => $records,
             'columns'      => $columns,
-        ]);
+        ], 'Data Master');
     }
 
-    public function edit(Request $request, int $id): View|RedirectResponse
+    public function edit(Request $request, int $id): Response|RedirectResponse
     {
         $campaign       = $request->session()->get('campaign', 'mbsales');
         $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['forms' => []];
@@ -63,14 +63,14 @@ class DataMasterController extends Controller
             return redirect()->route('admin.data-master.index', ['type' => $type])->with('error', 'Record not found.');
         }
 
-        return view('admin.data_master_edit', [
+        return $this->inertiaAdmin('admin.inline-data_master_edit', [
             'campaign'     => $campaign,
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
             'type'         => $type,
             'tableName'    => $tableName,
             'record'       => $record,
             'columns'      => array_keys((array) $record),
-        ]);
+        ], 'Edit Record');
     }
 
     public function update(Request $request): RedirectResponse

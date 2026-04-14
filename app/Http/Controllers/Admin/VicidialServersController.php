@@ -9,21 +9,22 @@ use App\Models\VicidialServer;
 use App\Services\CampaignService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Inertia\Response;
 
 class VicidialServersController extends Controller
 {
     public function __construct(protected CampaignService $campaignService) {}
 
-    public function index(Request $request): View
+    public function index(Request $request): Response
     {
         $servers   = VicidialServer::orderBy('campaign_code')->orderBy('priority')->get();
         $campaigns = $this->campaignService->getCampaigns();
-        return view('admin.vicidial_servers', [
+
+        return $this->inertiaAdmin('admin.inline-vicidial_servers', [
             'servers'      => $servers,
             'campaigns'    => $campaigns,
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
-        ]);
+        ], 'VICIdial Servers');
     }
 
     public function store(StoreVicidialServerRequest $request): RedirectResponse

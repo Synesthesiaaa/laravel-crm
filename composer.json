@@ -12,6 +12,7 @@
         "laravel/reverb": "^1.8",
         "laravel/sanctum": "^4.3",
         "laravel/tinker": "^2.10.1",
+        "inertiajs/inertia-laravel": "^2.0",
         "league/csv": "^9.28",
         "marcelog/pami": "2.*",
         "pusher/pusher-php-server": "*",
