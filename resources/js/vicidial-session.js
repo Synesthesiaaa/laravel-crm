@@ -1,3 +1,5 @@
+//vici-session.js
+
 const DEFAULT_VERIFY_MAX = 15;
 const DEFAULT_VERIFY_DELAY_MS = 1500;
 const DEFAULT_TIMEOUT_MS = 20000;
