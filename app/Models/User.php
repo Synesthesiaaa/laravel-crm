@@ -14,7 +14,7 @@ use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable, SoftDeletes, LogsActivity, HasRoles;
+    use HasApiTokens, HasFactory, HasRoles, LogsActivity, Notifiable, SoftDeletes;
 
     public function getActivitylogOptions(): LogOptions
     {
@@ -25,8 +25,11 @@ class User extends Authenticatable
     }
 
     public const ROLE_SUPER_ADMIN = 'Super Admin';
+
     public const ROLE_ADMIN = 'Admin';
+
     public const ROLE_TEAM_LEADER = 'Team Leader';
+
     public const ROLE_AGENT = 'Agent';
 
     protected $fillable = [
@@ -40,6 +43,10 @@ class User extends Authenticatable
         'vici_pass',
         'extension',
         'sip_password',
+        'default_campaign',
+        'auto_vici_login',
+        'default_blended',
+        'default_ingroups',
     ];
 
     protected $hidden = [
@@ -56,6 +63,8 @@ class User extends Authenticatable
             'password' => 'hashed',
             'vici_pass' => EncryptedIfPossible::class,
             'sip_password' => 'encrypted',
+            'auto_vici_login' => 'boolean',
+            'default_blended' => 'boolean',
         ];
     }
 
@@ -81,7 +90,7 @@ class User extends Authenticatable
 
     public function isAgent(): bool
     {
-        return !empty($this->role);
+        return ! empty($this->role);
     }
 
     public function attendanceLogs(): \Illuminate\Database\Eloquent\Relations\HasMany

@@ -18,6 +18,7 @@ class VicidialAgentSession extends Model
         'pause_code',
         'blended',
         'ingroup_choices',
+        'last_iframe_url',
         'logged_in_at',
         'last_synced_at',
         'last_status_payload',
@@ -26,9 +27,9 @@ class VicidialAgentSession extends Model
     protected function casts(): array
     {
         return [
-            'blended'            => 'boolean',
-            'logged_in_at'       => 'datetime',
-            'last_synced_at'     => 'datetime',
+            'blended' => 'boolean',
+            'logged_in_at' => 'datetime',
+            'last_synced_at' => 'datetime',
             'last_status_payload' => 'array',
         ];
     }

@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Repositories\AttendanceRepository;
 use App\Repositories\UserRepository;
 use App\Services\Telephony\CallOrchestrationService;
+use App\Services\Telephony\VicidialSessionService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -17,7 +18,8 @@ class AuthService
     public function __construct(
         protected UserRepository $userRepository,
         protected AttendanceRepository $attendanceRepository,
-        protected CallOrchestrationService $callOrchestration
+        protected CallOrchestrationService $callOrchestration,
+        protected VicidialSessionService $vicidialSessionService,
     ) {}
 
     public function validateCredentials(string $username, string $password): ?User
@@ -74,8 +76,15 @@ class AuthService
         $sessionId = $request->session()->getId();
 
         $user = Auth::user();
+        $campaign = (string) $request->session()->get('campaign', 'mbsales');
         if ($user) {
             $this->callOrchestration->forceCompleteAllForUser($user);
+
+            try {
+                $this->vicidialSessionService->logoutAgent($user, $campaign);
+            } catch (\Throwable) {
+                // Best-effort telephony cleanup; auth logout must still complete.
+            }
             DB::transaction(function () use ($user): void {
                 $this->attendanceRepository->log($user->id, 'logout', request()?->ip());
                 event(new UserLoggedOut($user->id));

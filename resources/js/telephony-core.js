@@ -30,6 +30,8 @@ const CALL_ERRORS = {
     BUSY:                 'BUSY',
     CHANNEL_UNAVAILABLE:  'CHANNEL_UNAVAILABLE',
     AUTH_FAILURE:         'AUTH_FAILURE',
+    VICIDIAL_AGENT_NOT_LOGGED_IN: 'VICIDIAL_AGENT_NOT_LOGGED_IN',
+    VICIDIAL_DIAL_FAILED: 'VICIDIAL_DIAL_FAILED',
 };
 
 // ── Module-level state ────────────────────────────────────────────────────────

@@ -206,6 +206,8 @@
                                         try { await window.TelephonyCore.destroy(); } catch(e) {}
                                     }
                                     try { await axios.post('/api/vicidial/session/logout'); } catch(e) {}
+                                    const vf = document.getElementById('vici-session-frame');
+                                    if (vf) { vf.onload = null; vf.onerror = null; vf.src = 'about:blank'; }
                                     document.getElementById('logout-form').submit();
                                 })()
                             ">
@@ -382,11 +384,9 @@
         </div>
     </div>
 
-    {{-- Click-to-call widget (agents) --}}
+    {{-- Click-to-call widget --}}
     @auth
-    @if(auth()->user()->role === 'Agent' || auth()->user()->role === 'Team Leader')
     <x-click-to-call />
-    @endif
     @endauth
 
     {{-- Disposition modal (post-call wrap-up) --}}
@@ -444,14 +444,18 @@
 
     {{-- WebRTC remote audio element (hidden, managed by TelephonyCore) --}}
     @auth
-    @if(in_array(auth()->user()->role ?? '', ['Agent', 'Team Leader']))
     <audio id="remoteAudio" autoplay playsinline style="display:none;" aria-hidden="true"></audio>
-    @endif
+    @include('partials.phone-widget')
+    @php
+        $telephonyBootstrap = session()->pull('telephony_bootstrap');
+    @endphp
+    <script>
+        window.__telephonyBootstrap = @json($telephonyBootstrap);
+    </script>
     @endauth
 
     {{-- Global telephony: rehydrate call state + Echo subscription + SIP.js registration (persists across navigation) --}}
     @auth
-    @if(in_array(auth()->user()->role ?? '', ['Agent', 'Team Leader']))
     <script>
     document.addEventListener('alpine:init', function() {
         const store = Alpine.store('call');
@@ -492,13 +496,12 @@
                 const res = await window.axios.get('/api/call/status');
                 if (res.data?.success) rehydrateFromStatus(res.data);
             } catch {}
-            try {
-                await Alpine.store('vicidial').sync();
-            } catch {}
+            // VICIdial session iframe + reconnect/bootstrap: phone widget (phone-widget.js init)
 
-            // 2. Subscribe Reverb channel for real-time state updates
+            // 2. Subscribe Reverb channel for real-time state updates (agent route uses agentScreen() for a full subscription)
             if (window.TelephonyEcho?.initEcho && window.TelephonyEcho.isBroadcastEnabled()) {
                 window.TelephonyEcho.initEcho();
+                @unless(request()->routeIs('agent.index'))
                 window.TelephonyEcho.subscribeAgentChannel(userId, (payload) => {
                     store.state = mapBackendToUI(payload.to_status);
                     if (payload.session_id) store.sessionId = payload.session_id;
@@ -510,6 +513,7 @@
                         store.startTimer();
                     }
                 });
+                @endunless
             }
 
             // 3. Register SIP.js with Asterisk SIP (WebRTC)
@@ -523,7 +527,6 @@
         })();
     });
     </script>
-    @endif
     @endauth
 
     {{-- Theme toggle script --}}
@@ -547,6 +550,8 @@
       })();
     </script>
 
+    {{-- Marker for soft-navigate.js: page-specific scripts from @stack follow this node --}}
+    <div id="soft-nav-scripts-marker" class="hidden" aria-hidden="true"></div>
     @stack('scripts')
 </body>
 </html>

@@ -1,9 +1,11 @@
-//vici-session.js
-
 const DEFAULT_VERIFY_MAX = 15;
 const DEFAULT_VERIFY_DELAY_MS = 1500;
 const DEFAULT_TIMEOUT_MS = 20000;
 
+/** 422 means "no iframe URL" from the API — treat as a normal response so axios does not log a failed GET. */
+const AXIOS_IFRAME_URL_OPTS = {
+    validateStatus: (status) => (status >= 200 && status < 300) || status === 422,
+};
 function isIframeAgentApiOnly() {
     return window.__VICIDIAL_SESSION_IFRAME_ONLY === true;
 }
@@ -199,6 +201,7 @@ async function maybeReconnectPending(localSession, campaign, ctx = null) {
     try {
         const res = await window.axios.get('/api/vicidial/session/iframe-url', {
             params: { campaign: effectiveCampaign },
+            ...AXIOS_IFRAME_URL_OPTS,
         });
         if (res.data?.success && res.data?.iframe_url) {
             url = res.data.iframe_url;
@@ -452,7 +455,7 @@ async function popout(campaign = null, ctx = null) {
                 params: { campaign: effectiveCampaign },
                 ...AXIOS_IFRAME_URL_OPTS,
             });
-            url = res.data?.iframe_url || null;
+            url = res.data?.success ? res.data?.iframe_url || null : null;
         } catch (_) {}
     }
 

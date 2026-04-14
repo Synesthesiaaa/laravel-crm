@@ -5,6 +5,7 @@ namespace App\Services\Telephony;
 use App\Jobs\CallNoAnswerTimeoutJob;
 use App\Models\CallSession;
 use App\Models\User;
+use App\Models\VicidialAgentSession;
 use App\Services\DispositionService;
 use App\Support\CallErrors;
 use App\Support\OperationResult;
@@ -35,34 +36,51 @@ class CallOrchestrationService
         if ($active) {
             return OperationResult::failure(
                 CallErrors::MESSAGES[CallErrors::ALREADY_IN_CALL],
-                CallErrors::toJson(CallErrors::ALREADY_IN_CALL)
+                CallErrors::toJson(CallErrors::ALREADY_IN_CALL),
             );
         }
 
         if ($this->dispositionService->hasPendingDisposition($user->id)) {
             return OperationResult::failure(
                 CallErrors::MESSAGES[CallErrors::DIAL_BLOCKED_DISPOSITION],
-                CallErrors::toJson(CallErrors::DIAL_BLOCKED_DISPOSITION)
+                CallErrors::toJson(CallErrors::DIAL_BLOCKED_DISPOSITION),
             );
         }
 
         if (empty($user->vici_user) || empty($user->vici_pass)) {
             return OperationResult::failure(
                 'ViciDial credentials are not set. Contact administrator.',
-                CallErrors::toJson(CallErrors::EXTENSION_OFFLINE)
+                CallErrors::toJson(CallErrors::EXTENSION_OFFLINE),
             );
+        }
+
+        $skipAgentSessionCheck = app()->runningInConsole() && ! app()->runningUnitTests();
+
+        if (! $skipAgentSessionCheck && config('vicidial.require_vicidial_agent_session_before_dial', true)) {
+            $agentSession = VicidialAgentSession::query()
+                ->where('user_id', $user->id)
+                ->where('campaign_code', $campaign)
+                ->first();
+
+            if (! $agentSession
+                || ! in_array($agentSession->session_status, VicidialSessionService::USABLE_STATUSES, true)) {
+                return OperationResult::failure(
+                    'Log into VICIdial for this campaign on the agent screen first, then wait until Online.',
+                    CallErrors::toJson(CallErrors::VICIDIAL_AGENT_NOT_LOGGED_IN),
+                );
+            }
         }
 
         // Create session first so we have a session_id for the timeout job
         try {
             $session = DB::transaction(function () use ($user, $campaign, $phoneNumber, $leadId) {
                 return CallSession::create([
-                    'user_id'       => $user->id,
+                    'user_id' => $user->id,
                     'campaign_code' => $campaign,
-                    'lead_id'       => $leadId,
-                    'phone_number'  => $phoneNumber,
-                    'status'        => CallSession::STATUS_DIALING,
-                    'dialed_at'     => now(),
+                    'lead_id' => $leadId,
+                    'phone_number' => $phoneNumber,
+                    'status' => CallSession::STATUS_DIALING,
+                    'dialed_at' => now(),
                 ]);
             });
         } catch (\Throwable $e) {
@@ -71,18 +89,19 @@ class CallOrchestrationService
                 'campaign' => $campaign,
                 'user_id' => $user->id,
             ]);
+
             return OperationResult::failure($e->getMessage());
         }
 
         // Dial via ViciDial external_dial API – ViciDial handles ringing the agent and
         // bridging through the configured trunk, avoiding direct AMI originate spam.
         $dialParams = [
-            'value'        => $phoneNumber,
+            'value' => $phoneNumber,
             'phone_number' => $phoneNumber,
-            'phone_code'   => $phoneCode,
-            'search'       => 'YES',
-            'preview'      => 'NO',
-            'focus'        => 'YES',
+            'phone_code' => $phoneCode,
+            'search' => 'YES',
+            'preview' => 'NO',
+            'focus' => 'YES',
         ];
         if ($leadId) {
             $dialParams['lead_id'] = $leadId;
@@ -91,17 +110,19 @@ class CallOrchestrationService
 
         if (! $dialResult['success']) {
             $this->telephonyLogger->warning('CallOrchestrationService', 'ViciDial external_dial failed', [
-                'user_id'  => $user->id,
-                'number'   => $phoneNumber,
+                'user_id' => $user->id,
+                'number' => $phoneNumber,
                 'response' => $dialResult['raw_response'],
             ]);
             $this->callStateService->transition($session, CallSession::STATUS_FAILED, [
                 'end_reason' => 'vicidial_dial_failed',
             ], true);
 
+            $errorCode = $dialResult['failure_code'] ?? CallErrors::VICIDIAL_DIAL_FAILED;
+
             return OperationResult::failure(
                 $dialResult['message'] ?? 'ViciDial dial request failed.',
-                CallErrors::toJson(CallErrors::CHANNEL_UNAVAILABLE)
+                CallErrors::toJson($errorCode),
             );
         }
 
@@ -110,7 +131,7 @@ class CallOrchestrationService
             DB::transaction(function () use ($session) {
                 $this->callStateService->transition($session, CallSession::STATUS_RINGING);
                 CallNoAnswerTimeoutJob::dispatch($session->id)->delay(
-                    now()->addSeconds(config('webrtc.no_answer_timeout', 45))
+                    now()->addSeconds(config('webrtc.no_answer_timeout', 45)),
                 );
             });
         } catch (\Throwable $e) {
@@ -124,7 +145,7 @@ class CallOrchestrationService
 
             return OperationResult::failure(
                 'Call setup failed. Please try again.',
-                CallErrors::toJson(CallErrors::CHANNEL_UNAVAILABLE)
+                CallErrors::toJson(CallErrors::NETWORK_FAILURE),
             );
         }
 
@@ -157,7 +178,7 @@ class CallOrchestrationService
         } catch (\Throwable $e) {
             $this->telephonyLogger->warning('CallOrchestrationService', 'external_pause failed (non-blocking)', [
                 'session_id' => $session->id,
-                'error'      => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
         }
 
@@ -169,7 +190,7 @@ class CallOrchestrationService
         } catch (\Throwable $e) {
             $this->telephonyLogger->warning('CallOrchestrationService', 'external_hangup failed (non-blocking)', [
                 'session_id' => $session->id,
-                'error'      => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
         }
 
@@ -199,6 +220,7 @@ class CallOrchestrationService
                 $this->callStateService->transition($session, CallSession::STATUS_FAILED, [
                     'end_reason' => 'stale_session',
                 ], true);
+
                 return null;
             }
         }
@@ -209,6 +231,7 @@ class CallOrchestrationService
             $this->callStateService->transition($session, CallSession::STATUS_ABANDONED, [
                 'end_reason' => 'stale_session',
             ], true);
+
             return null;
         }
 
