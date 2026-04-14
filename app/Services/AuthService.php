@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Repositories\AttendanceRepository;
 use App\Repositories\UserRepository;
 use App\Services\Telephony\CallOrchestrationService;
+use App\Services\Telephony\TelephonyCampaignResolver;
 use App\Services\Telephony\VicidialSessionService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -76,7 +77,7 @@ class AuthService
         $sessionId = $request->session()->getId();
 
         $user = Auth::user();
-        $campaign = (string) $request->session()->get('campaign', 'mbsales');
+        $campaign = TelephonyCampaignResolver::forRequest($request);
         if ($user) {
             $this->callOrchestration->forceCompleteAllForUser($user);
 

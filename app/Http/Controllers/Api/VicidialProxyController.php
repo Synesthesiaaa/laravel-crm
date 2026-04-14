@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\Telephony\CallOrchestrationService;
+use App\Services\Telephony\TelephonyCampaignResolver;
 use App\Services\Telephony\VicidialProxyService;
 use App\Support\CallErrors;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +18,7 @@ class VicidialProxyController extends Controller
         if (empty($action)) {
             return response()->json(['success' => false, 'message' => 'Missing action']);
         }
-        $campaign = $request->query('campaign') ?: $request->session()->get('campaign', 'mbsales');
+        $campaign = $request->query('campaign') ?: TelephonyCampaignResolver::forRequest($request);
 
         // Dial actions: delegate to CallOrchestrationService (creates session, state machine)
         $dialActions = ['originate', 'external_dial'];

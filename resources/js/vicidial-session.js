@@ -6,6 +6,7 @@ const DEFAULT_TIMEOUT_MS = 20000;
 const AXIOS_IFRAME_URL_OPTS = {
     validateStatus: (status) => (status >= 200 && status < 300) || status === 422,
 };
+
 function isIframeAgentApiOnly() {
     return window.__VICIDIAL_SESSION_IFRAME_ONLY === true;
 }
@@ -18,7 +19,7 @@ const state = {
 };
 
 function getCampaign(campaign) {
-    return campaign || document.body?.dataset?.campaign || 'mbsales';
+    return campaign || document.body?.dataset?.telephonyCampaign || 'mbsales';
 }
 
 function phaseSet(ctx, phase) {

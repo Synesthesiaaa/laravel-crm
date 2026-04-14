@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\Telephony\CallbackService;
+use App\Services\Telephony\TelephonyCampaignResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -29,7 +30,7 @@ class CallbackController extends Controller
             strtoupper((string) ($validated['callback_type'] ?? 'ANYONE')),
             $validated['callback_user'] ?? null,
             $validated['callback_comments'] ?? null,
-            (string) ($validated['callback_status'] ?? 'CALLBK')
+            (string) ($validated['callback_status'] ?? 'CALLBK'),
         );
 
         return $this->respond($result);
@@ -45,7 +46,7 @@ class CallbackController extends Controller
         return $this->respond($service->remove(
             $request->user(),
             $this->campaign($request, $validated),
-            (int) $validated['lead_id']
+            (int) $validated['lead_id'],
         ));
     }
 
@@ -61,13 +62,18 @@ class CallbackController extends Controller
             $request->user(),
             $this->campaign($request, $validated),
             (int) $validated['lead_id'],
-            strtoupper((string) ($validated['search_location'] ?? 'ALL'))
+            strtoupper((string) ($validated['search_location'] ?? 'ALL')),
         ));
     }
 
     protected function campaign(Request $request, array $validated = []): string
     {
-        return (string) ($validated['campaign'] ?? $request->input('campaign', $request->session()->get('campaign', 'mbsales')));
+        $explicit = $validated['campaign'] ?? $request->input('campaign');
+
+        return TelephonyCampaignResolver::resolve(
+            $request,
+            is_string($explicit) && $explicit !== '' ? $explicit : null,
+        );
     }
 
     protected function respond($result): JsonResponse

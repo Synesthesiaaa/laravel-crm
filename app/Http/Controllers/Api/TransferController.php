@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\Telephony\TelephonyCampaignResolver;
 use App\Services\Telephony\TransferService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,6 +16,7 @@ class TransferController extends Controller
             'phone_number' => ['required', 'string', 'max:50'],
             'campaign' => ['nullable', 'string', 'max:50'],
         ]);
+
         return $this->respond($service->blindTransfer($request->user(), $this->campaign($request, $validated), $validated['phone_number']));
     }
 
@@ -32,7 +34,7 @@ class TransferController extends Controller
             $this->campaign($request, $validated),
             $validated['phone_number'] ?? null,
             $validated['ingroup'] ?? null,
-            (bool) ($validated['consultative'] ?? true)
+            (bool) ($validated['consultative'] ?? true),
         ));
     }
 
@@ -48,7 +50,7 @@ class TransferController extends Controller
             $request->user(),
             $this->campaign($request, $validated),
             $validated['ingroup'],
-            $validated['phone_number'] ?? null
+            $validated['phone_number'] ?? null,
         ));
     }
 
@@ -96,13 +98,18 @@ class TransferController extends Controller
         return $this->respond($service->swapPark(
             $request->user(),
             $this->campaign($request),
-            strtoupper($validated['target'])
+            strtoupper($validated['target']),
         ));
     }
 
     protected function campaign(Request $request, array $validated = []): string
     {
-        return (string) ($validated['campaign'] ?? $request->input('campaign', $request->session()->get('campaign', 'mbsales')));
+        $explicit = $validated['campaign'] ?? $request->input('campaign');
+
+        return TelephonyCampaignResolver::resolve(
+            $request,
+            is_string($explicit) && $explicit !== '' ? $explicit : null,
+        );
     }
 
     protected function respond($result): JsonResponse

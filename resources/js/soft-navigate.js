@@ -10,6 +10,59 @@ function removeInjectedPageScripts() {
     document.querySelectorAll('script[data-soft-nav-injected]').forEach((el) => el.remove());
 }
 
+/**
+ * Normalize href for matching (sidebar links may be absolute or root-relative).
+ */
+function normalizeNavHref(href) {
+    if (!href) {
+        return '';
+    }
+    try {
+        const u = new URL(href, window.location.origin);
+
+        return u.pathname + u.search;
+    } catch {
+        return href;
+    }
+}
+
+/**
+ * Soft-nav only swaps #main-layout; the sidebar stays from the first paint.
+ * Copy which `.sidebar-item` links are `active` from the fetched full HTML
+ * so the magenta current-page state matches the new route.
+ */
+function syncSidebarActiveFromFetchedDocument(doc) {
+    const nextSidebar = doc.getElementById('sidebar');
+    const curSidebar = document.getElementById('sidebar');
+    if (!nextSidebar || !curSidebar) {
+        return;
+    }
+
+    /** @type {Map<string, boolean>} */
+    const activeByHref = new Map();
+    nextSidebar.querySelectorAll('a.sidebar-item').forEach((a) => {
+        const href = a.getAttribute('href');
+        if (!href) {
+            return;
+        }
+        activeByHref.set(normalizeNavHref(href), a.classList.contains('active'));
+    });
+
+    curSidebar.querySelectorAll('a.sidebar-item').forEach((a) => {
+        const href = a.getAttribute('href');
+        if (!href) {
+            return;
+        }
+        const key = normalizeNavHref(href);
+        if (!activeByHref.has(key)) {
+            a.classList.remove('active');
+
+            return;
+        }
+        a.classList.toggle('active', activeByHref.get(key) === true);
+    });
+}
+
 function executeScriptsAfterMarker(doc) {
     const marker = doc.getElementById('soft-nav-scripts-marker');
     if (!marker) {
@@ -91,6 +144,8 @@ async function softNavigate(url, { push = true } = {}) {
     removeInjectedPageScripts();
 
     mainLayout.innerHTML = nextMain.innerHTML;
+
+    syncSidebarActiveFromFetchedDocument(doc);
 
     const titleEl = doc.querySelector('title');
     if (titleEl?.textContent) {

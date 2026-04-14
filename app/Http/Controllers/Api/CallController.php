@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Services\Telephony\CallOrchestrationService;
 use App\Services\Telephony\PredictiveDialerService;
+use App\Services\Telephony\TelephonyCampaignResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -12,7 +13,7 @@ class CallController extends Controller
 {
     public function __construct(
         protected CallOrchestrationService $orchestration,
-        protected PredictiveDialerService $predictiveDialer
+        protected PredictiveDialerService $predictiveDialer,
     ) {}
 
     /**
@@ -26,7 +27,7 @@ class CallController extends Controller
             'phone_code' => ['nullable', 'string', 'max:5'],
         ]);
 
-        $campaign = $request->query('campaign') ?: $request->session()->get('campaign', 'mbsales');
+        $campaign = $request->query('campaign') ?: TelephonyCampaignResolver::forRequest($request);
         $phoneNumber = $request->input('phone_number') ?: $request->query('phone_number') ?: $request->input('phone');
 
         if (empty($phoneNumber)) {
@@ -38,7 +39,7 @@ class CallController extends Controller
             $campaign,
             $phoneNumber,
             $request->input('lead_id') ? (int) $request->input('lead_id') : null,
-            $request->input('phone_code', '1')
+            $request->input('phone_code', '1'),
         );
 
         if (! $result->success) {
@@ -46,6 +47,7 @@ class CallController extends Controller
             if (is_array($result->data) && isset($result->data['error_code'])) {
                 $payload['error'] = $result->data;
             }
+
             return response()->json($payload, 422);
         }
 
@@ -124,7 +126,7 @@ class CallController extends Controller
      */
     public function predictiveDial(Request $request): JsonResponse
     {
-        $campaign = $request->query('campaign') ?: $request->session()->get('campaign', 'mbsales');
+        $campaign = $request->query('campaign') ?: TelephonyCampaignResolver::forRequest($request);
         $result = $this->predictiveDialer->dialNext($request->user(), $campaign);
 
         if (! $result->success) {

@@ -3,7 +3,7 @@
 </script>
 @php
     $phoneWidgetBoot = [
-        'vici_campaign' => (string) session('campaign', 'mbsales'),
+        'vici_campaign' => (string) (session('vicidial_campaign') ?? session('campaign', 'mbsales')),
         'phone_login' => (string) (auth()->user()->extension ?? ''),
         'vd_login' => (string) (auth()->user()->vici_user ?? ''),
         'panelW' => (int) config('vicidial.session_iframe_panel_width_px', 440),
