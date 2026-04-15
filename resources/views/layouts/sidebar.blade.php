@@ -51,6 +51,7 @@
         ['route' => 'admin.campaigns.index',        'label' => 'Campaigns',        'icon' => 'building-office'],
         ['route' => 'admin.forms.index',            'label' => 'Forms',            'icon' => 'document-text'],
         ['route' => 'admin.agent-screen.index',     'label' => 'Agent Screen Cfg', 'icon' => 'computer-desktop'],
+        ['route' => 'admin.attendance-statuses.index', 'label' => 'Attendance Statuses', 'icon' => 'clock'],
         ['route' => 'admin.configuration',          'label' => 'Configuration',    'icon' => 'cog-6-tooth'],
     ];
 @endphp

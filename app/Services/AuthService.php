@@ -19,6 +19,7 @@ class AuthService
     public function __construct(
         protected UserRepository $userRepository,
         protected AttendanceRepository $attendanceRepository,
+        protected AttendanceStatusService $attendanceStatusService,
         protected CallOrchestrationService $callOrchestration,
         protected VicidialSessionService $vicidialSessionService,
     ) {}
@@ -87,6 +88,7 @@ class AuthService
                 // Best-effort telephony cleanup; auth logout must still complete.
             }
             DB::transaction(function () use ($user): void {
+                $this->attendanceStatusService->autoCloseOnLogout($user, request()?->ip());
                 $this->attendanceRepository->log($user->id, 'logout', request()?->ip());
                 event(new UserLoggedOut($user->id));
             });
