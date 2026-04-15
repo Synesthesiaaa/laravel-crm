@@ -15,12 +15,44 @@
             @if($lastEvent)
                 <p class="text-[var(--color-on-surface-muted)] mt-3 text-sm">
                     Last event:
-                    <x-badge :type="$lastEvent->event_type === 'login' ? 'active' : 'inactive'">{{ strtoupper($lastEvent->event_type) }}</x-badge>
+                    <x-badge :type="$lastEvent->event_type === 'login' ? 'active' : ($lastEvent->event_type === 'logout' ? 'inactive' : 'info')">{{ $lastEvent->eventDisplayLabel() }}</x-badge>
                     <span class="ml-1">{{ $lastEvent->event_time?->timezone(config('app.timezone'))->format('M j, Y g:i A T') }}</span>
                 </p>
             @endif
         </div>
         <x-app-live-clock class="w-full shrink-0 md:max-w-sm" />
+    </div>
+</div>
+
+<div class="md-card mb-4" x-data="attendanceStatusPanel()" x-init="init()">
+    <div class="px-6 py-4 border-b border-[var(--color-border)]">
+        <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">{{ __('Away status') }}</h3>
+        <p class="text-xs text-[var(--color-on-surface-muted)] mt-1">{{ __('Start or end lunch, break, or other statuses configured by your administrator. Login and logout are recorded automatically.') }}</p>
+    </div>
+    <div class="p-6">
+        <p class="text-sm text-[var(--color-on-surface-muted)]" x-show="!ready">{{ __('Loading…') }}</p>
+        <template x-if="ready && open">
+            <div class="flex flex-wrap items-center gap-3">
+                <x-badge type="info"><span x-text="open?.label"></span></x-badge>
+                <span class="text-sm text-[var(--color-on-surface-muted)]" x-show="open?.started_at">
+                    {{ __('Since') }} <span x-text="formatStarted(open?.started_at)"></span>
+                </span>
+                <button type="button" class="btn-primary" :disabled="loading" @click="end()">
+                    <x-icon name="check" class="w-4 h-4" />
+                    {{ __('End status') }}
+                </button>
+            </div>
+        </template>
+        <template x-if="ready && !open && types.length">
+            <div class="flex flex-wrap gap-2">
+                <template x-for="t in types" :key="t.code">
+                    <button type="button" class="btn-secondary text-sm" :disabled="loading" @click="start(t.code)" x-text="'{{ __('Start') }} ' + t.label"></button>
+                </template>
+            </div>
+        </template>
+        <p class="text-sm text-[var(--color-on-surface-dim)]" x-show="ready && !open && !types.length">
+            {{ __('No away statuses are available. Ask a Super Admin to configure them under Admin → Attendance Statuses.') }}
+        </p>
     </div>
 </div>
 
@@ -49,7 +81,7 @@
             <tr>
                 <td>
                     <x-badge :type="$log->event_type === 'login' ? 'active' : ($log->event_type === 'logout' ? 'inactive' : 'info')">
-                        {{ strtoupper($log->event_type) }}
+                        {{ $log->eventDisplayLabel() }}
                     </x-badge>
                 </td>
                 <td class="font-mono text-sm text-[var(--color-on-surface-muted)]">{{ $log->event_time?->timezone(config('app.timezone'))->format('Y-m-d H:i:s T') }}</td>
@@ -59,4 +91,5 @@
     </tbody>
     @endif
 </x-table.index>
+
 @endsection

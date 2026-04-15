@@ -8,9 +8,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AttendanceLog extends Model
 {
+    public const SYSTEM_EVENT_TYPES = ['login', 'logout'];
+
+    public const DIRECTION_START = 'start';
+
+    public const DIRECTION_END = 'end';
+
     protected $fillable = [
         'user_id',
         'event_type',
+        'attendance_status_type_id',
+        'direction',
         'event_time',
         'ip_address',
     ];
@@ -25,6 +33,31 @@ class AttendanceLog extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function statusType(): BelongsTo
+    {
+        return $this->belongsTo(AttendanceStatusType::class, 'attendance_status_type_id');
+    }
+
+    public function eventDisplayLabel(): string
+    {
+        if (in_array($this->event_type, self::SYSTEM_EVENT_TYPES, true)) {
+            return strtoupper($this->event_type);
+        }
+
+        $base = $this->relationLoaded('statusType') && $this->statusType
+            ? $this->statusType->label
+            : strtoupper($this->event_type);
+
+        if ($this->direction === self::DIRECTION_START) {
+            return $base.' (Start)';
+        }
+        if ($this->direction === self::DIRECTION_END) {
+            return $base.' (End)';
+        }
+
+        return $base;
     }
 
     public function scopeForUser(Builder $query, int $userId): Builder

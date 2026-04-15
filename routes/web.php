@@ -101,6 +101,9 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::post('api/disposition/save', \App\Http\Controllers\Api\SaveDispositionController::class)->name('api.disposition.save')->middleware('throttle:api');
     Route::post('api/client-errors', fn () => response()->json(['ok' => true]))->name('api.client-errors');
     Route::get('attendance', [AttendanceController::class, 'index'])->name('attendance.index');
+    Route::post('api/attendance/start', [\App\Http\Controllers\Api\AttendanceStatusController::class, 'start'])->name('api.attendance.start')->middleware('throttle:api');
+    Route::post('api/attendance/end', [\App\Http\Controllers\Api\AttendanceStatusController::class, 'end'])->name('api.attendance.end')->middleware('throttle:api');
+    Route::get('api/attendance/current', [\App\Http\Controllers\Api\AttendanceStatusController::class, 'current'])->name('api.attendance.current')->middleware('throttle:api');
     Route::middleware('role:Team Leader,Admin,Super Admin')->group(function () {
         Route::get('reports', [ReportsController::class, 'index'])->name('reports.index');
         Route::post('api/supervisor/monitor', [\App\Http\Controllers\Api\SupervisorTelephonyController::class, 'monitor'])->name('api.supervisor.monitor')->middleware('throttle:vicidial');
@@ -158,6 +161,10 @@ Route::middleware(['auth', 'campaign'])->group(function () {
             Route::post('agent-screen', [\App\Http\Controllers\Admin\AgentScreenController::class, 'store'])->name('agent-screen.store');
             Route::put('agent-screen/{field}', [\App\Http\Controllers\Admin\AgentScreenController::class, 'update'])->name('agent-screen.update');
             Route::post('agent-screen/delete', [\App\Http\Controllers\Admin\AgentScreenController::class, 'destroy'])->name('agent-screen.destroy');
+            Route::get('attendance-statuses', [\App\Http\Controllers\Admin\AttendanceStatusTypesController::class, 'index'])->name('attendance-statuses.index');
+            Route::post('attendance-statuses', [\App\Http\Controllers\Admin\AttendanceStatusTypesController::class, 'store'])->name('attendance-statuses.store');
+            Route::put('attendance-statuses/{id}', [\App\Http\Controllers\Admin\AttendanceStatusTypesController::class, 'update'])->name('attendance-statuses.update');
+            Route::post('attendance-statuses/delete', [\App\Http\Controllers\Admin\AttendanceStatusTypesController::class, 'destroy'])->name('attendance-statuses.destroy');
         });
     });
     Route::get('forms/{type}', [FormController::class, 'show'])->name('forms.show')->where('type', '[a-z_]+');
