@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\Telephony\DtmfService;
+use App\Services\Telephony\TelephonyCampaignResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -18,8 +19,8 @@ class DtmfController extends Controller
 
         $result = $service->send(
             $request->user(),
-            (string) ($validated['campaign'] ?? $request->session()->get('campaign', 'mbsales')),
-            $validated['digits']
+            TelephonyCampaignResolver::resolve($request, $validated['campaign'] ?? null),
+            $validated['digits'],
         );
 
         return response()->json([

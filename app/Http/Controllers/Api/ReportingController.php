@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\Telephony\ReportingService;
+use App\Services\Telephony\TelephonyCampaignResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -67,7 +68,12 @@ class ReportingController extends Controller
 
     protected function campaign(Request $request): string
     {
-        return (string) $request->input('campaign', $request->session()->get('campaign', 'mbsales'));
+        $explicit = $request->input('campaign');
+
+        return TelephonyCampaignResolver::resolve(
+            $request,
+            is_string($explicit) && $explicit !== '' ? (string) $explicit : null,
+        );
     }
 
     protected function respond($result): JsonResponse

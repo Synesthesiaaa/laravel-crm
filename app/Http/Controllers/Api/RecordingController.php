@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\Telephony\RecordingService;
+use App\Services\Telephony\TelephonyCampaignResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -19,7 +20,7 @@ class RecordingController extends Controller
         $result = $service->startRecording(
             $request->user(),
             $this->campaign($request, $validated),
-            $validated['stage'] ?? null
+            $validated['stage'] ?? null,
         );
 
         return $this->respond($result);
@@ -50,7 +51,12 @@ class RecordingController extends Controller
 
     protected function campaign(Request $request, array $validated = []): string
     {
-        return (string) ($validated['campaign'] ?? $request->input('campaign', $request->session()->get('campaign', 'mbsales')));
+        $explicit = $validated['campaign'] ?? $request->input('campaign');
+
+        return TelephonyCampaignResolver::resolve(
+            $request,
+            is_string($explicit) && $explicit !== '' ? $explicit : null,
+        );
     }
 
     protected function respond($result): JsonResponse

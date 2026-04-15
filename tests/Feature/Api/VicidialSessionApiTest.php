@@ -612,7 +612,9 @@ class VicidialSessionApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('success', true);
 
-        $this->assertSame('newcamp', session('campaign'));
-        $this->assertSame('New Camp', session('campaign_name'));
+        $this->assertSame('newcamp', session('vicidial_campaign'));
+        $this->assertSame('New Camp', session('vicidial_campaign_name'));
+        $this->assertSame('testcamp', session('campaign'));
+        $this->assertSame('Test', session('campaign_name'));
     }
 }

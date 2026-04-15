@@ -2,6 +2,25 @@
  * Global floating phone / VICIdial session widget (see resources/views/partials/phone-widget.blade.php).
  * `window.__VICIDIAL_SESSION_IFRAME_ONLY` is set inline in the Blade partial before Alpine inits.
  */
+
+/**
+ * Match CRM campaign code to a row from VICIdial (exact id, then case-insensitive).
+ * @param {Array<{id: string, name?: string}>} agentCampaigns
+ * @param {string} crmCode
+ * @returns {{id: string, name?: string}|null}
+ */
+function findCampaignInAgentList(agentCampaigns, crmCode) {
+    if (!crmCode || !Array.isArray(agentCampaigns) || agentCampaigns.length === 0) {
+        return null;
+    }
+    const exact = agentCampaigns.find((c) => c && c.id === crmCode);
+    if (exact) {
+        return exact;
+    }
+    const lower = String(crmCode).toLowerCase();
+    return agentCampaigns.find((c) => c && String(c.id).toLowerCase() === lower) || null;
+}
+
 window.getPhoneWidgetCtx = function getPhoneWidgetCtx() {
     const el = document.getElementById('phone-widget-root');
     if (!el || !window.Alpine?.$data) {
@@ -47,8 +66,9 @@ window.phoneWidget = function phoneWidget(boot = {}) {
                 .filter(Boolean);
         },
 
-        currentCampaign() {
-            const fromBody = document.body?.dataset?.campaign;
+        /** VICIdial / dialer campaign only — never reads CRM `data-campaign`. */
+        telephonyCampaign() {
+            const fromBody = document.body?.dataset?.telephonyCampaign;
             return this.vici.vici_campaign || fromBody || 'mbsales';
         },
 
@@ -60,7 +80,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
                     campaign: code,
                     campaign_name: row?.name || code,
                 });
-                if (document.body?.dataset) document.body.dataset.campaign = code;
+                if (document.body?.dataset) document.body.dataset.telephonyCampaign = code;
                 Alpine.store('vicidial').campaign = code;
             } catch (_) {}
         },
@@ -75,16 +95,32 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             this.vici.agent_campaigns_error = null;
             try {
                 const res = await window.axios.get('/api/vicidial/session/agent-campaigns', {
-                    params: { context_campaign: this.currentCampaign() },
+                    params: { context_campaign: this.telephonyCampaign() },
                 });
                 if (res.data?.success && Array.isArray(res.data.campaigns)) {
                     this.vici.agent_campaigns = res.data.campaigns;
-                    const ids = this.vici.agent_campaigns.map((c) => c.id);
-                    if (ids.length && !ids.includes(this.vici.vici_campaign)) {
-                        this.vici.vici_campaign = this.vici.agent_campaigns[0].id;
-                        await this.persistViciCampaignToSession();
+                    const crmCode = this.vici.vici_campaign;
+                    const match = findCampaignInAgentList(this.vici.agent_campaigns, crmCode);
+
+                    if (match) {
+                        // Align softphone state + session vicidial_* to VICIdial canonical id (e.g. casing).
+                        if (match.id !== crmCode) {
+                            this.vici.vici_campaign = match.id;
+                            await this.persistViciCampaignToSession();
+                        } else if (document.body?.dataset) {
+                            document.body.dataset.telephonyCampaign = match.id;
+                        }
+                    } else if (this.vici.agent_campaigns.length && crmCode) {
+                        // Softphone campaign not in API list: keep selection, prepend for the dropdown.
+                        this.vici.agent_campaigns = [
+                            { id: crmCode, name: crmCode },
+                            ...this.vici.agent_campaigns,
+                        ];
+                        if (document.body?.dataset) {
+                            document.body.dataset.telephonyCampaign = crmCode;
+                        }
                     } else if (document.body?.dataset) {
-                        document.body.dataset.campaign = this.vici.vici_campaign;
+                        document.body.dataset.telephonyCampaign = this.vici.vici_campaign;
                     }
                 }
             } catch (e) {
@@ -101,7 +137,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
                 return;
             }
             await window.VicidialSession.login({
-                campaign: this.currentCampaign(),
+                campaign: this.telephonyCampaign(),
                 phoneLogin: this.vici.phone_login || null,
                 phonePass: this.vici.phone_pass || null,
                 vdLogin: this.vici.vd_login || null,
@@ -115,7 +151,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
 
         async viciPause(value) {
             if (!this.sessionControls || !window.VicidialSession?.pause) return;
-            await window.VicidialSession.pause(value, this.currentCampaign(), this);
+            await window.VicidialSession.pause(value, this.telephonyCampaign(), this);
         },
 
         /** Pause when active (ready/in_call); "Active" when paused — matches Vicidial wording */
@@ -130,12 +166,12 @@ window.phoneWidget = function phoneWidget(boot = {}) {
 
         async viciLogout() {
             if (!this.sessionControls || !window.VicidialSession?.logout) return;
-            await window.VicidialSession.logout(this.currentCampaign(), this);
+            await window.VicidialSession.logout(this.telephonyCampaign(), this);
         },
 
         async viciPopout() {
             if (!this.sessionControls || !window.VicidialSession?.popout) return;
-            await window.VicidialSession.popout(this.currentCampaign(), this);
+            await window.VicidialSession.popout(this.telephonyCampaign(), this);
         },
 
         _onWsPhase(e) {
@@ -158,9 +194,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
 
             let viciStatusData = null;
             try {
-                viciStatusData = await Alpine.store('vicidial').sync(
-                    document.body.dataset.campaign || 'mbsales',
-                );
+                viciStatusData = await Alpine.store('vicidial').sync(this.telephonyCampaign());
             } catch (_) {}
 
             try {
@@ -168,7 +202,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
                 if (window.VicidialSession?.maybeReconnectPending) {
                     reconnected = await window.VicidialSession.maybeReconnectPending(
                         viciStatusData?.local_session,
-                        document.body.dataset.campaign,
+                        this.telephonyCampaign(),
                         this,
                     );
                 }
@@ -198,7 +232,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         async syncVicidialStatusFromPhone() {
             if (!this.sessionControls) return;
             try {
-                const data = await Alpine.store('vicidial').sync(this.currentCampaign());
+                const data = await Alpine.store('vicidial').sync(this.telephonyCampaign());
                 const localStatus = data?.local_session?.session_status || '';
                 if (['ready', 'paused', 'in_call'].includes(localStatus)) {
                     if (!['syncing', 'iframe_loading', 'requesting'].includes(this.vici.phase)) {

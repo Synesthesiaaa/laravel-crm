@@ -120,9 +120,23 @@ class LoginController extends Controller
         $this->authService->logAttendance($user->id, 'login', $request->ip());
 
         $campaigns = $this->campaignService->getCampaigns();
-        if ($campaign && isset($campaigns[$campaign])) {
-            $request->session()->put('campaign', $campaign);
-            $request->session()->put('campaign_name', $campaigns[$campaign]['name'] ?? $campaign);
+        $resolved = null;
+        if (is_string($campaign) && $campaign !== '') {
+            if (isset($campaigns[$campaign])) {
+                $resolved = $campaign;
+            } else {
+                foreach (array_keys($campaigns) as $key) {
+                    if (strcasecmp((string) $key, $campaign) === 0) {
+                        $resolved = $key;
+
+                        break;
+                    }
+                }
+            }
+        }
+        if ($resolved !== null) {
+            $request->session()->put('campaign', $resolved);
+            $request->session()->put('campaign_name', $campaigns[$resolved]['name'] ?? $resolved);
         } else {
             $first = array_key_first($campaigns);
             if ($first) {

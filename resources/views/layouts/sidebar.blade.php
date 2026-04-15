@@ -1,8 +1,29 @@
 @php
-    $currentRoute = request()->route()?->getName() ?? '';
     $campaignName = session('campaign_name', 'CRM');
     $campaign     = session('campaign', '');
     $forms        = $campaignConfig['forms'] ?? [];
+    /** Route `forms/{type}` — use route param for active state. */
+    $formsRouteType = request()->route('type');
+
+    /**
+     * Active nav item: exact route name, or `admin.foo.*`-style group when the sidebar points at `admin.foo.index`.
+     * Uses request()->routeIs() so matching stays aligned with Laravel's route naming.
+     */
+    $sidebarLinkActive = static function (string $itemRoute): bool {
+        if ($itemRoute === '' || ! request()->route()) {
+            return false;
+        }
+        if (request()->routeIs($itemRoute)) {
+            return true;
+        }
+        if (str_ends_with($itemRoute, '.index')) {
+            $base = substr($itemRoute, 0, -strlen('.index'));
+
+            return request()->routeIs($base.'.*');
+        }
+
+        return false;
+    };
 
     $navItems = [
         ['route' => 'dashboard',    'label' => 'Dashboard',    'icon' => 'chart-bar'],
@@ -64,7 +85,7 @@
         {{-- Main --}}
         @foreach($navItems as $item)
             <a href="{{ route($item['route']) }}"
-               class="sidebar-item {{ $currentRoute === $item['route'] ? 'active' : '' }}"
+               class="sidebar-item {{ $sidebarLinkActive($item['route']) ? 'active' : '' }}"
                title="{{ $item['label'] }}"
                @click="$store.sidebar.closeMobile()">
                 <x-icon :name="$item['icon']" class="sidebar-icon shrink-0" />
@@ -76,7 +97,7 @@
         <div class="sidebar-section-label">Telephony</div>
         @foreach($telephonyItems as $item)
             <a href="{{ route($item['route']) }}"
-               class="sidebar-item {{ $currentRoute === $item['route'] ? 'active' : '' }}"
+               class="sidebar-item {{ $sidebarLinkActive($item['route']) ? 'active' : '' }}"
                title="{{ $item['label'] }}"
                @click="$store.sidebar.closeMobile()">
                 <x-icon :name="$item['icon']" class="sidebar-icon shrink-0" />
@@ -89,7 +110,7 @@
         <div class="sidebar-section-label">Campaign Forms</div>
         @foreach($forms as $formCode => $formConfig)
             <a href="{{ route('forms.show', ['type' => $formCode, 'campaign' => $campaign]) }}"
-               class="sidebar-item {{ ($currentRoute === 'forms.show' && request('type') === $formCode) ? 'active' : '' }}"
+               class="sidebar-item {{ (request()->routeIs('forms.show') && (string) $formsRouteType === (string) $formCode) ? 'active' : '' }}"
                title="{{ $formConfig['name'] ?? $formCode }}"
                @click="$store.sidebar.closeMobile()">
                 <x-icon name="document-text" class="sidebar-icon shrink-0" />
@@ -103,7 +124,7 @@
         <div class="sidebar-section-label">Admin</div>
         @foreach($adminItems as $item)
             <a href="{{ route($item['route']) }}"
-               class="sidebar-item {{ str_starts_with($currentRoute, str_replace('.index', '', $item['route'])) ? 'active' : '' }}"
+               class="sidebar-item {{ $sidebarLinkActive($item['route']) ? 'active' : '' }}"
                title="{{ $item['label'] }}"
                @click="$store.sidebar.closeMobile()">
                 <x-icon :name="$item['icon']" class="sidebar-icon shrink-0" />
@@ -116,7 +137,7 @@
             <div class="sidebar-section-label">Super Admin</div>
             @foreach($superAdminItems as $item)
                 <a href="{{ route($item['route']) }}"
-                   class="sidebar-item {{ str_starts_with($currentRoute, str_replace(['.index', '.create'], '', $item['route'])) ? 'active' : '' }}"
+                   class="sidebar-item {{ $sidebarLinkActive($item['route']) ? 'active' : '' }}"
                    title="{{ $item['label'] }}"
                    @click="$store.sidebar.closeMobile()">
                     <x-icon :name="$item['icon']" class="sidebar-icon shrink-0" />

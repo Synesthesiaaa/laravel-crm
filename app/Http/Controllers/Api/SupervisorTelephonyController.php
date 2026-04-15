@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\Telephony\TelephonyCampaignResolver;
 use App\Services\Telephony\VicidialProxyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,7 +12,7 @@ use Illuminate\Http\Request;
 class SupervisorTelephonyController extends Controller
 {
     public function __construct(
-        protected VicidialProxyService $agentApi
+        protected VicidialProxyService $agentApi,
     ) {}
 
     public function monitor(Request $request): JsonResponse
@@ -43,12 +44,16 @@ class SupervisorTelephonyController extends Controller
             'show_confetti' => ['nullable', 'boolean'],
         ]);
 
-        $campaign = (string) $request->input('campaign', $request->session()->get('campaign', 'mbsales'));
+        $explicit = $request->input('campaign');
+        $campaign = TelephonyCampaignResolver::resolve(
+            $request,
+            is_string($explicit) && $explicit !== '' ? (string) $explicit : null,
+        );
         $payload = [
             'recipient_type' => $validated['recipient_type'],
             'recipient' => $validated['recipient'],
             'notification_text' => $validated['notification_text'] ?? '',
-            'show_confetti' => !empty($validated['show_confetti']) ? 'Y' : 'N',
+            'show_confetti' => ! empty($validated['show_confetti']) ? 'Y' : 'N',
         ];
 
         $result = $this->agentApi->execute($request->user(), $campaign, 'send_notification', [
@@ -73,7 +78,7 @@ class SupervisorTelephonyController extends Controller
             'server_ip' => ['nullable', 'string', 'max:20'],
         ]);
 
-        $campaign = (string) ($validated['campaign'] ?? $request->session()->get('campaign', 'mbsales'));
+        $campaign = TelephonyCampaignResolver::resolve($request, $validated['campaign'] ?? null);
         $agent = User::findOrFail((int) $validated['agent_user_id']);
 
         $query = array_merge([

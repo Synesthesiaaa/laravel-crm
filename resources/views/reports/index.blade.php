@@ -33,25 +33,29 @@
         </div>
     </div>
 
-    <div class="flex gap-2 border-b border-[var(--color-border)]">
-        <button class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
+    <div class="flex gap-2 border-b border-[var(--color-border)]" role="tablist">
+        <button type="button" role="tab" :aria-selected="tab === 'status'"
+                class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
                 :class="tab === 'status' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-on-surface-muted)]'"
-                @click="tab = 'status'">
+                @click="setTab('status')">
             Call Status Stats
         </button>
-        <button class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
+        <button type="button" role="tab" :aria-selected="tab === 'agents'"
+                class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
                 :class="tab === 'agents' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-on-surface-muted)]'"
-                @click="tab = 'agents'">
+                @click="setTab('agents')">
             Agent Performance
         </button>
-        <button class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
+        <button type="button" role="tab" :aria-selected="tab === 'dispo'"
+                class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
                 :class="tab === 'dispo' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-on-surface-muted)]'"
-                @click="tab = 'dispo'">
+                @click="setTab('dispo')">
             Disposition Report
         </button>
-        <button class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
+        <button type="button" role="tab" :aria-selected="tab === 'recording'"
+                class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
                 :class="tab === 'recording' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-on-surface-muted)]'"
-                @click="tab = 'recording'">
+                @click="setTab('recording')">
             Recording Browser
         </button>
     </div>
@@ -66,6 +70,8 @@
 @push('scripts')
 <script>
 window.telephonyReports = function () {
+    const ALLOWED_TABS = ['status', 'agents', 'dispo', 'recording'];
+
     return {
         tab: 'status',
         loading: false,
@@ -87,7 +93,26 @@ window.telephonyReports = function () {
         },
 
         init() {
+            this.syncTabFromUrl();
+            this._onPopState = () => this.syncTabFromUrl();
+            window.addEventListener('popstate', this._onPopState);
             this.refreshAll();
+        },
+
+        syncTabFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const t = params.get('tab');
+            this.tab = t && ALLOWED_TABS.includes(t) ? t : 'status';
+        },
+
+        setTab(name) {
+            if (!ALLOWED_TABS.includes(name)) {
+                return;
+            }
+            this.tab = name;
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', name);
+            window.history.replaceState({}, '', url);
         },
 
         async refreshAll() {

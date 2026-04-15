@@ -15,11 +15,11 @@ class NextLeadController extends Controller
 {
     public function __invoke(Request $request): JsonResponse
     {
-        $campaign = $request->query('campaign') ?: $request->session()->get('campaign', 'mbsales');
+        $campaign = $request->query('campaign') ?: (string) $request->session()->get('campaign', 'mbsales');
         $user = $request->user();
 
         // Throttle: prevent rapid-fire requests from the same agent
-        $cacheKey = 'next_lead_throttle_' . $user->id;
+        $cacheKey = 'next_lead_throttle_'.$user->id;
         if (Cache::has($cacheKey)) {
             return response()->json([
                 'success' => true,
@@ -35,17 +35,17 @@ class NextLeadController extends Controller
             return response()->json([
                 'success' => true,
                 'lead' => [
-                    'lead_id'      => $lead->lead_id,
+                    'lead_id' => $lead->lead_id,
                     'phone_number' => $lead->phone_number,
-                    'client_name'  => $lead->client_name,
-                    'custom_data'  => $lead->custom_data ?? [],
+                    'client_name' => $lead->client_name,
+                    'custom_data' => $lead->custom_data ?? [],
                 ],
             ]);
         }
 
         return response()->json([
             'success' => true,
-            'lead'    => null,
+            'lead' => null,
             'message' => 'No leads available in the hopper.',
         ]);
     }
@@ -74,10 +74,10 @@ class NextLeadController extends Controller
                 }
 
                 $lead->update([
-                    'status'              => 'assigned',
+                    'status' => 'assigned',
                     'assigned_to_user_id' => $userId,
-                    'assigned_at'         => now(),
-                    'last_attempted_at'   => now(),
+                    'assigned_at' => now(),
+                    'last_attempted_at' => now(),
                 ]);
 
                 return $lead;
@@ -85,8 +85,8 @@ class NextLeadController extends Controller
         } catch (\Throwable $e) {
             Log::error('NextLeadController: failed to fetch next lead', [
                 'campaign' => $campaign,
-                'user_id'  => $userId,
-                'error'    => $e->getMessage(),
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
             ]);
 
             return null;
