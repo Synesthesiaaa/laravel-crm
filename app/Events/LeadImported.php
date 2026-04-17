@@ -12,6 +12,6 @@ class LeadImported
     public function __construct(
         public readonly string $campaignCode,
         public readonly int $importedCount,
-        public readonly int $uploadedByUserId
+        public readonly int $uploadedByUserId,
     ) {}
 }

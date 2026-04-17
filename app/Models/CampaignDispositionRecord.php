@@ -25,7 +25,7 @@ class CampaignDispositionRecord extends Model
     protected function casts(): array
     {
         return [
-            'called_at'      => 'datetime',
+            'called_at' => 'datetime',
             'lead_data_json' => 'array',
         ];
     }

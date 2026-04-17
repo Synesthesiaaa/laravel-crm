@@ -14,9 +14,9 @@ class ExtractionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'data_type'  => ['nullable', 'string', 'max:50'],
+            'data_type' => ['nullable', 'string', 'max:50'],
             'start_date' => ['nullable', 'date_format:Y-m-d'],
-            'end_date'   => ['nullable', 'date_format:Y-m-d', 'after_or_equal:start_date'],
+            'end_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:start_date'],
         ];
     }
 }

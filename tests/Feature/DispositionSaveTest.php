@@ -82,8 +82,12 @@ class DispositionSaveTest extends TestCase
         $this->assertNotNull($session->disposition_at);
     }
 
-    public function test_disposition_rejected_when_call_not_ended(): void
+    public function test_disposition_force_ends_still_active_call(): void
     {
+        // Policy change (2026-04): if the session is still active when disposition
+        // is submitted, DispositionService force-completes it rather than reject.
+        // This prevents stuck sessions when hangup fails to transition. The save
+        // must succeed and the session must end up terminal.
         DispositionCode::create([
             'campaign_code' => '',
             'code' => 'SALE',
@@ -103,9 +107,14 @@ class DispositionSaveTest extends TestCase
             'call_session_id' => $session->id,
         ]);
 
-        $response->assertStatus(422);
-        $response->assertJson(['success' => false]);
-        $this->assertDatabaseMissing('campaign_disposition_records', ['call_session_id' => $session->id]);
+        $response->assertOk();
+        $response->assertJson(['success' => true]);
+        $this->assertDatabaseHas('campaign_disposition_records', [
+            'call_session_id' => $session->id,
+            'disposition_code' => 'SALE',
+        ]);
+        $session->refresh();
+        $this->assertTrue($session->isTerminal(), 'Session should be force-completed.');
     }
 
     public function test_disposition_duplicate_rejected(): void

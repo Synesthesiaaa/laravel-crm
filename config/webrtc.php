@@ -30,8 +30,8 @@ return [
     |--------------------------------------------------------------------------
     */
     'ice_servers' => array_merge(
-        [['urls' => 'stun:' . env('STUN_SERVER', 'stun.l.google.com:19302')]],
-        json_decode(env('ICE_SERVERS', '[]'), true) ?: []
+        [['urls' => 'stun:'.env('STUN_SERVER', 'stun.l.google.com:19302')]],
+        json_decode(env('ICE_SERVERS', '[]'), true) ?: [],
     ),
 
     /*
@@ -47,5 +47,24 @@ return [
     |--------------------------------------------------------------------------
     */
     'no_answer_timeout' => (int) env('SIP_NO_ANSWER_TIMEOUT', 45),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Media path: which WebRTC stack owns the audio for an agent
+    |--------------------------------------------------------------------------
+    | Accepted values:
+    |   - 'sipjs'     : CRM-owned SIP.js (resources/js/telephony-core.js). The
+    |                   Vicidial iframe is used ONLY for session UI, no audio.
+    |   - 'viciphone' : Vicidial ViciPhone (served inside the session iframe)
+    |                   owns the audio. CRM does not call TelephonyCore.register().
+    |   - 'both'      : Both are allowed (current legacy behavior). Warning:
+    |                   registering the same extension twice can break calls.
+    |                   Use only while migrating between the two.
+    |
+    | The frontend reads this value via the bootstrap payload and decides whether
+    | to call TelephonyCore.register() or not. The telephony health check warns
+    | if `both` is active.
+    */
+    'media_path' => env('TELEPHONY_MEDIA_PATH', 'sipjs'),
 
 ];

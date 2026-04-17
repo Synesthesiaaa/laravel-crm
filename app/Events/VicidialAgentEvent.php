@@ -40,10 +40,10 @@ class VicidialAgentEvent implements ShouldBroadcastNow
     public function broadcastWith(): array
     {
         return [
-            'user_id'   => $this->userId,
-            'event'     => $this->event,
-            'message'   => $this->message,
-            'extra'     => $this->extra,
+            'user_id' => $this->userId,
+            'event' => $this->event,
+            'message' => $this->message,
+            'extra' => $this->extra,
             'timestamp' => now()->toIso8601String(),
         ];
     }

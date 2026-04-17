@@ -9,7 +9,7 @@ use Illuminate\View\View;
 class RecordsController extends Controller
 {
     public function __construct(
-        protected CallHistoryService $callHistoryService
+        protected CallHistoryService $callHistoryService,
     ) {}
 
     public function index(Request $request): View
@@ -20,8 +20,9 @@ class RecordsController extends Controller
             $request->query('start_date'),
             $request->query('end_date'),
             $request->query('agent'),
-            15
+            15,
         );
+
         return view('records.index', [
             'history' => $history,
             'campaign' => $campaign,

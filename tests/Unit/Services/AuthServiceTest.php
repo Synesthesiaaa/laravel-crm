@@ -5,7 +5,6 @@ namespace Tests\Unit\Services;
 use App\Models\User;
 use App\Services\AuthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
@@ -32,7 +31,7 @@ class AuthServiceTest extends TestCase
         $user = User::factory()->create([
             'username' => 'testuser',
             'password' => bcrypt('password123'),
-            'role'     => 'Agent',
+            'role' => 'Agent',
         ]);
 
         $result = $this->service->attempt('testuser', 'password123');
@@ -48,7 +47,7 @@ class AuthServiceTest extends TestCase
         $this->service->logAttendance($user->id, 'login', '127.0.0.1');
 
         $this->assertDatabaseHas('attendance_logs', [
-            'user_id'    => $user->id,
+            'user_id' => $user->id,
             'event_type' => 'login',
             'ip_address' => '127.0.0.1',
         ]);

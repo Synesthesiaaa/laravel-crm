@@ -14,32 +14,33 @@ use Illuminate\View\View;
 class AgentScreenController extends Controller
 {
     public function __construct(
-        protected CampaignService $campaignService
+        protected CampaignService $campaignService,
     ) {}
 
     public function index(Request $request): View
     {
-        $campaigns        = $this->campaignService->getCampaigns();
+        $campaigns = $this->campaignService->getCampaigns();
         $selectedCampaign = $request->query('campaign', array_key_first($campaigns) ?? '');
-        if ($selectedCampaign !== '' && !isset($campaigns[$selectedCampaign])) {
+        if ($selectedCampaign !== '' && ! isset($campaigns[$selectedCampaign])) {
             $selectedCampaign = array_key_first($campaigns) ?? '';
         }
         $fields = AgentScreenField::where('campaign_code', $selectedCampaign)
             ->orderBy('field_order')
             ->orderBy('id')
             ->get();
+
         return view('admin.agent_screen', [
-            'campaigns'        => $campaigns,
-            'fields'           => $fields,
+            'campaigns' => $campaigns,
+            'fields' => $fields,
             'selectedCampaign' => $selectedCampaign,
-            'campaignName'     => $request->session()->get('campaign_name', 'CRM'),
+            'campaignName' => $request->session()->get('campaign_name', 'CRM'),
         ]);
     }
 
     public function store(StoreAgentScreenFieldRequest $request): RedirectResponse
     {
         $validated = $request->validated();
-        $exists    = AgentScreenField::where('campaign_code', $validated['campaign_code'])
+        $exists = AgentScreenField::where('campaign_code', $validated['campaign_code'])
             ->where('field_key', $validated['field_key'])
             ->exists();
         if ($exists) {
@@ -48,12 +49,13 @@ class AgentScreenController extends Controller
         $maxOrder = AgentScreenField::where('campaign_code', $validated['campaign_code'])->max('field_order');
         AgentScreenField::create([
             'campaign_code' => $validated['campaign_code'],
-            'field_key'     => $validated['field_key'],
-            'field_label'   => $validated['field_label'],
-            'field_order'   => ($maxOrder ?? 0) + 1,
-            'field_width'   => $validated['field_width'] ?? 'full',
+            'field_key' => $validated['field_key'],
+            'field_label' => $validated['field_label'],
+            'field_order' => ($maxOrder ?? 0) + 1,
+            'field_width' => $validated['field_width'] ?? 'full',
         ]);
         $this->campaignService->clearCampaignsCache();
+
         return redirect()->route('admin.agent-screen.index', ['campaign' => $validated['campaign_code']])
             ->with('success', 'Field added.');
     }
@@ -66,17 +68,19 @@ class AgentScreenController extends Controller
             'field_width' => $validated['field_width'] ?? 'full',
         ]);
         $this->campaignService->clearCampaignsCache();
+
         return redirect()->route('admin.agent-screen.index', ['campaign' => $field->campaign_code])
             ->with('success', 'Field updated.');
     }
 
     public function destroy(Request $request): RedirectResponse
     {
-        $id       = (int) $request->input('id');
-        $field    = AgentScreenField::findOrFail($id);
+        $id = (int) $request->input('id');
+        $field = AgentScreenField::findOrFail($id);
         $campaign = $field->campaign_code;
         $field->delete();
         $this->campaignService->clearCampaignsCache();
+
         return redirect()->route('admin.agent-screen.index', ['campaign' => $campaign])
             ->with('success', 'Field removed.');
     }

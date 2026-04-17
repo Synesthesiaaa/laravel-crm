@@ -133,23 +133,34 @@
     const textColor = isDark ? '#a1a1aa' : '#52525b';
     const gridColor = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
 
-    new ApexCharts(document.getElementById('admin-chart-activity'), {
-        series: [{ name: 'Submissions', data: @json($activityTrend['values'] ?? []) }],
-        chart: { type: 'area', height: 240, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
-        colors: ['#e91e8c'],
-        fill: { type: 'gradient', gradient: { opacityFrom: .35, opacityTo: .03 } },
-        stroke: { curve: 'smooth', width: 2 },
-        xaxis: { categories: @json($activityTrend['labels'] ?? []), labels: { style: { colors: textColor, fontSize: '11px' }, rotate: -30 }, axisBorder: { show: false }, axisTicks: { show: false } },
-        yaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
-        grid: { borderColor: gridColor, strokeDashArray: 3 },
-        tooltip: { theme: isDark ? 'dark' : 'light' },
-        dataLabels: { enabled: false },
-        theme: { mode: isDark ? 'dark' : 'light' },
-    }).render();
+    // Soft-nav safety: destroy previous instances before re-creating.
+    window.__crmAdminDashboardCharts = window.__crmAdminDashboardCharts || {};
+    Object.values(window.__crmAdminDashboardCharts).forEach((c) => { try { c.destroy(); } catch (_) {} });
+    window.__crmAdminDashboardCharts = {};
+
+    const activityEl = document.getElementById('admin-chart-activity');
+    if (activityEl) {
+        const activity = new ApexCharts(activityEl, {
+            series: [{ name: 'Submissions', data: @json($activityTrend['values'] ?? []) }],
+            chart: { type: 'area', height: 240, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
+            colors: ['#e91e8c'],
+            fill: { type: 'gradient', gradient: { opacityFrom: .35, opacityTo: .03 } },
+            stroke: { curve: 'smooth', width: 2 },
+            xaxis: { categories: @json($activityTrend['labels'] ?? []), labels: { style: { colors: textColor, fontSize: '11px' }, rotate: -30 }, axisBorder: { show: false }, axisTicks: { show: false } },
+            yaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
+            grid: { borderColor: gridColor, strokeDashArray: 3 },
+            tooltip: { theme: isDark ? 'dark' : 'light' },
+            dataLabels: { enabled: false },
+            theme: { mode: isDark ? 'dark' : 'light' },
+        });
+        window.__crmAdminDashboardCharts.activity = activity;
+        activity.render();
+    }
 
     const agentLabels = @json($topAgents['labels'] ?? []);
-    if (agentLabels.length) {
-        new ApexCharts(document.getElementById('admin-chart-agents'), {
+    const agentsEl = document.getElementById('admin-chart-agents');
+    if (agentLabels.length && agentsEl) {
+        const agents = new ApexCharts(agentsEl, {
             series: [{ name: 'Submissions', data: @json($topAgents['values'] ?? []) }],
             chart: { type: 'bar', height: 240, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
             colors: ['#e91e8c'],
@@ -161,7 +172,9 @@
             dataLabels: { enabled: false },
             theme: { mode: isDark ? 'dark' : 'light' },
             categories: agentLabels,
-        }).render();
+        });
+        window.__crmAdminDashboardCharts.agents = agents;
+        agents.render();
     }
 })();
 </script>

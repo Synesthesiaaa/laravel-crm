@@ -29,7 +29,7 @@ class ImportLeadsCsvJob implements ShouldQueue
         public string $filePath,
         public string $campaignCode,
         public string $formType,
-        public string $agent
+        public string $agent,
     ) {
         $this->onQueue('imports');
     }
@@ -37,12 +37,14 @@ class ImportLeadsCsvJob implements ShouldQueue
     public function handle(CampaignService $campaignService, FormSubmissionService $formSubmissionService): void
     {
         $formConfig = $campaignService->getFormConfig($this->campaignCode, $this->formType);
-        if (!$formConfig) {
+        if (! $formConfig) {
             Log::warning('ImportLeadsCsvJob: Invalid campaign/form', ['campaign' => $this->campaignCode, 'form' => $this->formType]);
+
             return;
         }
-        if (!file_exists($this->filePath) || !is_readable($this->filePath)) {
+        if (! file_exists($this->filePath) || ! is_readable($this->filePath)) {
             Log::warning('ImportLeadsCsvJob: File not found or not readable', ['path' => $this->filePath]);
+
             return;
         }
 
@@ -51,6 +53,7 @@ class ImportLeadsCsvJob implements ShouldQueue
             $reader->setHeaderOffset(0);
         } catch (\Throwable $e) {
             Log::warning('ImportLeadsCsvJob: Failed to open CSV', ['path' => $this->filePath, 'error' => $e->getMessage()]);
+
             return;
         }
 
@@ -65,6 +68,6 @@ class ImportLeadsCsvJob implements ShouldQueue
             }
         }
 
-        Log::info('ImportLeadsCsvJob: Imported ' . $count . ' rows', ['campaign' => $this->campaignCode, 'form' => $this->formType]);
+        Log::info('ImportLeadsCsvJob: Imported '.$count.' rows', ['campaign' => $this->campaignCode, 'form' => $this->formType]);
     }
 }

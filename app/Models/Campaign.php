@@ -12,12 +12,13 @@ use Spatie\Activitylog\Traits\LogsActivity;
 
 class Campaign extends Model
 {
-    use HasFactory, SoftDeletes, LogsActivity;
+    use HasFactory, LogsActivity, SoftDeletes;
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()->logFillable()->logOnlyDirty()->dontSubmitEmptyLogs();
     }
+
     protected $fillable = [
         'code',
         'name',

@@ -17,17 +17,17 @@ class FormSubmissionService
         protected CampaignService $campaignService,
         protected FormFieldRepository $formFieldRepository,
         protected FormSubmissionRepository $formSubmissionRepository,
-        protected CallHistoryService $callHistoryService
+        protected CallHistoryService $callHistoryService,
     ) {}
 
     public function submit(string $campaign, string $formType, array $data, string $agent): OperationResult
     {
         $formConfig = $this->campaignService->getFormConfig($campaign, $formType);
-        if (!$formConfig) {
+        if (! $formConfig) {
             return OperationResult::failure('Invalid form.');
         }
         $tableName = $formConfig['table_name'];
-        if (!$this->formFieldRepository->validateTableName($tableName, $this->campaignService->getAllFormTableNames())) {
+        if (! $this->formFieldRepository->validateTableName($tableName, $this->campaignService->getAllFormTableNames())) {
             return OperationResult::failure('Invalid table.');
         }
         $fields = $this->formFieldRepository->getFieldsForForm($campaign, $formType);
@@ -56,7 +56,7 @@ class FormSubmissionService
                     $id,
                     $agent,
                     isset($data['lead_id']) && $data['lead_id'] !== '' ? (int) $data['lead_id'] : null,
-                    $data['phone_number'] ?? null
+                    $data['phone_number'] ?? null,
                 );
 
                 return $id;
@@ -73,15 +73,15 @@ class FormSubmissionService
     /** @return array<string, mixed>|null */
     public function prepareFormRow(Collection $fields, array $data, string $agent): ?array
     {
-        $date      = $this->sanitizeDate($data['date'] ?? '');
+        $date = $this->sanitizeDate($data['date'] ?? '');
         $requestId = trim((string) ($data['request_id'] ?? ''));
         if ($date === '' || $requestId === '') {
             return null;
         }
         $row = [
-            'date'       => $date,
+            'date' => $date,
             'request_id' => $requestId,
-            'agent'      => $agent,
+            'agent' => $agent,
         ];
         foreach ($fields as $field) {
             $colName = $field->field_name;
@@ -114,6 +114,7 @@ class FormSubmissionService
                 } else {
                     $row[$colName] = json_encode($picked);
                 }
+
                 continue;
             }
 
@@ -131,6 +132,7 @@ class FormSubmissionService
             }
             $row[$colName] = $value;
         }
+
         return $row;
     }
 
@@ -142,7 +144,7 @@ class FormSubmissionService
     {
         $systemColumns = ['date', 'request_id', 'agent', 'id', 'created_at', 'updated_at'];
 
-        if (!Schema::hasTable($tableName)) {
+        if (! Schema::hasTable($tableName)) {
             Schema::create($tableName, function ($table) {
                 $table->id();
                 $table->date('date')->index();
@@ -152,17 +154,17 @@ class FormSubmissionService
             });
         } else {
             // Base table safety: create missing required base columns.
-            if (!Schema::hasColumn($tableName, 'date')) {
+            if (! Schema::hasColumn($tableName, 'date')) {
                 Schema::table($tableName, function ($table) {
                     $table->date('date')->index();
                 });
             }
-            if (!Schema::hasColumn($tableName, 'request_id')) {
+            if (! Schema::hasColumn($tableName, 'request_id')) {
                 Schema::table($tableName, function ($table) {
                     $table->string('request_id', 255)->index();
                 });
             }
-            if (!Schema::hasColumn($tableName, 'agent')) {
+            if (! Schema::hasColumn($tableName, 'agent')) {
                 Schema::table($tableName, function ($table) {
                     $table->string('agent', 255)->index();
                 });
@@ -175,7 +177,7 @@ class FormSubmissionService
             if (in_array($colName, $systemColumns, true)) {
                 continue;
             }
-            if (!Schema::hasColumn($tableName, $colName)) {
+            if (! Schema::hasColumn($tableName, $colName)) {
                 $missingFieldCols[] = $field;
             }
         }
@@ -194,23 +196,29 @@ class FormSubmissionService
                 switch ($type) {
                     case 'textarea':
                         $table->text($colName)->nullable($nullable);
+
                         break;
                     case 'date':
                         $table->date($colName)->nullable($nullable);
+
                         break;
                     case 'select':
                         $table->string($colName, 255)->nullable($nullable);
+
                         break;
                     case 'multiselect':
                         $table->text($colName)->nullable($nullable);
+
                         break;
                     case 'number':
                         // Most of your known numeric fields (amount/rate) use 2 decimals.
                         $table->decimal($colName, 10, 2)->nullable($nullable);
+
                         break;
                     case 'text':
                     default:
                         $table->string($colName, 255)->nullable($nullable);
+
                         break;
                 }
             }
@@ -223,6 +231,7 @@ class FormSubmissionService
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $input)) {
             return $input;
         }
+
         return '';
     }
 }

@@ -3,12 +3,7 @@
 namespace Tests\Unit\Services;
 
 use App\Models\FormField;
-use App\Repositories\FormFieldRepository;
-use App\Repositories\FormSubmissionRepository;
-use App\Services\CallHistoryService;
-use App\Services\CampaignService;
 use App\Services\FormSubmissionService;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -42,10 +37,10 @@ class FormSubmissionServiceTest extends TestCase
         ]);
 
         $result = $this->service->prepareFormRow($fields, [
-            'date'       => '2026-01-15',
+            'date' => '2026-01-15',
             'request_id' => '260115001',
-            'full_name'  => 'John Doe',
-            'amount'     => '1000.50',
+            'full_name' => 'John Doe',
+            'amount' => '1000.50',
         ], 'agent1');
 
         $this->assertNotNull($result);
@@ -62,9 +57,9 @@ class FormSubmissionServiceTest extends TestCase
         ]);
 
         $result = $this->service->prepareFormRow($fields, [
-            'date'       => '2026-01-15',
+            'date' => '2026-01-15',
             'request_id' => '260115001',
-            'phone'      => '+63 (912) 345-6789',
+            'phone' => '+63 (912) 345-6789',
         ], 'agent1');
 
         $this->assertEquals('639123456789', $result['phone']);

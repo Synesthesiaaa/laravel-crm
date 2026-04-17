@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class FormField extends Model
 {
     use SoftDeletes;
+
     protected $fillable = [
         'campaign_code',
         'form_type',

@@ -33,6 +33,7 @@ class TransferService
         if ($phoneNumber) {
             $query['phone_number'] = $phoneNumber;
         }
+
         return $this->transferConference($user, $campaign, 'LOCAL_CLOSER', $phoneNumber, $query);
     }
 
@@ -86,9 +87,10 @@ class TransferService
             $raw = strtolower($result['raw_response'] ?? '');
             if (str_contains($raw, 'invalid value') || str_contains($raw, 'not allowed') || str_contains($raw, 'error')) {
                 return OperationResult::failure(
-                    'Swap-park is not supported on this ViciDial version. Use Park/Grab instead.'
+                    'Swap-park is not supported on this ViciDial version. Use Park/Grab instead.',
                 );
             }
+
             return OperationResult::failure($result['message'] ?: 'Swap-park request failed.');
         }
 
@@ -100,7 +102,7 @@ class TransferService
         string $campaign,
         string $value,
         ?string $phoneNumber = null,
-        array $query = []
+        array $query = [],
     ): OperationResult {
         $result = $this->agentApi->execute($user, $campaign, 'transfer_conference', [
             'value' => $value,
@@ -121,6 +123,7 @@ class TransferService
         if (! $result['success']) {
             return OperationResult::failure($result['message'] ?: 'Park call request failed.');
         }
+
         return OperationResult::success(['raw_response' => $result['raw_response']]);
     }
 }

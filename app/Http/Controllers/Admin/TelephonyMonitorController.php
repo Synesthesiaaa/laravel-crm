@@ -13,7 +13,7 @@ use Illuminate\View\View;
 class TelephonyMonitorController extends Controller
 {
     public function __construct(
-        protected TelephonyHealthService $health
+        protected TelephonyHealthService $health,
     ) {}
 
     public function index(): View

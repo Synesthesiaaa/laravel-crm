@@ -25,7 +25,7 @@ Broadcast::channel('telephony.supervisor', function ($user) {
  */
 Broadcast::channel('agents.online', function ($user) {
     return [
-        'id'   => $user->id,
+        'id' => $user->id,
         'name' => $user->name,
         'role' => $user->role ?? 'Agent',
     ];

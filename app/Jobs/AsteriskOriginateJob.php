@@ -25,7 +25,7 @@ class AsteriskOriginateJob implements ShouldQueue
     public function __construct(
         public string $channel,
         public string $number,
-        public string $callerId = ''
+        public string $callerId = '',
     ) {
         $this->onQueue('asterisk');
     }

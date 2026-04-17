@@ -17,7 +17,7 @@ class TelephonySmokeDialCommand extends Command
     protected $description = 'Run a direct CRM -> AMI -> trunk dial smoke test';
 
     public function __construct(
-        protected CallOrchestrationService $orchestration
+        protected CallOrchestrationService $orchestration,
     ) {
         parent::__construct();
     }
@@ -31,16 +31,19 @@ class TelephonySmokeDialCommand extends Command
 
         if ($userId <= 0 || $number === '' || $campaign === '') {
             $this->error('Required: --user-id, --number, --campaign');
+
             return self::FAILURE;
         }
 
         $user = User::find($userId);
         if (! $user) {
             $this->error("User not found: {$userId}");
+
             return self::FAILURE;
         }
         if (empty($user->extension)) {
             $this->error("User {$userId} has no extension configured.");
+
             return self::FAILURE;
         }
 
@@ -50,20 +53,21 @@ class TelephonySmokeDialCommand extends Command
             $campaign,
             $number,
             null,
-            $phoneCode
+            $phoneCode,
         );
 
         if (! $result->success) {
-            $this->error('Smoke dial failed: ' . ($result->message ?? 'Unknown error'));
+            $this->error('Smoke dial failed: '.($result->message ?? 'Unknown error'));
             if (is_array($result->data)) {
                 $this->line(json_encode($result->data));
             }
+
             return self::FAILURE;
         }
 
         $sessionId = $result->data['session_id'] ?? null;
-        $this->info('Smoke dial started successfully. Session ID: ' . ($sessionId ?: 'n/a'));
+        $this->info('Smoke dial started successfully. Session ID: '.($sessionId ?: 'n/a'));
+
         return self::SUCCESS;
     }
 }
-

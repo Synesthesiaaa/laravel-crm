@@ -11,7 +11,7 @@ class VicidialNonAgentApiService
 {
     public function __construct(
         protected VicidialServerRepository $serverRepository,
-        protected TelephonyLogger $telephonyLogger
+        protected TelephonyLogger $telephonyLogger,
     ) {}
 
     public function execute(
@@ -19,7 +19,7 @@ class VicidialNonAgentApiService
         string $campaign,
         string $function,
         array $params = [],
-        bool $useServerCredentials = true
+        bool $useServerCredentials = true,
     ): OperationResult {
         $server = $this->serverRepository->getForCampaign($campaign);
         if (! $server) {
@@ -51,7 +51,7 @@ class VicidialNonAgentApiService
                 ->timeout((int) config('vicidial.timeout', 10))
                 ->retry(
                     (int) config('vicidial.retry_times', 2),
-                    (int) config('vicidial.retry_sleep_ms', 500)
+                    (int) config('vicidial.retry_sleep_ms', 500),
                 )
                 ->get($baseUrl, $query);
         } catch (\Throwable $e) {
@@ -73,7 +73,7 @@ class VicidialNonAgentApiService
             $this->telephonyLogger->warning('VicidialNonAgentApiService', 'Non-Agent API returned error', [
                 'campaign' => $campaign,
                 'function' => $function,
-                'response' => strlen($body) > 500 ? substr($body, 0, 500) . '...' : $body,
+                'response' => strlen($body) > 500 ? substr($body, 0, 500).'...' : $body,
             ]);
 
             return OperationResult::failure($body);
@@ -106,7 +106,7 @@ class VicidialNonAgentApiService
             return preg_replace('#agc/api\.php.*$#', 'non_agent_api.php', $apiUrl) ?: '';
         }
 
-        return rtrim($apiUrl, '/') . '/non_agent_api.php';
+        return rtrim($apiUrl, '/').'/non_agent_api.php';
     }
 
     /**

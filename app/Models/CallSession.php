@@ -9,16 +9,25 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CallSession extends Model
 {
     use HasFactory;
+
     protected $table = 'call_sessions';
 
     public const STATUS_DIALING = 'dialing';
+
     public const STATUS_RINGING = 'ringing';
+
     public const STATUS_ANSWERED = 'answered';
+
     public const STATUS_IN_CALL = 'in_call';
+
     public const STATUS_ON_HOLD = 'on_hold';
+
     public const STATUS_TRANSFERRING = 'transferring';
+
     public const STATUS_COMPLETED = 'completed';
+
     public const STATUS_FAILED = 'failed';
+
     public const STATUS_ABANDONED = 'abandoned';
 
     public const TERMINAL_STATUSES = [

@@ -14,13 +14,14 @@ class UpdateCampaignRequest extends FormRequest
     public function rules(): array
     {
         $campaignId = $this->route('campaign')?->id ?? 0;
+
         return [
-            'code'          => ['required', 'string', 'max:50', "unique:campaigns,code,{$campaignId}", 'regex:/^[a-z0-9_]+$/'],
-            'name'          => ['required', 'string', 'max:255'],
-            'description'   => ['nullable', 'string', 'max:1000'],
-            'color'         => ['nullable', 'string', 'max:50'],
+            'code' => ['required', 'string', 'max:50', "unique:campaigns,code,{$campaignId}", 'regex:/^[a-z0-9_]+$/'],
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'color' => ['nullable', 'string', 'max:50'],
             'display_order' => ['nullable', 'integer'],
-            'is_active'     => ['nullable', 'boolean'],
+            'is_active' => ['nullable', 'boolean'],
             'predictive_enabled' => ['nullable', 'boolean'],
             'predictive_delay_seconds' => ['nullable', 'integer', 'min:1', 'max:300'],
             'predictive_max_attempts' => ['nullable', 'integer', 'min:1', 'max:20'],
@@ -31,8 +32,8 @@ class UpdateCampaignRequest extends FormRequest
     {
         return [
             'code.required' => 'Campaign code is required.',
-            'code.unique'   => 'That campaign code is already in use.',
-            'code.regex'    => 'Campaign code may only contain lowercase letters, numbers, and underscores.',
+            'code.unique' => 'That campaign code is already in use.',
+            'code.regex' => 'Campaign code may only contain lowercase letters, numbers, and underscores.',
             'name.required' => 'Campaign name is required.',
         ];
     }

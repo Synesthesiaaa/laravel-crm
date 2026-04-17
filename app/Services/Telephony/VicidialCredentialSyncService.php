@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Http;
 class VicidialCredentialSyncService
 {
     public function __construct(
-        protected TelephonyLogger $telephonyLogger
+        protected TelephonyLogger $telephonyLogger,
     ) {}
 
     /**
@@ -87,7 +87,8 @@ class VicidialCredentialSyncService
         if (str_contains($agentUrl, 'agc/api.php')) {
             return preg_replace('#agc/api\.php.*$#', 'non_agent_api.php', $agentUrl) ?: '';
         }
-        return rtrim($agentUrl, '/') . '/non_agent_api.php';
+
+        return rtrim($agentUrl, '/').'/non_agent_api.php';
     }
 
     private function call(VicidialServer $server, array $params): array
@@ -98,8 +99,8 @@ class VicidialCredentialSyncService
         }
 
         $query = array_merge([
-            'user'   => $server->api_user,
-            'pass'   => $server->api_pass,
+            'user' => $server->api_user,
+            'pass' => $server->api_pass,
             'source' => $server->source ?: config('vicidial.default_source', 'crm_tracker'),
         ], $params);
 
@@ -111,6 +112,7 @@ class VicidialCredentialSyncService
 
             $body = trim($response->body());
             $success = ! str_starts_with(strtolower($body), 'error:');
+
             return ['success' => $success, 'body' => $body];
         } catch (\Throwable $e) {
             return ['success' => false, 'body' => $e->getMessage()];
@@ -118,15 +120,15 @@ class VicidialCredentialSyncService
     }
 
     /**
-     * @return bool  true when the operation succeeded
+     * @return bool true when the operation succeeded
      */
     private function provisionUser(User $user, VicidialServer $server, bool $creating): bool
     {
         $function = $creating ? 'add_user' : 'update_user';
         $params = [
-            'function'        => $function,
-            'agent_user'      => $user->vici_user,
-            'agent_pass'      => $user->vici_pass,
+            'function' => $function,
+            'agent_user' => $user->vici_user,
+            'agent_pass' => $user->vici_pass,
             'agent_full_name' => $user->full_name ?: $user->username,
             'agent_user_level' => 1,
             'agent_user_group' => 'AGENTS',
@@ -141,10 +143,10 @@ class VicidialCredentialSyncService
         $result = $this->call($server, $params);
 
         $context = [
-            'function'    => $function,
-            'vici_user'   => $user->vici_user,
-            'server'      => $server->server_name,
-            'response'    => $result['body'],
+            'function' => $function,
+            'vici_user' => $user->vici_user,
+            'server' => $server->server_name,
+            'response' => $result['body'],
         ];
 
         if ($result['success']) {
@@ -161,7 +163,7 @@ class VicidialCredentialSyncService
     }
 
     /**
-     * @return bool  true when the operation succeeded
+     * @return bool true when the operation succeeded
      */
     private function provisionPhone(User $user, VicidialServer $server, bool $creating): bool
     {
@@ -176,35 +178,36 @@ class VicidialCredentialSyncService
                 'server' => $server->server_name,
                 'extension' => $user->extension,
             ]);
+
             return false;
         }
 
         $function = $creating ? 'add_phone' : 'update_phone';
         $params = [
-            'function'              => $function,
-            'extension'             => $user->extension,
-            'server_ip'             => $serverIp,
-            'protocol'              => 'SIP',
-            'phone_full_name'       => ($user->full_name ?: $user->username) . ' SIP ' . $user->extension,
-            'dialplan_number'       => $user->extension,
-            'voicemail_id'          => $user->extension,
-            'phone_login'           => $user->extension,
-            'is_webphone'           => 'Y',
-            'webphone_auto_answer'  => 'Y',
+            'function' => $function,
+            'extension' => $user->extension,
+            'server_ip' => $serverIp,
+            'protocol' => 'SIP',
+            'phone_full_name' => ($user->full_name ?: $user->username).' SIP '.$user->extension,
+            'dialplan_number' => $user->extension,
+            'voicemail_id' => $user->extension,
+            'phone_login' => $user->extension,
+            'is_webphone' => 'Y',
+            'webphone_auto_answer' => 'Y',
         ];
 
         if (! empty($user->sip_password)) {
             $params['registration_password'] = $user->sip_password;
-            $params['phone_pass']            = $user->sip_password;
+            $params['phone_pass'] = $user->sip_password;
         }
 
         $result = $this->call($server, $params);
 
         $context = [
-            'function'  => $function,
+            'function' => $function,
             'extension' => $user->extension,
-            'server'    => $server->server_name,
-            'response'  => $result['body'],
+            'server' => $server->server_name,
+            'response' => $result['body'],
         ];
 
         if ($result['success']) {
@@ -225,6 +228,7 @@ class VicidialCredentialSyncService
         if (! empty($server->db_host)) {
             return $server->db_host;
         }
+
         return (string) config('asterisk.host', '');
     }
 }

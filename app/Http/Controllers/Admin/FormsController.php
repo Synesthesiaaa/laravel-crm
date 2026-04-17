@@ -18,18 +18,19 @@ class FormsController extends Controller
 
     public function index(Request $request): View
     {
-        $campaigns       = Campaign::where('is_active', true)->orderBy('display_order')->get();
+        $campaigns = Campaign::where('is_active', true)->orderBy('display_order')->get();
         $selectedCampaign = $request->query('campaign', $campaigns->first()?->code ?? '');
-        $forms           = Form::with('campaign')
+        $forms = Form::with('campaign')
             ->where('campaign_code', $selectedCampaign)
             ->orderBy('display_order')
             ->orderBy('id')
             ->get();
+
         return view('admin.forms', [
-            'campaigns'        => $campaigns,
-            'forms'            => $forms,
+            'campaigns' => $campaigns,
+            'forms' => $forms,
             'selectedCampaign' => $selectedCampaign,
-            'campaignName'     => $request->session()->get('campaign_name', 'CRM'),
+            'campaignName' => $request->session()->get('campaign_name', 'CRM'),
         ]);
     }
 
@@ -42,15 +43,16 @@ class FormsController extends Controller
         }
         Form::create([
             'campaign_code' => $validated['campaign_code'],
-            'form_code'     => $validated['form_code'],
-            'name'          => $validated['name'],
-            'table_name'    => $validated['table_name'],
-            'color'         => $validated['color'] ?? 'blue',
-            'icon'          => $validated['icon'] ?? 'form',
+            'form_code' => $validated['form_code'],
+            'name' => $validated['name'],
+            'table_name' => $validated['table_name'],
+            'color' => $validated['color'] ?? 'blue',
+            'icon' => $validated['icon'] ?? 'form',
             'display_order' => $validated['display_order'] ?? 0,
-            'is_active'     => true,
+            'is_active' => true,
         ]);
         $this->campaignService->clearCampaignsCache();
+
         return redirect()->route('admin.forms.index', ['campaign' => $validated['campaign_code']])->with('success', 'Form created.');
     }
 
@@ -66,15 +68,16 @@ class FormsController extends Controller
         }
         $form->update([
             'campaign_code' => $validated['campaign_code'],
-            'form_code'     => $validated['form_code'],
-            'name'          => $validated['name'],
-            'table_name'    => $validated['table_name'],
-            'color'         => $validated['color'] ?? 'blue',
-            'icon'          => $validated['icon'] ?? 'form',
+            'form_code' => $validated['form_code'],
+            'name' => $validated['name'],
+            'table_name' => $validated['table_name'],
+            'color' => $validated['color'] ?? 'blue',
+            'icon' => $validated['icon'] ?? 'form',
             'display_order' => $validated['display_order'] ?? 0,
-            'is_active'     => $request->boolean('is_active', true),
+            'is_active' => $request->boolean('is_active', true),
         ]);
         $this->campaignService->clearCampaignsCache();
+
         return redirect()->route('admin.forms.index', ['campaign' => $form->campaign_code])->with('success', 'Form updated.');
     }
 
@@ -83,6 +86,7 @@ class FormsController extends Controller
         $form = Form::findOrFail((int) $request->input('id'));
         $form->update(['is_active' => false]);
         $this->campaignService->clearCampaignsCache();
+
         return redirect()->route('admin.forms.index', ['campaign' => $form->campaign_code])->with('success', 'Form deactivated.');
     }
 }

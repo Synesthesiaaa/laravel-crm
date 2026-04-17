@@ -199,6 +199,46 @@ Alpine.store('vicidial', {
 
 window.Alpine = Alpine;
 window.TelephonyCore = TelephonyCore;
+
+/**
+ * Graceful logout: hang up active call, unregister SIP.js, close Vicidial session,
+ * blank the session iframe, then submit the real logout form.
+ *
+ * Exposed on window so the header dropdown can call it from `@submit.prevent`
+ * without a 15-line inline arrow function.
+ */
+window.crmGracefulLogout = async function () {
+    try {
+        const call = Alpine.store('call');
+        if (call.state !== 'idle' && call.sessionId) {
+            try { await window.axios.post('/api/call/hangup', { session_id: call.sessionId }); } catch (_) {}
+        }
+        call.state = 'idle';
+        call.sessionId = null;
+        call.stopTimer();
+
+        if (window.TelephonyCore) {
+            try { await window.TelephonyCore.destroy(); } catch (_) {}
+        }
+
+        try { await window.axios.post('/api/vicidial/session/logout'); } catch (_) {}
+
+        const frame = document.getElementById('vici-session-frame');
+        if (frame) {
+            frame.onload = null;
+            frame.onerror = null;
+            frame.src = 'about:blank';
+        }
+    } finally {
+        const form = document.getElementById('logout-form');
+        if (form) {
+            HTMLFormElement.prototype.submit.call(form);
+        } else {
+            window.location.href = '/login';
+        }
+    }
+};
+
 Alpine.start();
 
 // Global keyboard shortcuts

@@ -16,7 +16,7 @@ class TelephonyReconciliationService
         protected CallStateService $callStateService,
         protected CallUuidMappingService $mapping,
         protected TelephonyAlertService $alerts,
-        protected TelephonyLogger $telephonyLogger
+        protected TelephonyLogger $telephonyLogger,
     ) {}
 
     /**
@@ -66,7 +66,7 @@ class TelephonyReconciliationService
                 $this->alerts->staleCorrected(
                     $session->id,
                     (int) $session->user_id,
-                    $session->dialed_at?->toIso8601String() ?? ''
+                    $session->dialed_at?->toIso8601String() ?? '',
                 );
             }
         }
@@ -87,7 +87,7 @@ class TelephonyReconciliationService
             $session = $this->mapping->findSessionForHangup(
                 $ev->linkedid,
                 $ev->channel,
-                $ev->payload ?? []
+                $ev->payload ?? [],
             );
 
             if ($session) {

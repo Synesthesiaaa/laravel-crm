@@ -19,7 +19,7 @@ class DispositionCodesApiTest extends TestCase
 
     public function test_api_requires_campaign_parameter(): void
     {
-        $user  = User::factory()->create(['role' => 'Agent']);
+        $user = User::factory()->create(['role' => 'Agent']);
         $token = $user->createToken('test')->plainTextToken;
 
         $response = $this->withToken($token)->getJson('/api/v1/disposition-codes');
@@ -28,15 +28,15 @@ class DispositionCodesApiTest extends TestCase
 
     public function test_api_returns_disposition_codes_for_campaign(): void
     {
-        $user  = User::factory()->create(['role' => 'Agent']);
+        $user = User::factory()->create(['role' => 'Agent']);
         $token = $user->createToken('test')->plainTextToken;
 
         DispositionCode::create([
             'campaign_code' => 'test_campaign',
-            'code'          => 'SALE',
-            'label'         => 'Sale',
-            'is_active'     => true,
-            'sort_order'    => 1,
+            'code' => 'SALE',
+            'label' => 'Sale',
+            'is_active' => true,
+            'sort_order' => 1,
         ]);
 
         $response = $this->withToken($token)->getJson('/api/v1/disposition-codes?campaign=test_campaign');

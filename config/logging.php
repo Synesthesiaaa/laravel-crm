@@ -129,41 +129,41 @@ return [
 
         'audit' => [
             'driver' => 'daily',
-            'path'   => storage_path('logs/audit.log'),
-            'level'  => 'info',
-            'days'   => env('LOG_AUDIT_DAYS', 90),
+            'path' => storage_path('logs/audit.log'),
+            'level' => 'info',
+            'days' => env('LOG_AUDIT_DAYS', 90),
             'replace_placeholders' => true,
         ],
 
         'security' => [
             'driver' => 'daily',
-            'path'   => storage_path('logs/security.log'),
-            'level'  => 'info',
-            'days'   => env('LOG_SECURITY_DAYS', 365),
+            'path' => storage_path('logs/security.log'),
+            'level' => 'info',
+            'days' => env('LOG_SECURITY_DAYS', 365),
             'replace_placeholders' => true,
         ],
 
         'telephony' => [
             'driver' => 'daily',
-            'path'   => storage_path('logs/telephony.log'),
-            'level'  => 'info',
-            'days'   => env('LOG_TELEPHONY_DAYS', 30),
+            'path' => storage_path('logs/telephony.log'),
+            'level' => 'info',
+            'days' => env('LOG_TELEPHONY_DAYS', 30),
             'replace_placeholders' => true,
         ],
 
         'telephony-events' => [
             'driver' => 'daily',
-            'path'   => storage_path('logs/telephony-events.log'),
-            'level'  => 'info',
-            'days'   => env('LOG_TELEPHONY_EVENTS_DAYS', 14),
+            'path' => storage_path('logs/telephony-events.log'),
+            'level' => 'info',
+            'days' => env('LOG_TELEPHONY_EVENTS_DAYS', 14),
             'replace_placeholders' => true,
         ],
 
         'telephony-errors' => [
             'driver' => 'daily',
-            'path'   => storage_path('logs/telephony-errors.log'),
-            'level'  => 'error',
-            'days'   => env('LOG_TELEPHONY_ERRORS_DAYS', 30),
+            'path' => storage_path('logs/telephony-errors.log'),
+            'level' => 'error',
+            'days' => env('LOG_TELEPHONY_ERRORS_DAYS', 30),
             'replace_placeholders' => true,
         ],
 

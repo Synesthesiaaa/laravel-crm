@@ -11,7 +11,7 @@ use Illuminate\View\View;
 class DispositionRecordsController extends Controller
 {
     public function __construct(
-        protected DispositionRepository $dispositionRepository
+        protected DispositionRepository $dispositionRepository,
     ) {}
 
     public function index(Request $request): View
@@ -19,7 +19,7 @@ class DispositionRecordsController extends Controller
         $campaign = $request->session()->get('campaign', 'mbsales');
         $query = CampaignDispositionRecord::with('campaign')->where('campaign_code', $campaign)->orderByDesc('called_at');
         if ($request->filled('agent')) {
-            $query->where('agent', 'like', '%' . $request->input('agent') . '%');
+            $query->where('agent', 'like', '%'.$request->input('agent').'%');
         }
         if ($request->filled('disposition')) {
             $query->where('disposition_code', $request->input('disposition'));
@@ -32,6 +32,7 @@ class DispositionRecordsController extends Controller
         }
         $records = $query->paginate(50);
         $dispositionCodes = $this->dispositionRepository->getForCampaign($campaign);
+
         return view('admin.disposition_records', [
             'records' => $records,
             'dispositionCodes' => $dispositionCodes,

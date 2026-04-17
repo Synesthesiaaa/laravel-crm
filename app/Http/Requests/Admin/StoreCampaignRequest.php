@@ -14,10 +14,10 @@ class StoreCampaignRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'code'          => ['required', 'string', 'max:50', 'unique:campaigns,code', 'regex:/^[a-z0-9_]+$/'],
-            'name'          => ['required', 'string', 'max:255'],
-            'description'   => ['nullable', 'string', 'max:1000'],
-            'color'         => ['nullable', 'string', 'max:50'],
+            'code' => ['required', 'string', 'max:50', 'unique:campaigns,code', 'regex:/^[a-z0-9_]+$/'],
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'color' => ['nullable', 'string', 'max:50'],
             'display_order' => ['nullable', 'integer'],
             'predictive_enabled' => ['nullable', 'boolean'],
             'predictive_delay_seconds' => ['nullable', 'integer', 'min:1', 'max:300'],
@@ -29,8 +29,8 @@ class StoreCampaignRequest extends FormRequest
     {
         return [
             'code.required' => 'Campaign code is required.',
-            'code.unique'   => 'That campaign code is already in use.',
-            'code.regex'    => 'Campaign code may only contain lowercase letters, numbers, and underscores.',
+            'code.unique' => 'That campaign code is already in use.',
+            'code.regex' => 'Campaign code may only contain lowercase letters, numbers, and underscores.',
             'name.required' => 'Campaign name is required.',
         ];
     }

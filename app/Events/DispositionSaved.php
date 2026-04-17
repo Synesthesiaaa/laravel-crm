@@ -16,7 +16,7 @@ class DispositionSaved implements ShouldBroadcast
         public readonly string $campaignCode,
         public readonly string $agent,
         public readonly string $dispositionCode,
-        public readonly ?int $leadId = null
+        public readonly ?int $leadId = null,
     ) {}
 
     public function broadcastOn(): array
@@ -32,10 +32,10 @@ class DispositionSaved implements ShouldBroadcast
     public function broadcastWith(): array
     {
         return [
-            'agent'           => $this->agent,
-            'campaign_code'   => $this->campaignCode,
+            'agent' => $this->agent,
+            'campaign_code' => $this->campaignCode,
             'disposition_code' => $this->dispositionCode,
-            'timestamp'       => now()->toIso8601String(),
+            'timestamp' => now()->toIso8601String(),
         ];
     }
 }

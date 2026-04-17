@@ -12,20 +12,20 @@ class AdminDashboardController extends Controller
 {
     public function __construct(
         protected CampaignService $campaignService,
-        protected AdminDashboardService $dashboardService
+        protected AdminDashboardService $dashboardService,
     ) {}
 
     public function index(Request $request): View
     {
-        $campaign       = $request->session()->get('campaign', 'mbsales');
+        $campaign = $request->session()->get('campaign', 'mbsales');
         $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['name' => $campaign, 'forms' => []];
 
         return view('admin.dashboard', [
-            'campaign'     => $campaign,
+            'campaign' => $campaign,
             'campaignName' => $campaignConfig['name'] ?? $campaign,
-            'stats'        => $this->dashboardService->getFormStats($campaign),
-            'userCount'    => $this->dashboardService->getTotalUserCount(),
-            'user'         => $request->user(),
+            'stats' => $this->dashboardService->getFormStats($campaign),
+            'userCount' => $this->dashboardService->getTotalUserCount(),
+            'user' => $request->user(),
         ]);
     }
 }

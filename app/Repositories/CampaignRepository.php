@@ -50,6 +50,7 @@ class CampaignRepository implements CampaignRepositoryInterface
                 ];
             }
         }
+
         return $result;
     }
 
@@ -64,9 +65,10 @@ class CampaignRepository implements CampaignRepositoryInterface
             ->where('form_code', $formCode)
             ->where('is_active', true)
             ->first();
-        if (!$form) {
+        if (! $form) {
             return null;
         }
+
         return [
             'name' => $form->name,
             'table_name' => $form->table_name,

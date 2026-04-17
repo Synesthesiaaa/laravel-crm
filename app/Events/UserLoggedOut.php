@@ -10,6 +10,6 @@ class UserLoggedOut
     use Dispatchable, SerializesModels;
 
     public function __construct(
-        public readonly int $userId
+        public readonly int $userId,
     ) {}
 }

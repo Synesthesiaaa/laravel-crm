@@ -17,9 +17,9 @@ class WebsocketHealthController extends Controller
 
         return response()->json([
             'websocket_enabled' => $enabled,
-            'host'              => config('broadcasting.connections.reverb.options.host'),
-            'port'              => config('broadcasting.connections.reverb.options.port'),
-            'scheme'            => config('broadcasting.connections.reverb.options.useTLS') ? 'wss' : 'ws',
+            'host' => config('broadcasting.connections.reverb.options.host'),
+            'port' => config('broadcasting.connections.reverb.options.port'),
+            'scheme' => config('broadcasting.connections.reverb.options.useTLS') ? 'wss' : 'ws',
         ]);
     }
 }

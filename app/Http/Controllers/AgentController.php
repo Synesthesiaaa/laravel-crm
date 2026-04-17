@@ -14,7 +14,7 @@ class AgentController extends Controller
     public function __construct(
         protected CampaignService $campaignService,
         protected DispositionRepositoryInterface $dispositionRepository,
-        protected TelephonyFeatureService $telephonyFeatureService
+        protected TelephonyFeatureService $telephonyFeatureService,
     ) {}
 
     public function index(Request $request): View

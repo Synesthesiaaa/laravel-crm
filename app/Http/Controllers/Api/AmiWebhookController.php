@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Events\TelephonyEventLogged;
 use App\Http\Controllers\Controller;
 use App\Services\Telephony\CallStateService;
-use App\Services\Telephony\TelephonyLogger;
 use App\Services\Telephony\CallUuidMappingService;
+use App\Services\Telephony\TelephonyLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -20,7 +20,7 @@ class AmiWebhookController extends Controller
     public function __construct(
         protected CallStateService $callStateService,
         protected CallUuidMappingService $mapping,
-        protected TelephonyLogger $telephonyLogger
+        protected TelephonyLogger $telephonyLogger,
     ) {}
 
     /**
@@ -53,7 +53,7 @@ class AmiWebhookController extends Controller
             (string) $event,
             'info',
             'AMI webhook received',
-            ['linkedid' => $linkedid, 'channel' => $channel]
+            ['linkedid' => $linkedid, 'channel' => $channel],
         ));
 
         $processed = false;
@@ -89,8 +89,9 @@ class AmiWebhookController extends Controller
         if (! $session) {
             $this->telephonyLogger->debug('AmiWebhookController', 'No matching session for Bridge event', [
                 'linkedid' => $linkedid,
-                'channel'  => $channel,
+                'channel' => $channel,
             ]);
+
             return false;
         }
 
@@ -103,7 +104,7 @@ class AmiWebhookController extends Controller
         // Transition ringing/answered → in_call
         $result = $this->callStateService->transition($session, \App\Models\CallSession::STATUS_IN_CALL, [
             'linkedid' => $linkedid,
-            'channel'  => $channel,
+            'channel' => $channel,
             'metadata' => ['ami_payload' => $payload],
         ]);
 
@@ -135,22 +136,22 @@ class AmiWebhookController extends Controller
             $result = $this->callStateService->transition(
                 $session,
                 \App\Models\CallSession::STATUS_IN_CALL,
-                ['linkedid' => $linkedid, 'channel' => $channel, 'metadata' => ['ami_payload' => $payload]]
+                ['linkedid' => $linkedid, 'channel' => $channel, 'metadata' => ['ami_payload' => $payload]],
             );
         } else {
             // NOANSWER, BUSY, CANCEL, CONGESTION, etc. → fail
             $endReason = match ($dialStatus) {
-                'NOANSWER'   => 'no_answer',
-                'BUSY'       => 'busy',
-                'CANCEL'     => 'cancelled',
+                'NOANSWER' => 'no_answer',
+                'BUSY' => 'busy',
+                'CANCEL' => 'cancelled',
                 'CONGESTION' => 'congestion',
-                default      => 'dial_failed_' . strtolower($dialStatus),
+                default => 'dial_failed_'.strtolower($dialStatus),
             };
             $result = $this->callStateService->transition(
                 $session,
                 \App\Models\CallSession::STATUS_FAILED,
                 ['end_reason' => $endReason, 'metadata' => ['ami_payload' => $payload]],
-                true
+                true,
             );
         }
 
@@ -174,7 +175,7 @@ class AmiWebhookController extends Controller
                 'Hangup',
                 'warning',
                 'AMI hangup unmatched to any active session',
-                ['linkedid' => $linkedid, 'channel' => $channel]
+                ['linkedid' => $linkedid, 'channel' => $channel],
             ));
 
             return false;

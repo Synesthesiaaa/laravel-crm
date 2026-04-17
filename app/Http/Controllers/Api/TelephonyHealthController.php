@@ -13,7 +13,7 @@ use Illuminate\Http\JsonResponse;
 class TelephonyHealthController extends Controller
 {
     public function __construct(
-        protected TelephonyHealthService $health
+        protected TelephonyHealthService $health,
     ) {}
 
     public function __invoke(): JsonResponse

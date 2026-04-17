@@ -66,7 +66,7 @@ class ReconcileCallStateJob implements ShouldQueue
             $session = $mapping->findSessionForHangup(
                 $ev->linkedid,
                 $ev->channel,
-                $ev->payload ?? []
+                $ev->payload ?? [],
             );
 
             if ($session) {

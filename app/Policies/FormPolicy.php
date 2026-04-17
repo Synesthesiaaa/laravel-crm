@@ -12,6 +12,7 @@ class FormPolicy
         if ($user->isSuperAdmin()) {
             return true;
         }
+
         return null;
     }
 

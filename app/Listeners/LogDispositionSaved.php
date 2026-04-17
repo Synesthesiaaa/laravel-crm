@@ -10,10 +10,10 @@ class LogDispositionSaved
     public function handle(DispositionSaved $event): void
     {
         Log::channel('audit')->info('Disposition saved', [
-            'campaign'    => $event->campaignCode,
-            'agent'       => $event->agent,
+            'campaign' => $event->campaignCode,
+            'agent' => $event->agent,
             'disposition' => $event->dispositionCode,
-            'lead_id'     => $event->leadId,
+            'lead_id' => $event->leadId,
         ]);
     }
 }

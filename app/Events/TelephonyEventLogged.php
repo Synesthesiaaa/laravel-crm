@@ -16,7 +16,7 @@ class TelephonyEventLogged implements ShouldBroadcastNow
         public readonly string $eventType,
         public readonly string $severity,
         public readonly string $message,
-        public readonly array $context = []
+        public readonly array $context = [],
     ) {}
 
     public function broadcastOn(): array

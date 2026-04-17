@@ -23,7 +23,7 @@ class CallNoAnswerTimeoutJob implements ShouldQueue
     public int $timeout = 60;
 
     public function __construct(
-        public int $callSessionId
+        public int $callSessionId,
     ) {
         $this->delay(now()->addSeconds(30));
         $this->onQueue('default');
@@ -32,7 +32,7 @@ class CallNoAnswerTimeoutJob implements ShouldQueue
     public function handle(CallStateService $callStateService): void
     {
         $session = CallSession::find($this->callSessionId);
-        if (!$session || $session->isTerminal()) {
+        if (! $session || $session->isTerminal()) {
             return;
         }
 

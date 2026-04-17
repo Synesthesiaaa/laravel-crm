@@ -15,14 +15,14 @@ class StoreFieldLogicRequest extends FormRequest
     {
         return [
             'campaign_code' => ['required', 'string', 'max:50'],
-            'form_type'     => ['required', 'string', 'max:50'],
-            'field_name'    => ['required', 'string', 'max:80', 'regex:/^[a-zA-Z0-9_]+$/'],
-            'field_label'   => ['required', 'string', 'max:255'],
-            'field_type'    => ['required', 'in:text,textarea,number,date,select,multiselect'],
-            'is_required'   => ['nullable', 'boolean'],
-            'field_order'   => ['nullable', 'integer'],
-            'field_width'   => ['nullable', 'in:full,half,third'],
-            'options'       => ['nullable', 'string', 'max:65535'],
+            'form_type' => ['required', 'string', 'max:50'],
+            'field_name' => ['required', 'string', 'max:80', 'regex:/^[a-zA-Z0-9_]+$/'],
+            'field_label' => ['required', 'string', 'max:255'],
+            'field_type' => ['required', 'in:text,textarea,number,date,select,multiselect'],
+            'is_required' => ['nullable', 'boolean'],
+            'field_order' => ['nullable', 'integer'],
+            'field_width' => ['nullable', 'in:full,half,third'],
+            'options' => ['nullable', 'string', 'max:65535'],
         ];
     }
 }

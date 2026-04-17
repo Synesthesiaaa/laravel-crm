@@ -31,7 +31,7 @@ class LeadController extends Controller
             $request->user(),
             $this->campaign($request, $validated),
             isset($validated['lead_id']) ? (int) $validated['lead_id'] : null,
-            $validated['phone_number'] ?? null
+            $validated['phone_number'] ?? null,
         ));
     }
 
@@ -47,7 +47,7 @@ class LeadController extends Controller
             $request->user(),
             $this->campaign($request, $validated),
             (int) $validated['lead_id'],
-            $validated['field_name']
+            $validated['field_name'],
         ));
     }
 
@@ -85,7 +85,7 @@ class LeadController extends Controller
         return $this->respond($service->switchLead(
             $request->user(),
             $this->campaign($request, $validated),
-            (int) $validated['lead_id']
+            (int) $validated['lead_id'],
         ));
     }
 
@@ -99,7 +99,7 @@ class LeadController extends Controller
         return $this->respond($service->updateFields(
             $request->user(),
             $this->campaign($request, $validated),
-            $validated['fields']
+            $validated['fields'],
         ));
     }
 

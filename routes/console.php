@@ -50,7 +50,7 @@ Schedule::call(function () {
 })->hourly()->name('invalidate-dashboard-cache')->withoutOverlapping();
 
 // Reconcile stuck call sessions: force stale active calls to failed
-Schedule::job(new \App\Jobs\ReconcileCallStateJob())
+Schedule::job(new \App\Jobs\ReconcileCallStateJob)
     ->everyFifteenMinutes()
     ->name('reconcile-call-state')
     ->withoutOverlapping(10);

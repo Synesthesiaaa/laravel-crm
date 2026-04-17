@@ -17,7 +17,7 @@ class UsersControllerTest extends TestCase
         parent::setUp();
         $this->superAdmin = User::factory()->create([
             'username' => 'admin',
-            'role'     => User::ROLE_SUPER_ADMIN,
+            'role' => User::ROLE_SUPER_ADMIN,
         ]);
     }
 
@@ -47,11 +47,11 @@ class UsersControllerTest extends TestCase
         $response = $this->actingAs($this->superAdmin)
             ->withSession(['campaign' => 'test', 'campaign_name' => 'Test'])
             ->post(route('admin.users.store'), [
-                'username'              => 'newagent',
-                'full_name'             => 'New Agent',
-                'password'              => 'Password1!',
+                'username' => 'newagent',
+                'full_name' => 'New Agent',
+                'password' => 'Password1!',
                 'password_confirmation' => 'Password1!',
-                'role'                  => 'Agent',
+                'role' => 'Agent',
             ]);
 
         $response->assertRedirect(route('admin.users.index'));
@@ -65,11 +65,11 @@ class UsersControllerTest extends TestCase
         $response = $this->actingAs($this->superAdmin)
             ->withSession(['campaign' => 'test', 'campaign_name' => 'Test'])
             ->post(route('admin.users.store'), [
-                'username'              => 'existinguser',
-                'full_name'             => 'Duplicate',
-                'password'              => 'Password1!',
+                'username' => 'existinguser',
+                'full_name' => 'Duplicate',
+                'password' => 'Password1!',
                 'password_confirmation' => 'Password1!',
-                'role'                  => 'Agent',
+                'role' => 'Agent',
             ]);
 
         $response->assertSessionHasErrors('username');

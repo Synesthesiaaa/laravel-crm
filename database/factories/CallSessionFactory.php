@@ -13,11 +13,12 @@ class CallSessionFactory extends Factory
     public function definition(): array
     {
         $dialedAt = $this->faker->dateTimeBetween('-1 hour', 'now');
+
         return [
             'user_id' => User::factory(),
             'campaign_code' => 'mbsales',
             'lead_id' => $this->faker->optional(0.7)->numberBetween(1, 9999),
-            'phone_number' => '+63' . $this->faker->numerify('9#########'),
+            'phone_number' => '+63'.$this->faker->numerify('9#########'),
             'status' => CallSession::STATUS_DIALING,
             'linkedid' => null,
             'channel' => null,
@@ -52,6 +53,7 @@ class CallSessionFactory extends Factory
     public function inCall(): static
     {
         $answeredAt = now()->subMinutes(2);
+
         return $this->state(fn () => [
             'status' => CallSession::STATUS_IN_CALL,
             'ringing_at' => now()->subMinutes(2),
@@ -63,6 +65,7 @@ class CallSessionFactory extends Factory
     {
         $answeredAt = now()->subMinutes(5);
         $endedAt = now();
+
         return $this->state(fn () => [
             'status' => CallSession::STATUS_COMPLETED,
             'ringing_at' => $answeredAt->copy()->subSeconds(30),

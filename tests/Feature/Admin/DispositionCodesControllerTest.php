@@ -13,6 +13,7 @@ class DispositionCodesControllerTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Campaign $campaign;
 
     protected function setUp(): void
@@ -20,11 +21,11 @@ class DispositionCodesControllerTest extends TestCase
         parent::setUp();
         $this->admin = User::factory()->create([
             'username' => 'admin',
-            'role'     => User::ROLE_ADMIN,
+            'role' => User::ROLE_ADMIN,
         ]);
         $this->campaign = Campaign::create([
-            'code'     => 'testcamp',
-            'name'     => 'Test Campaign',
+            'code' => 'testcamp',
+            'name' => 'Test Campaign',
             'is_active' => true,
         ]);
     }
@@ -44,15 +45,15 @@ class DispositionCodesControllerTest extends TestCase
             ->withSession(['campaign' => 'testcamp', 'campaign_name' => 'Test Campaign'])
             ->post(route('admin.disposition-codes.store'), [
                 'campaign_code' => 'testcamp',
-                'code'          => 'SALE',
-                'label'         => 'Sale',
-                'sort_order'    => 1,
+                'code' => 'SALE',
+                'label' => 'Sale',
+                'sort_order' => 1,
             ]);
 
         $response->assertRedirect();
         $this->assertDatabaseHas('disposition_codes', [
             'campaign_code' => 'testcamp',
-            'code'          => 'SALE',
+            'code' => 'SALE',
         ]);
     }
 
@@ -60,10 +61,10 @@ class DispositionCodesControllerTest extends TestCase
     {
         $code = DispositionCode::create([
             'campaign_code' => 'testcamp',
-            'code'          => 'DNC',
-            'label'         => 'Do Not Call',
-            'is_active'     => true,
-            'sort_order'    => 1,
+            'code' => 'DNC',
+            'label' => 'Do Not Call',
+            'is_active' => true,
+            'sort_order' => 1,
         ]);
 
         $response = $this->actingAs($this->admin)

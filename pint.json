@@ -15,6 +15,7 @@
     },
     "exclude": [
         "bootstrap/cache",
+        "docs",
         "storage",
         "vendor"
     ]

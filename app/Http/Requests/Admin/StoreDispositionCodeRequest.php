@@ -15,9 +15,9 @@ class StoreDispositionCodeRequest extends FormRequest
     {
         return [
             'campaign_code' => ['required', 'string', 'max:50'],
-            'code'          => ['required', 'string', 'max:50'],
-            'label'         => ['required', 'string', 'max:255'],
-            'sort_order'    => ['nullable', 'integer'],
+            'code' => ['required', 'string', 'max:50'],
+            'label' => ['required', 'string', 'max:255'],
+            'sort_order' => ['nullable', 'integer'],
         ];
     }
 }

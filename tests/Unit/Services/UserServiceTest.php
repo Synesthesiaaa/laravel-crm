@@ -22,10 +22,10 @@ class UserServiceTest extends TestCase
     public function test_create_creates_user_with_hashed_password(): void
     {
         $user = $this->service->create([
-            'username'  => 'newuser',
+            'username' => 'newuser',
             'full_name' => 'New User',
-            'password'  => 'Password1',
-            'role'      => 'Agent',
+            'password' => 'Password1',
+            'role' => 'Agent',
         ]);
 
         $this->assertInstanceOf(User::class, $user);
@@ -44,7 +44,7 @@ class UserServiceTest extends TestCase
 
     public function test_delete_removes_other_user(): void
     {
-        $admin  = User::factory()->create(['role' => 'Super Admin']);
+        $admin = User::factory()->create(['role' => 'Super Admin']);
         $target = User::factory()->create(['role' => 'Agent']);
 
         $result = $this->service->delete($target, $admin);

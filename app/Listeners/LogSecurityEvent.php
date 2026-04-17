@@ -12,7 +12,7 @@ class LogSecurityEvent
     {
         Log::channel('security')->info('User logged in', [
             'user_id' => $event->userId,
-            'ip'      => $event->ipAddress,
+            'ip' => $event->ipAddress,
         ]);
     }
 

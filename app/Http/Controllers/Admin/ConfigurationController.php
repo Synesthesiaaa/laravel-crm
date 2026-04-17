@@ -5,21 +5,22 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Services\CampaignService;
 use App\Services\TelephonyFeatureService;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class ConfigurationController extends Controller
 {
     public function __construct(
         protected CampaignService $campaignService,
-        protected TelephonyFeatureService $telephonyFeatureService
+        protected TelephonyFeatureService $telephonyFeatureService,
     ) {}
 
     public function index(Request $request): View
     {
         $tab = $request->query('tab', 'general');
         $campaigns = $this->campaignService->getCampaigns();
+
         return view('admin.configuration', [
             'tab' => $tab,
             'campaigns' => $campaigns,

@@ -13,6 +13,6 @@ class CallOriginated
         public readonly string $campaignCode,
         public readonly string $agent,
         public readonly string $phoneNumber,
-        public readonly ?int $leadId = null
+        public readonly ?int $leadId = null,
     ) {}
 }
