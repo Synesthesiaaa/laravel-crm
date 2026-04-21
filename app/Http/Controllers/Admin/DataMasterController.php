@@ -28,11 +28,12 @@ class DataMasterController extends Controller
         $tableName = $forms[$type]['table_name'] ?? $forms[$type]['table'] ?? '';
         $allowedTables = $this->dataMasterService->getAllowedTables($campaignConfig);
         $records = $this->dataMasterService->getRecords($tableName, $allowedTables);
-        $columns = [];
+        $available = null;
         $first = $records->first();
         if ($first) {
-            $columns = array_keys((array) $first);
+            $available = array_keys((array) $first);
         }
+        $layout = $this->dataMasterService->getColumnLayout($campaign, $type, $available);
 
         return view('admin.data_master', [
             'campaign' => $campaign,
@@ -41,7 +42,8 @@ class DataMasterController extends Controller
             'type' => $type,
             'tableName' => $tableName,
             'records' => $records,
-            'columns' => $columns,
+            'columns' => $layout['columns'],
+            'headers' => $layout['headers'],
         ]);
     }
 
@@ -63,13 +65,16 @@ class DataMasterController extends Controller
             return redirect()->route('admin.data-master.index', ['type' => $type])->with('error', 'Record not found.');
         }
 
+        $layout = $this->dataMasterService->getColumnLayout($campaign, $type, array_keys((array) $record));
+
         return view('admin.data_master_edit', [
             'campaign' => $campaign,
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
             'type' => $type,
             'tableName' => $tableName,
             'record' => $record,
-            'columns' => array_keys((array) $record),
+            'columns' => $layout['columns'],
+            'headers' => $layout['headers'],
         ]);
     }
 

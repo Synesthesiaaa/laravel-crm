@@ -28,7 +28,7 @@
     <thead>
         <tr>
             @foreach($columns as $col)
-                <th>{{ $col }}</th>
+                <th>{{ $headers[$col] ?? $col }}</th>
             @endforeach
             <th style="text-align: right">Actions</th>
         </tr>
