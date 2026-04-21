@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 class DashboardStatsService
 {
     public function __construct(
-        protected CampaignRepository $campaignRepository
+        protected CampaignRepository $campaignRepository,
     ) {}
 
     public function getActivityTrend(string $campaignCode, int $days = 14): array
@@ -49,10 +49,11 @@ class DashboardStatsService
             $labels = [];
             $values = [];
             for ($i = $days - 1; $i >= 0; $i--) {
-                $d        = now()->subDays($i)->format('Y-m-d');
+                $d = now()->subDays($i)->format('Y-m-d');
                 $labels[] = now()->subDays($i)->format('M d');
                 $values[] = $activityData[$d] ?? 0;
             }
+
             return ['labels' => $labels, 'values' => $values];
         });
     }
@@ -100,13 +101,14 @@ class DashboardStatsService
     private function resolveAllowedTables(string $campaignCode): array
     {
         $campaigns = $this->campaignRepository->getCampaignsWithForms();
-        $config    = $campaigns[$campaignCode] ?? null;
-        if (!$config || empty($config['forms'])) {
+        $config = $campaigns[$campaignCode] ?? null;
+        if (! $config || empty($config['forms'])) {
             return [];
         }
         $allowed = $this->campaignRepository->getAllFormTableNames();
-        $tables  = array_filter(array_column($config['forms'], 'table'));
-        $tables  = array_values(array_intersect($tables, $allowed));
+        $tables = array_filter(array_column($config['forms'], 'table'));
+        $tables = array_values(array_intersect($tables, $allowed));
+
         return array_values(array_filter($tables, fn (string $t) => Schema::hasTable($t) && Schema::hasColumn($t, 'date') && Schema::hasColumn($t, 'agent')));
     }
 }

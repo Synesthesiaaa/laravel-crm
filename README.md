@@ -213,6 +213,9 @@ Feature tests live under `tests/Feature/`.
 | `docs/asterisk/VICIDIAL_DIRECT_CRM_INTEGRATION_GUIDE.md` | Asterisk / AMI / CRM wiring |
 | `docs/telephony/` | Telephony build notes and phases (where present) |
 | `deploy/supervisor/laravel-ami-listener.conf.example` | AMI listener Supervisor template |
+| `docs/audit/` | System audit reports (baseline, findings, UI fixes, telephony decision, tests, security) |
+| `docs/audit/ui-soft-nav-rules.md` | Required reading for anyone writing page-level `<script>` blocks |
+| `docs/audit/03-telephony.md` | SIP.js vs ViciPhone decision + `TELEPHONY_MEDIA_PATH` feature flag |
 
 ---
 

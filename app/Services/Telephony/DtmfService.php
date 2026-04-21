@@ -20,7 +20,7 @@ class DtmfService
         $encoded = str_replace('#', 'P', $encoded);
         $encoded = str_replace('*', 'S', $encoded);
 
-        if (!preg_match('/^[0-9PSQ]+$/', $encoded)) {
+        if (! preg_match('/^[0-9PSQ]+$/', $encoded)) {
             return OperationResult::failure('Invalid DTMF string. Allowed: 0-9, *, #, Q.');
         }
 

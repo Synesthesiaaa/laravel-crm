@@ -9,19 +9,19 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            if (!Schema::hasColumn('users', 'username')) {
+            if (! Schema::hasColumn('users', 'username')) {
                 $table->string('username', 255)->nullable()->unique()->after('id');
             }
-            if (!Schema::hasColumn('users', 'full_name')) {
+            if (! Schema::hasColumn('users', 'full_name')) {
                 $table->string('full_name', 255)->nullable()->after('username');
             }
-            if (!Schema::hasColumn('users', 'role')) {
+            if (! Schema::hasColumn('users', 'role')) {
                 $table->string('role', 50)->default('Agent')->after('full_name');
             }
-            if (!Schema::hasColumn('users', 'vici_user')) {
+            if (! Schema::hasColumn('users', 'vici_user')) {
                 $table->string('vici_user', 100)->nullable()->after('role');
             }
-            if (!Schema::hasColumn('users', 'vici_pass')) {
+            if (! Schema::hasColumn('users', 'vici_pass')) {
                 $table->string('vici_pass', 255)->nullable()->after('vici_user');
             }
         });

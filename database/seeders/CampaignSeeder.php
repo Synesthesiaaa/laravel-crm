@@ -30,7 +30,7 @@ class CampaignSeeder extends Seeder
         foreach ($forms as $f) {
             Form::updateOrCreate(
                 ['campaign_code' => $f['campaign_code'], 'form_code' => $f['form_code']],
-                $f
+                $f,
             );
         }
     }

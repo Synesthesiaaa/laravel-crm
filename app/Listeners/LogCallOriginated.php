@@ -11,9 +11,9 @@ class LogCallOriginated
     {
         Log::channel('telephony')->info('Call originated', [
             'campaign' => $event->campaignCode,
-            'agent'    => $event->agent,
-            'phone'    => $event->phoneNumber,
-            'lead_id'  => $event->leadId,
+            'agent' => $event->agent,
+            'phone' => $event->phoneNumber,
+            'lead_id' => $event->leadId,
         ]);
     }
 }

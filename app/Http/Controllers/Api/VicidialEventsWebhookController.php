@@ -35,10 +35,10 @@ class VicidialEventsWebhookController extends Controller
         }
 
         $viciUser = $request->input('user', '');
-        $event    = $request->input('event', '');
-        $message  = $request->input('message', '');
-        $leadId   = $request->input('lead_id');
-        $counter  = $request->input('counter');
+        $event = $request->input('event', '');
+        $message = $request->input('message', '');
+        $leadId = $request->input('lead_id');
+        $counter = $request->input('counter');
 
         if ($event === '' || $viciUser === '') {
             return response()->json(['received' => true, 'processed' => false, 'reason' => 'missing event or user']);
@@ -46,29 +46,29 @@ class VicidialEventsWebhookController extends Controller
 
         $this->logger->event('VicidialEventsWebhook', $event, 'ViciDial push event received', [
             'vici_user' => $viciUser,
-            'message'   => $message,
-            'lead_id'   => $leadId,
+            'message' => $message,
+            'lead_id' => $leadId,
         ]);
 
         $user = User::where('vici_user', $viciUser)->first();
         $userId = $user?->id;
 
         $processed = match ($event) {
-            'call_answered'         => $this->handleCallAnswered($user, $leadId, $message),
+            'call_answered' => $this->handleCallAnswered($user, $leadId, $message),
             'call_dead', 'agent_hangup' => $this->handleCallEnded($user, $event),
-            'call_dialed'           => $this->handleCallDialed($user, $message),
-            'state_ready'           => $this->handleStateChange($userId, $viciUser, 'ready', $message),
-            'state_paused'          => $this->handleStateChange($userId, $viciUser, 'paused', $message),
-            'logged_in'             => $this->handleLogin($userId, $viciUser, $message),
+            'call_dialed' => $this->handleCallDialed($user, $message),
+            'state_ready' => $this->handleStateChange($userId, $viciUser, 'ready', $message),
+            'state_paused' => $this->handleStateChange($userId, $viciUser, 'paused', $message),
+            'logged_in' => $this->handleLogin($userId, $viciUser, $message),
             'logged_out', 'logged_out_complete' => $this->handleLogout($userId, $viciUser, $event),
-            'dispo_set'             => $this->handleDispoSet($user, $leadId, $message),
-            default                 => $this->handleGenericEvent($userId, $event, $message),
+            'dispo_set' => $this->handleDispoSet($user, $leadId, $message),
+            default => $this->handleGenericEvent($userId, $event, $message),
         };
 
         return response()->json([
-            'received'  => true,
+            'received' => true,
             'processed' => $processed,
-            'event'     => $event,
+            'event' => $event,
         ]);
     }
 
@@ -117,6 +117,7 @@ class VicidialEventsWebhookController extends Controller
         }
 
         $this->broadcastAgentEvent($user->id, 'call_dialed', $message);
+
         return true;
     }
 
@@ -129,13 +130,15 @@ class VicidialEventsWebhookController extends Controller
                 ?->update(['session_status' => $status]);
         }
 
-        $this->broadcastAgentEvent($userId, 'state_' . $status, $message);
+        $this->broadcastAgentEvent($userId, 'state_'.$status, $message);
+
         return true;
     }
 
     private function handleLogin(?int $userId, string $viciUser, string $message): bool
     {
         $this->broadcastAgentEvent($userId, 'logged_in', $message);
+
         return true;
     }
 
@@ -149,21 +152,24 @@ class VicidialEventsWebhookController extends Controller
         }
 
         $this->broadcastAgentEvent($userId, $event, '');
+
         return true;
     }
 
     private function handleDispoSet(?User $user, mixed $leadId, string $message): bool
     {
         $this->broadcastAgentEvent($user?->id, 'dispo_set', $message, [
-            'lead_id'          => $leadId,
+            'lead_id' => $leadId,
             'disposition_code' => $message,
         ]);
+
         return true;
     }
 
     private function handleGenericEvent(?int $userId, string $event, string $message): bool
     {
         $this->broadcastAgentEvent($userId, $event, $message);
+
         return true;
     }
 

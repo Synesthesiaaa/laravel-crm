@@ -23,6 +23,7 @@ class TelephonyEnablePredictiveCommand extends Command
         $campaign = Campaign::where('code', $code)->first();
         if (! $campaign) {
             $this->error("Campaign not found: {$code}");
+
             return self::FAILURE;
         }
 
@@ -33,7 +34,7 @@ class TelephonyEnablePredictiveCommand extends Command
         ]);
 
         $this->info("Predictive dialing enabled for {$code} (delay={$delay}s, max_attempts={$maxAttempts}).");
+
         return self::SUCCESS;
     }
 }
-

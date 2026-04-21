@@ -15,34 +15,35 @@ class ExtractionController extends Controller
 {
     public function __construct(
         protected CampaignService $campaignService,
-        protected ExtractionService $extractionService
+        protected ExtractionService $extractionService,
     ) {}
 
     public function index(Request $request): View
     {
-        $campaign       = $request->session()->get('campaign', 'mbsales');
+        $campaign = $request->session()->get('campaign', 'mbsales');
         $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['forms' => []];
+
         return view('admin.extraction', [
-            'campaign'     => $campaign,
+            'campaign' => $campaign,
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
-            'forms'        => $campaignConfig['forms'] ?? [],
+            'forms' => $campaignConfig['forms'] ?? [],
         ]);
     }
 
     public function export(ExtractionRequest $request): StreamedResponse|RedirectResponse
     {
-        $campaign       = $request->session()->get('campaign', 'mbsales');
+        $campaign = $request->session()->get('campaign', 'mbsales');
         $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['forms' => []];
-        $dataType       = $request->input('data_type', 'all');
-        $tables         = $this->extractionService->resolveTables($campaignConfig, $dataType);
+        $dataType = $request->input('data_type', 'all');
+        $tables = $this->extractionService->resolveTables($campaignConfig, $dataType);
 
         if (empty($tables)) {
             return redirect()->route('admin.extraction.index')->with('error', 'No tables to export.');
         }
 
         $startDate = $request->input('start_date');
-        $endDate   = $request->input('end_date');
-        $filename  = 'export_' . $campaign . '_' . date('Y-m-d_His') . '.csv';
+        $endDate = $request->input('end_date');
+        $filename = 'export_'.$campaign.'_'.date('Y-m-d_His').'.csv';
 
         return response()->streamDownload(function () use ($tables, $startDate, $endDate) {
             $out = fopen('php://output', 'w');

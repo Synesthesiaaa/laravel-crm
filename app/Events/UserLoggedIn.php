@@ -11,6 +11,6 @@ class UserLoggedIn
 
     public function __construct(
         public readonly int $userId,
-        public readonly ?string $ipAddress = null
+        public readonly ?string $ipAddress = null,
     ) {}
 }

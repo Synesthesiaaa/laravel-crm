@@ -18,7 +18,7 @@ use PAMI\Message\IncomingMessage;
 class AmiEventListenerCommand extends Command
 {
     public function __construct(
-        protected TelephonyLogger $telephonyLogger
+        protected TelephonyLogger $telephonyLogger,
     ) {
         parent::__construct();
     }
@@ -48,7 +48,7 @@ class AmiEventListenerCommand extends Command
             return self::FAILURE;
         }
 
-        $webhookUrl = $this->option('webhook-url') ?: rtrim(config('app.url'), '/') . '/api/webhooks/ami';
+        $webhookUrl = $this->option('webhook-url') ?: rtrim(config('app.url'), '/').'/api/webhooks/ami';
         $reconnectDelay = (int) $this->option('reconnect-delay');
 
         $this->info("AMI Event Listener starting. Webhook: {$webhookUrl}");
@@ -78,7 +78,7 @@ class AmiEventListenerCommand extends Command
 
         $listenerId = $this->client->registerEventListener(
             fn (IncomingMessage $event) => $this->forwardToWebhook($event, $webhookUrl),
-            fn (IncomingMessage $event) => $this->shouldForward($event)
+            fn (IncomingMessage $event) => $this->shouldForward($event),
         );
 
         try {
@@ -149,7 +149,7 @@ class AmiEventListenerCommand extends Command
 
         foreach ($event->getVariables() as $key => $value) {
             if ($value !== null && $value !== '') {
-                $payload['variable_' . $key] = $value;
+                $payload['variable_'.$key] = $value;
             }
         }
 

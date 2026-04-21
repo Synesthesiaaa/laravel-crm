@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Http;
 class TelephonyHealthService
 {
     public function __construct(
-        protected VicidialServerRepository $vicidialServers
+        protected VicidialServerRepository $vicidialServers,
     ) {}
 
     /**
@@ -63,15 +63,15 @@ class TelephonyHealthService
     /**
      * Determine overall status: ok, degraded, critical.
      */
-    public function getStatus(array $metrics = null): string
+    public function getStatus(?array $metrics = null): string
     {
         $m = $metrics ?? $this->getMetrics();
 
-        if ($m['stale_calls'] > 0 || $m['failed_telephony_jobs_24h'] > 10 || !$m['db_connection']) {
+        if ($m['stale_calls'] > 0 || $m['failed_telephony_jobs_24h'] > 10 || ! $m['db_connection']) {
             return 'critical';
         }
 
-        if ($m['unmatched_ami_events_24h'] > 20 || $m['alerts_24h'] > 50 || !$m['vicidial_reachable']) {
+        if ($m['unmatched_ami_events_24h'] > 20 || $m['alerts_24h'] > 50 || ! $m['vicidial_reachable']) {
             return 'degraded';
         }
 
@@ -93,7 +93,7 @@ class TelephonyHealthService
     protected function checkVicidialReachability(): bool
     {
         $server = VicidialServer::active()->whereNotNull('api_url')->where('api_url', '!=', '')->first();
-        if (!$server || empty($server->api_url)) {
+        if (! $server || empty($server->api_url)) {
             return true; // No server configured = not applicable
         }
 
@@ -101,6 +101,7 @@ class TelephonyHealthService
             $url = rtrim((string) $server->api_url, '?&');
             $response = Http::when(! config('vicidial.verify_ssl', true), fn ($h) => $h->withoutVerifying())
                 ->connectTimeout(3)->timeout(5)->get($url);
+
             return $response->status() < 500;
         } catch (\Throwable) {
             return false;
@@ -111,6 +112,7 @@ class TelephonyHealthService
     {
         try {
             DB::connection()->getPdo();
+
             return true;
         } catch (\Throwable) {
             return false;

@@ -13,8 +13,8 @@ class NotifyLeadImportComplete
         Cache::forget("admin_form_stats_{$event->campaignCode}");
 
         Log::channel('audit')->info('Lead import completed', [
-            'campaign'  => $event->campaignCode,
-            'count'     => $event->importedCount,
+            'campaign' => $event->campaignCode,
+            'count' => $event->importedCount,
             'uploaded_by' => $event->uploadedByUserId,
         ]);
     }

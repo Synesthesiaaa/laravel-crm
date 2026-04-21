@@ -14,16 +14,16 @@ use Illuminate\View\View;
 class FieldLogicController extends Controller
 {
     public function __construct(
-        protected CampaignService $campaignService
+        protected CampaignService $campaignService,
     ) {}
 
     public function index(Request $request): View
     {
-        $campaign       = $request->session()->get('campaign', 'mbsales');
+        $campaign = $request->session()->get('campaign', 'mbsales');
         $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['forms' => []];
-        $forms          = $campaignConfig['forms'] ?? [];
-        $formType       = $request->query('form', array_key_first($forms) ?: '');
-        if ($formType !== '' && !isset($forms[$formType])) {
+        $forms = $campaignConfig['forms'] ?? [];
+        $formType = $request->query('form', array_key_first($forms) ?: '');
+        if ($formType !== '' && ! isset($forms[$formType])) {
             $formType = array_key_first($forms) ?: '';
         }
         $fields = FormField::where('campaign_code', $campaign)
@@ -31,19 +31,20 @@ class FieldLogicController extends Controller
             ->orderBy('field_order')
             ->orderBy('id')
             ->get();
+
         return view('admin.field_logic', [
-            'campaign'     => $campaign,
+            'campaign' => $campaign,
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
-            'forms'        => $forms,
-            'formType'     => $formType,
-            'fields'       => $fields,
+            'forms' => $forms,
+            'formType' => $formType,
+            'fields' => $fields,
         ]);
     }
 
     public function store(StoreFieldLogicRequest $request): RedirectResponse
     {
         $validated = $request->validated();
-        $options   = $this->normalizeOptionsInput($request->input('options'));
+        $options = $this->normalizeOptionsInput($request->input('options'));
         if (in_array($validated['field_type'], ['select', 'multiselect'], true) && $options === null) {
             return redirect()->back()
                 ->withInput()
@@ -57,26 +58,27 @@ class FieldLogicController extends Controller
             ->max('field_order');
         FormField::create([
             'campaign_code' => $validated['campaign_code'],
-            'form_type'     => $validated['form_type'],
-            'field_name'    => $validated['field_name'],
-            'field_label'   => $validated['field_label'],
-            'field_type'    => $validated['field_type'],
-            'is_required'   => $request->boolean('is_required'),
-            'field_order'   => $validated['field_order'] ?? ($maxOrder ?? 0) + 1,
-            'field_width'   => $validated['field_width'] ?? 'full',
-            'options'       => $options,
+            'form_type' => $validated['form_type'],
+            'field_name' => $validated['field_name'],
+            'field_label' => $validated['field_label'],
+            'field_type' => $validated['field_type'],
+            'is_required' => $request->boolean('is_required'),
+            'field_order' => $validated['field_order'] ?? ($maxOrder ?? 0) + 1,
+            'field_width' => $validated['field_width'] ?? 'full',
+            'options' => $options,
         ]);
         $this->campaignService->clearCampaignsCache();
+
         return redirect()->route('admin.field-logic.index', ['form' => $validated['form_type']])
             ->with('success', 'Field added.');
     }
 
     public function update(UpdateFieldLogicRequest $request, int $id): RedirectResponse
     {
-        $field     = FormField::findOrFail($id);
+        $field = FormField::findOrFail($id);
         $validated = $request->validated();
-        $newType   = $validated['field_type'] ?? $field->field_type;
-        $options   = $this->normalizeOptionsInput($request->input('options'));
+        $newType = $validated['field_type'] ?? $field->field_type;
+        $options = $this->normalizeOptionsInput($request->input('options'));
         if (in_array($newType, ['select', 'multiselect'], true) && $options === null) {
             return redirect()->back()
                 ->withInput()
@@ -87,14 +89,15 @@ class FieldLogicController extends Controller
         }
         $field->update([
             'field_label' => $validated['field_label'],
-            'field_name'  => $validated['field_name'] ?? $field->field_name,
-            'field_type'  => $newType,
+            'field_name' => $validated['field_name'] ?? $field->field_name,
+            'field_type' => $newType,
             'is_required' => $request->boolean('is_required'),
             'field_order' => $validated['field_order'] ?? $field->field_order,
             'field_width' => $validated['field_width'] ?? $field->field_width,
-            'options'     => $options,
+            'options' => $options,
         ]);
         $this->campaignService->clearCampaignsCache();
+
         return redirect()->route('admin.field-logic.index', ['form' => $field->form_type])
             ->with('success', 'Field updated.');
     }
@@ -106,7 +109,7 @@ class FieldLogicController extends Controller
             return null;
         }
         $lines = preg_split('/\r\n|\r|\n/', $text) ?: [];
-        $opts  = [];
+        $opts = [];
         foreach ($lines as $line) {
             $line = trim((string) $line);
             if ($line !== '') {
@@ -119,11 +122,12 @@ class FieldLogicController extends Controller
 
     public function destroy(Request $request): RedirectResponse
     {
-        $id      = (int) $request->input('id');
-        $field   = FormField::findOrFail($id);
+        $id = (int) $request->input('id');
+        $field = FormField::findOrFail($id);
         $formType = $field->form_type;
         $field->delete();
         $this->campaignService->clearCampaignsCache();
+
         return redirect()->route('admin.field-logic.index', ['form' => $formType])
             ->with('success', 'Field deleted.');
     }

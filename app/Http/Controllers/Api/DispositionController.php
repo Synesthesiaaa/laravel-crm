@@ -13,6 +13,7 @@ class DispositionController extends Controller
     {
         $campaign = $request->query('campaign') ?: $request->session()->get('campaign', 'mbsales');
         $codes = $dispositionService->getCodesForCampaign($campaign);
+
         return response()->json(['success' => true, 'codes' => $codes]);
     }
 }

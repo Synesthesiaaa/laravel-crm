@@ -8,18 +8,17 @@ use Illuminate\Support\Facades\Schema;
 class ExtractionService
 {
     public function __construct(
-        protected CampaignService $campaignService
+        protected CampaignService $campaignService,
     ) {}
 
     /**
-     * @param  array<string, mixed> $campaignConfig
-     * @param  string               $dataType
+     * @param  array<string, mixed>  $campaignConfig
      * @return array<string, string> tableName => friendlyName
      */
     public function resolveTables(array $campaignConfig, string $dataType): array
     {
         $allowedTables = $this->campaignService->getAllFormTableNames();
-        $tables        = [];
+        $tables = [];
 
         if ($dataType === 'all') {
             foreach ($campaignConfig['forms'] ?? [] as $formCode => $formConfig) {
@@ -29,7 +28,7 @@ class ExtractionService
                 }
             }
         } elseif (isset($campaignConfig['forms'][$dataType])) {
-            $fc    = $campaignConfig['forms'][$dataType];
+            $fc = $campaignConfig['forms'][$dataType];
             $table = $fc['table_name'] ?? $fc['table'] ?? '';
             if ($table && in_array($table, $allowedTables, true)) {
                 $tables[$table] = $fc['name'] ?? $dataType;
@@ -42,14 +41,14 @@ class ExtractionService
     /**
      * Streams a CSV of the given tables to the provided resource handle.
      *
-     * @param  resource             $handle
-     * @param  array<string, string> $tables
+     * @param  resource  $handle
+     * @param  array<string, string>  $tables
      */
     public function streamCsv($handle, array $tables, ?string $startDate, ?string $endDate): void
     {
         foreach ($tables as $tableName => $friendlyName) {
             // If the form table doesn't exist yet, skip it (prevents 500s).
-            if (!Schema::hasTable($tableName)) {
+            if (! Schema::hasTable($tableName)) {
                 continue;
             }
             $query = DB::table($tableName);

@@ -40,13 +40,13 @@ class InboundCallReceived implements ShouldBroadcastNow
     public function broadcastWith(): array
     {
         return [
-            'user_id'       => $this->userId,
-            'phone_number'  => $this->phoneNumber,
-            'lead_id'       => $this->leadId,
-            'client_name'   => $this->clientName,
+            'user_id' => $this->userId,
+            'phone_number' => $this->phoneNumber,
+            'lead_id' => $this->leadId,
+            'client_name' => $this->clientName,
             'campaign_code' => $this->campaignCode,
-            'lead_data'     => $this->leadData,
-            'timestamp'     => now()->toIso8601String(),
+            'lead_data' => $this->leadData,
+            'timestamp' => now()->toIso8601String(),
         ];
     }
 }

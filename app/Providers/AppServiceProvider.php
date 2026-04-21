@@ -29,7 +29,7 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        Model::preventLazyLoading(!$this->app->isProduction());
+        Model::preventLazyLoading(! $this->app->isProduction());
 
         Gate::policy(Campaign::class, CampaignPolicy::class);
         Gate::policy(\App\Models\User::class, UserPolicy::class);
@@ -57,17 +57,17 @@ class AppServiceProvider extends ServiceProvider
             @mkdir($tempDir, 0755, true);
         }
         if (! getenv('TMPDIR') && is_dir($tempDir)) {
-            putenv('TMPDIR=' . $tempDir);
+            putenv('TMPDIR='.$tempDir);
         }
     }
 
     private function registerRepositoryBindings(): void
     {
         $bindings = [
-            \App\Contracts\Repositories\CampaignRepositoryInterface::class  => \App\Repositories\CampaignRepository::class,
-            \App\Contracts\Repositories\UserRepositoryInterface::class       => \App\Repositories\UserRepository::class,
+            \App\Contracts\Repositories\CampaignRepositoryInterface::class => \App\Repositories\CampaignRepository::class,
+            \App\Contracts\Repositories\UserRepositoryInterface::class => \App\Repositories\UserRepository::class,
             \App\Contracts\Repositories\FormSubmissionRepositoryInterface::class => \App\Repositories\FormSubmissionRepository::class,
-            \App\Contracts\Repositories\FormFieldRepositoryInterface::class  => \App\Repositories\FormFieldRepository::class,
+            \App\Contracts\Repositories\FormFieldRepositoryInterface::class => \App\Repositories\FormFieldRepository::class,
             \App\Contracts\Repositories\DispositionRepositoryInterface::class => \App\Repositories\DispositionRepository::class,
             \App\Contracts\Repositories\VicidialServerRepositoryInterface::class => \App\Repositories\VicidialServerRepository::class,
             \App\Contracts\Repositories\AttendanceRepositoryInterface::class => \App\Repositories\AttendanceRepository::class,

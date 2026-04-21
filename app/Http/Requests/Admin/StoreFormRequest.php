@@ -15,11 +15,11 @@ class StoreFormRequest extends FormRequest
     {
         return [
             'campaign_code' => ['required', 'string', 'max:50', 'exists:campaigns,code'],
-            'form_code'     => ['required', 'string', 'max:50', 'regex:/^[a-z0-9_]+$/'],
-            'name'          => ['required', 'string', 'max:255'],
-            'table_name'    => ['required', 'string', 'max:100', 'regex:/^[a-z0-9_]+$/'],
-            'color'         => ['nullable', 'string', 'max:50'],
-            'icon'          => ['nullable', 'string', 'max:50'],
+            'form_code' => ['required', 'string', 'max:50', 'regex:/^[a-z0-9_]+$/'],
+            'name' => ['required', 'string', 'max:255'],
+            'table_name' => ['required', 'string', 'max:100', 'regex:/^[a-z0-9_]+$/'],
+            'color' => ['nullable', 'string', 'max:50'],
+            'icon' => ['nullable', 'string', 'max:50'],
             'display_order' => ['nullable', 'integer'],
         ];
     }
@@ -28,10 +28,10 @@ class StoreFormRequest extends FormRequest
     {
         return [
             'form_code.required' => 'Form code is required.',
-            'form_code.regex'    => 'Form code may only contain lowercase letters, numbers, and underscores.',
-            'name.required'      => 'Form name is required.',
+            'form_code.regex' => 'Form code may only contain lowercase letters, numbers, and underscores.',
+            'name.required' => 'Form name is required.',
             'table_name.required' => 'Table name is required.',
-            'table_name.regex'   => 'Table name may only contain lowercase letters, numbers, and underscores.',
+            'table_name.regex' => 'Table name may only contain lowercase letters, numbers, and underscores.',
         ];
     }
 }

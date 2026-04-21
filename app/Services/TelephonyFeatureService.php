@@ -40,21 +40,22 @@ class TelephonyFeatureService
 
     public function isEnabled(string $feature): bool
     {
-        if (!in_array($feature, self::FEATURE_KEYS, true)) {
+        if (! in_array($feature, self::FEATURE_KEYS, true)) {
             return false;
         }
 
         $all = $this->getAll();
+
         return (bool) ($all[$feature] ?? false);
     }
 
     public function updateMany(array $values): void
     {
         foreach (self::FEATURE_KEYS as $feature) {
-            $enabled = !empty($values[$feature]);
+            $enabled = ! empty($values[$feature]);
             SystemSetting::query()->updateOrCreate(
                 ['setting_key' => $this->toSettingKey($feature)],
-                ['setting_value' => $enabled ? '1' : '0']
+                ['setting_value' => $enabled ? '1' : '0'],
             );
         }
 
@@ -76,7 +77,7 @@ class TelephonyFeatureService
 
     private function toSettingKey(string $feature): string
     {
-        return 'telephony_feature_' . $feature;
+        return 'telephony_feature_'.$feature;
     }
 
     private function castBool(?string $value): bool

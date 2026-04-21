@@ -32,12 +32,13 @@ class FormFieldRepository implements FormFieldRepositoryInterface
                 'vici_params' => $field->vici_params,
                 'field_width' => $field->field_width ?? 'full',
             ];
-            if (!empty($field->vici_params)) {
+            if (! empty($field->vici_params)) {
                 $vici[] = $arr;
             } else {
                 $campaign[] = $arr;
             }
         }
+
         return [
             'vici' => $vici,
             'campaign' => $campaign,
@@ -51,10 +52,11 @@ class FormFieldRepository implements FormFieldRepositoryInterface
         if ($tableName === '') {
             return false;
         }
-        if ($allowedTables !== null && !in_array($tableName, $allowedTables, true)) {
+        if ($allowedTables !== null && ! in_array($tableName, $allowedTables, true)) {
             return false;
         }
         $sqlKeywords = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'DROP', 'CREATE', 'ALTER', 'TRUNCATE', 'EXEC', 'EXECUTE'];
-        return !in_array(strtoupper($tableName), $sqlKeywords, true);
+
+        return ! in_array(strtoupper($tableName), $sqlKeywords, true);
     }
 }

@@ -49,9 +49,9 @@ class SupervisorAgentsController extends Controller
             ->get()
             ->keyBy('user_id');
 
-        $agents = $users->map(function (User $user) use ($today, $activeCalls, $todaysCompleted, $todaysDispositions, $agentNames, $viciSessions) {
+        $agents = $users->map(function (User $user) use ($activeCalls, $todaysCompleted, $todaysDispositions, $agentNames, $viciSessions) {
             $latestLog = $user->attendanceLogs->first();
-            $isOnline  = $latestLog?->event_type === 'login';
+            $isOnline = $latestLog?->event_type === 'login';
             $currentCall = $activeCalls->get($user->id);
             $agentName = $agentNames[$user->id] ?? $user->username;
             $dispositions = $todaysDispositions->get($agentName, 0);
@@ -69,18 +69,18 @@ class SupervisorAgentsController extends Controller
                 : [];
 
             return [
-                'id'           => $user->id,
-                'name'         => $agentName,
-                'status'       => $status,
+                'id' => $user->id,
+                'name' => $agentName,
+                'status' => $status,
                 'status_label' => $this->statusLabel($status),
-                'calls_today'  => $callsToday,
-                'avg_handle'   => 0,
+                'calls_today' => $callsToday,
+                'avg_handle' => 0,
                 'dispositions' => $dispositions,
-                'since'        => $latestLog?->event_time?->format('H:i') ?? '—',
+                'since' => $latestLog?->event_time?->format('H:i') ?? '—',
                 'current_call' => $currentCall ? [
                     'phone_number' => $currentCall->phone_number,
-                    'status'       => $currentCall->status,
-                    'duration'     => $currentCall->answered_at ? (int) now()->diffInSeconds($currentCall->answered_at) : 0,
+                    'status' => $currentCall->status,
+                    'duration' => $currentCall->answered_at ? (int) now()->diffInSeconds($currentCall->answered_at) : 0,
                 ] : null,
                 'vici_status' => $viciSessions->get($user->id)?->session_status,
                 'queue_count' => (int) ($viciSessions->get($user->id)?->last_status_payload['queue_count'] ?? 0),
@@ -88,12 +88,12 @@ class SupervisorAgentsController extends Controller
         });
 
         $stats = [
-            'agentsOnline'  => $agents->whereIn('status', ['available', 'on_call'])->count(),
-            'callsWaiting'  => 0,
-            'callsActive'   => $activeCalls->count(),
-            'avgWaitTime'   => 0,
-            'todayTotal'    => $todaysCompleted->sum(),
-            'slaPercent'    => 100,
+            'agentsOnline' => $agents->whereIn('status', ['available', 'on_call'])->count(),
+            'callsWaiting' => 0,
+            'callsActive' => $activeCalls->count(),
+            'avgWaitTime' => 0,
+            'todayTotal' => $todaysCompleted->sum(),
+            'slaPercent' => 100,
         ];
 
         return response()->json(compact('agents', 'stats'));
@@ -102,9 +102,9 @@ class SupervisorAgentsController extends Controller
     private function statusLabel(string $status): string
     {
         return match ($status) {
-            'oncall'   => 'On Call',
+            'oncall' => 'On Call',
             'available' => 'Available',
-            default     => 'Offline',
+            default => 'Offline',
         };
     }
 }

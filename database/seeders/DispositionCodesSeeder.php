@@ -23,7 +23,7 @@ class DispositionCodesSeeder extends Seeder
         foreach ($codes as $row) {
             DispositionCode::updateOrCreate(
                 ['campaign_code' => $row['campaign_code'], 'code' => $row['code']],
-                array_merge($row, ['is_active' => true])
+                array_merge($row, ['is_active' => true]),
             );
         }
     }

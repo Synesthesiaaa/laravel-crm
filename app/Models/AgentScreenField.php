@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class AgentScreenField extends Model
 {
     use SoftDeletes;
+
     protected $fillable = [
         'campaign_code',
         'field_key',

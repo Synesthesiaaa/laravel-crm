@@ -23,6 +23,7 @@ class CallHistoryService
         if ($leadId === null && ($phone === null || $phone === '')) {
             return $q->get();
         }
+
         return $q->get();
     }
 
@@ -36,8 +37,9 @@ class CallHistoryService
             $q->whereDate('created_at', '<=', $endDate);
         }
         if ($agent) {
-            $q->where('agent', 'like', '%' . $agent . '%');
+            $q->where('agent', 'like', '%'.$agent.'%');
         }
+
         return $q->paginate($perPage);
     }
 
@@ -49,11 +51,12 @@ class CallHistoryService
         ?int $leadId = null,
         ?string $phoneNumber = null,
         string $status = 'RECORDED',
-        ?string $remarks = null
+        ?string $remarks = null,
     ): OperationResult {
         if ($campaignCode === '' || $formType === '' || $agent === '') {
             return OperationResult::failure('Campaign code, form type and agent are required.');
         }
+
         try {
             CrmCallHistory::create([
                 'lead_id' => $leadId,
@@ -65,6 +68,7 @@ class CallHistoryService
                 'status' => $status,
                 'remarks' => $remarks,
             ]);
+
             return OperationResult::success();
         } catch (\Throwable $e) {
             return OperationResult::failure($e->getMessage());

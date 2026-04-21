@@ -37,7 +37,7 @@ class LoginRateLimitTest extends TestCase
         $user = User::factory()->create([
             'username' => 'validuser',
             'password' => bcrypt('ValidPass1'),
-            'role'     => 'Agent',
+            'role' => 'Agent',
         ]);
 
         $response = $this->post(route('login'), [
@@ -68,7 +68,7 @@ class LoginRateLimitTest extends TestCase
         // Either outcome proves the rate limiter is working.
         $this->assertTrue(
             $response->status() === 429 || $response->isRedirection(),
-            "Expected 429 or redirect when rate limited, got {$response->status()}"
+            "Expected 429 or redirect when rate limited, got {$response->status()}",
         );
 
         if ($response->isRedirection()) {

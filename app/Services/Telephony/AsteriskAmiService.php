@@ -9,7 +9,7 @@ use PAMI\Message\Action\OriginateAction;
 class AsteriskAmiService
 {
     public function __construct(
-        protected TelephonyLogger $telephonyLogger
+        protected TelephonyLogger $telephonyLogger,
     ) {}
 
     /**
@@ -63,10 +63,11 @@ class AsteriskAmiService
     {
         if (! $this->isConfigured()) {
             $this->telephonyLogger->warning('AsteriskAmiService', 'AMI secret not configured');
+
             return ['success' => false, 'message' => 'AMI not configured'];
         }
 
-        $callerId = $callerId ?: 'Web Call ' . $number;
+        $callerId = $callerId ?: 'Web Call '.$number;
 
         try {
             $client = new ClientImpl($this->clientOptions());
@@ -99,6 +100,7 @@ class AsteriskAmiService
                 'channel' => $channel,
                 'number' => $number,
             ]);
+
             return ['success' => false, 'message' => $e->getMessage()];
         }
     }
@@ -108,21 +110,22 @@ class AsteriskAmiService
      *
      * Flow: AMI calls SIP/{extension} → SIP.js auto-answers → Asterisk dials SIP/goip-trunk/{number}
      *
-     * @param  string  $extension   Agent's SIP extension (e.g. "6001")
-     * @param  string  $number      Outbound phone number to dial via GoIP trunk
+     * @param  string  $extension  Agent's SIP extension (e.g. "6001")
+     * @param  string  $number  Outbound phone number to dial via GoIP trunk
      * @param  string  $callerName  Caller ID name
-     * @param  int     $timeout     Seconds to wait for agent to answer (default 30)
+     * @param  int  $timeout  Seconds to wait for agent to answer (default 30)
      * @return array{success: bool, message: ?string, linkedid?: string}
      */
     public function originateWebRtc(string $extension, string $number, string $callerName = '', int $timeout = 30): array
     {
         if (! $this->isConfigured()) {
             $this->telephonyLogger->warning('AsteriskAmiService', 'AMI secret not configured');
+
             return ['success' => false, 'message' => 'AMI not configured'];
         }
 
         $trunk = config('asterisk.goip_trunk', 'goip-trunk');
-        $callerId = $callerName ?: 'Agent ' . $extension;
+        $callerId = $callerName ?: 'Agent '.$extension;
 
         try {
             $client = new ClientImpl($this->clientOptions());
@@ -131,9 +134,9 @@ class AsteriskAmiService
             // SIP-only: always originate to SIP/{extension}.
             // When agent browser answers, Asterisk runs the Application (Dial) to connect to GoIP trunk.
             $channelPrefix = $this->getAgentChannelPrefix();
-            $action = new OriginateAction($channelPrefix . '/' . $extension);
+            $action = new OriginateAction($channelPrefix.'/'.$extension);
             $action->setApplication('Dial');
-            $action->setData('SIP/' . $trunk . '/' . $number . ',' . $timeout . ',r');
+            $action->setData('SIP/'.$trunk.'/'.$number.','.$timeout.',r');
             $action->setCallerId($callerId);
             $action->setAsync(true);
             $action->setVariable('CRM_AGENT', $extension);
@@ -166,6 +169,7 @@ class AsteriskAmiService
                 'extension' => $extension,
                 'number' => $number,
             ]);
+
             return ['success' => false, 'message' => $e->getMessage()];
         }
     }

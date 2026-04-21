@@ -10,7 +10,7 @@ use Symfony\Component\HttpFoundation\Response;
 class EnsureCampaignSelected
 {
     public function __construct(
-        protected CampaignService $campaignService
+        protected CampaignService $campaignService,
     ) {}
 
     public function handle(Request $request, Closure $next): Response
@@ -24,6 +24,7 @@ class EnsureCampaignSelected
             $request->session()->put('campaign', $first);
             $request->session()->put('campaign_name', $campaigns[$first]['name'] ?? $first);
         }
+
         return $next($request);
     }
 }

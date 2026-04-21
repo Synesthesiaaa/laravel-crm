@@ -12,11 +12,11 @@ class CampaignFactory extends Factory
     public function definition(): array
     {
         return [
-            'code'        => fake()->unique()->bothify('??##'),
-            'name'        => fake()->company(),
+            'code' => fake()->unique()->bothify('??##'),
+            'name' => fake()->company(),
             'description' => fake()->sentence(),
-            'color'       => '#' . fake()->hexColor(),
-            'is_active'   => true,
+            'color' => '#'.fake()->hexColor(),
+            'is_active' => true,
         ];
     }
 }

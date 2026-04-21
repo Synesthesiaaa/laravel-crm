@@ -12,6 +12,7 @@ class CampaignPolicy
         if ($user->isSuperAdmin()) {
             return true;
         }
+
         return null;
     }
 

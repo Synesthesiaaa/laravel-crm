@@ -17,6 +17,7 @@ class NotificationsController extends Controller
             'form_type' => $h->form_type,
             'created_at' => $h->created_at?->toIso8601String(),
         ])->all();
+
         return response()->json(['success' => true, 'items' => $data]);
     }
 }

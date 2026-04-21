@@ -29,6 +29,7 @@ set_error_handler(function (int $severity, string $message, string $file, int $l
         && str_contains($message, "system's temporary directory")) {
         return true;
     }
+
     return null;
 }, \E_DEPRECATED | \E_WARNING);
 

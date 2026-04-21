@@ -16,6 +16,7 @@ class EncryptedIfPossible implements CastsAttributes
         if ($value === null || $value === '') {
             return $value;
         }
+
         try {
             return Crypt::decryptString($value);
         } catch (DecryptException) {
@@ -28,6 +29,7 @@ class EncryptedIfPossible implements CastsAttributes
         if ($value === null || $value === '') {
             return [$key => $value];
         }
+
         return [$key => Crypt::encryptString($value)];
     }
 }

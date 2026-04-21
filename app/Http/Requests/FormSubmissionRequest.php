@@ -44,6 +44,7 @@ class FormSubmissionRequest extends FormRequest
                     } else {
                         $rules[$name.'.*'] = ['string', 'max:255'];
                     }
+
                     continue;
                 }
                 $fieldRules = [];
@@ -55,13 +56,16 @@ class FormSubmissionRequest extends FormRequest
                 switch ($field->field_type) {
                     case 'number':
                         $fieldRules[] = 'numeric';
+
                         break;
                     case 'date':
                         $fieldRules[] = 'date';
+
                         break;
                     case 'textarea':
                         $fieldRules[] = 'string';
                         $fieldRules[] = 'max:65535';
+
                         break;
                     case 'select':
                         $fieldRules[] = 'string';
@@ -70,10 +74,12 @@ class FormSubmissionRequest extends FormRequest
                         if ($allowed !== []) {
                             $fieldRules[] = Rule::in($allowed);
                         }
+
                         break;
                     default:
                         $fieldRules[] = 'string';
                         $fieldRules[] = 'max:255';
+
                         break;
                 }
                 $rules[$name] = $fieldRules;

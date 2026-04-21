@@ -16,6 +16,7 @@ class NotificationService
             ->where('agent', $agentName)
             ->orderByDesc('created_at')
             ->limit($limit);
+
         return $q->get();
     }
 }

@@ -28,13 +28,13 @@ class SipCredentialsController extends Controller
         }
 
         return response()->json([
-            'success'    => true,
-            'sip_uri'    => $user->extension . '@' . config('webrtc.sip_domain'),
-            'ws_url'     => config('webrtc.asterisk_ws_url'),
-            'extension'  => $user->extension,
-            'password'   => $user->sip_password,
-            'stun'       => config('webrtc.stun_server'),
-            'domain'     => config('webrtc.sip_domain'),
+            'success' => true,
+            'sip_uri' => $user->extension.'@'.config('webrtc.sip_domain'),
+            'ws_url' => config('webrtc.asterisk_ws_url'),
+            'extension' => $user->extension,
+            'password' => $user->sip_password,
+            'stun' => config('webrtc.stun_server'),
+            'domain' => config('webrtc.sip_domain'),
             'ice_servers' => config('webrtc.ice_servers'),
             'no_answer_timeout' => config('webrtc.no_answer_timeout'),
         ]);

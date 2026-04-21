@@ -96,30 +96,38 @@
     if (!ApexCharts) return;
 
     const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-    const textColor   = isDark ? '#a1a1aa' : '#52525b';
-    const borderColor = isDark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.07)';
-    const gridColor   = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
-    const surfaceColor = isDark ? '#1a1a1a' : '#fafafa';
+    const textColor = isDark ? '#a1a1aa' : '#52525b';
+    const gridColor = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
 
-    // Activity area chart
-    new ApexCharts(document.getElementById('chart-activity'), {
-        series: [{ name: 'Submissions', data: @json($activityTrend['values'] ?? []) }],
-        chart: { type: 'area', height: 220, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif', animations: { enabled: true, easing: 'easeinout', speed: 600 } },
-        colors: ['#e91e8c'],
-        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: .35, opacityTo: .03 } },
-        stroke: { curve: 'smooth', width: 2 },
-        xaxis: { categories: @json($activityTrend['labels'] ?? []), labels: { style: { colors: textColor, fontSize: '11px' }, rotate: -30 }, axisBorder: { show: false }, axisTicks: { show: false } },
-        yaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
-        grid: { borderColor: gridColor, strokeDashArray: 3 },
-        tooltip: { theme: isDark ? 'dark' : 'light' },
-        dataLabels: { enabled: false },
-        theme: { mode: isDark ? 'dark' : 'light' },
-    }).render();
+    // Soft-nav safety: this script re-executes on every navigation. Destroy previous
+    // ApexCharts instances (tracked on window) so we do not leak DOM / listeners.
+    window.__crmDashboardCharts = window.__crmDashboardCharts || {};
+    Object.values(window.__crmDashboardCharts).forEach((c) => { try { c.destroy(); } catch (_) {} });
+    window.__crmDashboardCharts = {};
 
-    // Top agents bar chart
+    const activityEl = document.getElementById('chart-activity');
+    if (activityEl) {
+        const activity = new ApexCharts(activityEl, {
+            series: [{ name: 'Submissions', data: @json($activityTrend['values'] ?? []) }],
+            chart: { type: 'area', height: 220, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif', animations: { enabled: true, easing: 'easeinout', speed: 600 } },
+            colors: ['#e91e8c'],
+            fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: .35, opacityTo: .03 } },
+            stroke: { curve: 'smooth', width: 2 },
+            xaxis: { categories: @json($activityTrend['labels'] ?? []), labels: { style: { colors: textColor, fontSize: '11px' }, rotate: -30 }, axisBorder: { show: false }, axisTicks: { show: false } },
+            yaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
+            grid: { borderColor: gridColor, strokeDashArray: 3 },
+            tooltip: { theme: isDark ? 'dark' : 'light' },
+            dataLabels: { enabled: false },
+            theme: { mode: isDark ? 'dark' : 'light' },
+        });
+        window.__crmDashboardCharts.activity = activity;
+        activity.render();
+    }
+
     const agentLabels = @json($topAgents['labels'] ?? []);
-    if (agentLabels.length) {
-        new ApexCharts(document.getElementById('chart-agents'), {
+    const agentsEl = document.getElementById('chart-agents');
+    if (agentLabels.length && agentsEl) {
+        const agents = new ApexCharts(agentsEl, {
             series: [{ name: 'Submissions', data: @json($topAgents['values'] ?? []) }],
             chart: { type: 'bar', height: 220, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
             colors: ['#e91e8c'],
@@ -131,7 +139,9 @@
             dataLabels: { enabled: false },
             theme: { mode: isDark ? 'dark' : 'light' },
             categories: agentLabels,
-        }).render();
+        });
+        window.__crmDashboardCharts.agents = agents;
+        agents.render();
     }
 })();
 </script>

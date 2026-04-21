@@ -45,7 +45,7 @@ class SaveDispositionController extends Controller
             $request->input('phone_number'),
             $request->input('remarks') ?: $request->input('notes'),
             $request->input('call_duration_seconds') ? (int) $request->input('call_duration_seconds') : null,
-            $request->input('lead_data_json')
+            $request->input('lead_data_json'),
         );
         if (! $result->success) {
             return response()->json(['success' => false, 'message' => $result->message], 422);

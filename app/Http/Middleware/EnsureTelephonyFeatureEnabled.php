@@ -17,7 +17,7 @@ class EnsureTelephonyFeatureEnabled
             return $next($request);
         }
 
-        if (!$this->featureService->isEnabled($feature)) {
+        if (! $this->featureService->isEnabled($feature)) {
             return response()->json([
                 'ok' => false,
                 'message' => 'This telephony feature is disabled by administrator.',

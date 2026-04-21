@@ -9,7 +9,7 @@ use Illuminate\View\View;
 class AttendanceController extends Controller
 {
     public function __construct(
-        protected AttendanceRepository $attendanceRepository
+        protected AttendanceRepository $attendanceRepository,
     ) {}
 
     public function index(Request $request): View

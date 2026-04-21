@@ -10,7 +10,7 @@ return new class extends Migration
     {
         $tables = ['pjli_cycle', 'pjli_winback', 'pjli_renewal', 'pjli_ofw'];
         foreach ($tables as $tableName) {
-            if (!Schema::hasTable($tableName)) {
+            if (! Schema::hasTable($tableName)) {
                 continue;
             }
             if (Schema::hasColumn($tableName, 'request_id')) {
@@ -27,10 +27,10 @@ return new class extends Migration
     {
         $tables = ['pjli_cycle', 'pjli_winback', 'pjli_renewal', 'pjli_ofw'];
         foreach ($tables as $tableName) {
-            if (!Schema::hasTable($tableName)) {
+            if (! Schema::hasTable($tableName)) {
                 continue;
             }
-            if (!Schema::hasColumn($tableName, 'request_id')) {
+            if (! Schema::hasColumn($tableName, 'request_id')) {
                 continue;
             }
             Schema::table($tableName, function (Blueprint $table) {

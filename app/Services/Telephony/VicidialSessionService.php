@@ -289,7 +289,7 @@ class VicidialSessionService
                             return OperationResult::success(
                                 array_merge(
                                     $this->liveAgentMismatchPayload($user, $campaign, $session),
-                                    ['login_state' => 'login_pending']
+                                    ['login_state' => 'login_pending'],
                                 ),
                                 $this->liveAgentMismatchMessage($user, $campaign, $session),
                             );
@@ -317,7 +317,7 @@ class VicidialSessionService
                         return OperationResult::success(
                             array_merge(
                                 $this->liveAgentMismatchPayload($user, $campaign, $session),
-                                ['login_state' => 'login_pending']
+                                ['login_state' => 'login_pending'],
                             ),
                             $this->liveAgentMismatchMessage($user, $campaign, $session),
                         );

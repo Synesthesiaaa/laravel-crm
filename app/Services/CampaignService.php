@@ -8,16 +8,17 @@ use Illuminate\Support\Facades\Cache;
 class CampaignService
 {
     public function __construct(
-        protected CampaignRepository $campaignRepository
+        protected CampaignRepository $campaignRepository,
     ) {}
 
     public function getCampaigns(): array
     {
         return Cache::remember('campaigns_with_forms', 300, function () {
             $fromDb = $this->campaignRepository->getCampaignsWithForms();
-            if (!empty($fromDb)) {
+            if (! empty($fromDb)) {
                 return $fromDb;
             }
+
             return config('campaigns.fallback', []);
         });
     }
@@ -25,6 +26,7 @@ class CampaignService
     public function getCampaign(string $code): ?array
     {
         $campaigns = $this->getCampaigns();
+
         return $campaigns[$code] ?? null;
     }
 

@@ -196,23 +196,7 @@
                             My Attendance
                         </a>
                         <div class="border-t border-[var(--color-border)] mt-1 pt-1">
-                            <form method="POST" action="{{ route('logout') }}" id="logout-form" @submit.prevent="
-                                (async () => {
-                                    const s = Alpine.store('call');
-                                    if (s.state !== 'idle' && s.sessionId) {
-                                        try { await axios.post('/api/call/hangup', { session_id: s.sessionId }); } catch(e) {}
-                                    }
-                                    s.state = 'idle'; s.sessionId = null; s.stopTimer();
-                                    // Unregister SIP and destroy UA before logout
-                                    if (window.TelephonyCore) {
-                                        try { await window.TelephonyCore.destroy(); } catch(e) {}
-                                    }
-                                    try { await axios.post('/api/vicidial/session/logout'); } catch(e) {}
-                                    const vf = document.getElementById('vici-session-frame');
-                                    if (vf) { vf.onload = null; vf.onerror = null; vf.src = 'about:blank'; }
-                                    document.getElementById('logout-form').submit();
-                                })()
-                            ">
+                            <form method="POST" action="{{ route('logout') }}" id="logout-form" @submit.prevent="window.crmGracefulLogout && window.crmGracefulLogout()">
                                 @csrf
                                 <button type="submit" class="dropdown-item w-full text-red-400 hover:text-red-300">
                                     <x-icon name="arrow-right-on-rectangle" class="w-4 h-4" />
@@ -453,6 +437,7 @@
     @endphp
     <script>
         window.__telephonyBootstrap = @json($telephonyBootstrap);
+        window.__telephonyMediaPath = @json(config('webrtc.media_path', 'sipjs'));
     </script>
     @endauth
 
@@ -519,36 +504,51 @@
             }
 
             // 3. Register SIP.js with Asterisk SIP (WebRTC)
+            //    Only when the media_path config allows it. ViciPhone-only deployments
+            //    skip this so we don't have two WebRTC registrations for the same
+            //    extension (documented: config/webrtc.php `media_path`).
             //    TelephonyCore is a singleton – calling register() when already
             //    registered is a no-op, so page navigation is safe.
-            if (window.TelephonyCore) {
+            const mediaPath = window.__telephonyMediaPath || 'sipjs';
+            if (window.TelephonyCore && (mediaPath === 'sipjs' || mediaPath === 'both')) {
                 window.TelephonyCore.register().catch(err => {
                     console.warn('[TelephonyInit] SIP register error:', err);
                 });
+            }
+            if (mediaPath === 'both') {
+                console.warn('[TelephonyInit] media_path=both: both SIP.js and ViciPhone are active. Use only while migrating.');
             }
         })();
     });
     </script>
     @endauth
 
-    {{-- Theme toggle script --}}
+    {{-- Theme toggle: delegated clicks + fresh DOM queries so soft-nav (#main-layout swap) keeps working --}}
     <script>
       (function() {
-        var html  = document.documentElement;
-        var btn   = document.getElementById('theme-toggle');
-        var dark  = btn && btn.querySelector('.theme-icon-dark');
-        var light = btn && btn.querySelector('.theme-icon-light');
+        var html = document.documentElement;
         function applyTheme(t) {
           html.setAttribute('data-theme', t);
-          try { localStorage.setItem('theme', t); } catch(e) {}
-          if (dark)  dark.classList.toggle('hidden',  t === 'light');
+          try { localStorage.setItem('theme', t); } catch (e) {}
+          var btn = document.getElementById('theme-toggle');
+          var dark = btn && btn.querySelector('.theme-icon-dark');
+          var light = btn && btn.querySelector('.theme-icon-light');
+          if (dark) dark.classList.toggle('hidden', t === 'light');
           if (light) light.classList.toggle('hidden', t !== 'light');
-          if (btn)   btn.setAttribute('aria-label', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+          if (btn) {
+            btn.setAttribute('aria-label', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+            btn.setAttribute('title', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+          }
         }
-        if (btn) btn.addEventListener('click', () => {
+        document.addEventListener('click', function (e) {
+          var toggle = e.target && e.target.closest && e.target.closest('#theme-toggle');
+          if (!toggle) return;
           applyTheme(html.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
         });
         applyTheme(html.getAttribute('data-theme') || 'dark');
+        window.addEventListener('soft-navigate', function () {
+          applyTheme(html.getAttribute('data-theme') || 'dark');
+        });
       })();
     </script>
 

@@ -21,9 +21,10 @@ class UserRepository implements UserRepositoryInterface
     public function validateCredentials(string $username, string $password): ?User
     {
         $user = $this->findByUsername($username);
-        if (!$user || !Hash::check($password, $user->password)) {
+        if (! $user || ! Hash::check($password, $user->password)) {
             return null;
         }
+
         return $user;
     }
 

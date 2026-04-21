@@ -12,7 +12,7 @@ class PredictiveDialerService
 {
     public function __construct(
         protected CallOrchestrationService $orchestration,
-        protected TelephonyLogger $telephonyLogger
+        protected TelephonyLogger $telephonyLogger,
     ) {}
 
     /**
@@ -61,7 +61,7 @@ class PredictiveDialerService
             $user,
             $campaignCode,
             (string) $lead->phone_number,
-            is_numeric($lead->lead_id) ? (int) $lead->lead_id : null
+            is_numeric($lead->lead_id) ? (int) $lead->lead_id : null,
         );
 
         if (! $result->success) {

@@ -55,10 +55,12 @@ class TelephonyPreflightCommand extends Command
         $failed = collect($rows)->contains(fn ($row) => in_array($row[1], ['MISSING', 'INVALID', 'FAIL'], true));
         if ($failed) {
             $this->error('Preflight failed. Fix failing checks before production dial tests.');
+
             return self::FAILURE;
         }
 
         $this->info('Preflight passed. Ready for direct dial smoke tests.');
+
         return self::SUCCESS;
     }
 
@@ -79,7 +81,7 @@ class TelephonyPreflightCommand extends Command
         }
 
         fclose($socket);
+
         return [true, ''];
     }
 }
-

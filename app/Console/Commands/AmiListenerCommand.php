@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Events\CallStateChanged;
 use App\Events\InboundCallReceived;
 use App\Models\CallSession;
 use App\Services\Telephony\CallStateService;
@@ -15,11 +14,15 @@ use PAMI\Message\Event\EventMessage;
 class AmiListenerCommand extends Command
 {
     protected $signature = 'ami:listen';
+
     protected $description = 'Persistent AMI event listener — streams Asterisk events into the CRM event bus';
 
     private bool $shouldRun = true;
+
     private int $reconnectDelay;
+
     private int $maxReconnectDelay;
+
     private int $eventsProcessed = 0;
 
     private const HANDLED_EVENTS = [
@@ -46,6 +49,7 @@ class AmiListenerCommand extends Command
 
         if (config('asterisk.secret', '') === '') {
             $this->error('ASTERISK_AMI_SECRET is not configured. Exiting.');
+
             return self::FAILURE;
         }
 
@@ -91,7 +95,7 @@ class AmiListenerCommand extends Command
     ): void {
         $client = new ClientImpl($this->amiOptions());
         $client->open();
-        $this->info('Connected to AMI at ' . config('asterisk.host') . ':' . config('asterisk.port'));
+        $this->info('Connected to AMI at '.config('asterisk.host').':'.config('asterisk.port'));
 
         $client->registerEventListener(function (EventMessage $event) use ($callStateService, $mapping, $logger) {
             $this->dispatchEvent($event, $callStateService, $mapping, $logger);
@@ -127,26 +131,30 @@ class AmiListenerCommand extends Command
 
         $logger->event('AmiListenerCommand', $name, 'AMI event received', [
             'linkedid' => $linkedid,
-            'channel'  => $channel,
+            'channel' => $channel,
         ]);
 
         if ($name === 'Hangup' || $name === 'HangupRequest' || $name === 'SoftHangupRequest') {
             $this->handleHangup($linkedid, $channel, $event, $callStateService, $mapping, $logger);
+
             return;
         }
 
         if ($name === 'Bridge' || $name === 'BridgeEnter') {
             $this->handleBridge($linkedid, $channel, $event, $callStateService, $mapping, $logger);
+
             return;
         }
 
         if ($name === 'DialEnd') {
             $this->handleDialEnd($linkedid, $channel, $event, $callStateService, $mapping, $logger);
+
             return;
         }
 
         if ($name === 'AgentConnect') {
             $this->handleAgentConnect($event, $mapping, $logger);
+
             return;
         }
     }
@@ -163,8 +171,8 @@ class AmiListenerCommand extends Command
         $mapping->attachAsteriskIdentifiers($session, $linkedid, $channel);
         $callStateService->recordHangup($session, [
             'end_reason' => 'ami_hangup',
-            'linkedid'   => $linkedid,
-            'channel'    => $channel,
+            'linkedid' => $linkedid,
+            'channel' => $channel,
         ]);
     }
 
@@ -180,7 +188,7 @@ class AmiListenerCommand extends Command
         $mapping->attachAsteriskIdentifiers($session, $linkedid, $channel);
         $callStateService->transition($session, CallSession::STATUS_IN_CALL, [
             'linkedid' => $linkedid,
-            'channel'  => $channel,
+            'channel' => $channel,
         ]);
     }
 
@@ -199,15 +207,15 @@ class AmiListenerCommand extends Command
         if ($dialStatus === 'ANSWER') {
             $callStateService->transition($session, CallSession::STATUS_IN_CALL, [
                 'linkedid' => $linkedid,
-                'channel'  => $channel,
+                'channel' => $channel,
             ]);
         } else {
             $endReason = match ($dialStatus) {
-                'NOANSWER'   => 'no_answer',
-                'BUSY'       => 'busy',
-                'CANCEL'     => 'cancelled',
+                'NOANSWER' => 'no_answer',
+                'BUSY' => 'busy',
+                'CANCEL' => 'cancelled',
                 'CONGESTION' => 'congestion',
-                default      => 'dial_failed_' . strtolower($dialStatus ?: 'unknown'),
+                default => 'dial_failed_'.strtolower($dialStatus ?: 'unknown'),
             };
             $callStateService->transition($session, CallSession::STATUS_FAILED, [
                 'end_reason' => $endReason,
@@ -249,19 +257,20 @@ class AmiListenerCommand extends Command
         foreach ($keys as $key => $value) {
             $data[$key] = $value;
         }
+
         return $data;
     }
 
     private function amiOptions(): array
     {
         return [
-            'host'            => config('asterisk.host'),
-            'port'            => config('asterisk.port'),
-            'username'        => config('asterisk.username'),
-            'secret'          => config('asterisk.secret'),
+            'host' => config('asterisk.host'),
+            'port' => config('asterisk.port'),
+            'username' => config('asterisk.username'),
+            'secret' => config('asterisk.secret'),
             'connect_timeout' => config('asterisk.timeout', 5),
-            'read_timeout'    => config('asterisk.read_timeout', 5000),
-            'scheme'          => 'tcp://',
+            'read_timeout' => config('asterisk.read_timeout', 5000),
+            'scheme' => 'tcp://',
         ];
     }
 

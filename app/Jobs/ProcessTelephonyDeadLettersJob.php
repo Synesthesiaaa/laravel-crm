@@ -41,8 +41,8 @@ class ProcessTelephonyDeadLettersJob implements ShouldQueue
                 $uuid,
                 $job->queue ?? 'telephony',
                 strlen((string) $job->exception) > 500
-                    ? substr((string) $job->exception, 0, 500) . '...'
-                    : (string) ($job->exception ?? 'Unknown error')
+                    ? substr((string) $job->exception, 0, 500).'...'
+                    : (string) ($job->exception ?? 'Unknown error'),
             );
         }
     }
@@ -55,10 +55,11 @@ class ProcessTelephonyDeadLettersJob implements ShouldQueue
         $uuids = [];
         foreach ($alerts as $a) {
             $ctx = $a->context;
-            if (is_array($ctx) && !empty($ctx['uuid'])) {
+            if (is_array($ctx) && ! empty($ctx['uuid'])) {
                 $uuids[] = $ctx['uuid'];
             }
         }
+
         return array_unique($uuids);
     }
 

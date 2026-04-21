@@ -10,14 +10,14 @@ use App\Models\TelephonyAlert;
 class TelephonyAlertService
 {
     public function __construct(
-        protected TelephonyLogger $telephonyLogger
+        protected TelephonyLogger $telephonyLogger,
     ) {}
 
     public function log(
         string $type,
         string $message,
         array $context = [],
-        string $severity = TelephonyAlert::SEVERITY_WARNING
+        string $severity = TelephonyAlert::SEVERITY_WARNING,
     ): TelephonyAlert {
         $alert = TelephonyAlert::create([
             'type' => $type,
@@ -43,7 +43,7 @@ class TelephonyAlertService
             TelephonyAlert::TYPE_STALE_CORRECTED,
             "Forced stale call to failed: session_id=$sessionId",
             ['session_id' => $sessionId, 'user_id' => $userId, 'dialed_at' => $dialedAt],
-            TelephonyAlert::SEVERITY_WARNING
+            TelephonyAlert::SEVERITY_WARNING,
         );
     }
 
@@ -53,7 +53,7 @@ class TelephonyAlertService
             TelephonyAlert::TYPE_UNMATCHED_AMI,
             "Matched previously unmatched AMI event: event_id=$eventId -> session_id=$sessionId",
             ['event_id' => $eventId, 'session_id' => $sessionId],
-            TelephonyAlert::SEVERITY_INFO
+            TelephonyAlert::SEVERITY_INFO,
         );
     }
 
@@ -63,7 +63,7 @@ class TelephonyAlertService
             TelephonyAlert::TYPE_DEAD_LETTER,
             "Telephony job failed: $queue",
             ['uuid' => $uuid, 'queue' => $queue, 'exception' => $exception],
-            TelephonyAlert::SEVERITY_WARNING
+            TelephonyAlert::SEVERITY_WARNING,
         );
     }
 
@@ -73,7 +73,7 @@ class TelephonyAlertService
             TelephonyAlert::TYPE_VICIDIAL_UNREACHABLE,
             "VICIdial API unreachable: $campaign",
             ['campaign' => $campaign, 'error' => $error],
-            TelephonyAlert::SEVERITY_WARNING
+            TelephonyAlert::SEVERITY_WARNING,
         );
     }
 

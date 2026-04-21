@@ -7,7 +7,7 @@ class OperationResult
     public function __construct(
         public bool $success,
         public ?string $message = null,
-        public mixed $data = null
+        public mixed $data = null,
     ) {}
 
     public static function success(mixed $data = null, ?string $message = null): self

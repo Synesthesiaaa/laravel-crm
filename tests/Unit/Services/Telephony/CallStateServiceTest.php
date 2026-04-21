@@ -3,7 +3,6 @@
 namespace Tests\Unit\Services\Telephony;
 
 use App\Models\CallSession;
-use App\Models\User;
 use App\Services\Telephony\CallStateService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -55,8 +54,11 @@ class CallStateServiceTest extends TestCase
 
     public function test_invalid_transition_rejected(): void
     {
+        // DIALING -> ON_HOLD is never valid; on-hold requires an answered call.
+        // (Note: DIALING -> COMPLETED IS allowed now because agent hangup must
+        // always be able to terminate a session; see VALID_TRANSITIONS comment.)
         $session = CallSession::factory()->dialing()->create();
-        $result = $this->service->transition($session, CallSession::STATUS_COMPLETED);
+        $result = $this->service->transition($session, CallSession::STATUS_ON_HOLD);
         $this->assertFalse($result->success);
         $session->refresh();
         $this->assertEquals(CallSession::STATUS_DIALING, $session->status);
@@ -107,10 +109,12 @@ class CallStateServiceTest extends TestCase
         $this->assertEquals('reconciliation_timeout', $session->end_reason);
     }
 
-    public function test_force_correction_only_allows_failed_or_abandoned(): void
+    public function test_force_correction_only_allows_terminal_states(): void
     {
+        // Force transitions are restricted to terminal states (COMPLETED/FAILED/ABANDONED).
+        // Attempting to force to a non-terminal state must fail.
         $session = CallSession::factory()->inCall()->create();
-        $result = $this->service->transition($session, CallSession::STATUS_COMPLETED, [], true);
+        $result = $this->service->transition($session, CallSession::STATUS_RINGING, [], true);
         $this->assertFalse($result->success);
         $session->refresh();
         $this->assertEquals(CallSession::STATUS_IN_CALL, $session->status);
@@ -120,7 +124,9 @@ class CallStateServiceTest extends TestCase
     {
         $this->assertTrue($this->service->isValidTransition(CallSession::STATUS_DIALING, CallSession::STATUS_RINGING));
         $this->assertTrue($this->service->isValidTransition(CallSession::STATUS_IN_CALL, CallSession::STATUS_COMPLETED));
-        $this->assertFalse($this->service->isValidTransition(CallSession::STATUS_DIALING, CallSession::STATUS_COMPLETED));
+        // DIALING -> ON_HOLD is not valid (must go through ANSWERED/IN_CALL first).
+        $this->assertFalse($this->service->isValidTransition(CallSession::STATUS_DIALING, CallSession::STATUS_ON_HOLD));
+        // No transitions out of terminal states.
         $this->assertFalse($this->service->isValidTransition(CallSession::STATUS_COMPLETED, CallSession::STATUS_RINGING));
     }
 

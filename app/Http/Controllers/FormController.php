@@ -15,18 +15,20 @@ class FormController extends Controller
     public function __construct(
         protected CampaignService $campaignService,
         protected FormSubmissionService $formSubmissionService,
-        protected FormFieldRepository $formFieldRepository
+        protected FormFieldRepository $formFieldRepository,
     ) {}
 
     public function show(Request $request, string $type): View|RedirectResponse
     {
         $campaign = $request->query('campaign', $request->session()->get('campaign', 'mbsales'));
         $campaignConfig = $this->campaignService->getCampaign($campaign);
-        if (!$campaignConfig || !isset($campaignConfig['forms'][$type])) {
-            if (!empty($campaignConfig['forms'])) {
+        if (! $campaignConfig || ! isset($campaignConfig['forms'][$type])) {
+            if (! empty($campaignConfig['forms'])) {
                 $first = array_key_first($campaignConfig['forms']);
+
                 return redirect()->route('forms.show', ['type' => $first, 'campaign' => $campaign]);
             }
+
             return redirect()->route('dashboard')->with('error', 'No forms available for this campaign.');
         }
         $formConfig = $campaignConfig['forms'][$type];
@@ -34,6 +36,7 @@ class FormController extends Controller
         $prefill = array_merge($request->query(), [
             'date' => now()->format('Y-m-d'),
         ]);
+
         return view('forms.show', [
             'campaign' => $campaign,
             'campaignName' => $campaignConfig['name'] ?? $campaign,
@@ -58,14 +61,15 @@ class FormController extends Controller
             $campaign,
             $formType,
             $request->all(),
-            $agent
+            $agent,
         );
 
-        if (!$result->success) {
+        if (! $result->success) {
             return redirect()->back()
                 ->withInput()
                 ->with('error', $result->message ?? 'Submission failed.');
         }
+
         return redirect()->route('forms.show', ['type' => $formType, 'campaign' => $campaign])
             ->with('success', 'Record saved successfully.');
     }

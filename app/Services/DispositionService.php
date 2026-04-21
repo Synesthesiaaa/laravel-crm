@@ -44,7 +44,7 @@ class DispositionService
         ?string $phoneNumber = null,
         ?string $remarks = null,
         ?int $callDurationSeconds = null,
-        ?string $leadDataJson = null
+        ?string $leadDataJson = null,
     ): OperationResult {
         $code = $this->resolveAndValidateCode($campaignCode, $dispositionCode, $dispositionLabel);
         if (! $code) {

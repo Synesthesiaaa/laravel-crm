@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 class CallStateService
 {
     public function __construct(
-        protected TelephonyLogger $telephonyLogger
+        protected TelephonyLogger $telephonyLogger,
     ) {}
 
     /**
@@ -93,6 +93,7 @@ class CallStateService
                 'from' => $fromStatus,
                 'to' => $toStatus,
             ]);
+
             return OperationResult::success(null, 'Already terminal');
         }
 
@@ -102,6 +103,7 @@ class CallStateService
 
         if ($force && ! in_array($toStatus, self::FORCE_CORRECTION_ALLOWED, true)) {
             $allowed = implode(', ', (array) self::FORCE_CORRECTION_ALLOWED);
+
             return OperationResult::failure("Force correction only allowed to terminal states: {$allowed}");
         }
 

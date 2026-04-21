@@ -9,7 +9,7 @@ class RecordingService
 {
     public function __construct(
         protected VicidialProxyService $agentApi,
-        protected VicidialNonAgentApiService $nonAgentApi
+        protected VicidialNonAgentApiService $nonAgentApi,
     ) {}
 
     public function startRecording(User $user, string $campaign, ?string $stage = null): OperationResult
@@ -37,6 +37,7 @@ class RecordingService
         if (! $result['success']) {
             return OperationResult::failure($result['message'] ?: 'Failed to stop recording.');
         }
+
         return OperationResult::success(['raw_response' => $result['raw_response']]);
     }
 
@@ -46,6 +47,7 @@ class RecordingService
         if (! $result['success']) {
             return OperationResult::failure($result['message'] ?: 'Unable to fetch recording status.');
         }
+
         return OperationResult::success(['raw_response' => $result['raw_response']]);
     }
 

@@ -10,7 +10,7 @@ use Illuminate\View\View;
 class RecordsListController extends Controller
 {
     public function __construct(
-        protected CallHistoryService $callHistoryService
+        protected CallHistoryService $callHistoryService,
     ) {}
 
     public function index(Request $request): View
@@ -21,8 +21,9 @@ class RecordsListController extends Controller
             $request->query('start_date'),
             $request->query('end_date'),
             $request->query('agent'),
-            25
+            25,
         );
+
         return view('admin.records_list', [
             'history' => $history,
             'campaign' => $campaign,

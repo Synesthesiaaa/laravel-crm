@@ -17,10 +17,10 @@ class CallbackService
         string $type = 'ANYONE',
         ?string $callbackUser = null,
         ?string $comments = null,
-        string $callbackStatus = 'CALLBK'
+        string $callbackStatus = 'CALLBK',
     ): OperationResult {
         $type = strtoupper($type);
-        if (!in_array($type, ['ANYONE', 'USERONLY'], true)) {
+        if (! in_array($type, ['ANYONE', 'USERONLY'], true)) {
             return OperationResult::failure('Invalid callback type.');
         }
 

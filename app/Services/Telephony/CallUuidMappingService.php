@@ -13,7 +13,7 @@ use App\Models\User;
 class CallUuidMappingService
 {
     public function __construct(
-        protected TelephonyLogger $telephonyLogger
+        protected TelephonyLogger $telephonyLogger,
     ) {}
 
     /**
@@ -53,8 +53,6 @@ class CallUuidMappingService
 
     /**
      * Find call session for hangup event. Tries linkedid, channel, then extension fallback.
-     *
-     * @return CallSession|null
      */
     public function findSessionForHangup(?string $linkedid, ?string $channel, array $payload = []): ?CallSession
     {

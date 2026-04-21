@@ -27,7 +27,7 @@ class FormFieldsSeeder extends Seeder
         foreach ($ezycashFields as $f) {
             FormField::updateOrCreate(
                 ['campaign_code' => $f['campaign_code'], 'form_type' => $f['form_type'], 'field_name' => $f['field_name']],
-                $f
+                $f,
             );
         }
     }

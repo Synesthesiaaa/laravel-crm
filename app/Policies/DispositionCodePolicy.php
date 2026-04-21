@@ -12,6 +12,7 @@ class DispositionCodePolicy
         if ($user->isSuperAdmin()) {
             return true;
         }
+
         return null;
     }
 

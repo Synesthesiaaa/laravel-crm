@@ -11,7 +11,7 @@ class DashboardController extends Controller
 {
     public function __construct(
         protected CampaignService $campaignService,
-        protected DashboardStatsService $dashboardStats
+        protected DashboardStatsService $dashboardStats,
     ) {}
 
     public function index(Request $request): View
@@ -22,6 +22,7 @@ class DashboardController extends Controller
         $forms = $campaignConfig['forms'] ?? [];
         $activityTrend = $this->dashboardStats->getActivityTrend($campaign, 14);
         $topAgents = $this->dashboardStats->getTopAgents($campaign, 10);
+
         return view('dashboard', [
             'campaign' => $campaign,
             'campaignName' => $campaignName,

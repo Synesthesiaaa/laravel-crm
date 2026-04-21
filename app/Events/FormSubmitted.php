@@ -13,6 +13,6 @@ class FormSubmitted
         public readonly string $campaignCode,
         public readonly string $formType,
         public readonly int $recordId,
-        public readonly string $agent
+        public readonly string $agent,
     ) {}
 }

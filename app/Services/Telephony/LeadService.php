@@ -9,7 +9,7 @@ class LeadService
 {
     public function __construct(
         protected VicidialNonAgentApiService $nonAgentApi,
-        protected VicidialProxyService $agentApi
+        protected VicidialProxyService $agentApi,
     ) {}
 
     public function search(User $user, string $campaign, string $phoneNumber): OperationResult

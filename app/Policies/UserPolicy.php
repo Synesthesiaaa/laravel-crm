@@ -11,6 +11,7 @@ class UserPolicy
         if ($user->isSuperAdmin()) {
             return true;
         }
+
         return null;
     }
 

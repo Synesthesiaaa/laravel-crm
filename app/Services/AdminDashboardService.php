@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 class AdminDashboardService
 {
     public function __construct(
-        protected CampaignService $campaignService
+        protected CampaignService $campaignService,
     ) {}
 
     /** @return array<string, array{name: string, count: int, color: string}> */
@@ -17,9 +17,9 @@ class AdminDashboardService
     {
         return Cache::remember("admin_form_stats_{$campaignCode}", 300, function () use ($campaignCode) {
             $campaignConfig = $this->campaignService->getCampaign($campaignCode) ?? ['name' => $campaignCode, 'forms' => []];
-            $forms          = $campaignConfig['forms'] ?? [];
-            $tableNames     = $this->campaignService->getAllFormTableNames();
-            $stats          = [];
+            $forms = $campaignConfig['forms'] ?? [];
+            $tableNames = $this->campaignService->getAllFormTableNames();
+            $stats = [];
 
             $tableList = [];
             foreach ($forms as $formCode => $formConfig) {
@@ -28,19 +28,19 @@ class AdminDashboardService
                     $tableList[$formCode] = $tableName;
                 } else {
                     $stats[$formCode] = [
-                        'name'  => $formConfig['name'] ?? $formCode,
+                        'name' => $formConfig['name'] ?? $formCode,
                         'count' => 0,
                         'color' => $formConfig['color'] ?? 'blue',
                     ];
                 }
             }
 
-            if (!empty($tableList)) {
+            if (! empty($tableList)) {
                 $counts = $this->batchCountTables($tableList);
                 foreach ($forms as $formCode => $formConfig) {
                     if (isset($counts[$formCode])) {
                         $stats[$formCode] = [
-                            'name'  => $formConfig['name'] ?? $formCode,
+                            'name' => $formConfig['name'] ?? $formCode,
                             'count' => $counts[$formCode],
                             'color' => $formConfig['color'] ?? 'blue',
                         ];
@@ -74,6 +74,7 @@ class AdminDashboardService
                 $counts[$formCode] = 0;
             }
         }
+
         return $counts;
     }
 }
