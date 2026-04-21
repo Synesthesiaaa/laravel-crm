@@ -6,10 +6,14 @@ use App\Contracts\Repositories\DispositionRepositoryInterface;
 use App\Models\Campaign;
 use App\Models\DispositionCode;
 use App\Models\Form;
+use App\Models\Lead;
+use App\Models\LeadList;
 use App\Models\VicidialServer;
 use App\Policies\CampaignPolicy;
 use App\Policies\DispositionCodePolicy;
 use App\Policies\FormPolicy;
+use App\Policies\LeadListPolicy;
+use App\Policies\LeadPolicy;
 use App\Policies\UserPolicy;
 use App\Policies\VicidialServerPolicy;
 use App\Services\CampaignService;
@@ -36,6 +40,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Form::class, FormPolicy::class);
         Gate::policy(DispositionCode::class, DispositionCodePolicy::class);
         Gate::policy(VicidialServer::class, VicidialServerPolicy::class);
+        Gate::policy(LeadList::class, LeadListPolicy::class);
+        Gate::policy(Lead::class, LeadPolicy::class);
 
         View::composer(['layouts.app', 'layouts.sidebar'], function ($view) {
             $view->with('user', Auth::user());

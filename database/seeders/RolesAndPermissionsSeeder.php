@@ -23,6 +23,10 @@ class RolesAndPermissionsSeeder extends Seeder
             'view-agent-dashboard',
             'manage-field-logic',
             'manage-agent-screen',
+            'manage-leads',
+            'import-leads',
+            'export-leads',
+            'manage-lead-fields',
         ];
 
         foreach ($permissions as $permission) {
@@ -41,6 +45,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage-agent-screen',
             'view-reports',
             'export-data',
+            'manage-leads',
+            'import-leads',
+            'export-leads',
         ]);
 
         $teamLeader = Role::firstOrCreate(['name' => 'Team Leader', 'guard_name' => 'web']);
@@ -48,6 +55,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view-reports',
             'export-data',
             'view-agent-dashboard',
+            'export-leads',
         ]);
 
         $agent = Role::firstOrCreate(['name' => 'Agent', 'guard_name' => 'web']);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Campaign;
 use App\Models\LeadHopper;
+use App\Models\LeadList;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -61,9 +62,20 @@ class NextLeadController extends Controller
                 $campaignConfig = Campaign::where('code', $campaign)->first();
                 $maxAttempts = max(1, (int) ($campaignConfig?->predictive_max_attempts ?? 3));
 
+                $activeListIds = LeadList::forCampaign($campaign)
+                    ->active()
+                    ->pluck('id')
+                    ->all();
+
                 $lead = LeadHopper::forCampaign($campaign)
                     ->pending()
                     ->where('attempt_count', '<', $maxAttempts)
+                    ->where(function ($q) use ($activeListIds) {
+                        $q->whereNull('list_id');
+                        if (! empty($activeListIds)) {
+                            $q->orWhereIn('list_id', $activeListIds);
+                        }
+                    })
                     ->orderByDesc('priority')
                     ->orderBy('id')
                     ->lockForUpdate()

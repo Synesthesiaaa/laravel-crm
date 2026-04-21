@@ -39,6 +39,7 @@
         ['route' => 'admin.attendance.index',         'label' => 'Staff Attendance',    'icon' => 'clock'],
         ['route' => 'admin.records.index',            'label' => 'Records List',        'icon' => 'table-cells'],
         ['route' => 'admin.data-master.index',        'label' => 'Data Master',         'icon' => 'list-bullet'],
+        ['route' => 'admin.leads.lists.index',        'label' => 'Leads',               'icon' => 'queue-list'],
         ['route' => 'reports.index',                  'label' => 'Reports',             'icon' => 'chart-pie'],
         ['route' => 'admin.disposition-records.index','label' => 'Disposition Records', 'icon' => 'clipboard-document-list'],
         ['route' => 'admin.disposition-codes.index',  'label' => 'Disposition Codes',   'icon' => 'tag'],
@@ -51,6 +52,7 @@
         ['route' => 'admin.campaigns.index',        'label' => 'Campaigns',        'icon' => 'building-office'],
         ['route' => 'admin.forms.index',            'label' => 'Forms',            'icon' => 'document-text'],
         ['route' => 'admin.agent-screen.index',     'label' => 'Agent Screen Cfg', 'icon' => 'computer-desktop'],
+        ['route' => 'admin.leads.fields.index',     'label' => 'Lead Fields Cfg',  'icon' => 'adjustments-horizontal'],
         ['route' => 'admin.attendance-statuses.index', 'label' => 'Attendance Statuses', 'icon' => 'clock'],
         ['route' => 'admin.configuration',          'label' => 'Configuration',    'icon' => 'cog-6-tooth'],
     ];

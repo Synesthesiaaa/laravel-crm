@@ -136,6 +136,38 @@ Route::middleware(['auth', 'campaign'])->group(function () {
         Route::get('extraction', [\App\Http\Controllers\Admin\ExtractionController::class, 'index'])->name('extraction.index');
         Route::post('extraction', [\App\Http\Controllers\Admin\ExtractionController::class, 'export'])->name('extraction.export');
 
+        // Leads integration (ViciDial-style lists + leads)
+        Route::prefix('leads')->name('leads.')->group(function () {
+            // Lead lists
+            Route::get('lists', [\App\Http\Controllers\Admin\Leads\LeadListsController::class, 'index'])->name('lists.index');
+            Route::post('lists', [\App\Http\Controllers\Admin\Leads\LeadListsController::class, 'store'])->name('lists.store');
+            Route::get('lists/{list}', [\App\Http\Controllers\Admin\Leads\LeadListsController::class, 'show'])->name('lists.show');
+            Route::put('lists/{list}', [\App\Http\Controllers\Admin\Leads\LeadListsController::class, 'update'])->name('lists.update');
+            Route::post('lists/{list}/toggle', [\App\Http\Controllers\Admin\Leads\LeadListsController::class, 'toggle'])->name('lists.toggle');
+            Route::post('lists/{list}/load-hopper', [\App\Http\Controllers\Admin\Leads\LeadListsController::class, 'loadHopper'])->name('lists.load-hopper');
+            Route::post('lists/delete', [\App\Http\Controllers\Admin\Leads\LeadListsController::class, 'destroy'])->name('lists.destroy');
+
+            // Leads (scoped by list)
+            Route::get('lists/{list}/leads', [\App\Http\Controllers\Admin\Leads\LeadsController::class, 'index'])->name('leads.index');
+            Route::get('lists/{list}/leads/create', [\App\Http\Controllers\Admin\Leads\LeadsController::class, 'create'])->name('leads.create');
+            Route::post('lists/{list}/leads', [\App\Http\Controllers\Admin\Leads\LeadsController::class, 'store'])->name('leads.store');
+            Route::get('lists/{list}/leads/{lead}/edit', [\App\Http\Controllers\Admin\Leads\LeadsController::class, 'edit'])->name('leads.edit');
+            Route::put('lists/{list}/leads/{lead}', [\App\Http\Controllers\Admin\Leads\LeadsController::class, 'update'])->name('leads.update');
+            Route::post('lists/{list}/leads/delete', [\App\Http\Controllers\Admin\Leads\LeadsController::class, 'destroy'])->name('leads.destroy');
+            Route::post('lists/{list}/leads/bulk', [\App\Http\Controllers\Admin\Leads\LeadsController::class, 'bulk'])->name('leads.bulk');
+
+            // Import wizard
+            Route::get('lists/{list}/import', [\App\Http\Controllers\Admin\Leads\LeadImportController::class, 'form'])->name('import.form');
+            Route::post('lists/{list}/import/upload', [\App\Http\Controllers\Admin\Leads\LeadImportController::class, 'upload'])->name('import.upload');
+            Route::get('lists/{list}/import/mapping', [\App\Http\Controllers\Admin\Leads\LeadImportController::class, 'mapping'])->name('import.mapping');
+            Route::post('lists/{list}/import/confirm', [\App\Http\Controllers\Admin\Leads\LeadImportController::class, 'confirm'])->name('import.confirm');
+
+            // Export
+            Route::get('lists/{list}/export', [\App\Http\Controllers\Admin\Leads\LeadExportController::class, 'download'])->name('export.download');
+            Route::get('lists/{list}/template', [\App\Http\Controllers\Admin\Leads\LeadExportController::class, 'template'])->name('export.template');
+            Route::get('export/all', [\App\Http\Controllers\Admin\Leads\LeadExportController::class, 'downloadAll'])->name('export.all');
+        });
+
         // Super Admin only
         Route::middleware('role:Super Admin')->group(function () {
             Route::get('configuration', [\App\Http\Controllers\Admin\ConfigurationController::class, 'index'])->name('configuration');
@@ -165,6 +197,14 @@ Route::middleware(['auth', 'campaign'])->group(function () {
             Route::post('attendance-statuses', [\App\Http\Controllers\Admin\AttendanceStatusTypesController::class, 'store'])->name('attendance-statuses.store');
             Route::put('attendance-statuses/{id}', [\App\Http\Controllers\Admin\AttendanceStatusTypesController::class, 'update'])->name('attendance-statuses.update');
             Route::post('attendance-statuses/delete', [\App\Http\Controllers\Admin\AttendanceStatusTypesController::class, 'destroy'])->name('attendance-statuses.destroy');
+
+            // Lead field schema (Super Admin)
+            Route::prefix('leads')->name('leads.')->group(function () {
+                Route::get('fields', [\App\Http\Controllers\Admin\Leads\LeadFieldsController::class, 'index'])->name('fields.index');
+                Route::post('fields', [\App\Http\Controllers\Admin\Leads\LeadFieldsController::class, 'store'])->name('fields.store');
+                Route::put('fields/{id}', [\App\Http\Controllers\Admin\Leads\LeadFieldsController::class, 'update'])->name('fields.update');
+                Route::post('fields/delete', [\App\Http\Controllers\Admin\Leads\LeadFieldsController::class, 'destroy'])->name('fields.destroy');
+            });
         });
     });
     Route::get('forms/{type}', [FormController::class, 'show'])->name('forms.show')->where('type', '[a-z_]+');

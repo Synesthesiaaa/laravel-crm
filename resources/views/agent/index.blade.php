@@ -5,7 +5,11 @@
 @section('header-title', 'Agent Screen')
 
 @section('content')
-<div x-data="agentScreen()" x-init="init()" data-campaign="{{ session('campaign', 'mbsales') }}" data-user-id="{{ auth()->id() }}" class="flex flex-col lg:flex-row gap-6 h-full">
+<div x-data="agentScreen()" x-init="init()"
+     data-campaign="{{ session('campaign', 'mbsales') }}"
+     data-user-id="{{ auth()->id() }}"
+     @isset($prefill) data-prefill="{{ json_encode($prefill) }}" @endisset
+     class="flex flex-col lg:flex-row gap-6 h-full">
 
     {{-- WebSocket health banner --}}
     <div x-show="$store.ws.isDisconnected && !$store.ws.dismissed"
@@ -336,6 +340,25 @@ window.agentScreen = function() {
             this.$watch('$store.call.state', (v) => { if (v) this.callState = v; });
             this.$watch('$store.call.number', (v) => { if (v) this.phoneNumber = v; });
             this.$watch('$store.call.sessionId', (v) => { if (v) this.sessionId = v; });
+
+            // Admin "Dial" button pre-fill (from leads list pages)
+            try {
+                const prefillRaw = this.$el.dataset.prefill;
+                if (prefillRaw) {
+                    const p = JSON.parse(prefillRaw);
+                    if (p && p.phone) {
+                        this.phoneNumber = p.phone;
+                        Alpine.store('call').number = p.phone;
+                    }
+                    if (p && p.lead_id) {
+                        this.leadId = String(p.lead_id);
+                    }
+                    if (p && p.client_name) {
+                        this.clientName = p.client_name;
+                    }
+                }
+            } catch (_) { /* ignore malformed prefill */ }
+
             if (!this.featureEnabled('predictive_dialing')) {
                 this.predictiveMode = false;
             }

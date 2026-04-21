@@ -12,6 +12,8 @@ class LeadHopper extends Model
 
     protected $fillable = [
         'campaign_code',
+        'list_id',
+        'lead_pk',
         'lead_id',
         'phone_number',
         'client_name',
@@ -39,6 +41,16 @@ class LeadHopper extends Model
         return $this->belongsTo(User::class, 'assigned_to_user_id');
     }
 
+    public function list(): BelongsTo
+    {
+        return $this->belongsTo(LeadList::class, 'list_id');
+    }
+
+    public function lead(): BelongsTo
+    {
+        return $this->belongsTo(Lead::class, 'lead_pk');
+    }
+
     public function scopePending(Builder $query): Builder
     {
         return $query->where('status', 'pending');
@@ -47,5 +59,10 @@ class LeadHopper extends Model
     public function scopeForCampaign($query, string $campaignCode)
     {
         return $query->where('campaign_code', $campaignCode);
+    }
+
+    public function scopeForList(Builder $query, int $listId): Builder
+    {
+        return $query->where('list_id', $listId);
     }
 }

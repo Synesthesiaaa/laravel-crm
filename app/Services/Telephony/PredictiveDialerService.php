@@ -4,6 +4,7 @@ namespace App\Services\Telephony;
 
 use App\Models\Campaign;
 use App\Models\LeadHopper;
+use App\Models\LeadList;
 use App\Models\User;
 use App\Support\OperationResult;
 use Illuminate\Support\Facades\DB;
@@ -28,9 +29,20 @@ class PredictiveDialerService
         $lead = DB::transaction(function () use ($campaignCode, $campaign, $user) {
             $maxAttempts = max(1, (int) ($campaign->predictive_max_attempts ?? 3));
 
+            $activeListIds = LeadList::forCampaign($campaignCode)
+                ->active()
+                ->pluck('id')
+                ->all();
+
             $lead = LeadHopper::forCampaign($campaignCode)
                 ->pending()
                 ->where('attempt_count', '<', $maxAttempts)
+                ->where(function ($q) use ($activeListIds) {
+                    $q->whereNull('list_id');
+                    if (! empty($activeListIds)) {
+                        $q->orWhereIn('list_id', $activeListIds);
+                    }
+                })
                 ->orderByDesc('priority')
                 ->orderBy('id')
                 ->lockForUpdate()

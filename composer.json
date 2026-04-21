@@ -13,6 +13,7 @@
         "laravel/sanctum": "^4.3",
         "laravel/tinker": "^2.10.1",
         "league/csv": "^9.28",
+        "maatwebsite/excel": "3.1.68",
         "marcelog/pami": "2.*",
         "pusher/pusher-php-server": "*",
         "spatie/laravel-activitylog": "^4.12",
