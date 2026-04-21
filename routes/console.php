@@ -60,3 +60,4 @@ Schedule::command('horizon:snapshot')
     ->everyFiveMinutes()
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/scheduler.log'));
+

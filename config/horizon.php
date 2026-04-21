@@ -210,8 +210,20 @@ return [
             'timeout' => 60,
             'nice' => 0,
         ],
+        'supervisor-imports' => [
+            'connection' => 'redis',
+            'queue' => ['imports'],
+            'balance' => 'simple',
+            'maxProcesses' => 2,
+            'memory' => 512,     // XLSX parsing can be heavy
+            'tries' => 2,
+            'timeout' => 1800,   // match ImportLeadsFileJob::$timeout
+            'nice' => 0,
+        ],
     ],
 
+
+    
     'environments' => [
         'production' => [
             'supervisor-1' => [
