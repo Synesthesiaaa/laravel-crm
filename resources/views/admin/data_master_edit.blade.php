@@ -25,7 +25,7 @@
                 @foreach($columns as $col)
                     @if(!in_array($col, ['id', 'created_at', 'updated_at'], true))
                         <div class="mb-4">
-                            <label class="block text-xs font-bold text-gray-600 uppercase mb-1">{{ $col }}</label>
+                            <label class="block text-xs font-bold text-gray-600 uppercase mb-1">{{ $headers[$col] ?? $col }}</label>
                             <input type="text" name="{{ $col }}" value="{{ is_object($record) ? ($record->$col ?? '') : ($record[$col] ?? '') }}" class="w-full px-3 py-2 border border-gray-200 rounded">
                         </div>
                     @endif
