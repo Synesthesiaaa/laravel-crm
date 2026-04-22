@@ -5,6 +5,7 @@ namespace App\Services\Leads;
 use App\Models\Lead;
 use App\Models\LeadList;
 use App\Support\OperationResult;
+use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -14,6 +15,18 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class LeadImportService
 {
+    /**
+     * Columns on the Lead model that are cast to date / datetime and therefore
+     * cannot accept arbitrary string values from a spreadsheet.
+     *
+     * @var list<string>
+     */
+    protected const DATE_COLUMNS = [
+        'date_of_birth',
+        'last_called_at',
+        'last_local_call_time',
+    ];
+
     public function __construct(
         protected LeadFieldService $fieldService,
     ) {}
@@ -72,58 +85,72 @@ class LeadImportService
         $skipped = 0;
 
         DB::transaction(function () use ($rows, $list, $dedupe, $updateExisting, $standardColumns, &$inserted, &$updated, &$skipped) {
-            foreach ($rows as $row) {
-                $phone = trim((string) ($row['phone_number'] ?? ''));
-                if ($phone === '') {
-                    $skipped++;
+            foreach ($rows as $rowIndex => $row) {
+                try {
+                    $phone = trim((string) ($row['phone_number'] ?? ''));
+                    if ($phone === '') {
+                        $skipped++;
 
-                    continue;
-                }
-
-                $standard = [];
-                $custom = [];
-                foreach ($row as $key => $value) {
-                    if ($key === '' || $key === null) {
                         continue;
                     }
-                    if (in_array($key, $standardColumns, true) || in_array($key, ['status', 'enabled'], true)) {
-                        $standard[$key] = $value;
-                    } else {
-                        $custom[$key] = $value;
-                    }
-                }
 
-                $payload = array_merge($standard, [
-                    'list_id' => $list->id,
-                    'campaign_code' => $list->campaign_code,
-                    'phone_number' => $phone,
-                    'status' => $standard['status'] ?? 'NEW',
-                    'enabled' => (bool) ($standard['enabled'] ?? true),
-                    'custom_fields' => $custom !== [] ? $custom : null,
-                ]);
-
-                $existing = null;
-                if ($dedupe === 'phone_number') {
-                    $existing = Lead::forList($list->id)->where('phone_number', $phone)->first();
-                } elseif ($dedupe === 'vendor_lead_code' && ! empty($payload['vendor_lead_code'])) {
-                    $existing = Lead::forList($list->id)
-                        ->where('vendor_lead_code', $payload['vendor_lead_code'])
-                        ->first();
-                }
-
-                if ($existing) {
-                    if ($updateExisting) {
-                        $existing->update($payload);
-                        $updated++;
-                    } else {
-                        $skipped++;
+                    $standard = [];
+                    $custom = [];
+                    foreach ($row as $key => $value) {
+                        if ($key === '' || $key === null) {
+                            continue;
+                        }
+                        if (in_array($key, $standardColumns, true) || in_array($key, ['status', 'enabled'], true)) {
+                            $standard[$key] = $value;
+                        } else {
+                            $custom[$key] = $value;
+                        }
                     }
 
-                    continue;
-                }
+                    $standard = $this->sanitiseDateColumns($standard);
 
-                Lead::create($payload);
-                $inserted++;
+                    $payload = array_merge($standard, [
+                        'list_id' => $list->id,
+                        'campaign_code' => $list->campaign_code,
+                        'phone_number' => $phone,
+                        'status' => $standard['status'] ?? 'NEW',
+                        'enabled' => (bool) ($standard['enabled'] ?? true),
+                        'custom_fields' => $custom !== [] ? $custom : null,
+                    ]);
+
+                    $existing = null;
+                    if ($dedupe === 'phone_number') {
+                        $existing = Lead::forList($list->id)->where('phone_number', $phone)->first();
+                    } elseif ($dedupe === 'vendor_lead_code' && ! empty($payload['vendor_lead_code'])) {
+                        $existing = Lead::forList($list->id)
+                            ->where('vendor_lead_code', $payload['vendor_lead_code'])
+                            ->first();
+                    }
+
+                    if ($existing) {
+                        if ($updateExisting) {
+                            $existing->update($payload);
+                            $updated++;
+                        } else {
+                            $skipped++;
+                        }
+
+                        continue;
+                    }
+
+                    Lead::create($payload);
+                    $inserted++;
+                } catch (\Throwable $e) {
+                    // One bad cell should never poison a 100k-row import.
+                    $skipped++;
+                    Log::warning('LeadImportService: skipped bad row', [
+                        'list_id' => $list->id,
+                        'row_index' => $rowIndex,
+                        'phone' => $row['phone_number'] ?? null,
+                        'error' => $e->getMessage(),
+                        'exception' => get_class($e),
+                    ]);
+                }
             }
         });
 
@@ -175,6 +202,39 @@ class LeadImportService
         }
 
         return null;
+    }
+
+    /**
+     * Replace any value in a date-cast column that isn't a parseable date with
+     * null so Eloquent's `asDateTime()` doesn't throw a DateMalformedStringException
+     * (e.g. when an email was accidentally mapped to `date_of_birth`).
+     *
+     * @param  array<string, mixed>  $standard
+     * @return array<string, mixed>
+     */
+    protected function sanitiseDateColumns(array $standard): array
+    {
+        foreach (self::DATE_COLUMNS as $col) {
+            if (! array_key_exists($col, $standard)) {
+                continue;
+            }
+            $value = $standard[$col];
+            if ($value === null || $value === '') {
+                $standard[$col] = null;
+
+                continue;
+            }
+            if ($value instanceof \DateTimeInterface) {
+                continue;
+            }
+            try {
+                Carbon::parse((string) $value);
+            } catch (\Throwable) {
+                $standard[$col] = null;
+            }
+        }
+
+        return $standard;
     }
 
     public function deleteStash(string $token): void
