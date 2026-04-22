@@ -64,6 +64,20 @@ class LeadImportServiceTest extends TestCase
         $this->assertSame(['note' => 'x'], $lead->custom_fields);
     }
 
+    public function test_persist_rows_accepts_numeric_excel_phone_cells(): void
+    {
+        $rows = [
+            ['phone_number' => 5553333, 'first_name' => 'Excel'],
+            ['phone_number' => 5554444.0, 'first_name' => 'Float'],
+        ];
+
+        $result = $this->service->persistRows($this->list, $rows);
+
+        $this->assertSame(2, $result['inserted']);
+        $this->assertSame('5553333', Lead::where('first_name', 'Excel')->first()->phone_number);
+        $this->assertSame('5554444', Lead::where('first_name', 'Float')->first()->phone_number);
+    }
+
     public function test_persist_rows_dedupe_by_phone_skips_duplicates_by_default(): void
     {
         $this->service->persistRows($this->list, [
@@ -122,6 +136,66 @@ class LeadImportServiceTest extends TestCase
         $lead2 = Lead::where('phone_number', '5552222')->first();
         $this->assertNotNull($lead2->date_of_birth);
         $this->assertSame('1990-05-04', $lead2->date_of_birth->format('Y-m-d'));
+    }
+
+    public function test_persist_rows_nullifies_datetime_objects_outside_sane_range(): void
+    {
+        // PhpSpreadsheet returns a real \DateTime for date-formatted cells.
+        // An empty / zero-serial cell resolves to year -0001, which MySQL
+        // rejects with SQLSTATE[22007] when sent through. The sanitiser must
+        // null those out instead of trusting any DateTimeInterface.
+        $badDate = new \DateTime('-0001-11-30 00:00:00');
+        $futureDate = new \DateTime('2999-01-01 00:00:00');
+        $goodDate = new \DateTime('1985-05-08');
+
+        $rows = [
+            [
+                'phone_number' => '5551111',
+                'first_name' => 'NegYear',
+                'date_of_birth' => $badDate,
+            ],
+            [
+                'phone_number' => '5552222',
+                'first_name' => 'FarFuture',
+                'date_of_birth' => $futureDate,
+            ],
+            [
+                'phone_number' => '5553333',
+                'first_name' => 'Good',
+                'date_of_birth' => $goodDate,
+            ],
+        ];
+
+        $result = $this->service->persistRows($this->list, $rows);
+
+        $this->assertSame(3, $result['inserted']);
+        $this->assertSame(0, $result['skipped']);
+
+        $this->assertNull(Lead::where('phone_number', '5551111')->first()->date_of_birth);
+        $this->assertNull(Lead::where('phone_number', '5552222')->first()->date_of_birth);
+        $this->assertSame(
+            '1985-05-08',
+            Lead::where('phone_number', '5553333')->first()->date_of_birth->format('Y-m-d'),
+        );
+    }
+
+    public function test_persist_rows_nullifies_zero_date_strings(): void
+    {
+        // Carbon::parse('0000-00-00') happily returns a Carbon instance with
+        // year 0, which MySQL then rejects. The range check must catch it.
+        $rows = [
+            [
+                'phone_number' => '5554444',
+                'first_name' => 'ZeroDate',
+                'date_of_birth' => '0000-00-00',
+            ],
+        ];
+
+        $result = $this->service->persistRows($this->list, $rows);
+
+        $this->assertSame(1, $result['inserted']);
+        $this->assertSame(0, $result['skipped']);
+        $this->assertNull(Lead::where('phone_number', '5554444')->first()->date_of_birth);
     }
 
     public function test_persist_rows_isolates_failures_to_individual_rows(): void

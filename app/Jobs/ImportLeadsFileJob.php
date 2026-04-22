@@ -13,7 +13,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ImportLeadsFileJob implements ShouldQueue
@@ -50,16 +49,14 @@ class ImportLeadsFileJob implements ShouldQueue
         if (! $list) {
             Log::warning('ImportLeadsFileJob: list not found', ['list_id' => $this->listId]);
             $tracker->fail($this->runId, 'Lead list was deleted before the import could run.');
-
-            return;
+            throw new \RuntimeException('Lead list not found for import job.');
         }
 
         $path = $service->resolveStashPath($this->token);
         if (! $path) {
             Log::warning('ImportLeadsFileJob: stash file not found', ['token' => $this->token]);
-            $tracker->fail($this->runId, 'Uploaded file expired or was removed before processing started.');
-
-            return;
+            $tracker->fail($this->runId, 'Uploaded file expired or was removed before processing started. Ensure the web app and Horizon workers share the same storage disk (e.g. NFS or `local` on one server).');
+            throw new \RuntimeException('Lead import stash file not found — check APP_ENV storage path and queue worker filesystem.');
         }
 
         $tracker->markProcessing($this->runId);

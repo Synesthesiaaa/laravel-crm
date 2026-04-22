@@ -80,8 +80,10 @@
                     @foreach($columns as $col)
                         <td class="text-sm">
                             @php
-                                $value = array_key_exists($col, $lead->getAttributes())
-                                    ? $lead->getAttribute($col)
+                                // Prefer real model columns (including casts) — getAttributes() is unreliable
+                                // for some drivers / casts and wrongly sends values to custom_fields.
+                                $value = ($col === 'id' || $lead->isFillable($col))
+                                    ? $lead->{$col}
                                     : data_get($lead->custom_fields ?? [], $col);
                             @endphp
                             @if(is_array($value))

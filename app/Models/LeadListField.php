@@ -95,6 +95,8 @@ class LeadListField extends Model
             ['key' => 'status', 'label' => 'Status', 'type' => 'text', 'order' => 230],
             ['key' => 'called_count', 'label' => 'Called Count', 'type' => 'number', 'order' => 240],
             ['key' => 'last_called_at', 'label' => 'Last Called At', 'type' => 'date', 'order' => 250],
+            ['key' => 'last_local_call_time', 'label' => 'Last Local Call Time', 'type' => 'date', 'order' => 260],
+            ['key' => 'user', 'label' => 'User', 'type' => 'text', 'order' => 270],
         ];
     }
 }

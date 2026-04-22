@@ -195,12 +195,17 @@ class LeadImportService
         DB::transaction(function () use ($rows, $list, $dedupe, $updateExisting, $standardColumns, &$inserted, &$updated, &$skipped) {
             foreach ($rows as $rowIndex => $row) {
                 try {
-                    $phone = trim((string) ($row['phone_number'] ?? ''));
+                    foreach ($row as $k => $v) {
+                        $row[$k] = $this->normalizeImportCellValue($v);
+                    }
+
+                    $phone = $this->stringForPhoneImport($row['phone_number'] ?? null);
                     if ($phone === '') {
                         $skipped++;
 
                         continue;
                     }
+                    $phone = mb_substr($phone, 0, 32);
 
                     $standard = [];
                     $custom = [];
@@ -275,6 +280,64 @@ class LeadImportService
     }
 
     /**
+     * Coerce PhpSpreadsheet / Maatwebsite cell payloads into plain PHP values
+     * so Eloquent never receives RichText objects, etc.
+     */
+    protected function normalizeImportCellValue(mixed $value): mixed
+    {
+        if ($value === null) {
+            return null;
+        }
+        if ($value instanceof \DateTimeInterface) {
+            return $value;
+        }
+        if (is_object($value) && method_exists($value, 'getPlainText')) {
+            return trim((string) $value->getPlainText());
+        }
+        if ($value instanceof \Stringable) {
+            return trim((string) $value->__toString());
+        }
+        if (is_bool($value) || is_int($value) || is_float($value)) {
+            return $value;
+        }
+
+        return $value;
+    }
+
+    /**
+     * Build a single dialable phone string from whatever Excel/CSV put in the cell.
+     */
+    protected function stringForPhoneImport(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+        if ($value instanceof \DateTimeInterface) {
+            // Sheet mis-detected a phone column as a date — do not persist garbage.
+            return '';
+        }
+        if (is_object($value) && method_exists($value, 'getPlainText')) {
+            $value = $value->getPlainText();
+        } elseif ($value instanceof \Stringable) {
+            $value = $value->__toString();
+        }
+        if (is_float($value) || is_int($value)) {
+            if (is_float($value) && is_finite($value) && abs($value - round($value)) < 1e-9) {
+                return (string) (int) round($value);
+            }
+            if (is_float($value) && is_finite($value)) {
+                $s = rtrim(rtrim(sprintf('%.12F', $value), '0'), '.');
+
+                return trim($s);
+            }
+
+            return trim((string) $value);
+        }
+
+        return trim(preg_replace('/\s+/u', ' ', (string) $value) ?? '');
+    }
+
+    /**
      * Apply a column mapping to convert raw sheet rows into db-ready rows.
      *
      * @param  array<int, array<int, mixed>>  $rawRows  Raw sheet rows (header row excluded).
@@ -313,9 +376,21 @@ class LeadImportService
     }
 
     /**
+     * Sanest range MySQL will accept in a DATE / DATETIME column without
+     * throwing SQLSTATE[22007]. We tighten it further to 1900..2100 because no
+     * realistic DOB / call-time value should fall outside that, and this rules
+     * out PhpSpreadsheet's "empty date cell" artefact of year -0001 as well as
+     * Carbon's tolerant parse of '0000-00-00'.
+     */
+    private const DATE_MIN_YEAR = 1900;
+
+    private const DATE_MAX_YEAR = 2100;
+
+    /**
      * Replace any value in a date-cast column that isn't a parseable date with
      * null so Eloquent's `asDateTime()` doesn't throw a DateMalformedStringException
-     * (e.g. when an email was accidentally mapped to `date_of_birth`).
+     * (e.g. when an email was accidentally mapped to `date_of_birth`) and so
+     * MySQL never receives an out-of-range placeholder like '-0001-11-30'.
      *
      * @param  array<string, mixed>  $standard
      * @return array<string, mixed>
@@ -333,16 +408,32 @@ class LeadImportService
                 continue;
             }
             if ($value instanceof \DateTimeInterface) {
+                $standard[$col] = $this->isInSaneDateRange($value) ? $value : null;
+
                 continue;
             }
             try {
-                Carbon::parse((string) $value);
+                $parsed = Carbon::parse((string) $value);
             } catch (\Throwable) {
                 $standard[$col] = null;
+
+                continue;
             }
+            $standard[$col] = $this->isInSaneDateRange($parsed) ? $parsed : null;
         }
 
         return $standard;
+    }
+
+    /**
+     * True when the given date falls inside the range MySQL will accept and
+     * that makes sense for CRM data (DOBs, call timestamps, etc.).
+     */
+    private function isInSaneDateRange(\DateTimeInterface $dt): bool
+    {
+        $year = (int) $dt->format('Y');
+
+        return $year >= self::DATE_MIN_YEAR && $year <= self::DATE_MAX_YEAR;
     }
 
     public function deleteStash(string $token): void
