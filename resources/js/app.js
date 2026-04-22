@@ -14,10 +14,13 @@ import focus from '@alpinejs/focus';
 import collapse from '@alpinejs/collapse';
 import intersect from '@alpinejs/intersect';
 import './attendance-status';
+import registerLeadImportProgress from './lead-import-progress';
 
 Alpine.plugin(focus);
 Alpine.plugin(collapse);
 Alpine.plugin(intersect);
+
+registerLeadImportProgress(Alpine);
 
 // Global toast store
 Alpine.store('toast', {

@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Jobs\ImportLeadsFileJob;
 use App\Models\LeadList;
 use App\Services\Leads\LeadFieldService;
+use App\Services\Leads\LeadImportProgressTracker;
 use App\Services\Leads\LeadImportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class LeadImportController extends Controller
@@ -121,6 +123,17 @@ class LeadImportController extends Controller
             return redirect()->back()->with('error', 'At least one column must map to phone_number.');
         }
 
+        $runId = (string) Str::uuid();
+        $estimatedRows = (int) ($stash['rows'] ?? 0);
+
+        app(LeadImportProgressTracker::class)->createQueued(
+            $runId,
+            $list->id,
+            (int) $request->user()->id,
+            $estimatedRows,
+            ['dedupe' => $request->input('dedupe')],
+        );
+
         ImportLeadsFileJob::dispatch(
             $list->id,
             $stash['token'],
@@ -130,12 +143,16 @@ class LeadImportController extends Controller
                 'update_existing' => $request->boolean('update_existing'),
             ],
             (int) $request->user()->id,
+            $runId,
+            $estimatedRows,
         );
 
         $request->session()->forget('lead_import_'.$list->id);
 
         return redirect()
             ->route('admin.leads.lists.show', $list)
-            ->with('success', 'Import queued. You will be notified when it completes.');
+            ->with('success', 'Import queued. Progress appears below while the file is processed.')
+            ->with('lead_import_run_id', $runId)
+            ->with('lead_import_estimated_rows', $estimatedRows);
     }
 }

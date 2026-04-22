@@ -161,6 +161,9 @@ Route::middleware(['auth', 'campaign'])->group(function () {
             Route::post('lists/{list}/import/upload', [\App\Http\Controllers\Admin\Leads\LeadImportController::class, 'upload'])->name('import.upload');
             Route::get('lists/{list}/import/mapping', [\App\Http\Controllers\Admin\Leads\LeadImportController::class, 'mapping'])->name('import.mapping');
             Route::post('lists/{list}/import/confirm', [\App\Http\Controllers\Admin\Leads\LeadImportController::class, 'confirm'])->name('import.confirm');
+            Route::get('lists/{list}/import/progress/{runId}', [\App\Http\Controllers\Admin\Leads\LeadImportProgressController::class, 'show'])
+                ->name('import.progress')
+                ->middleware('throttle:120,1');
 
             // Export
             Route::get('lists/{list}/export', [\App\Http\Controllers\Admin\Leads\LeadExportController::class, 'download'])->name('export.download');

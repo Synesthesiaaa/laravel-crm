@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Events\LeadImported;
 use App\Imports\LeadsImport;
 use App\Models\LeadList;
+use App\Services\Leads\LeadImportProgressTracker;
 use App\Services\Leads\LeadImportService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -35,15 +36,20 @@ class ImportLeadsFileJob implements ShouldQueue
         public array $mapping,
         public array $options,
         public int $uploadedByUserId,
+        public string $runId,
+        public int $estimatedRows = 0,
     ) {
         $this->onQueue('imports');
     }
 
     public function handle(LeadImportService $service): void
     {
+        $tracker = app(LeadImportProgressTracker::class);
+
         $list = LeadList::find($this->listId);
         if (! $list) {
             Log::warning('ImportLeadsFileJob: list not found', ['list_id' => $this->listId]);
+            $tracker->fail($this->runId, 'Lead list was deleted before the import could run.');
 
             return;
         }
@@ -51,31 +57,67 @@ class ImportLeadsFileJob implements ShouldQueue
         $path = $service->resolveStashPath($this->token);
         if (! $path) {
             Log::warning('ImportLeadsFileJob: stash file not found', ['token' => $this->token]);
+            $tracker->fail($this->runId, 'Uploaded file expired or was removed before processing started.');
 
             return;
         }
 
-        $import = new LeadsImport($list, $this->mapping, $this->options, $service);
+        $tracker->markProcessing($this->runId);
+
+        $import = new LeadsImport(
+            $list,
+            $this->mapping,
+            $this->options,
+            $service,
+            $this->runId,
+            $tracker,
+        );
 
         try {
             Excel::import($import, $path);
         } catch (\Throwable $e) {
             Log::error('ImportLeadsFileJob: import failed', [
                 'list_id' => $this->listId,
+                'run_id' => $this->runId,
                 'error' => $e->getMessage(),
             ]);
+            $tracker->fail($this->runId, $e->getMessage());
             throw $e;
         }
+
+        $tracker->complete(
+            $this->runId,
+            $import->inserted,
+            $import->updated,
+            $import->skipped,
+            $import->failedChunks,
+        );
 
         LeadImported::dispatch($list->campaign_code, $import->inserted + $import->updated, $this->uploadedByUserId);
 
         Log::info('ImportLeadsFileJob: finished', [
             'list_id' => $this->listId,
+            'run_id' => $this->runId,
             'inserted' => $import->inserted,
             'updated' => $import->updated,
             'skipped' => $import->skipped,
         ]);
 
         $service->deleteStash($this->token);
+    }
+
+    public function failed(?\Throwable $e = null): void
+    {
+        if ($e === null) {
+            return;
+        }
+
+        $tracker = app(LeadImportProgressTracker::class);
+        $existing = $tracker->get($this->runId);
+        if ($existing !== null && ($existing['status'] ?? '') === 'completed') {
+            return;
+        }
+
+        $tracker->fail($this->runId, $e->getMessage());
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Imports;
 
 use App\Models\LeadList;
+use App\Services\Leads\LeadImportProgressTracker;
 use App\Services\Leads\LeadImportService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -40,6 +41,8 @@ class LeadsImport implements ToCollection, WithChunkReading, WithHeadingRow
         protected array $mapping,
         protected array $options,
         protected LeadImportService $service,
+        protected ?string $runId = null,
+        protected ?LeadImportProgressTracker $progress = null,
     ) {
         $this->normalisedMapping = $this->normaliseMapping($mapping);
     }
@@ -76,6 +79,8 @@ class LeadsImport implements ToCollection, WithChunkReading, WithHeadingRow
             $this->inserted += $result['inserted'];
             $this->updated += $result['updated'];
             $this->skipped += $result['skipped'];
+
+            $this->pushProgress(count($mapped), $mapped);
         } catch (\Throwable $e) {
             // Don't let one chunk poison the entire import. Log + skip the chunk.
             $this->failedChunks++;
@@ -86,7 +91,44 @@ class LeadsImport implements ToCollection, WithChunkReading, WithHeadingRow
                 'error' => $e->getMessage(),
                 'exception' => get_class($e),
             ]);
+
+            $this->pushProgress($rows->count(), []);
         }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $mapped
+     */
+    protected function pushProgress(int $chunkRowCount, array $mapped): void
+    {
+        if ($this->runId === null || $this->runId === '' || $this->progress === null) {
+            return;
+        }
+
+        $recent = [];
+        foreach (array_slice($mapped, -8) as $r) {
+            $fn = isset($r['first_name']) ? trim((string) $r['first_name']) : '';
+            $ln = isset($r['last_name']) ? trim((string) $r['last_name']) : '';
+            $name = trim($fn.' '.$ln);
+            if ($name === '') {
+                $name = null;
+            }
+            $recent[] = [
+                'phone' => trim((string) ($r['phone_number'] ?? '')),
+                'name' => $name,
+            ];
+        }
+
+        $this->progress->afterChunk(
+            $this->runId,
+            $this->list->id,
+            $chunkRowCount,
+            $recent,
+            $this->inserted,
+            $this->updated,
+            $this->skipped,
+            $this->failedChunks,
+        );
     }
 
     public function chunkSize(): int

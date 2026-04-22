@@ -66,7 +66,11 @@ class LeadImportExportTest extends TestCase
             ])
             ->assertRedirect(route('admin.leads.lists.show', $this->list));
 
-        Queue::assertPushed(ImportLeadsFileJob::class);
+        Queue::assertPushed(ImportLeadsFileJob::class, function (ImportLeadsFileJob $job) {
+            return $job->listId === $this->list->id
+                && strlen($job->runId) === 36
+                && $job->estimatedRows >= 0;
+        });
     }
 
     public function test_confirm_rejects_mapping_without_phone_number(): void
