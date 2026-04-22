@@ -125,15 +125,33 @@ export default function registerLeadImportTrackStore(Alpine) {
                         'X-Requested-With': 'XMLHttpRequest',
                     },
                 });
-                if (!r.ok) {
-                    this.error = `HTTP ${r.status}`;
+                if (r.status === 429) {
+                    this.error = 'Too many requests; retrying…';
+
                     return;
                 }
-                this.state = await r.json();
+                if (!r.ok) {
+                    if ([403, 404, 422].includes(r.status)) {
+                        await this.clearStaleImportUi({ stale: true });
+
+                        return;
+                    }
+                    this.error = `HTTP ${r.status}`;
+
+                    return;
+                }
+                const data = await r.json();
+                const s = data?.status;
+                if (s === 'unknown') {
+                    this.stopPolling();
+                    await this.clearStaleImportUi({ stale: true });
+
+                    return;
+                }
+                this.state = data;
                 this.error = null;
 
-                const s = this.state?.status;
-                if (s === 'completed' || s === 'failed' || s === 'unknown') {
+                if (s === 'completed' || s === 'failed') {
                     this.stopPolling();
                     if (s === 'completed') {
                         this._reloadOnDismiss = true;
@@ -142,6 +160,41 @@ export default function registerLeadImportTrackStore(Alpine) {
                 }
             } catch (e) {
                 this.error = e?.message || 'Network error';
+            }
+        },
+
+        /**
+         * Remove phantom progress (expired cache, stale localStorage, 403 on poll).
+         * Optionally POST `stale: true` so Laravel forgets `lead_import_track`
+         * and the next full page load does not re-open the panel.
+         */
+        async clearStaleImportUi({ stale = false } = {}) {
+            this.stopPolling();
+            const url = this.track?.dismiss_url;
+            const runId = this.track?.run_id;
+            this.track = null;
+            this.state = null;
+            this.error = null;
+            this.collapsed = false;
+            this._reloadOnDismiss = false;
+            this.persistLs();
+            if (stale && url) {
+                const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                try {
+                    await fetch(url, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            Accept: 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': token || '',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        body: JSON.stringify({ run_id: runId, stale: true }),
+                    });
+                } catch (_) {
+                    /* ignore */
+                }
             }
         },
 

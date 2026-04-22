@@ -175,7 +175,17 @@ class LeadImportController extends Controller
 
         $request->validate([
             'run_id' => ['nullable', 'uuid'],
+            'stale' => ['sometimes', 'boolean'],
         ]);
+
+        // Client detected dead progress (cache miss, wrong list, etc.): always
+        // drop session so the layout stops injecting __LEAD_IMPORT_TRACK__ on
+        // every page load.
+        if ($request->boolean('stale')) {
+            $request->session()->forget('lead_import_track');
+
+            return response()->json(['ok' => true]);
+        }
 
         $track = $request->session()->get('lead_import_track');
         $runId = $request->input('run_id');

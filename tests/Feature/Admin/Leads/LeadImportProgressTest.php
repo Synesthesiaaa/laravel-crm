@@ -114,4 +114,30 @@ class LeadImportProgressTest extends TestCase
             ->getJson(route('admin.leads.import.progress', ['list' => $listB, 'runId' => $runId]))
             ->assertForbidden();
     }
+
+    public function test_dismiss_track_with_stale_flag_forgets_session_even_when_run_id_mismatches(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $sessionRunId = (string) Str::uuid();
+        $otherRunId = (string) Str::uuid();
+
+        $this->actingAs($admin)
+            ->withSession([
+                'campaign' => 'testcamp',
+                'campaign_name' => 'T',
+                'lead_import_track' => [
+                    'run_id' => $sessionRunId,
+                    'list_id' => 1,
+                    'poll_url' => 'https://example.test/poll',
+                    'dismiss_url' => route('admin.leads.import.track.dismiss'),
+                ],
+            ])
+            ->postJson(route('admin.leads.import.track.dismiss'), [
+                'run_id' => $otherRunId,
+                'stale' => true,
+            ])
+            ->assertOk()
+            ->assertJson(['ok' => true])
+            ->assertSessionMissing('lead_import_track');
+    }
 }
