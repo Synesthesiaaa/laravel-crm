@@ -11,7 +11,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Maatwebsite\Excel\Excel as ExcelFormats;
 use Maatwebsite\Excel\Facades\Excel;
+use Maatwebsite\Excel\HeadingRowImport;
 
 class LeadImportService
 {
@@ -44,27 +46,133 @@ class LeadImportService
             throw new \InvalidArgumentException('Unsupported file type. Use CSV or XLSX.');
         }
 
+        // Defensive: large CSV/XLSX header inspection can spike memory; raise
+        // ceilings only for this request so the upload step never 500s on
+        // bigger lists. PHP-FPM ignores these in safe mode but for typical
+        // installs they take effect for the lifetime of the request.
+        @ini_set('memory_limit', '512M');
+        @set_time_limit(120);
+
         $token = (string) Str::uuid();
         $path = 'lead-imports/'.$token.'.'.$ext;
-        Storage::disk('local')->put($path, file_get_contents($file->getRealPath()));
+
+        // Stream the upload straight to storage instead of loading the whole
+        // file into RAM via file_get_contents(). storeAs() uses a stream copy
+        // under the hood so a 50 MB upload no longer needs 50 MB of memory.
+        $file->storeAs('lead-imports', $token.'.'.$ext, 'local');
 
         $absolute = Storage::disk('local')->path($path);
-        $sheets = Excel::toArray(null, $absolute);
-        $rows = $sheets[0] ?? [];
-        $headers = array_map(
-            fn ($h) => is_string($h) ? trim($h) : (string) $h,
-            array_values($rows[0] ?? [])
-        );
-        $preview = array_slice($rows, 1, 5);
+
+        try {
+            [$headers, $preview, $rowCount] = $ext === 'csv'
+                ? $this->inspectCsv($absolute)
+                : $this->inspectSpreadsheet($absolute, $ext);
+        } catch (\Throwable $e) {
+            // Inspection failed (corrupt file, weird encoding, etc.). Drop the
+            // stash file so we don't leak orphaned uploads, then surface a
+            // friendly error to the controller (which renders a flash msg).
+            Storage::disk('local')->delete($path);
+            throw new \RuntimeException(
+                'Could not read the uploaded file. It may be corrupt, empty, or in an unsupported encoding. ('
+                .$e->getMessage().')',
+                previous: $e,
+            );
+        }
+
+        if ($headers === []) {
+            Storage::disk('local')->delete($path);
+            throw new \RuntimeException('The uploaded file appears to be empty or has no header row.');
+        }
 
         return [
             'token' => $token,
             'path' => $path,
             'headers' => $headers,
             'preview' => $preview,
-            'rows' => max(0, count($rows) - 1),
+            'rows' => $rowCount,
             'campaign_code' => $campaignCode,
         ];
+    }
+
+    /**
+     * Inspect a CSV using native fgetcsv — constant memory regardless of file
+     * size, handles quoted fields, and tolerates BOM / mixed line endings.
+     *
+     * @return array{0: list<string>, 1: array<int, array<int, mixed>>, 2: int}
+     */
+    protected function inspectCsv(string $absolutePath): array
+    {
+        $handle = @fopen($absolutePath, 'rb');
+        if ($handle === false) {
+            throw new \RuntimeException('Unable to open uploaded CSV for inspection.');
+        }
+
+        try {
+            // Strip UTF-8 BOM if present so the first header isn't "\ufeffName".
+            $bom = fread($handle, 3);
+            if ($bom !== "\xEF\xBB\xBF") {
+                rewind($handle);
+            }
+
+            $headerRow = fgetcsv($handle);
+            if ($headerRow === false || $headerRow === null) {
+                return [[], [], 0];
+            }
+            $headers = array_map(
+                fn ($h) => is_string($h) ? trim($h) : (string) $h,
+                array_values($headerRow)
+            );
+
+            $preview = [];
+            $rowCount = 0;
+            while (($row = fgetcsv($handle)) !== false) {
+                if ($row === [null]) {
+                    continue;
+                }
+                $rowCount++;
+                if (count($preview) < 5) {
+                    $preview[] = array_values($row);
+                }
+            }
+
+            return [$headers, $preview, $rowCount];
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    /**
+     * Inspect an XLSX/XLS by pulling only the heading row and a tiny preview
+     * slice, never the entire workbook. Falls back to a chunked Excel read
+     * for the row count rather than holding every cell in memory.
+     *
+     * @return array{0: list<string>, 1: array<int, array<int, mixed>>, 2: int}
+     */
+    protected function inspectSpreadsheet(string $absolutePath, string $ext): array
+    {
+        $readerType = $ext === 'xls' ? ExcelFormats::XLS : ExcelFormats::XLSX;
+
+        $heading = (new HeadingRowImport)->toArray($absolutePath, null, $readerType);
+        $headerRow = $heading[0][0] ?? [];
+        $headers = array_map(
+            fn ($h) => is_string($h) ? trim($h) : (string) $h,
+            array_values($headerRow)
+        );
+
+        // Best-effort preview + row count. We deliberately swallow errors here
+        // so a busted preview never crashes the upload step.
+        $preview = [];
+        $rowCount = 0;
+        try {
+            $sheets = Excel::toArray(null, $absolutePath, $readerType);
+            $rows = $sheets[0] ?? [];
+            $rowCount = max(0, count($rows) - 1);
+            $preview = array_slice($rows, 1, 5);
+        } catch (\Throwable) {
+            // Headers are enough to proceed with mapping — preview is cosmetic.
+        }
+
+        return [$headers, $preview, $rowCount];
     }
 
     /**

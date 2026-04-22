@@ -32,13 +32,36 @@ class LeadImportController extends Controller
     {
         $this->authorize('import', $list);
 
+        // PHP silently drops the upload (and clears $_FILES) when the request
+        // body exceeds post_max_size. Detect that here so the user gets a
+        // friendly message instead of an HTTP 500.
+        if (empty($_FILES) && empty($_POST) && ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+            $maxPost = ini_get('post_max_size') ?: '?';
+
+            return redirect()->back()->with(
+                'error',
+                "Upload exceeded the server's post_max_size ({$maxPost}). Split the file or raise post_max_size / upload_max_filesize in php.ini."
+            );
+        }
+
         $request->validate([
             'file' => ['required', 'file', 'mimes:csv,xlsx,xls,txt', 'max:51200'],
         ]);
 
         try {
             $stash = $this->importService->stash($request->file('file'), $list->campaign_code);
+        } catch (\Illuminate\Http\Exceptions\PostTooLargeException $e) {
+            return redirect()->back()->with('error', 'Upload too large for the server. Reduce the file size or contact an admin to raise php.ini limits.');
         } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Lead import upload failed', [
+                'list_id' => $list->id,
+                'user_id' => $request->user()?->id,
+                'file' => $request->file('file')?->getClientOriginalName(),
+                'size' => $request->file('file')?->getSize(),
+                'error' => $e->getMessage(),
+                'exception' => get_class($e),
+            ]);
+
             return redirect()->back()->with('error', 'Upload failed: '.$e->getMessage());
         }
 
