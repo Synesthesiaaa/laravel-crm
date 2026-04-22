@@ -8,6 +8,7 @@ use App\Models\LeadList;
 use App\Services\Leads\LeadFieldService;
 use App\Services\Leads\LeadImportProgressTracker;
 use App\Services\Leads\LeadImportService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -149,10 +150,41 @@ class LeadImportController extends Controller
 
         $request->session()->forget('lead_import_'.$list->id);
 
+        $request->session()->put('lead_import_track', [
+            'run_id' => $runId,
+            'list_id' => $list->id,
+            'list_name' => $list->name,
+            'campaign_code' => $list->campaign_code,
+            'estimated_rows' => $estimatedRows,
+            'poll_url' => route('admin.leads.import.progress', ['list' => $list, 'runId' => $runId]),
+            'dismiss_url' => route('admin.leads.import.track.dismiss'),
+            'list_url' => route('admin.leads.lists.show', $list),
+        ]);
+
         return redirect()
             ->route('admin.leads.lists.show', $list)
-            ->with('success', 'Import queued. Progress appears below while the file is processed.')
-            ->with('lead_import_run_id', $runId)
-            ->with('lead_import_estimated_rows', $estimatedRows);
+            ->with('success', 'Import queued. Progress is shown in the floating panel (stays visible on other pages and tabs).');
+    }
+
+    /**
+     * Clear server-side import tracking after the user dismisses the progress UI.
+     */
+    public function dismissTrack(Request $request): JsonResponse
+    {
+        abort_unless($request->user()?->isAdmin() ?? false, 403);
+
+        $request->validate([
+            'run_id' => ['nullable', 'uuid'],
+        ]);
+
+        $track = $request->session()->get('lead_import_track');
+        $runId = $request->input('run_id');
+        if ($track && $runId && ($track['run_id'] ?? '') !== $runId) {
+            return response()->json(['ok' => true]);
+        }
+
+        $request->session()->forget('lead_import_track');
+
+        return response()->json(['ok' => true]);
     }
 }

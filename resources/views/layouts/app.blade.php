@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    @if(session()->has('lead_import_track'))
+        <script>
+            window.__LEAD_IMPORT_TRACK__ = @json(session('lead_import_track'));
+        </script>
+    @endif
     <script>
       (function() {
         var t = localStorage.getItem('theme') || 'dark';
@@ -250,6 +255,125 @@
                 </div>
             </div>
         </template>
+    </div>
+
+    {{-- Lead import progress (global: survives navigation + syncs across tabs via localStorage) --}}
+    <div x-show="$store.leadImport.panelVisible"
+         x-cloak
+         class="fixed bottom-4 right-4 z-[60] max-w-md w-[min(100vw-2rem,28rem)] shadow-xl rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-1)] text-[var(--color-on-surface)] overflow-hidden"
+         style="display: none;"
+         role="status"
+         aria-live="polite">
+        {{-- Collapsed strip --}}
+        <button type="button"
+                class="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm bg-[var(--color-surface-container-low)] hover:bg-[var(--color-surface-3)] transition-colors"
+                x-show="$store.leadImport.collapsed"
+                @click="$store.leadImport.toggleCollapsed()">
+            <span class="flex items-center gap-2 min-w-0">
+                <span class="inline-block size-2 rounded-full bg-[var(--color-primary)] shrink-0"
+                      x-show="$store.leadImport.state && ['queued','processing'].includes($store.leadImport.state.status)"></span>
+                <span class="truncate font-medium" x-text="$store.leadImport.track?.list_name || 'Lead import'"></span>
+                <span class="text-xs text-[var(--color-on-surface-dim)] shrink-0" x-text="$store.leadImport.percentDisplay() != null ? $store.leadImport.percentDisplay() + '%' : '…'"></span>
+            </span>
+            <x-icon name="chevron-down" class="w-4 h-4 shrink-0 text-[var(--color-on-surface-dim)] -rotate-180" />
+        </button>
+
+        <div x-show="!$store.leadImport.collapsed" class="flex flex-col max-h-[min(70vh,32rem)]">
+            <div class="px-3 py-2 border-b border-[var(--color-border)] flex items-start justify-between gap-2 bg-[var(--color-surface-container-low)]">
+                <div class="min-w-0">
+                    <div class="text-xs font-semibold text-[var(--color-on-surface)] truncate">Lead import</div>
+                    <div class="text-[11px] text-[var(--color-on-surface-dim)] truncate" x-text="$store.leadImport.track?.list_name || ''"></div>
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                    <a x-show="$store.leadImport.track?.list_url"
+                       :href="$store.leadImport.track?.list_url"
+                       class="btn-icon"
+                       title="Open list">
+                        <x-icon name="arrow-top-right-on-square" class="w-4 h-4" />
+                    </a>
+                    <button type="button" class="btn-icon" @click="$store.leadImport.toggleCollapsed()" title="Minimize">
+                        <x-icon name="chevron-down" class="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+            <div class="p-3 space-y-3 overflow-y-auto text-sm">
+                <div class="flex items-center justify-between gap-2 text-xs text-[var(--color-on-surface-dim)]">
+                    <span class="flex items-center gap-2">
+                        <span class="inline-block size-1.5 rounded-full bg-[var(--color-primary)]"
+                              x-show="$store.leadImport.state && ['queued','processing'].includes($store.leadImport.state.status)"></span>
+                        <span x-text="$store.leadImport.statusLabel()"></span>
+                    </span>
+                </div>
+                <div>
+                    <div class="flex justify-between text-[11px] text-[var(--color-on-surface-dim)] mb-1">
+                        <span>Progress</span>
+                        <span x-show="$store.leadImport.percentDisplay() != null"><span x-text="$store.leadImport.percentDisplay()"></span>%</span>
+                        <span x-show="$store.leadImport.isIndeterminate()">Estimating…</span>
+                    </div>
+                    <div class="h-2 rounded-full bg-[var(--color-border)] overflow-hidden">
+                        <template x-if="$store.leadImport.percentDisplay() != null">
+                            <div class="h-full rounded-full bg-[var(--color-primary)] transition-[width] duration-500 ease-out"
+                                 :style="'width:' + Math.min(100, $store.leadImport.percentDisplay()) + '%'"></div>
+                        </template>
+                        <template x-if="$store.leadImport.isIndeterminate()">
+                            <div class="h-full w-1/3 rounded-full bg-[var(--color-primary)]/80 animate-pulse"></div>
+                        </template>
+                    </div>
+                    <p class="text-[11px] text-[var(--color-on-surface-dim)] mt-1"
+                       x-show="$store.leadImport.state && $store.leadImport.state.estimated_rows > 0">
+                        <span x-text="$store.leadImport.state.rows_processed ?? 0"></span> / <span x-text="$store.leadImport.state.estimated_rows"></span> rows
+                    </p>
+                </div>
+                <div class="grid grid-cols-4 gap-1.5 text-center" x-show="$store.leadImport.state && $store.leadImport.state.status !== 'unknown'">
+                    <div class="rounded-md bg-[var(--color-surface-container)] px-1 py-1.5">
+                        <div class="text-sm font-semibold leading-none" x-text="$store.leadImport.state?.inserted ?? '—'"></div>
+                        <div class="text-[9px] uppercase text-[var(--color-on-surface-dim)] mt-0.5">Ins</div>
+                    </div>
+                    <div class="rounded-md bg-[var(--color-surface-container)] px-1 py-1.5">
+                        <div class="text-sm font-semibold leading-none" x-text="$store.leadImport.state?.updated ?? '—'"></div>
+                        <div class="text-[9px] uppercase text-[var(--color-on-surface-dim)] mt-0.5">Upd</div>
+                    </div>
+                    <div class="rounded-md bg-[var(--color-surface-container)] px-1 py-1.5">
+                        <div class="text-sm font-semibold leading-none" x-text="$store.leadImport.state?.skipped ?? '—'"></div>
+                        <div class="text-[9px] uppercase text-[var(--color-on-surface-dim)] mt-0.5">Skip</div>
+                    </div>
+                    <div class="rounded-md bg-[var(--color-surface-container)] px-1 py-1.5">
+                        <div class="text-sm font-semibold leading-none" x-text="$store.leadImport.state?.failed_chunks ?? '0'"></div>
+                        <div class="text-[9px] uppercase text-[var(--color-on-surface-dim)] mt-0.5">Err</div>
+                    </div>
+                </div>
+                <div x-show="$store.leadImport.state?.recent?.length">
+                    <div class="text-[11px] font-medium text-[var(--color-on-surface-dim)] mb-1">Latest rows</div>
+                    <ul class="text-xs space-y-0.5 max-h-28 overflow-y-auto font-mono">
+                        <template x-for="(row, idx) in $store.leadImport.recentReversed" :key="(row.phone || '') + '-' + idx">
+                            <li class="flex justify-between gap-2 border-b border-[var(--color-border)]/50 py-0.5 last:border-0">
+                                <span class="truncate" x-text="row.phone"></span>
+                                <span class="truncate text-[var(--color-on-surface-dim)]" x-text="row.name || '—'"></span>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+                <div x-show="$store.leadImport.state?.status === 'failed'" class="rounded-lg bg-red-500/10 text-red-200 text-xs p-2">
+                    <span x-text="$store.leadImport.state?.message || 'Error'"></span>
+                </div>
+                <div x-show="$store.leadImport.state?.status === 'unknown'" class="text-xs text-[var(--color-on-surface-dim)]">
+                    <span x-text="$store.leadImport.state?.message || ''"></span>
+                </div>
+                <p x-show="$store.leadImport.error" class="text-xs text-amber-400" x-text="$store.leadImport.error"></p>
+                <div class="flex flex-wrap gap-2 pt-1">
+                    <button type="button"
+                            class="btn-primary text-xs py-1.5 px-3"
+                            x-show="$store.leadImport.isTerminal"
+                            @click="$store.leadImport.dismiss()">
+                        Dismiss
+                    </button>
+                    <span class="text-[11px] text-[var(--color-on-surface-dim)] self-center"
+                          x-show="$store.leadImport.state?.status === 'completed'">
+                        Page refreshes when you dismiss.
+                    </span>
+                </div>
+            </div>
+        </div>
     </div>
 
     {{-- Confirm dialog --}}

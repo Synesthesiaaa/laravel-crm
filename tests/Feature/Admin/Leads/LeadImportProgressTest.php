@@ -78,6 +78,27 @@ class LeadImportProgressTest extends TestCase
             ->assertJsonPath('user_id', $owner->id);
     }
 
+    public function test_dismiss_track_clears_session(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $runId = (string) Str::uuid();
+
+        $response = $this->actingAs($admin)
+            ->withSession([
+                'campaign' => 'testcamp',
+                'campaign_name' => 'T',
+                'lead_import_track' => [
+                    'run_id' => $runId,
+                    'list_id' => 1,
+                    'poll_url' => 'https://example.test/poll',
+                    'dismiss_url' => route('admin.leads.import.track.dismiss'),
+                ],
+            ])
+            ->postJson(route('admin.leads.import.track.dismiss'), ['run_id' => $runId]);
+
+        $response->assertOk()->assertJson(['ok' => true])->assertSessionMissing('lead_import_track');
+    }
+
     public function test_wrong_list_for_run_id_returns_403(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);

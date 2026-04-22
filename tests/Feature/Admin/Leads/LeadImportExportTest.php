@@ -64,7 +64,8 @@ class LeadImportExportTest extends TestCase
                 'dedupe' => 'phone_number',
                 'update_existing' => 0,
             ])
-            ->assertRedirect(route('admin.leads.lists.show', $this->list));
+            ->assertRedirect(route('admin.leads.lists.show', $this->list))
+            ->assertSessionHas('lead_import_track');
 
         Queue::assertPushed(ImportLeadsFileJob::class, function (ImportLeadsFileJob $job) {
             return $job->listId === $this->list->id
