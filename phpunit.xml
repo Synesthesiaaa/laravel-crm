@@ -31,5 +31,9 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <env name="VICIDIAL_DISPO_INBOUND_ENABLED" value="true"/>
+        <env name="VICIDIAL_DISPO_POLL_ENABLED" value="true"/>
+        <env name="AGENT_UNIFIED_SAVE_ENABLED" value="true"/>
+        <env name="HOPPER_AUTO_TOPUP_ENABLED" value="true"/>
     </php>
 </phpunit>

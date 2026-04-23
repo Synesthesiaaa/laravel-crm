@@ -39,7 +39,7 @@ class DispositionSaveTest extends TestCase
         ]);
         $response->assertOk();
         $response->assertJson(['success' => true]);
-        $this->assertDatabaseHas('campaign_disposition_records', [
+        $this->assertDatabaseHas('agent_call_dispositions', [
             'campaign_code' => 'mbsales',
             'disposition_code' => 'SALE',
             'agent' => $user->full_name ?? $user->name ?? $user->username,
@@ -72,7 +72,7 @@ class DispositionSaveTest extends TestCase
 
         $response->assertOk();
         $response->assertJson(['success' => true]);
-        $this->assertDatabaseHas('campaign_disposition_records', [
+        $this->assertDatabaseHas('agent_call_dispositions', [
             'campaign_code' => 'mbsales',
             'call_session_id' => $session->id,
             'disposition_code' => 'SALE',
@@ -109,7 +109,7 @@ class DispositionSaveTest extends TestCase
 
         $response->assertOk();
         $response->assertJson(['success' => true]);
-        $this->assertDatabaseHas('campaign_disposition_records', [
+        $this->assertDatabaseHas('agent_call_dispositions', [
             'call_session_id' => $session->id,
             'disposition_code' => 'SALE',
         ]);

@@ -30,17 +30,64 @@ return [
     | Disposition code mapping (Laravel code => VICIdial status)
     |--------------------------------------------------------------------------
     */
+    /*
+    | CRM disposition / lead status => ViciDial status (Non-Agent update_lead, Agent external_status).
+    */
     'disposition_map' => [
+        'NEW' => 'NEW',
         'SALE' => 'SALE',
         'CBH' => 'CBH',
         'CBW' => 'CBW',
         'CBC' => 'CBC',
+        'CALLBK' => 'CALLBK',
         'DNC' => 'DNC',
         'NAN' => 'NAN',
+        'NO_ANSWER' => 'NA',
         'NA' => 'NA',
-        'BUSY' => 'BUSY',
+        'BUSY' => 'B',
+        'AB' => 'AB',
+        'ABANDONED' => 'AB',
+        'ANSWER_MACHINE' => 'AM',
+        'AM' => 'AM',
+        'DROPPED_CALL' => 'DROP',
+        'DROPC' => 'DROP',
+        'DROP' => 'DROP',
+        'A' => 'A',
+        'DC' => 'DC',
+        'N' => 'N',
         'OTHER' => 'OTHER',
     ],
+
+    /*
+    | ViciDial vicidial_list.status (and dialer auto-dispositions) => CRM leads.status.
+    */
+    'vicidial_to_crm_status' => [
+        'NEW' => 'NEW',
+        'NA' => 'NO_ANSWER',
+        'N' => 'NO_ANSWER',
+        'B' => 'BUSY',
+        'BUSY' => 'BUSY',
+        'AB' => 'AB',
+        'DROP' => 'DROPPED_CALL',
+        'DROPC' => 'DROPPED_CALL',
+        'AM' => 'ANSWER_MACHINE',
+        'A' => 'A',
+        'DC' => 'DC',
+        'SALE' => 'SALE',
+        'DNC' => 'DNC',
+        'CALLBK' => 'CALLBK',
+        'CBH' => 'CBH',
+        'CBW' => 'CBW',
+        'CBC' => 'CBC',
+    ],
+
+    'inbound_dispo_enabled' => env('VICIDIAL_DISPO_INBOUND_ENABLED', false),
+
+    'inbound_poll_enabled' => env('VICIDIAL_DISPO_POLL_ENABLED', false),
+
+    'unified_agent_save_enabled' => env('AGENT_UNIFIED_SAVE_ENABLED', false),
+
+    'hopper_auto_topup_enabled' => env('HOPPER_AUTO_TOPUP_ENABLED', true),
 
     /*
     |--------------------------------------------------------------------------

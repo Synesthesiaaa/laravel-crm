@@ -61,6 +61,9 @@ class ImportLeadsFileJob implements ShouldQueue
 
         $tracker->markProcessing($this->runId);
 
+        $uploader = \App\Models\User::find($this->uploadedByUserId);
+        $this->options['allow_status_override'] = $uploader?->isSuperAdmin() ?? false;
+
         $import = new LeadsImport(
             $list,
             $this->mapping,

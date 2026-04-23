@@ -8,6 +8,7 @@
 <div x-data="agentScreen()" x-init="init()"
      data-campaign="{{ session('campaign', 'mbsales') }}"
      data-user-id="{{ auth()->id() }}"
+     data-unified-agent-save="{{ !empty($unifiedAgentSaveEnabled) ? '1' : '0' }}"
      @isset($prefill) data-prefill="{{ json_encode($prefill) }}" @endisset
      class="flex flex-col lg:flex-row gap-6 h-full">
 
@@ -78,7 +79,7 @@
         @if(isset($fields) && $fields->isNotEmpty())
         <div class="md-card p-5">
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)] mb-4">Capture Details</h3>
-            <form id="capture-form" @submit.prevent="saveForm()" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <form id="capture-form" @submit.prevent="onCaptureSubmit($event)" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 @foreach($fields as $field)
                 <div class="@if(($field->field_width ?? '') === 'full') sm:col-span-2 @endif">
                     @if($field->field_type === 'textarea')
@@ -107,13 +108,16 @@
                     @endif
                 </div>
                 @endforeach
-                <div class="sm:col-span-2 flex gap-3 pt-2">
+                <div class="sm:col-span-2 flex gap-3 pt-2" x-show="!unifiedAgentSave">
                     <button type="submit" class="btn-primary" :disabled="saving">
                         <x-icon name="check" class="w-4 h-4" />
                         <span x-text="saving ? 'Saving...' : 'Save Record'">Save Record</span>
                     </button>
                     <button type="button" class="btn-ghost" @click="clearForm()">Clear</button>
                 </div>
+                <p class="sm:col-span-2 text-xs text-[var(--color-on-surface-muted)] pt-1" x-show="unifiedAgentSave">
+                    Capture fields are saved together with disposition when you click <strong>Save disposition</strong> in wrap-up.
+                </p>
             </form>
         </div>
         @else
@@ -240,9 +244,9 @@
                 <label class="form-label">Notes</label>
                 <textarea x-model="dispositionNotes" class="form-textarea" rows="3" placeholder="Optional call notes..."></textarea>
             </div>
-            <button class="btn-primary w-full" @click="saveDisposition()" :disabled="!dispositionCode || savingDisposition">
+            <button class="btn-primary w-full" @click="unifiedAgentSave ? saveRecordAndDisposition() : saveDisposition()" :disabled="!dispositionCode || savingDisposition">
                 <x-icon name="check" class="w-4 h-4" />
-                <span x-text="savingDisposition ? 'Saving...' : (dispositionError ? 'Retry Save' : 'Save Disposition')">Save Disposition</span>
+                <span x-text="savingDisposition ? 'Saving...' : (dispositionError ? 'Retry Save' : (unifiedAgentSave ? 'Save record & disposition' : 'Save Disposition'))">Save Disposition</span>
             </button>
         </div>
 
@@ -329,12 +333,15 @@ window.agentScreen = function() {
             phone_search: '',
             raw: '',
         },
+        unifiedAgentSave: false,
+        leadPk: null,
 
         _echoUnsubscribe: null,
         _statusPollInterval: null,
         features: @js($telephonyFeatures ?? []),
 
         init() {
+            this.unifiedAgentSave = this.$el.dataset.unifiedAgentSave === '1';
             this.$watch('callState', (v) => Alpine.store('call').state = v);
             this.$watch('$store.call.duration', (v) => { this.duration = v; });
             this.$watch('$store.call.state', (v) => { if (v) this.callState = v; });
@@ -833,6 +840,26 @@ window.agentScreen = function() {
             return `${m}:${sec}`;
         },
 
+        prefillLeadForm(lead) {
+            if (!lead || !lead.fields) return;
+            const form = document.getElementById('capture-form');
+            if (!form) return;
+            form.querySelectorAll('input, select, textarea').forEach(el => {
+                if (el.name && lead.fields[el.name] !== undefined && lead.fields[el.name] !== null) {
+                    el.value = String(lead.fields[el.name]);
+                }
+            });
+        },
+
+        onCaptureSubmit(ev) {
+            if (this.unifiedAgentSave) {
+                ev.preventDefault();
+                Alpine.store('toast').info('Use Save disposition below to save capture and disposition together.');
+                return;
+            }
+            this.saveForm();
+        },
+
         async fetchNextLead() {
             if (this.loadingNextLead || (this.callState !== 'idle' && this.callState !== 'wrapup')) return;
             this.loadingNextLead = true;
@@ -840,9 +867,12 @@ window.agentScreen = function() {
                 const campaign = this.crmCampaign();
                 const res = await window.axios.get('/api/leads/next', { params: { campaign } });
                 if (res.data.lead) {
-                    this.leadId = res.data.lead.lead_id || '';
-                    this.phoneNumber = res.data.lead.phone_number || '';
-                    this.clientName = res.data.lead.client_name || '';
+                    const lead = res.data.lead;
+                    this.leadPk = lead.lead_pk != null ? Number(lead.lead_pk) : null;
+                    this.leadId = lead.lead_id || '';
+                    this.phoneNumber = lead.phone_number || '';
+                    this.clientName = lead.client_name || '';
+                    this.prefillLeadForm(lead);
                     Alpine.store('call').number = this.phoneNumber;
                     Alpine.store('toast').success('Lead loaded.');
                 } else {
@@ -852,6 +882,49 @@ window.agentScreen = function() {
                 Alpine.store('toast').error(e.response?.data?.message || 'Failed to fetch lead.');
             } finally {
                 this.loadingNextLead = false;
+            }
+        },
+
+        async saveRecordAndDisposition() {
+            if (!this.dispositionCode) return;
+            this.savingDisposition = true;
+            this.dispositionError = null;
+            const campaign = this.crmCampaign();
+            const form = document.getElementById('capture-form');
+            const captureData = {};
+            if (form) {
+                form.querySelectorAll('input, select, textarea').forEach(el => {
+                    if (el.name && !el.name.startsWith('_')) captureData[el.name] = el.value ?? '';
+                });
+            }
+            try {
+                await window.axios.post('/api/agent/record/save', {
+                    campaign_code: campaign,
+                    call_session_id: this.sessionId,
+                    lead_pk: this.leadPk,
+                    lead_id: this.leadId,
+                    phone_number: this.phoneNumber,
+                    disposition_code: this.dispositionCode,
+                    remarks: this.dispositionNotes,
+                    call_duration_seconds: this.duration,
+                    capture_data: captureData,
+                });
+                this.recentCalls.unshift({
+                    id: Date.now(),
+                    phone: this.phoneNumber,
+                    time: new Date().toLocaleTimeString(),
+                    disposition: this.dispositionCode,
+                });
+                if (this.recentCalls.length > 10) this.recentCalls.pop();
+                Alpine.store('toast').success('Record and disposition saved.');
+                this.clearForm();
+                this.resetAfterDisposition();
+            } catch (e) {
+                const msg = e.response?.data?.message || 'Failed to save. You may retry or dismiss.';
+                this.dispositionError = msg;
+                Alpine.store('toast').error(msg);
+            } finally {
+                this.savingDisposition = false;
             }
         },
 
@@ -896,6 +969,7 @@ window.agentScreen = function() {
         resetAfterDisposition() {
             this.callState = 'idle';
             this.sessionId = null;
+            this.leadPk = null;
             this.dispositionCode = '';
             this.dispositionNotes = '';
             this.dispositionError = null;
@@ -944,9 +1018,12 @@ window.agentScreen = function() {
                     Alpine.store('toast').info(res.data.message || 'No leads available in hopper.');
                     return;
                 }
-                this.leadId = res.data.lead.lead_id || '';
-                this.phoneNumber = res.data.lead.phone_number || '';
-                this.clientName = res.data.lead.client_name || '';
+                const lead = res.data.lead;
+                this.leadPk = lead.lead_pk != null ? Number(lead.lead_pk) : null;
+                this.leadId = lead.lead_id || '';
+                this.phoneNumber = lead.phone_number || '';
+                this.clientName = lead.client_name || '';
+                this.prefillLeadForm(lead);
                 this.predictiveDelay = Number(res.data.predictive_delay_seconds || this.predictiveDelay || 3);
                 this.sessionId = res.data.session_id || null;
                 Alpine.store('call').number = this.phoneNumber;

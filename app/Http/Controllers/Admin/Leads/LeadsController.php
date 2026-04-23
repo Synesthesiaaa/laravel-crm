@@ -80,6 +80,12 @@ class LeadsController extends Controller
         $data['campaign_code'] = $list->campaign_code;
         $data['list_id'] = $list->id;
 
+        if (! $request->user()?->isSuperAdmin()) {
+            $data['status'] = 'NEW';
+        } elseif (empty($data['status'] ?? null)) {
+            $data['status'] = 'NEW';
+        }
+
         $lead = Lead::create($data);
 
         $list->update(['leads_count' => $list->leads()->count()]);

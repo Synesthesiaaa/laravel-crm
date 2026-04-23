@@ -67,7 +67,7 @@
         $adminLinks = [
             ['route' => 'admin.records.index',            'icon' => 'table-cells',             'label' => 'Records List',         'desc' => 'Call history & submissions'],
             ['route' => 'admin.data-master.index',        'icon' => 'list-bullet',             'label' => 'Data Master',          'desc' => 'CRUD form data records'],
-            ['route' => 'admin.disposition-records.index','icon' => 'clipboard-document-list', 'label' => 'Disposition Records',  'desc' => 'Lead & disposition log'],
+            ['route' => 'admin.agent-records.index','icon' => 'clipboard-document-list', 'label' => 'Agent Call Records',  'desc' => 'Capture & disposition log'],
             ['route' => 'admin.disposition-codes.index',  'icon' => 'tag',                     'label' => 'Disposition Codes',    'desc' => 'Manage codes per campaign'],
             ['route' => 'admin.field-logic.index',        'icon' => 'cog-6-tooth',             'label' => 'Field Logic',          'desc' => 'Form field schemas'],
             ['route' => 'admin.extraction.index',         'icon' => 'arrow-down-tray',         'label' => 'Data Extraction',      'desc' => 'Export to CSV'],

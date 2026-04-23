@@ -41,7 +41,7 @@
         ['route' => 'admin.data-master.index',        'label' => 'Data Master',         'icon' => 'list-bullet'],
         ['route' => 'admin.leads.lists.index',        'label' => 'Leads',               'icon' => 'queue-list'],
         ['route' => 'reports.index',                  'label' => 'Reports',             'icon' => 'chart-pie'],
-        ['route' => 'admin.disposition-records.index','label' => 'Disposition Records', 'icon' => 'clipboard-document-list'],
+        ['route' => 'admin.agent-records.index','label' => 'Agent Call Records', 'icon' => 'clipboard-document-list'],
         ['route' => 'admin.disposition-codes.index',  'label' => 'Disposition Codes',   'icon' => 'tag'],
         ['route' => 'admin.field-logic.index',        'label' => 'Field Logic',         'icon' => 'cog-6-tooth'],
         ['route' => 'admin.extraction.index',         'label' => 'Extraction',          'icon' => 'arrow-down-tray'],

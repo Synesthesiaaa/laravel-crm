@@ -8,6 +8,7 @@ use App\Models\DispositionCode;
 use App\Models\Form;
 use App\Models\Lead;
 use App\Models\LeadList;
+use App\Observers\LeadObserver;
 use App\Models\VicidialServer;
 use App\Policies\CampaignPolicy;
 use App\Policies\DispositionCodePolicy;
@@ -42,6 +43,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(VicidialServer::class, VicidialServerPolicy::class);
         Gate::policy(LeadList::class, LeadListPolicy::class);
         Gate::policy(Lead::class, LeadPolicy::class);
+
+        Lead::observe(LeadObserver::class);
 
         View::composer(['layouts.app', 'layouts.sidebar'], function ($view) {
             $view->with('user', Auth::user());

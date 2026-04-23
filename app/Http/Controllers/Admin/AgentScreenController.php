@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\StoreAgentScreenFieldRequest;
 use App\Http\Requests\Admin\UpdateAgentScreenFieldRequest;
 use App\Models\AgentScreenField;
 use App\Services\CampaignService;
+use App\Services\Leads\LeadFieldService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -15,6 +16,7 @@ class AgentScreenController extends Controller
 {
     public function __construct(
         protected CampaignService $campaignService,
+        protected LeadFieldService $leadFieldService,
     ) {}
 
     public function index(Request $request): View
@@ -34,6 +36,7 @@ class AgentScreenController extends Controller
             'fields' => $fields,
             'selectedCampaign' => $selectedCampaign,
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
+            'leadStandardFieldKeys' => $this->leadFieldService->standardColumns(),
         ]);
     }
 

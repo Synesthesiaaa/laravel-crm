@@ -92,6 +92,7 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::get('api/reports/agent-status', [\App\Http\Controllers\Api\ReportingController::class, 'agentStatus'])->name('api.reports.agent-status')->middleware('throttle:api');
     Route::get('api/sip/credentials', [\App\Http\Controllers\Api\SipCredentialsController::class, 'show'])->name('api.sip.credentials')->middleware('throttle:api');
     Route::post('api/agent/capture', [\App\Http\Controllers\Api\AgentCaptureController::class, 'store'])->name('api.agent.capture')->middleware('throttle:api');
+    Route::post('api/agent/record/save', \App\Http\Controllers\Api\SaveAgentRecordController::class)->name('api.agent.record.save')->middleware('throttle:api');
     Route::get('api/leads/next', \App\Http\Controllers\Api\NextLeadController::class)->name('api.leads.next')->middleware('throttle:api');
     Route::get('api/disposition-codes', \App\Http\Controllers\Api\DispositionController::class)->name('api.disposition.codes')->middleware('throttle:api');
     Route::get('api/notifications', \App\Http\Controllers\Api\NotificationsController::class)->name('api.notifications')->middleware('throttle:api');
@@ -124,7 +125,10 @@ Route::middleware(['auth', 'campaign'])->group(function () {
         Route::get('data-master/edit/{id}', [\App\Http\Controllers\Admin\DataMasterController::class, 'edit'])->name('data-master.edit')->where('id', '[0-9]+');
         Route::post('data-master/update', [\App\Http\Controllers\Admin\DataMasterController::class, 'update'])->name('data-master.update');
         Route::post('data-master/delete', [\App\Http\Controllers\Admin\DataMasterController::class, 'destroy'])->name('data-master.destroy');
-        Route::get('disposition-records', [\App\Http\Controllers\Admin\DispositionRecordsController::class, 'index'])->name('disposition-records.index');
+        Route::get('agent-records', [\App\Http\Controllers\Admin\AgentCallDispositionsController::class, 'index'])->name('agent-records.index');
+        Route::get('agent-records/{record}/edit', [\App\Http\Controllers\Admin\AgentCallDispositionsController::class, 'edit'])->name('agent-records.edit');
+        Route::put('agent-records/{record}', [\App\Http\Controllers\Admin\AgentCallDispositionsController::class, 'update'])->name('agent-records.update');
+        Route::post('agent-records/export', [\App\Http\Controllers\Admin\AgentCallDispositionsController::class, 'export'])->name('agent-records.export');
         Route::get('disposition-codes', [\App\Http\Controllers\Admin\DispositionCodesController::class, 'index'])->name('disposition-codes.index');
         Route::post('disposition-codes', [\App\Http\Controllers\Admin\DispositionCodesController::class, 'store'])->name('disposition-codes.store');
         Route::put('disposition-codes/{id}', [\App\Http\Controllers\Admin\DispositionCodesController::class, 'update'])->name('disposition-codes.update');

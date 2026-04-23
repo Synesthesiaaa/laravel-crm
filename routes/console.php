@@ -2,6 +2,7 @@
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
@@ -60,4 +61,23 @@ Schedule::command('horizon:snapshot')
     ->everyFiveMinutes()
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/scheduler.log'));
+
+// Predictive hopper: top up NEW / due CALLBK leads for campaigns with predictive dialing enabled
+Schedule::call(function () {
+    if (! config('vicidial.hopper_auto_topup_enabled', true)) {
+        return;
+    }
+    $svc = app(\App\Services\Leads\HopperLoaderService::class);
+    foreach (\App\Models\Campaign::query()->where('is_active', true)->where('predictive_enabled', true)->get() as $c) {
+        $svc->loadCampaign($c->code, 500);
+    }
+})->everyMinute()->name('hopper-topup')->withoutOverlapping(5);
+
+// ViciDial vicidial_list poll — reconcile lead status when inbound_poll_enabled is true
+Schedule::call(function () {
+    if (! config('vicidial.inbound_poll_enabled', false)) {
+        return;
+    }
+    Bus::dispatchSync(new \App\Jobs\ReconcileVicidialLeadStatusJob);
+})->everyMinute()->name('vicidial-dispo-reconcile')->withoutOverlapping(5);
 

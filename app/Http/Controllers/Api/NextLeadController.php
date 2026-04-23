@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Campaign;
 use App\Models\LeadHopper;
 use App\Models\LeadList;
+use App\Services\Leads\LeadHopperResponseBuilder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -35,12 +36,7 @@ class NextLeadController extends Controller
         if ($lead) {
             return response()->json([
                 'success' => true,
-                'lead' => [
-                    'lead_id' => $lead->lead_id,
-                    'phone_number' => $lead->phone_number,
-                    'client_name' => $lead->client_name,
-                    'custom_data' => $lead->custom_data ?? [],
-                ],
+                'lead' => LeadHopperResponseBuilder::toApiArray($lead),
             ]);
         }
 

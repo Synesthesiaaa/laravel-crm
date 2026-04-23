@@ -131,8 +131,6 @@ class VicidialDispositionSyncService
 
     protected function mapLaravelToVicidial(string $code): string
     {
-        $map = config('vicidial.disposition_map', []);
-
-        return $map[$code] ?? $code;
+        return \App\Support\VicidialDispositionMap::mapCrmToVicidial($code);
     }
 }

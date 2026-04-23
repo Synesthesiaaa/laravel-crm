@@ -54,6 +54,7 @@ class AgentController extends Controller
             'fields' => $fields,
             'telephonyFeatures' => $this->telephonyFeatureService->getAll(),
             'prefill' => $prefill,
+            'unifiedAgentSaveEnabled' => (bool) config('vicidial.unified_agent_save_enabled', false),
         ]);
     }
 }

@@ -12,6 +12,11 @@ This project is the Laravel 12 migration of the legacy procedural PHP CRM (mbsal
 
 **Note:** `users.vici_pass` is stored encrypted (new writes). If migrating from legacy with plaintext `vici_pass`, re-save each user's VICIdial credentials once (e.g. via admin user edit) so they are encrypted, or existing plaintext will continue to work via backward-compatible cast until overwritten.
 
+## Agent call records (unified table)
+
+- **Primary table:** `agent_call_dispositions` stores capture JSON, disposition, source (`agent` / `vicidial_webhook` / `vicidial_poll`), optional `call_session_id`, and audit columns `last_edited_by_user_id` / `last_edited_at`.
+- **Deprecated (read-only / backfilled):** `campaign_disposition_records` and `agent_capture_records` are superseded for new writes; a one-time backfill migration copies historical rows into `agent_call_dispositions`. Admin UI: **Admin → Agent Call Records** (`admin/agent-records`).
+
 ## Auth
 
 - Login uses **username** and password (not email). The default seeded user has `username=admin`.

@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\VicidialAgentSession;
 use App\Services\Telephony\CallStateService;
 use App\Services\Telephony\TelephonyLogger;
+use App\Services\Telephony\ViciDialInboundDispoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -25,6 +26,7 @@ class VicidialEventsWebhookController extends Controller
     public function __construct(
         protected CallStateService $callStateService,
         protected TelephonyLogger $logger,
+        protected ViciDialInboundDispoService $inboundDispo,
     ) {}
 
     public function __invoke(Request $request): JsonResponse
@@ -158,6 +160,8 @@ class VicidialEventsWebhookController extends Controller
 
     private function handleDispoSet(?User $user, mixed $leadId, string $message): bool
     {
+        $this->inboundDispo->applyFromWebhook($user, $leadId, $message);
+
         $this->broadcastAgentEvent($user?->id, 'dispo_set', $message, [
             'lead_id' => $leadId,
             'disposition_code' => $message,

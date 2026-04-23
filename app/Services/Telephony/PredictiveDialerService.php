@@ -6,6 +6,7 @@ use App\Models\Campaign;
 use App\Models\LeadHopper;
 use App\Models\LeadList;
 use App\Models\User;
+use App\Services\Leads\LeadHopperResponseBuilder;
 use App\Support\OperationResult;
 use Illuminate\Support\Facades\DB;
 
@@ -95,12 +96,7 @@ class PredictiveDialerService
         }
 
         return OperationResult::success([
-            'lead' => [
-                'lead_id' => $lead->lead_id,
-                'phone_number' => $lead->phone_number,
-                'client_name' => $lead->client_name,
-                'custom_data' => $lead->custom_data ?? [],
-            ],
+            'lead' => LeadHopperResponseBuilder::toApiArray($lead),
             'session_id' => $result->data['session_id'] ?? null,
             'predictive_delay_seconds' => (int) ($campaign->predictive_delay_seconds ?? 3),
         ]);

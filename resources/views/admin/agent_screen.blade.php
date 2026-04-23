@@ -31,6 +31,11 @@
                 <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Load</button>
             </form>
         </div>
+        <div class="p-6 border-b border-gray-100 bg-amber-50/80 text-sm text-gray-700">
+            <p class="font-semibold text-gray-900 mb-1">Auto-fill from leads</p>
+            <p class="mb-1">Use a <strong>Field key</strong> that matches a standard lead column or a custom list column so the agent screen pre-fills from hopper/lead data.</p>
+            <p class="text-xs text-gray-600 font-mono break-all">{{ implode(', ', $leadStandardFieldKeys ?? []) }}</p>
+        </div>
         <div class="p-6 border-b border-gray-100 bg-gray-50">
             <h3 class="font-bold text-gray-900 mb-2">Add field</h3>
             <form method="POST" action="{{ route('admin.agent-screen.store') }}" class="flex flex-wrap gap-4 items-end">

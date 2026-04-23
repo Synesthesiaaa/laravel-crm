@@ -186,13 +186,14 @@ class LeadImportService
     {
         $dedupe = $options['dedupe'] ?? null; // 'phone_number' | 'vendor_lead_code' | null
         $updateExisting = (bool) ($options['update_existing'] ?? false);
+        $allowStatusOverride = (bool) ($options['allow_status_override'] ?? false);
 
         $standardColumns = $this->fieldService->standardColumns();
         $inserted = 0;
         $updated = 0;
         $skipped = 0;
 
-        DB::transaction(function () use ($rows, $list, $dedupe, $updateExisting, $standardColumns, &$inserted, &$updated, &$skipped) {
+        DB::transaction(function () use ($rows, $list, $dedupe, $updateExisting, $allowStatusOverride, $standardColumns, &$inserted, &$updated, &$skipped) {
             foreach ($rows as $rowIndex => $row) {
                 try {
                     foreach ($row as $k => $v) {
@@ -222,11 +223,15 @@ class LeadImportService
 
                     $standard = $this->sanitiseDateColumns($standard);
 
+                    $statusForCreate = $allowStatusOverride
+                        ? ($standard['status'] ?? 'NEW')
+                        : 'NEW';
+
                     $payload = array_merge($standard, [
                         'list_id' => $list->id,
                         'campaign_code' => $list->campaign_code,
                         'phone_number' => $phone,
-                        'status' => $standard['status'] ?? 'NEW',
+                        'status' => $statusForCreate,
                         'enabled' => (bool) ($standard['enabled'] ?? true),
                         'custom_fields' => $custom !== [] ? $custom : null,
                     ]);
@@ -242,6 +247,9 @@ class LeadImportService
 
                     if ($existing) {
                         if ($updateExisting) {
+                            if (! $allowStatusOverride) {
+                                unset($payload['status']);
+                            }
                             $existing->update($payload);
                             $updated++;
                         } else {

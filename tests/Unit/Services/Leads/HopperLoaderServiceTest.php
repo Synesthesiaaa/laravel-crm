@@ -23,13 +23,24 @@ class HopperLoaderServiceTest extends TestCase
         Campaign::create(['code' => 'testcamp', 'name' => 'Test', 'is_active' => true]);
     }
 
+    public function test_load_list_does_not_push_sale_status_leads(): void
+    {
+        $list = LeadList::create(['campaign_code' => 'testcamp', 'name' => 'A', 'active' => true]);
+        Lead::create(['list_id' => $list->id, 'campaign_code' => 'testcamp', 'phone_number' => '999', 'enabled' => true, 'status' => 'SALE']);
+
+        $this->assertSame(0, $this->loader->loadList($list));
+        $this->assertSame(0, LeadHopper::count());
+    }
+
     public function test_load_list_pushes_enabled_dialable_leads(): void
     {
         $list = LeadList::create(['campaign_code' => 'testcamp', 'name' => 'A', 'active' => true]);
 
-        Lead::create(['list_id' => $list->id, 'campaign_code' => 'testcamp', 'phone_number' => '111', 'enabled' => true, 'status' => 'NEW']);
-        Lead::create(['list_id' => $list->id, 'campaign_code' => 'testcamp', 'phone_number' => '222', 'enabled' => true, 'status' => 'DNC']);
-        Lead::create(['list_id' => $list->id, 'campaign_code' => 'testcamp', 'phone_number' => '333', 'enabled' => false, 'status' => 'NEW']);
+        Lead::withoutEvents(function () use ($list) {
+            Lead::create(['list_id' => $list->id, 'campaign_code' => 'testcamp', 'phone_number' => '111', 'enabled' => true, 'status' => 'NEW']);
+            Lead::create(['list_id' => $list->id, 'campaign_code' => 'testcamp', 'phone_number' => '222', 'enabled' => true, 'status' => 'DNC']);
+            Lead::create(['list_id' => $list->id, 'campaign_code' => 'testcamp', 'phone_number' => '333', 'enabled' => false, 'status' => 'NEW']);
+        });
 
         $count = $this->loader->loadList($list);
 
@@ -42,7 +53,7 @@ class HopperLoaderServiceTest extends TestCase
     public function test_load_list_skips_disabled_list(): void
     {
         $list = LeadList::create(['campaign_code' => 'testcamp', 'name' => 'Disabled', 'active' => false]);
-        Lead::create(['list_id' => $list->id, 'campaign_code' => 'testcamp', 'phone_number' => '111', 'enabled' => true, 'status' => 'NEW']);
+        Lead::withoutEvents(fn () => Lead::create(['list_id' => $list->id, 'campaign_code' => 'testcamp', 'phone_number' => '111', 'enabled' => true, 'status' => 'NEW']));
 
         $this->assertSame(0, $this->loader->loadList($list));
         $this->assertSame(0, LeadHopper::count());
@@ -51,13 +62,13 @@ class HopperLoaderServiceTest extends TestCase
     public function test_load_list_does_not_duplicate_existing_pending_rows(): void
     {
         $list = LeadList::create(['campaign_code' => 'testcamp', 'name' => 'A', 'active' => true]);
-        $lead = Lead::create([
+        $lead = Lead::withoutEvents(fn () => Lead::create([
             'list_id' => $list->id,
             'campaign_code' => 'testcamp',
             'phone_number' => '111',
             'enabled' => true,
             'status' => 'NEW',
-        ]);
+        ]));
         LeadHopper::create([
             'campaign_code' => 'testcamp',
             'list_id' => $list->id,

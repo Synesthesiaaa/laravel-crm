@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\CampaignDispositionRecord;
+use App\Models\AgentCallDisposition;
 use App\Models\User;
 use App\Repositories\CampaignRepository;
 use Illuminate\Http\JsonResponse;
@@ -23,22 +23,25 @@ class GlobalSearchController extends Controller
         $groups = [];
 
         // Search disposition records (leads)
-        $records = CampaignDispositionRecord::where('campaign_code', $campaign)
+        $records = AgentCallDisposition::where('campaign_code', $campaign)
             ->where(function ($query) use ($q) {
-                $query->where('lead_id', 'like', "%{$q}%")
-                    ->orWhere('phone_number', 'like', "%{$q}%")
-                    ->orWhere('agent', 'like', "%{$q}%");
+                $query->where('phone_number', 'like', "%{$q}%")
+                    ->orWhere('agent', 'like', "%{$q}%")
+                    ->orWhere('disposition_code', 'like', "%{$q}%");
+                if (is_numeric($q)) {
+                    $query->orWhere('lead_pk', (int) $q);
+                }
             })
             ->limit(5)
             ->get();
 
         if ($records->isNotEmpty()) {
             $groups[] = [
-                'label' => 'Disposition Records',
+                'label' => 'Agent Call Records',
                 'items' => $records->map(fn ($r) => [
-                    'title' => $r->lead_id ?? $r->phone_number ?? '—',
+                    'title' => $r->lead_pk ?? $r->phone_number ?? '—',
                     'subtitle' => "Agent: {$r->agent} · {$r->called_at?->format('Y-m-d')}",
-                    'url' => route('admin.disposition-records.index', ['search' => $q]),
+                    'url' => route('admin.agent-records.index'),
                 ])->values()->all(),
             ];
         }
@@ -70,7 +73,7 @@ class GlobalSearchController extends Controller
             'admin' => ['title' => 'Admin Dashboard',    'url' => route('admin.dashboard'),           'keywords' => ['admin', 'manage', 'mgt']],
             'users' => ['title' => 'User Access',        'url' => route('admin.users.index'),         'keywords' => ['user', 'access', 'staff']],
             'campaigns' => ['title' => 'Campaigns',          'url' => route('admin.campaigns.index'),     'keywords' => ['campaign']],
-            'disposition' => ['title' => 'Disposition Records', 'url' => route('admin.disposition-records.index'), 'keywords' => ['disposition', 'disp']],
+            'disposition' => ['title' => 'Agent Call Records', 'url' => route('admin.agent-records.index'), 'keywords' => ['disposition', 'disp', 'agent call']],
             'extraction' => ['title' => 'Data Extraction',    'url' => route('admin.extraction.index'),   'keywords' => ['extract', 'export', 'csv']],
         ];
 
