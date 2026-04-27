@@ -321,7 +321,7 @@
                     </div>
                     <p class="text-[11px] text-[var(--color-on-surface-dim)] mt-1"
                        x-show="$store.leadImport.state && $store.leadImport.state.estimated_rows > 0">
-                        <span x-text="$store.leadImport.state.rows_processed ?? 0"></span> / <span x-text="$store.leadImport.state.estimated_rows"></span> rows
+                        <span x-text="$store.leadImport.state?.rows_processed ?? 0"></span> / <span x-text="$store.leadImport.state?.estimated_rows ?? '—'"></span> rows
                     </p>
                 </div>
                 <div class="grid grid-cols-4 gap-1.5 text-center" x-show="$store.leadImport.state && $store.leadImport.state.status !== 'unknown'">
