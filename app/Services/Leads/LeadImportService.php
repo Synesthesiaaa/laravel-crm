@@ -4,6 +4,7 @@ namespace App\Services\Leads;
 
 use App\Models\Lead;
 use App\Models\LeadList;
+use App\Observers\LeadObserver;
 use App\Support\OperationResult;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
@@ -194,84 +195,90 @@ class LeadImportService
         $skipped = 0;
 
         DB::transaction(function () use ($rows, $list, $dedupe, $updateExisting, $allowStatusOverride, $standardColumns, &$inserted, &$updated, &$skipped) {
-            foreach ($rows as $rowIndex => $row) {
-                try {
-                    foreach ($row as $k => $v) {
-                        $row[$k] = $this->normalizeImportCellValue($v);
-                    }
+            LeadObserver::suppressCreatedHopperDispatch();
 
-                    $phone = $this->stringForPhoneImport($row['phone_number'] ?? null);
-                    if ($phone === '') {
-                        $skipped++;
+            try {
+                foreach ($rows as $rowIndex => $row) {
+                    try {
+                        foreach ($row as $k => $v) {
+                            $row[$k] = $this->normalizeImportCellValue($v);
+                        }
 
-                        continue;
-                    }
-                    $phone = mb_substr($phone, 0, 32);
+                        $phone = $this->stringForPhoneImport($row['phone_number'] ?? null);
+                        if ($phone === '') {
+                            $skipped++;
 
-                    $standard = [];
-                    $custom = [];
-                    foreach ($row as $key => $value) {
-                        if ($key === '' || $key === null) {
                             continue;
                         }
-                        if (in_array($key, $standardColumns, true) || in_array($key, ['status', 'enabled'], true)) {
-                            $standard[$key] = $value;
-                        } else {
-                            $custom[$key] = $value;
-                        }
-                    }
+                        $phone = mb_substr($phone, 0, 32);
 
-                    $standard = $this->sanitiseDateColumns($standard);
-
-                    $statusForCreate = $allowStatusOverride
-                        ? ($standard['status'] ?? 'NEW')
-                        : 'NEW';
-
-                    $payload = array_merge($standard, [
-                        'list_id' => $list->id,
-                        'campaign_code' => $list->campaign_code,
-                        'phone_number' => $phone,
-                        'status' => $statusForCreate,
-                        'enabled' => (bool) ($standard['enabled'] ?? true),
-                        'custom_fields' => $custom !== [] ? $custom : null,
-                    ]);
-
-                    $existing = null;
-                    if ($dedupe === 'phone_number') {
-                        $existing = Lead::forList($list->id)->where('phone_number', $phone)->first();
-                    } elseif ($dedupe === 'vendor_lead_code' && ! empty($payload['vendor_lead_code'])) {
-                        $existing = Lead::forList($list->id)
-                            ->where('vendor_lead_code', $payload['vendor_lead_code'])
-                            ->first();
-                    }
-
-                    if ($existing) {
-                        if ($updateExisting) {
-                            if (! $allowStatusOverride) {
-                                unset($payload['status']);
+                        $standard = [];
+                        $custom = [];
+                        foreach ($row as $key => $value) {
+                            if ($key === '' || $key === null) {
+                                continue;
                             }
-                            $existing->update($payload);
-                            $updated++;
-                        } else {
-                            $skipped++;
+                            if (in_array($key, $standardColumns, true) || in_array($key, ['status', 'enabled'], true)) {
+                                $standard[$key] = $value;
+                            } else {
+                                $custom[$key] = $value;
+                            }
                         }
 
-                        continue;
-                    }
+                        $standard = $this->sanitiseDateColumns($standard);
 
-                    Lead::create($payload);
-                    $inserted++;
-                } catch (\Throwable $e) {
-                    // One bad cell should never poison a 100k-row import.
-                    $skipped++;
-                    Log::warning('LeadImportService: skipped bad row', [
-                        'list_id' => $list->id,
-                        'row_index' => $rowIndex,
-                        'phone' => $row['phone_number'] ?? null,
-                        'error' => $e->getMessage(),
-                        'exception' => get_class($e),
-                    ]);
+                        $statusForCreate = $allowStatusOverride
+                            ? ($standard['status'] ?? 'NEW')
+                            : 'NEW';
+
+                        $payload = array_merge($standard, [
+                            'list_id' => $list->id,
+                            'campaign_code' => $list->campaign_code,
+                            'phone_number' => $phone,
+                            'status' => $statusForCreate,
+                            'enabled' => (bool) ($standard['enabled'] ?? true),
+                            'custom_fields' => $custom !== [] ? $custom : null,
+                        ]);
+
+                        $existing = null;
+                        if ($dedupe === 'phone_number') {
+                            $existing = Lead::forList($list->id)->where('phone_number', $phone)->first();
+                        } elseif ($dedupe === 'vendor_lead_code' && ! empty($payload['vendor_lead_code'])) {
+                            $existing = Lead::forList($list->id)
+                                ->where('vendor_lead_code', $payload['vendor_lead_code'])
+                                ->first();
+                        }
+
+                        if ($existing) {
+                            if ($updateExisting) {
+                                if (! $allowStatusOverride) {
+                                    unset($payload['status']);
+                                }
+                                $existing->update($payload);
+                                $updated++;
+                            } else {
+                                $skipped++;
+                            }
+
+                            continue;
+                        }
+
+                        Lead::create($payload);
+                        $inserted++;
+                    } catch (\Throwable $e) {
+                        // One bad cell should never poison a 100k-row import.
+                        $skipped++;
+                        Log::warning('LeadImportService: skipped bad row', [
+                            'list_id' => $list->id,
+                            'row_index' => $rowIndex,
+                            'phone' => $row['phone_number'] ?? null,
+                            'error' => $e->getMessage(),
+                            'exception' => get_class($e),
+                        ]);
+                    }
                 }
+            } finally {
+                LeadObserver::suppressCreatedHopperDispatch(false);
             }
         });
 

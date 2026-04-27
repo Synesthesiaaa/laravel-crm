@@ -8,14 +8,25 @@ use App\Services\Leads\HopperLoaderService;
 
 class LeadObserver
 {
+    protected static bool $suppressCreatedHopperDispatch = false;
+
     public function __construct(
         protected HopperLoaderService $hopperLoader,
     ) {}
 
+    public static function suppressCreatedHopperDispatch(bool $suppress = true): void
+    {
+        self::$suppressCreatedHopperDispatch = $suppress;
+    }
+
     public function created(Lead $lead): void
     {
+        if (self::$suppressCreatedHopperDispatch) {
+            return;
+        }
+
         if ($lead->status === 'NEW' && $lead->enabled) {
-            PushLeadToHopperJob::dispatch($lead->id);
+            PushLeadToHopperJob::dispatch($lead->id)->afterCommit();
         }
     }
 

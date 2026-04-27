@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Events\LeadImported;
 use App\Imports\LeadsImport;
 use App\Models\LeadList;
+use App\Services\Leads\HopperLoaderService;
 use App\Services\Leads\LeadImportProgressTracker;
 use App\Services\Leads\LeadImportService;
 use Illuminate\Bus\Queueable;
@@ -41,7 +42,7 @@ class ImportLeadsFileJob implements ShouldQueue
         $this->onQueue('imports');
     }
 
-    public function handle(LeadImportService $service): void
+    public function handle(LeadImportService $service, HopperLoaderService $hopperLoader): void
     {
         $tracker = app(LeadImportProgressTracker::class);
 
@@ -102,6 +103,12 @@ class ImportLeadsFileJob implements ShouldQueue
             'updated' => $import->updated,
             'skipped' => $import->skipped,
         ]);
+
+        // Import now suppresses per-row hopper dispatches; do one efficient top-up
+        // after commit so NEW/CALLBK leads are queued in batch.
+        if (($import->inserted + $import->updated) > 0) {
+            $hopperLoader->loadList($list, 500);
+        }
 
         $service->deleteStash($this->token);
     }

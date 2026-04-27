@@ -44,7 +44,7 @@ class ReconcileVicidialLeadStatusJob implements ShouldQueue
                 $stmt->execute([$since->format('Y-m-d H:i:s')]);
 
                 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                    $lead = $this->resolveLeadFromVicidialRow($row);
+                    $lead = $this->resolveLeadFromVicidialRow($row, (string) $server->campaign_code);
                     if (! $lead) {
                         continue;
                     }
@@ -73,11 +73,13 @@ class ReconcileVicidialLeadStatusJob implements ShouldQueue
     /**
      * @param  array<string, mixed>  $row
      */
-    protected function resolveLeadFromVicidialRow(array $row): ?Lead
+    protected function resolveLeadFromVicidialRow(array $row, string $campaignCode): ?Lead
     {
+        $query = Lead::query()->forCampaign($campaignCode);
+
         $vendor = isset($row['vendor_lead_code']) ? trim((string) $row['vendor_lead_code']) : '';
         if ($vendor !== '') {
-            $byVendor = Lead::query()->where('vendor_lead_code', $vendor)->first();
+            $byVendor = (clone $query)->where('vendor_lead_code', $vendor)->first();
             if ($byVendor) {
                 return $byVendor;
             }
@@ -85,14 +87,14 @@ class ReconcileVicidialLeadStatusJob implements ShouldQueue
 
         $phone = isset($row['phone_number']) ? trim((string) $row['phone_number']) : '';
         if ($phone !== '') {
-            $byPhone = Lead::query()->where('phone_number', $phone)->first();
+            $byPhone = (clone $query)->where('phone_number', $phone)->first();
             if ($byPhone) {
                 return $byPhone;
             }
         }
 
         if (! empty($row['lead_id']) && is_numeric($row['lead_id'])) {
-            return Lead::query()->find((int) $row['lead_id']);
+            return (clone $query)->whereKey((int) $row['lead_id'])->first();
         }
 
         return null;

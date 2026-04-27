@@ -95,8 +95,13 @@ class AgentCallDispositionService
                 $leadDataJson,
                 $captureData,
             ) {
-                $lead = $leadPk ? Lead::find($leadPk) : null;
                 $sessionRow = $callSessionId ? CallSession::find($callSessionId) : null;
+                $lead = $leadPk ? Lead::find($leadPk) : null;
+                $resolvedLeadPk = $lead?->id;
+                $vicidialLeadId = $sessionRow?->vicidial_lead_id;
+                if ($leadPk !== null && $resolvedLeadPk === null && $vicidialLeadId === null) {
+                    $vicidialLeadId = (string) $leadPk;
+                }
 
                 $leadSnapshot = null;
                 if ($lead) {
@@ -115,8 +120,8 @@ class AgentCallDispositionService
                     'call_session_id' => $callSessionId,
                     'campaign_code' => $campaignCode,
                     'list_id' => $lead?->list_id,
-                    'lead_pk' => $lead?->id,
-                    'vicidial_lead_id' => $sessionRow?->vicidial_lead_id,
+                    'lead_pk' => $resolvedLeadPk,
+                    'vicidial_lead_id' => $vicidialLeadId,
                     'phone_number' => $phoneNumber,
                     'user_id' => $userId,
                     'agent' => $agent,
@@ -144,8 +149,8 @@ class AgentCallDispositionService
                     }
                 }
 
-                if ($leadPk) {
-                    $lockedLead = Lead::lockForUpdate()->find($leadPk);
+                if ($resolvedLeadPk) {
+                    $lockedLead = Lead::lockForUpdate()->find($resolvedLeadPk);
                     if ($lockedLead) {
                         $lockedLead->increment('called_count');
                         $lockedLead->update([
@@ -155,7 +160,7 @@ class AgentCallDispositionService
                         ]);
                     }
 
-                    LeadHopper::where('lead_pk', $leadPk)
+                    LeadHopper::where('lead_pk', $resolvedLeadPk)
                         ->whereIn('status', ['pending', 'assigned'])
                         ->update([
                             'status' => 'completed',
@@ -163,7 +168,7 @@ class AgentCallDispositionService
                         ]);
                 }
 
-                event(new DispositionSaved($campaignCode, $agent, $dispositionCode, $leadPk));
+                event(new DispositionSaved($campaignCode, $agent, $dispositionCode, $resolvedLeadPk));
             });
 
             return OperationResult::success();
