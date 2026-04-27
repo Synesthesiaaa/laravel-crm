@@ -93,6 +93,8 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::get('api/sip/credentials', [\App\Http\Controllers\Api\SipCredentialsController::class, 'show'])->name('api.sip.credentials')->middleware('throttle:api');
     Route::post('api/agent/capture', [\App\Http\Controllers\Api\AgentCaptureController::class, 'store'])->name('api.agent.capture')->middleware('throttle:api');
     Route::post('api/agent/record/save', \App\Http\Controllers\Api\SaveAgentRecordController::class)->name('api.agent.record.save')->middleware('throttle:api');
+    Route::get('api/agent/submitted-records', [\App\Http\Controllers\Api\AgentSubmittedRecordsController::class, 'index'])->name('api.agent.submitted-records')->middleware('throttle:api');
+    Route::get('api/agent/submitted-records/export', [\App\Http\Controllers\Api\AgentSubmittedRecordsController::class, 'export'])->name('api.agent.submitted-records.export')->middleware('throttle:api');
     Route::get('api/leads/next', \App\Http\Controllers\Api\NextLeadController::class)->name('api.leads.next')->middleware('throttle:api');
     Route::get('api/disposition-codes', \App\Http\Controllers\Api\DispositionController::class)->name('api.disposition.codes')->middleware('throttle:api');
     Route::get('api/notifications', \App\Http\Controllers\Api\NotificationsController::class)->name('api.notifications')->middleware('throttle:api');

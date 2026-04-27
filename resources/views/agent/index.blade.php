@@ -10,7 +10,23 @@
      data-user-id="{{ auth()->id() }}"
      data-unified-agent-save="{{ !empty($unifiedAgentSaveEnabled) ? '1' : '0' }}"
      @isset($prefill) data-prefill="{{ json_encode($prefill) }}" @endisset
-     class="flex flex-col lg:flex-row gap-6 h-full">
+     class="flex flex-col gap-4 h-full">
+
+    {{-- Workspace vs submitted records (reporting) --}}
+    <div class="flex flex-wrap gap-2 border-b border-[var(--color-border)] pb-3 shrink-0">
+        <button type="button"
+                class="text-sm font-medium px-3 py-2 rounded-md transition-colors"
+                :class="agentTab === 'dialer' ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)]' : 'text-[var(--color-on-surface-dim)] hover:bg-[var(--color-surface-2)]'"
+                @click="agentTab = 'dialer'">
+            Calling workspace
+        </button>
+        <button type="button"
+                class="text-sm font-medium px-3 py-2 rounded-md transition-colors"
+                :class="agentTab === 'records' ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)]' : 'text-[var(--color-on-surface-dim)] hover:bg-[var(--color-surface-2)]'"
+                @click="agentTab = 'records'; loadSubmittedRecords(1)">
+            My submitted records
+        </button>
+    </div>
 
     {{-- WebSocket health banner --}}
     <div x-show="$store.ws.isDisconnected && !$store.ws.dismissed"
@@ -25,7 +41,102 @@
     {{-- Reset dismissed when connection restored --}}
     <template x-effect="if ($store.ws.isConnected) $store.ws.dismissed = false"></template>
 
+    {{-- Submitted call records (same campaign; agent-owned rows for reporting) --}}
+    <div x-show="agentTab === 'records'" x-cloak class="space-y-4 min-w-0">
+        <div class="md-card p-5">
+            <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-4">
+                <div>
+                    <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Submitted capture &amp; dispositions</h3>
+                    <p class="text-xs text-[var(--color-on-surface-muted)] mt-1">Records you saved for this CRM campaign. Export CSV for reporting.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" class="btn-secondary text-sm" @click="exportSubmittedRecords()" :disabled="recordsLoading">
+                        <x-icon name="arrow-down-tray" class="w-4 h-4" />
+                        Export CSV
+                    </button>
+                    <button type="button" class="btn-primary text-sm" @click="loadSubmittedRecords(1)" :disabled="recordsLoading">
+                        <x-icon name="arrow-path" class="w-4 h-4" />
+                        Refresh
+                    </button>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                <div class="form-field">
+                    <label class="form-label">Disposition</label>
+                    <select class="form-select" x-model="recordsFilters.disposition">
+                        <option value="">All</option>
+                        @foreach($dispositionCodes ?? [] as $dc)
+                            @php
+                                $code = is_array($dc) ? ($dc['code'] ?? '') : ($dc->code ?? '');
+                                $label = is_array($dc) ? ($dc['label'] ?? $code) : ($dc->label ?? $code);
+                            @endphp
+                            <option value="{{ $code }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Lead status (current)</label>
+                    <input type="text" class="form-input" x-model="recordsFilters.lead_status" placeholder="e.g. SALE, NEW" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">From date</label>
+                    <input type="date" class="form-input" x-model="recordsFilters.from_date" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">To date</label>
+                    <input type="date" class="form-input" x-model="recordsFilters.to_date" />
+                </div>
+            </div>
+            <div class="flex gap-2 mb-4">
+                <button type="button" class="btn-primary text-sm" @click="loadSubmittedRecords(1)" :disabled="recordsLoading">Apply filters</button>
+                <button type="button" class="btn-ghost text-sm" @click="clearRecordsFilters()">Clear</button>
+            </div>
+            <div class="overflow-x-auto rounded-md border border-[var(--color-border)]">
+                <table class="min-w-full text-sm">
+                    <thead class="bg-[var(--color-surface-2)] text-left text-[var(--color-on-surface-dim)]">
+                        <tr>
+                            <th class="px-3 py-2 font-medium">Called at</th>
+                            <th class="px-3 py-2 font-medium">Phone</th>
+                            <th class="px-3 py-2 font-medium">Lead</th>
+                            <th class="px-3 py-2 font-medium">Disposition</th>
+                            <th class="px-3 py-2 font-medium">Lead status</th>
+                            <th class="px-3 py-2 font-medium">Duration</th>
+                            <th class="px-3 py-2 font-medium">Capture</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-if="!recordsLoading && submittedRecords.length === 0">
+                            <tr><td colspan="7" class="px-3 py-8 text-center text-[var(--color-on-surface-muted)]">No submitted records yet.</td></tr>
+                        </template>
+                        <template x-if="recordsLoading">
+                            <tr><td colspan="7" class="px-3 py-8 text-center text-[var(--color-on-surface-muted)]">Loading…</td></tr>
+                        </template>
+                        <template x-for="row in submittedRecords" :key="row.id">
+                            <tr class="border-t border-[var(--color-border)]">
+                                <td class="px-3 py-2 whitespace-nowrap" x-text="formatRecordDate(row.called_at)"></td>
+                                <td class="px-3 py-2 font-mono text-xs" x-text="row.phone_number || '—'"></td>
+                                <td class="px-3 py-2" x-text="row.lead_pk ? '#' + row.lead_pk : '—'"></td>
+                                <td class="px-3 py-2"><span x-text="row.disposition_label || row.disposition_code"></span></td>
+                                <td class="px-3 py-2"><span class="text-xs font-medium" x-text="row.lead_current_status || '—'"></span></td>
+                                <td class="px-3 py-2 text-xs" x-text="row.call_duration_seconds != null ? row.call_duration_seconds + 's' : '—'"></td>
+                                <td class="px-3 py-2 text-xs text-[var(--color-on-surface-muted)] max-w-xs truncate" :title="captureSummary(row)" x-text="captureSummary(row)"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            <div class="flex items-center justify-between mt-4 text-xs text-[var(--color-on-surface-muted)]" x-show="submittedMeta.total > 0">
+                <span x-text="'Page ' + submittedMeta.current_page + ' of ' + submittedMeta.last_page + ' · ' + submittedMeta.total + ' rows'"></span>
+                <div class="flex gap-2">
+                    <button type="button" class="btn-ghost text-xs px-2 py-1" :disabled="recordsLoading || submittedMeta.current_page <= 1" @click="loadSubmittedRecords(submittedMeta.current_page - 1)">Previous</button>
+                    <button type="button" class="btn-ghost text-xs px-2 py-1" :disabled="recordsLoading || submittedMeta.current_page >= submittedMeta.last_page" @click="loadSubmittedRecords(submittedMeta.current_page + 1)">Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {{-- LEFT: Lead info + form --}}
+    <div x-show="agentTab === 'dialer'" class="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
     <div class="flex-1 min-w-0 space-y-4">
 
         {{-- Current lead card --}}
@@ -285,6 +396,7 @@
         @endif
 
     </div>
+    </div>
 </div>
 
 @endsection
@@ -335,6 +447,12 @@ window.agentScreen = function() {
         },
         unifiedAgentSave: false,
         leadPk: null,
+
+        agentTab: 'dialer',
+        submittedRecords: [],
+        submittedMeta: { current_page: 1, last_page: 1, per_page: 25, total: 0 },
+        recordsFilters: { disposition: '', lead_status: '', from_date: '', to_date: '' },
+        recordsLoading: false,
 
         _echoUnsubscribe: null,
         _statusPollInterval: null,
@@ -418,6 +536,63 @@ window.agentScreen = function() {
         /** CRM login campaign — hopper, forms, dispositions, lead tools. */
         crmCampaign() {
             return document.body?.dataset?.campaign || this.$el?.dataset?.campaign || 'mbsales';
+        },
+
+        async loadSubmittedRecords(page = 1) {
+            this.recordsLoading = true;
+            try {
+                const params = {
+                    campaign: this.crmCampaign(),
+                    page,
+                    disposition: this.recordsFilters.disposition || undefined,
+                    lead_status: this.recordsFilters.lead_status || undefined,
+                    from_date: this.recordsFilters.from_date || undefined,
+                    to_date: this.recordsFilters.to_date || undefined,
+                };
+                const res = await window.axios.get('/api/agent/submitted-records', { params });
+                this.submittedRecords = res.data.data || [];
+                this.submittedMeta = res.data.meta || this.submittedMeta;
+            } catch (e) {
+                if (Alpine.store('toast')) {
+                    Alpine.store('toast').error('Could not load submitted records.');
+                }
+                this.submittedRecords = [];
+            } finally {
+                this.recordsLoading = false;
+            }
+        },
+
+        clearRecordsFilters() {
+            this.recordsFilters = { disposition: '', lead_status: '', from_date: '', to_date: '' };
+            this.loadSubmittedRecords(1);
+        },
+
+        exportSubmittedRecords() {
+            const p = new URLSearchParams();
+            p.set('campaign', this.crmCampaign());
+            if (this.recordsFilters.disposition) p.set('disposition', this.recordsFilters.disposition);
+            if (this.recordsFilters.lead_status) p.set('lead_status', this.recordsFilters.lead_status);
+            if (this.recordsFilters.from_date) p.set('from_date', this.recordsFilters.from_date);
+            if (this.recordsFilters.to_date) p.set('to_date', this.recordsFilters.to_date);
+            window.location.assign('/api/agent/submitted-records/export?' + p.toString());
+        },
+
+        formatRecordDate(iso) {
+            if (!iso) return '—';
+            try {
+                const d = new Date(iso);
+                return isNaN(d.getTime()) ? iso : d.toLocaleString();
+            } catch (_) {
+                return iso;
+            }
+        },
+
+        captureSummary(row) {
+            const c = row.capture_data;
+            if (!c || typeof c !== 'object') return '—';
+            const keys = Object.keys(c);
+            if (!keys.length) return '—';
+            return keys.slice(0, 4).map((k) => k + ': ' + String(c[k]).slice(0, 40)).join(' · ');
         },
 
         /** VICIdial / dialer campaign — recordings, transfers, callbacks, DTMF, predictive dial. */
