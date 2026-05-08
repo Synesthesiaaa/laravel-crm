@@ -9,6 +9,19 @@ import TelephonyCore from './telephony-core';
 // Make ApexCharts available for dynamic import in views
 window.ApexChartsLoader = () => import('apexcharts').then(m => m.default);
 
+// After soft-nav layout settles, fix charts that measured 0-width during first render
+window.addEventListener('soft-navigate', () => {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        Object.values(window.__crmDashboardCharts || {}).forEach((c) => {
+            try {
+                c.resize();
+            } catch (_) {
+                /* noop */
+            }
+        });
+    }));
+});
+
 import Alpine from 'alpinejs';
 import focus from '@alpinejs/focus';
 import collapse from '@alpinejs/collapse';

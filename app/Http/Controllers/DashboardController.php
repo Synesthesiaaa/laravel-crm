@@ -21,7 +21,11 @@ class DashboardController extends Controller
         $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['forms' => []];
         $forms = $campaignConfig['forms'] ?? [];
         $kpis = $this->dashboardStats->getKpisForCampaign($campaign);
+        $dailyDays = (int) config('dashboard.daily_activity_days', 7);
+        $dailyActivity = $this->dashboardStats->getActivityTrend($campaign, $dailyDays);
+        $weeklyActivity = $this->dashboardStats->getWeeklyActivityTrend($campaign);
         $monthlyActivity = $this->dashboardStats->getMonthlyActivityTrend($campaign);
+        $agentLeaderboard = $this->dashboardStats->getAgentLeaderboard($campaign);
 
         return view('dashboard', [
             'campaign' => $campaign,
@@ -29,7 +33,11 @@ class DashboardController extends Controller
             'user' => $request->user(),
             'forms' => $forms,
             'kpis' => $kpis,
+            'dailyActivity' => $dailyActivity,
+            'weeklyActivity' => $weeklyActivity,
             'monthlyActivity' => $monthlyActivity,
+            'agentLeaderboard' => $agentLeaderboard,
+            'dailyActivityDays' => $dailyDays,
         ]);
     }
 }

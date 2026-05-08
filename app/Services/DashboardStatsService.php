@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Repositories\CampaignRepository;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -32,6 +33,41 @@ class DashboardStatsService
     }
 
     /** @return array{labels: list<string>, values: list<int>} */
+    public function getWeeklyActivityTrend(string $campaignCode, ?int $weeks = null): array
+    {
+        $weeks ??= (int) config('dashboard.weekly_activity_weeks', 8);
+        $weeks = max(1, $weeks);
+        $wk = now()->format('o-\WW');
+
+        return Cache::remember("activity_trend_weekly_{$campaignCode}_{$weeks}_{$wk}", 300, function () use ($campaignCode, $weeks) {
+            $oldestMonday = now()->copy()->startOfWeek(CarbonInterface::MONDAY)->subWeeks($weeks - 1);
+            $cutoff = $oldestMonday->format('Y-m-d');
+            $activityData = $this->aggregateSubmissionTotalsByDay($campaignCode, $cutoff);
+
+            $labels = [];
+            $values = [];
+            $today = now()->copy()->startOfDay();
+
+            for ($w = 0; $w < $weeks; $w++) {
+                $weekStart = now()->copy()->startOfWeek(CarbonInterface::MONDAY)->subWeeks($weeks - 1 - $w);
+                $weekEnd = $weekStart->copy()->endOfWeek(CarbonInterface::SUNDAY)->startOfDay();
+                if ($weekEnd->gt($today)) {
+                    $weekEnd = $today->copy();
+                }
+                $sum = 0;
+                for ($d = $weekStart->copy()->startOfDay(); $d->lte($weekEnd); $d->addDay()) {
+                    $key = $d->format('Y-m-d');
+                    $sum += $activityData[$key] ?? 0;
+                }
+                $labels[] = $weekStart->format('M j');
+                $values[] = $sum;
+            }
+
+            return ['labels' => $labels, 'values' => $values];
+        });
+    }
+
+    /** @return array{labels: list<string>, values: list<int>} */
     public function getMonthlyActivityTrend(string $campaignCode): array
     {
         $ym = sprintf('%04d_%02d', now()->year, now()->month);
@@ -52,6 +88,81 @@ class DashboardStatsService
             }
 
             return ['labels' => $labels, 'values' => $values];
+        });
+    }
+
+    /**
+     * Month-to-date: submissions (form tables), sale dispositions, optional sale amounts from lead JSON.
+     *
+     * @return list<array{agent: string, submissions: int, sales_count: int, sales_amount: float}>
+     */
+    public function getAgentLeaderboard(string $campaignCode, ?int $limit = null): array
+    {
+        $limit ??= (int) config('dashboard.agent_leaderboard_limit', 25);
+        $limit = max(1, $limit);
+        $ym = now()->format('Y-m');
+
+        return Cache::remember("agent_leaderboard_{$campaignCode}_{$ym}_{$limit}", 300, function () use ($campaignCode, $limit) {
+            $monthStart = now()->copy()->startOfMonth()->toDateString();
+            $today = now()->toDateString();
+
+            $submissionCounts = $this->getSubmissionCountsByAgentInDateRange($campaignCode, $monthStart, $today);
+
+            $saleCodes = config('dashboard.sale_disposition_codes', ['SALE']);
+            $saleCodes = array_values(array_filter($saleCodes, static fn ($c) => is_string($c) && $c !== ''));
+
+            $salesCounts = [];
+            $salesAmounts = [];
+
+            if (Schema::hasTable('campaign_disposition_records') && $saleCodes !== []) {
+                $rows = DB::table('campaign_disposition_records')
+                    ->where('campaign_code', $campaignCode)
+                    ->whereIn('disposition_code', $saleCodes)
+                    ->whereNotNull('called_at')
+                    ->whereDate('called_at', '>=', $monthStart)
+                    ->whereDate('called_at', '<=', $today)
+                    ->whereNotNull('agent')
+                    ->where('agent', '!=', '')
+                    ->select(['agent', 'lead_data_json'])
+                    ->get();
+
+                foreach ($rows as $row) {
+                    $agent = (string) $row->agent;
+                    $salesCounts[$agent] = ($salesCounts[$agent] ?? 0) + 1;
+                    $salesAmounts[$agent] = ($salesAmounts[$agent] ?? 0.0) + $this->sumSaleAmountFromLeadJson($row->lead_data_json);
+                }
+            }
+
+            $agents = array_unique(array_merge(
+                array_keys($submissionCounts),
+                array_keys($salesCounts),
+            ));
+
+            $ranked = [];
+            foreach ($agents as $agent) {
+                $ranked[] = [
+                    'agent' => $agent,
+                    'submissions' => $submissionCounts[$agent] ?? 0,
+                    'sales_count' => $salesCounts[$agent] ?? 0,
+                    'sales_amount' => round($salesAmounts[$agent] ?? 0.0, 2),
+                ];
+            }
+
+            usort($ranked, static function (array $a, array $b): int {
+                if ($a['submissions'] !== $b['submissions']) {
+                    return $b['submissions'] <=> $a['submissions'];
+                }
+                if ($a['sales_count'] !== $b['sales_count']) {
+                    return $b['sales_count'] <=> $a['sales_count'];
+                }
+                if ($a['sales_amount'] != $b['sales_amount']) {
+                    return $b['sales_amount'] <=> $a['sales_amount'];
+                }
+
+                return strcmp($a['agent'], $b['agent']);
+            });
+
+            return array_slice($ranked, 0, $limit);
         });
     }
 
@@ -155,11 +266,68 @@ class DashboardStatsService
         Cache::forget("activity_trend_{$campaignCode}_{$days}");
         Cache::forget("top_agents_{$campaignCode}_10");
 
+        $dailyDays = (int) config('dashboard.daily_activity_days', 7);
+        Cache::forget("activity_trend_{$campaignCode}_{$dailyDays}");
+
         $ym = sprintf('%04d_%02d', now()->year, now()->month);
         Cache::forget("activity_trend_monthly_{$campaignCode}_{$ym}");
 
+        $weeks = (int) config('dashboard.weekly_activity_weeks', 8);
+        $wk = now()->format('o-\WW');
+        Cache::forget("activity_trend_weekly_{$campaignCode}_{$weeks}_{$wk}");
+
         $hours = (int) config('dashboard.kpi_window_hours', 9);
         Cache::forget("dashboard_kpis_{$campaignCode}_{$hours}");
+
+        $limit = (int) config('dashboard.agent_leaderboard_limit', 25);
+        Cache::forget('agent_leaderboard_'.$campaignCode.'_'.now()->format('Y-m').'_'.$limit);
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function getSubmissionCountsByAgentInDateRange(string $campaignCode, string $fromYmd, string $toYmd): array
+    {
+        $tables = $this->resolveAllowedTables($campaignCode);
+        $counts = [];
+        foreach ($tables as $t) {
+            $rows = DB::table($t)
+                ->select('agent', DB::raw('COUNT(*) as c'))
+                ->whereBetween('date', [$fromYmd, $toYmd])
+                ->whereNotNull('agent')
+                ->where('agent', '!=', '')
+                ->groupBy('agent')
+                ->get();
+            foreach ($rows as $row) {
+                $agent = (string) $row->agent;
+                $counts[$agent] = ($counts[$agent] ?? 0) + (int) $row->c;
+            }
+        }
+
+        return $counts;
+    }
+
+    private function sumSaleAmountFromLeadJson(mixed $raw): float
+    {
+        if ($raw === null || $raw === '') {
+            return 0.0;
+        }
+        $data = is_string($raw) ? json_decode($raw, true) : $raw;
+        if (! is_array($data)) {
+            return 0.0;
+        }
+        /** @var list<string> $keys */
+        $keys = config('dashboard.sale_amount_json_keys', []);
+        foreach ($keys as $k) {
+            if (! is_string($k) || $k === '') {
+                continue;
+            }
+            if (isset($data[$k]) && is_numeric($data[$k])) {
+                return (float) $data[$k];
+            }
+        }
+
+        return 0.0;
     }
 
     /**

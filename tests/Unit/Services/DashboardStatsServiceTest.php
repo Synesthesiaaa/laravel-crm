@@ -163,6 +163,71 @@ class DashboardStatsServiceTest extends TestCase
         $this->assertSame(1, $trend['values'][6]);
     }
 
+    public function test_get_weekly_activity_trend_returns_expected_week_count(): void
+    {
+        Carbon::setTestNow('2026-05-07 12:00:00');
+        Cache::flush();
+        config(['dashboard.weekly_activity_weeks' => 8]);
+        $this->seed(CampaignSeeder::class);
+
+        $this->insertEzycashRow('2026-05-06');
+        $this->insertEzycashRow('2026-05-07');
+
+        $trend = app(DashboardStatsService::class)->getWeeklyActivityTrend('mbsales');
+
+        $this->assertCount(8, $trend['labels']);
+        $this->assertCount(8, $trend['values']);
+        $this->assertSame(2, array_sum($trend['values']));
+    }
+
+    public function test_get_agent_leaderboard_sorts_by_submissions_then_sales(): void
+    {
+        Carbon::setTestNow('2026-05-15 10:00:00');
+        Cache::flush();
+        $this->seed(CampaignSeeder::class);
+
+        $this->insertEzycashRowWithAgent('2026-05-10', 'Carl', 1);
+        $this->insertEzycashRowWithAgent('2026-05-10', 'Carl', 2);
+        $this->insertEzycashRowWithAgent('2026-05-10', 'Carl', 3);
+        $this->insertEzycashRowWithAgent('2026-05-11', 'Alice', 4);
+        $this->insertEzycashRowWithAgent('2026-05-11', 'Alice', 5);
+
+        CampaignDispositionRecord::create([
+            'campaign_code' => 'mbsales',
+            'agent' => 'Alice',
+            'disposition_code' => 'SALE',
+            'called_at' => Carbon::parse('2026-05-11 12:00:00'),
+            'lead_data_json' => ['ezycash_amount' => 500],
+        ]);
+        CampaignDispositionRecord::create([
+            'campaign_code' => 'mbsales',
+            'agent' => 'Bob',
+            'disposition_code' => 'SALE',
+            'called_at' => Carbon::parse('2026-05-12 12:00:00'),
+            'lead_data_json' => ['ezycash_amount' => 100],
+        ]);
+        CampaignDispositionRecord::create([
+            'campaign_code' => 'mbsales',
+            'agent' => 'Bob',
+            'disposition_code' => 'SALE',
+            'called_at' => Carbon::parse('2026-05-12 14:00:00'),
+            'lead_data_json' => ['ezycash_amount' => 200],
+        ]);
+
+        $board = app(DashboardStatsService::class)->getAgentLeaderboard('mbsales', 10);
+
+        $this->assertSame('Carl', $board[0]['agent']);
+        $this->assertSame(3, $board[0]['submissions']);
+        $this->assertSame('Alice', $board[1]['agent']);
+        $this->assertSame(2, $board[1]['submissions']);
+        $this->assertSame(1, $board[1]['sales_count']);
+        $this->assertSame(500.0, $board[1]['sales_amount']);
+        $this->assertSame('Bob', $board[2]['agent']);
+        $this->assertSame(0, $board[2]['submissions']);
+        $this->assertSame(2, $board[2]['sales_count']);
+        $this->assertSame(300.0, $board[2]['sales_amount']);
+    }
+
     private function insertEzycashRow(string $dateYmd): void
     {
         $now = now();
@@ -180,6 +245,28 @@ class DashboardStatsServiceTest extends TestCase
             'term' => '12',
             'rate' => 1.5,
             'agent' => 'AgentX',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+    }
+
+    private function insertEzycashRowWithAgent(string $dateYmd, string $agent, int $suffix): void
+    {
+        $now = now();
+        DB::table('ezycash')->insert([
+            'date' => $dateYmd,
+            'request_id' => 'req_'.$dateYmd.'_'.$suffix.'_'.uniqid(),
+            'cardholder_name' => 'Test',
+            'mpi_credit_card_no' => '0000',
+            'bank' => 'Test',
+            'account_type' => 'Savings',
+            'account_number' => '1',
+            'surname' => 'User',
+            'first_name' => 'Test',
+            'ezycash_amount' => 100.00,
+            'term' => '12',
+            'rate' => 1.5,
+            'agent' => $agent,
             'created_at' => $now,
             'updated_at' => $now,
         ]);

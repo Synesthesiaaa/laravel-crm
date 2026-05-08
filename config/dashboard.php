@@ -28,4 +28,26 @@ return [
 
     'kpi_window_hours' => 9,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Agent leaderboard (month-to-date on dashboard)
+    |--------------------------------------------------------------------------
+    */
+
+    'agent_leaderboard_limit' => 25,
+
+    /*
+    | First matching numeric key wins per sale disposition row (lead_data_json).
+    */
+
+    'sale_amount_json_keys' => [
+        'ezycash_amount',
+        'amount',
+        'loan_amount',
+    ],
+
+    'daily_activity_days' => 7,
+
+    'weekly_activity_weeks' => 8,
+
 ];

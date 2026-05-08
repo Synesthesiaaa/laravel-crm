@@ -33,15 +33,57 @@
         <x-stat-card label="Campaign"                     :value="strtoupper($campaign ?? '—')"               icon="building-office" color="info" />
     </div>
 
-    {{-- Monthly activity chart --}}
-    @if(!empty($monthlyActivity['labels']))
-    <div class="grid grid-cols-1 gap-6 animate-stagger">
+    {{-- Activity charts: daily / weekly / monthly --}}
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-stagger">
+        <div class="chart-container">
+            <p class="chart-title">Daily activity — last {{ $dailyActivityDays }} days</p>
+            <div id="chart-daily-activity" class="w-full" style="min-height: 240px;"></div>
+        </div>
+        <div class="chart-container">
+            <p class="chart-title">Weekly activity — last {{ config('dashboard.weekly_activity_weeks', 8) }} weeks</p>
+            <div id="chart-weekly-activity" class="w-full" style="min-height: 240px;"></div>
+        </div>
         <div class="chart-container">
             <p class="chart-title">Monthly activity — {{ $monthTitle }}</p>
-            <div id="chart-monthly-activity" style="min-height: 260px;"></div>
+            <div id="chart-monthly-activity" class="w-full" style="min-height: 240px;"></div>
         </div>
     </div>
-    @endif
+
+    {{-- Top agents (month-to-date) --}}
+    <div class="md-card overflow-hidden">
+        <div class="px-5 py-4 border-b border-[var(--color-border)]">
+            <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Top agents — {{ $monthTitle }}</h3>
+            <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">Ranked by submissions, then sales count, then sale amount (from disposition data).</p>
+        </div>
+        <div class="md-table-wrap">
+            @if(!empty($agentLeaderboard))
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="w-12">#</th>
+                            <th>Agent</th>
+                            <th class="text-right">Submissions</th>
+                            <th class="text-right">Sales</th>
+                            <th class="text-right">Sale amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($agentLeaderboard as $idx => $row)
+                            <tr>
+                                <td class="text-[var(--color-on-surface-dim)]">{{ $idx + 1 }}</td>
+                                <td class="font-medium text-[var(--color-on-surface)]">{{ $row['agent'] }}</td>
+                                <td class="text-right tabular-nums">{{ number_format($row['submissions']) }}</td>
+                                <td class="text-right tabular-nums">{{ number_format($row['sales_count']) }}</td>
+                                <td class="text-right tabular-nums">{{ number_format($row['sales_amount'], 2) }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            @else
+                <p class="table-empty py-8 text-center text-sm text-[var(--color-on-surface-dim)]">No submission or sale activity this month yet.</p>
+            @endif
+        </div>
+    </div>
 
     {{-- Campaign forms --}}
     @if(!empty($forms))
@@ -90,11 +132,13 @@
 @endsection
 
 @push('scripts')
-@if(!empty($monthlyActivity['labels']))
 <script>
 (async () => {
     const ApexCharts = await window.ApexChartsLoader?.() ?? null;
     if (!ApexCharts) return;
+
+    const main = document.getElementById('main-layout');
+    if (!main) return;
 
     const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
     const textColor = isDark ? '#a1a1aa' : '#52525b';
@@ -104,25 +148,39 @@
     Object.values(window.__crmDashboardCharts).forEach((c) => { try { c.destroy(); } catch (_) {} });
     window.__crmDashboardCharts = {};
 
-    const monthlyEl = document.getElementById('chart-monthly-activity');
-    if (monthlyEl) {
-        const monthly = new ApexCharts(monthlyEl, {
-            series: [{ name: 'Submissions', data: @json($monthlyActivity['values'] ?? []) }],
-            chart: { type: 'area', height: 260, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif', animations: { enabled: true, easing: 'easeinout', speed: 600 } },
+    function mountAreaChart(elId, categories, values) {
+        const el = document.getElementById(elId);
+        if (!el || !main.contains(el)) return Promise.resolve();
+        el.innerHTML = '';
+        if (!categories?.length) return Promise.resolve();
+
+        const chart = new ApexCharts(el, {
+            series: [{ name: 'Submissions', data: values }],
+            chart: { type: 'area', height: 240, width: '100%', toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif', animations: { enabled: true, easing: 'easeinout', speed: 600 } },
             colors: ['#e91e8c'],
             fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: .35, opacityTo: .03 } },
             stroke: { curve: 'smooth', width: 2 },
-            xaxis: { categories: @json($monthlyActivity['labels'] ?? []), labels: { style: { colors: textColor, fontSize: '11px' }, rotate: -30 }, axisBorder: { show: false }, axisTicks: { show: false } },
+            xaxis: { categories, labels: { style: { colors: textColor, fontSize: '11px' }, rotate: -30 }, axisBorder: { show: false }, axisTicks: { show: false } },
             yaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
             grid: { borderColor: gridColor, strokeDashArray: 3 },
             tooltip: { theme: isDark ? 'dark' : 'light' },
             dataLabels: { enabled: false },
             theme: { mode: isDark ? 'dark' : 'light' },
         });
-        window.__crmDashboardCharts.monthly = monthly;
-        monthly.render();
+        window.__crmDashboardCharts[elId] = chart;
+        return chart.render().then(() => { try { chart.resize(); } catch (_) {} });
     }
+
+    if (!main.querySelector('#chart-monthly-activity')) return;
+
+    await Promise.all([
+        mountAreaChart('chart-daily-activity', @json($dailyActivity['labels'] ?? []), @json($dailyActivity['values'] ?? [])),
+        mountAreaChart('chart-weekly-activity', @json($weeklyActivity['labels'] ?? []), @json($weeklyActivity['values'] ?? [])),
+        mountAreaChart('chart-monthly-activity', @json($monthlyActivity['labels'] ?? []), @json($monthlyActivity['values'] ?? [])),
+    ]);
+
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    Object.values(window.__crmDashboardCharts).forEach((c) => { try { c.resize(); } catch (_) {} });
 })();
 </script>
-@endif
 @endpush
