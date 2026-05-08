@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Repositories\CampaignRepository;
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,58 @@ class DashboardStatsService
     public function __construct(
         protected CampaignRepository $campaignRepository,
     ) {}
+
+    /**
+     * Rolling last 24 hours of form submissions, one bucket per clock hour (uses created_at).
+     *
+     * @return array{labels: list<string>, values: list<int>}
+     */
+    public function getLast24HourActivityTrend(string $campaignCode): array
+    {
+        $ttl = (int) config('dashboard.last_24h_activity_cache_seconds', 120);
+
+        return Cache::remember("activity_trend_24h_{$campaignCode}", max(30, $ttl), function () use ($campaignCode) {
+            $tables = $this->resolveAllowedTablesWithCreatedAt($campaignCode);
+            if (empty($tables)) {
+                return ['labels' => [], 'values' => []];
+            }
+
+            $since = now()->copy()->subHours(24);
+
+            /** @var array<string, int> $bucketCounts keys Y-m-d H */
+            $bucketCounts = [];
+            $labels = [];
+            for ($i = 23; $i >= 0; $i--) {
+                $h = now()->copy()->subHours($i)->startOfHour();
+                $key = $h->format('Y-m-d H');
+                $bucketCounts[$key] = 0;
+                $labels[] = $h->format('M j H:00');
+            }
+
+            foreach ($tables as $t) {
+                DB::table($t)
+                    ->where('created_at', '>=', $since)
+                    ->select('created_at')
+                    ->orderBy('id')
+                    ->chunk(1000, function ($rows) use (&$bucketCounts) {
+                        foreach ($rows as $row) {
+                            $h = Carbon::parse($row->created_at)->timezone(config('app.timezone'))->startOfHour();
+                            $key = $h->format('Y-m-d H');
+                            if (array_key_exists($key, $bucketCounts)) {
+                                $bucketCounts[$key]++;
+                            }
+                        }
+                    });
+            }
+
+            $values = [];
+            foreach (array_keys($bucketCounts) as $key) {
+                $values[] = $bucketCounts[$key];
+            }
+
+            return ['labels' => $labels, 'values' => $values];
+        });
+    }
 
     public function getActivityTrend(string $campaignCode, int $days = 14): array
     {
@@ -33,34 +86,23 @@ class DashboardStatsService
     }
 
     /** @return array{labels: list<string>, values: list<int>} */
-    public function getWeeklyActivityTrend(string $campaignCode, ?int $weeks = null): array
+    public function getWeeklyActivityTrend(string $campaignCode): array
     {
-        $weeks ??= (int) config('dashboard.weekly_activity_weeks', 8);
-        $weeks = max(1, $weeks);
-        $wk = now()->format('o-\WW');
+        $weekKey = now()->format('o-\WW');
 
-        return Cache::remember("activity_trend_weekly_{$campaignCode}_{$weeks}_{$wk}", 300, function () use ($campaignCode, $weeks) {
-            $oldestMonday = now()->copy()->startOfWeek(CarbonInterface::MONDAY)->subWeeks($weeks - 1);
-            $cutoff = $oldestMonday->format('Y-m-d');
+        return Cache::remember("activity_trend_weekly_{$campaignCode}_{$weekKey}", 300, function () use ($campaignCode) {
+            $weekStart = now()->copy()->startOfWeek(CarbonInterface::MONDAY);
+            $cutoff = $weekStart->format('Y-m-d');
             $activityData = $this->aggregateSubmissionTotalsByDay($campaignCode, $cutoff);
 
             $labels = [];
             $values = [];
             $today = now()->copy()->startOfDay();
 
-            for ($w = 0; $w < $weeks; $w++) {
-                $weekStart = now()->copy()->startOfWeek(CarbonInterface::MONDAY)->subWeeks($weeks - 1 - $w);
-                $weekEnd = $weekStart->copy()->endOfWeek(CarbonInterface::SUNDAY)->startOfDay();
-                if ($weekEnd->gt($today)) {
-                    $weekEnd = $today->copy();
-                }
-                $sum = 0;
-                for ($d = $weekStart->copy()->startOfDay(); $d->lte($weekEnd); $d->addDay()) {
-                    $key = $d->format('Y-m-d');
-                    $sum += $activityData[$key] ?? 0;
-                }
-                $labels[] = $weekStart->format('M j');
-                $values[] = $sum;
+            for ($d = $weekStart->copy(); $d->lte($today); $d->addDay()) {
+                $key = $d->format('Y-m-d');
+                $labels[] = $d->format('D M j');
+                $values[] = $activityData[$key] ?? 0;
             }
 
             return ['labels' => $labels, 'values' => $values];
@@ -266,15 +308,13 @@ class DashboardStatsService
         Cache::forget("activity_trend_{$campaignCode}_{$days}");
         Cache::forget("top_agents_{$campaignCode}_10");
 
-        $dailyDays = (int) config('dashboard.daily_activity_days', 7);
-        Cache::forget("activity_trend_{$campaignCode}_{$dailyDays}");
+        Cache::forget("activity_trend_24h_{$campaignCode}");
 
         $ym = sprintf('%04d_%02d', now()->year, now()->month);
         Cache::forget("activity_trend_monthly_{$campaignCode}_{$ym}");
 
-        $weeks = (int) config('dashboard.weekly_activity_weeks', 8);
         $wk = now()->format('o-\WW');
-        Cache::forget("activity_trend_weekly_{$campaignCode}_{$weeks}_{$wk}");
+        Cache::forget("activity_trend_weekly_{$campaignCode}_{$wk}");
 
         $hours = (int) config('dashboard.kpi_window_hours', 9);
         Cache::forget("dashboard_kpis_{$campaignCode}_{$hours}");
@@ -382,5 +422,13 @@ class DashboardStatsService
         $tables = array_values(array_intersect($tables, $allowed));
 
         return array_values(array_filter($tables, fn (string $t) => Schema::hasTable($t) && Schema::hasColumn($t, 'date') && Schema::hasColumn($t, 'agent')));
+    }
+
+    /** @return list<string> */
+    private function resolveAllowedTablesWithCreatedAt(string $campaignCode): array
+    {
+        $tables = $this->resolveAllowedTables($campaignCode);
+
+        return array_values(array_filter($tables, fn (string $t) => Schema::hasColumn($t, 'created_at')));
     }
 }

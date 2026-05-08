@@ -163,11 +163,50 @@ class DashboardStatsServiceTest extends TestCase
         $this->assertSame(1, $trend['values'][6]);
     }
 
-    public function test_get_weekly_activity_trend_returns_expected_week_count(): void
+    public function test_get_last_24_hour_activity_trend_buckets_by_hour(): void
+    {
+        Carbon::setTestNow('2026-05-07 15:30:00');
+        Cache::flush();
+        $this->seed(CampaignSeeder::class);
+
+        $base = [
+            'cardholder_name' => 'Test',
+            'mpi_credit_card_no' => '0000',
+            'bank' => 'Test',
+            'account_type' => 'Savings',
+            'account_number' => '1',
+            'surname' => 'User',
+            'first_name' => 'Test',
+            'ezycash_amount' => 100.00,
+            'term' => '12',
+            'rate' => 1.5,
+            'agent' => 'AgentX',
+        ];
+
+        DB::table('ezycash')->insert(array_merge($base, [
+            'date' => '2026-05-07',
+            'request_id' => 'req_24h_1_'.uniqid(),
+            'created_at' => Carbon::parse('2026-05-07 14:15:00'),
+            'updated_at' => Carbon::parse('2026-05-07 14:15:00'),
+        ]));
+        DB::table('ezycash')->insert(array_merge($base, [
+            'date' => '2026-05-06',
+            'request_id' => 'req_24h_2_'.uniqid(),
+            'created_at' => Carbon::parse('2026-05-06 16:00:00'),
+            'updated_at' => Carbon::parse('2026-05-06 16:00:00'),
+        ]));
+
+        $trend = app(DashboardStatsService::class)->getLast24HourActivityTrend('mbsales');
+
+        $this->assertCount(24, $trend['labels']);
+        $this->assertCount(24, $trend['values']);
+        $this->assertSame(2, array_sum($trend['values']));
+    }
+
+    public function test_get_weekly_activity_trend_shows_current_week_daily(): void
     {
         Carbon::setTestNow('2026-05-07 12:00:00');
         Cache::flush();
-        config(['dashboard.weekly_activity_weeks' => 8]);
         $this->seed(CampaignSeeder::class);
 
         $this->insertEzycashRow('2026-05-06');
@@ -175,8 +214,9 @@ class DashboardStatsServiceTest extends TestCase
 
         $trend = app(DashboardStatsService::class)->getWeeklyActivityTrend('mbsales');
 
-        $this->assertCount(8, $trend['labels']);
-        $this->assertCount(8, $trend['values']);
+        // ISO week: Mon May 4–Thu May 7 (today) => 4 points
+        $this->assertCount(4, $trend['labels']);
+        $this->assertCount(4, $trend['values']);
         $this->assertSame(2, array_sum($trend['values']));
     }
 

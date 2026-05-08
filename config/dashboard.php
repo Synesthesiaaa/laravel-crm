@@ -46,8 +46,10 @@ return [
         'loan_amount',
     ],
 
-    'daily_activity_days' => 7,
+    /*
+    | Cache TTL (seconds) for the rolling 24-hour submissions chart.
+    */
 
-    'weekly_activity_weeks' => 8,
+    'last_24h_activity_cache_seconds' => 120,
 
 ];

@@ -36,11 +36,11 @@
     {{-- Activity charts: daily / weekly / monthly --}}
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-stagger">
         <div class="chart-container">
-            <p class="chart-title">Daily activity — last {{ $dailyActivityDays }} days</p>
+            <p class="chart-title">Activity — last 24 hours</p>
             <div id="chart-daily-activity" class="w-full" style="min-height: 240px;"></div>
         </div>
         <div class="chart-container">
-            <p class="chart-title">Weekly activity — last {{ config('dashboard.weekly_activity_weeks', 8) }} weeks</p>
+            <p class="chart-title">Weekly activity — this week</p>
             <div id="chart-weekly-activity" class="w-full" style="min-height: 240px;"></div>
         </div>
         <div class="chart-container">
