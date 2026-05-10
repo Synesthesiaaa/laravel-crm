@@ -126,6 +126,10 @@
 @if(!empty($activityTrend['labels']))
 <script>
 (async () => {
+    if (document.readyState === 'loading') {
+        await new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+    }
+
     const ApexCharts = await window.ApexChartsLoader?.() ?? null;
     if (!ApexCharts) return;
 
