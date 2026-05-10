@@ -180,7 +180,11 @@
     ]);
 
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    Object.values(window.__crmDashboardCharts).forEach((c) => { try { c.resize(); } catch (_) {} });
+    window.resizeCrmDashboardCharts?.();
+    requestAnimationFrame(() => window.resizeCrmDashboardCharts?.());
+    // Sidebar / main-layout flex width often settles after ~280ms transition on first paint
+    setTimeout(() => window.resizeCrmDashboardCharts?.(), 120);
+    setTimeout(() => window.resizeCrmDashboardCharts?.(), 360);
 })();
 </script>
 @endpush

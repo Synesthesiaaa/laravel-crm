@@ -9,17 +9,31 @@ import TelephonyCore from './telephony-core';
 // Make ApexCharts available for dynamic import in views
 window.ApexChartsLoader = () => import('apexcharts').then(m => m.default);
 
-// After soft-nav layout settles, fix charts that measured 0-width during first render
-window.addEventListener('soft-navigate', () => {
+/** ApexCharts need a resize after layout is stable (full page load, sidebar transition, soft-nav). */
+window.resizeCrmDashboardCharts = function resizeCrmDashboardCharts() {
+    Object.values(window.__crmDashboardCharts || {}).forEach((c) => {
+        try {
+            c.resize();
+        } catch (_) {
+            /* noop */
+        }
+    });
+};
+
+function scheduleDashboardChartResize() {
     requestAnimationFrame(() => requestAnimationFrame(() => {
-        Object.values(window.__crmDashboardCharts || {}).forEach((c) => {
-            try {
-                c.resize();
-            } catch (_) {
-                /* noop */
-            }
-        });
+        window.resizeCrmDashboardCharts();
     }));
+}
+
+// Full page load (e.g. redirect after login): layout/fonts may settle after first chart render
+window.addEventListener('load', () => {
+    scheduleDashboardChartResize();
+});
+
+// After soft-nav layout settles
+window.addEventListener('soft-navigate', () => {
+    scheduleDashboardChartResize();
 });
 
 import Alpine from 'alpinejs';
