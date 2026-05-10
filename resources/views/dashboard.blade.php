@@ -134,7 +134,7 @@
 @push('scripts')
 <script>
 (async () => {
-    // Inline @stack scripts run during HTML parse; Vite app.js is deferred and runs after parse.
+    // Page scripts in the layout stack run during HTML parse; Vite app.js is deferred and runs after parse.
     // DOMContentLoaded fires only after deferred modules, so ApexChartsLoader exists then.
     if (document.readyState === 'loading') {
         await new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
