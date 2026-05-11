@@ -46,12 +46,12 @@ Alpine.plugin(focus);
 Alpine.plugin(collapse);
 Alpine.plugin(intersect);
 
-// Global toast store
+// Global toast store (optional title = small label above message, e.g. flash category)
 Alpine.store('toast', {
     items: [],
-    add(type, message, duration = 4000) {
+    add(type, message, duration = 4000, title = null) {
         const id = Date.now() + Math.random();
-        this.items.push({ id, type, message });
+        this.items.push({ id, type, message, title: title || null });
         if (duration > 0) {
             setTimeout(() => this.remove(id), duration);
         }
@@ -60,10 +60,10 @@ Alpine.store('toast', {
     remove(id) {
         this.items = this.items.filter(t => t.id !== id);
     },
-    success(msg, duration = 4000) { return this.add('success', msg, duration); },
-    error(msg, duration = 5000)   { return this.add('error',   msg, duration); },
-    warning(msg, duration = 4500) { return this.add('warning', msg, duration); },
-    info(msg, duration = 4000)    { return this.add('info',    msg, duration); },
+    success(msg, duration = 4000, title = null) { return this.add('success', msg, duration, title); },
+    error(msg, duration = 5000, title = null) { return this.add('error', msg, duration, title); },
+    warning(msg, duration = 4500, title = null) { return this.add('warning', msg, duration, title); },
+    info(msg, duration = 4000, title = null) { return this.add('info', msg, duration, title); },
 });
 
 // Global modal store

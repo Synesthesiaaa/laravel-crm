@@ -10,14 +10,29 @@ window.notificationDropdown = function() {
         items: [],
         unread: 0,
         loaded: false,
+        init() {
+            // Badge count without opening the panel (runs again after soft-nav Alpine.initTree)
+            this.refreshSummary();
+        },
         toggle() {
             this.open = !this.open;
             if (this.open && !this.loaded) this.load();
         },
+        async refreshSummary() {
+            try {
+                const res = await window.axios.get('/api/notifications');
+                this.unread = res.data.unread ?? 0;
+                if (this.open && this.loaded) {
+                    this.items = res.data.items ?? [];
+                }
+            } catch {
+                /* keep prior state */
+            }
+        },
         async load() {
             try {
                 const res = await window.axios.get('/api/notifications');
-                this.items  = res.data.items  ?? [];
+                this.items = res.data.items ?? [];
                 this.unread = res.data.unread ?? 0;
                 this.loaded = true;
             } catch {
@@ -27,7 +42,7 @@ window.notificationDropdown = function() {
         async markAllRead() {
             try {
                 await window.axios.post('/api/notifications/read-all');
-                this.items  = this.items.map(n => ({ ...n, read: true }));
+                this.items = this.items.map(n => ({ ...n, read: true }));
                 this.unread = 0;
             } catch {}
         },
