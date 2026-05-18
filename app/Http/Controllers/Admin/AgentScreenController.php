@@ -50,6 +50,7 @@ class AgentScreenController extends Controller
         AgentScreenField::create([
             'campaign_code' => $validated['campaign_code'],
             'field_key' => $validated['field_key'],
+            'vici_field' => $validated['vici_field'] ?? null,
             'field_label' => $validated['field_label'],
             'field_order' => ($maxOrder ?? 0) + 1,
             'field_width' => $validated['field_width'] ?? 'full',
@@ -65,6 +66,7 @@ class AgentScreenController extends Controller
         $validated = $request->validated();
         $field->update([
             'field_label' => $validated['field_label'],
+            'vici_field' => $validated['vici_field'] ?? null,
             'field_width' => $validated['field_width'] ?? 'full',
         ]);
         $this->campaignService->clearCampaignsCache();

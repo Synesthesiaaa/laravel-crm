@@ -14,6 +14,7 @@ class AgentScreenField extends Model
     protected $fillable = [
         'campaign_code',
         'field_key',
+        'vici_field',
         'field_label',
         'field_order',
         'field_width',

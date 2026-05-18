@@ -16,6 +16,7 @@ class StoreAgentScreenFieldRequest extends FormRequest
         return [
             'campaign_code' => ['required', 'string', 'max:50'],
             'field_key' => ['required', 'string', 'max:80', 'regex:/^[a-zA-Z0-9_]+$/'],
+            'vici_field' => ['nullable', 'string', 'max:80', 'regex:/^[a-zA-Z0-9_]+$/'],
             'field_label' => ['required', 'string', 'max:120'],
             'field_width' => ['nullable', 'in:full,half,third'],
         ];

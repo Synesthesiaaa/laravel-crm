@@ -305,6 +305,9 @@ window.agentScreen = function() {
         predictiveMode: false,
         predictiveDelay: 3,
         _predictiveTimer: null,
+        _leadHydrateTimer: null,
+        _suppressLeadWatcher: false,
+        _lastHydratedLeadId: '',
         transfer: {
             phone_number: '',
             ingroup: '',
@@ -336,6 +339,19 @@ window.agentScreen = function() {
             this.$watch('$store.call.state', (v) => { if (v) this.callState = v; });
             this.$watch('$store.call.number', (v) => { if (v) this.phoneNumber = v; });
             this.$watch('$store.call.sessionId', (v) => { if (v) this.sessionId = v; });
+            this.$watch('leadId', (value) => {
+                if (this._suppressLeadWatcher) {
+                    return;
+                }
+                if (this._leadHydrateTimer) {
+                    clearTimeout(this._leadHydrateTimer);
+                }
+                const leadId = String(value || '').trim();
+                if (!leadId || leadId === this._lastHydratedLeadId) {
+                    return;
+                }
+                this._leadHydrateTimer = setTimeout(() => this.hydrateLead(leadId), 400);
+            });
             if (!this.featureEnabled('predictive_dialing')) {
                 this.predictiveMode = false;
             }
@@ -457,17 +473,70 @@ window.agentScreen = function() {
 
         /** WebSocket handler: inbound/dialer call screen pop */
         _handleInboundCallWs(p) {
-            if (p.phone_number) {
-                this.phoneNumber = p.phone_number;
-                Alpine.store('call').number = p.phone_number;
-            }
-            if (p.lead_id) {
-                this.leadId = String(p.lead_id);
-            }
-            if (p.client_name) {
-                this.clientName = p.client_name;
-            }
+            this.applyLeadData({
+                ...p,
+                capture_data: p.capture_data || p.lead_data || {},
+            });
             Alpine.store('toast').info('Incoming call: ' + (p.phone_number || 'unknown'));
+        },
+
+        applyLeadData(payload = {}) {
+            const leadId = payload.lead_id ?? null;
+            const phoneNumber = payload.phone_number ?? null;
+            const clientName = payload.client_name ?? null;
+            const captureData = payload.capture_data || payload.lead_data || {};
+
+            this._suppressLeadWatcher = true;
+            try {
+                if (leadId !== null && leadId !== undefined && String(leadId).trim() !== '') {
+                    this.leadId = String(leadId);
+                    this._lastHydratedLeadId = String(leadId);
+                }
+                if (phoneNumber !== null && phoneNumber !== undefined && String(phoneNumber).trim() !== '') {
+                    this.phoneNumber = String(phoneNumber);
+                    Alpine.store('call').number = this.phoneNumber;
+                }
+                if (clientName !== null && clientName !== undefined && String(clientName).trim() !== '') {
+                    this.clientName = String(clientName);
+                }
+            } finally {
+                this._suppressLeadWatcher = false;
+            }
+
+            const form = document.getElementById('capture-form');
+            if (!form || !captureData || typeof captureData !== 'object') {
+                return;
+            }
+
+            form.querySelectorAll('input, select, textarea').forEach((el) => {
+                if (!el.name || el.name.startsWith('_')) return;
+                if (!Object.prototype.hasOwnProperty.call(captureData, el.name)) return;
+                const value = captureData[el.name];
+                if (value === null || value === undefined) return;
+                el.value = String(value);
+            });
+        },
+
+        async hydrateLead(leadIdOverride = null) {
+            const leadId = String(leadIdOverride || this.leadId || '').trim();
+            if (!leadId) {
+                return;
+            }
+
+            try {
+                const res = await window.axios.get('/api/leads/hydrate', {
+                    params: {
+                        campaign: this.crmCampaign(),
+                        lead_id: leadId,
+                    },
+                });
+                const data = res.data?.data;
+                if (data) {
+                    this.applyLeadData(data);
+                }
+            } catch (e) {
+                // Autofill is best-effort; avoid noisy toasts while typing lead IDs.
+            }
         },
 
         featureEnabled(key) {
@@ -767,6 +836,12 @@ window.agentScreen = function() {
                     Alpine.store('toast').error(res.data.message || 'Call failed.');
                     return;
                 }
+                this.applyLeadData({
+                    lead_id: res.data.lead_id,
+                    phone_number: res.data.phone_number,
+                    client_name: res.data.client_name,
+                    capture_data: res.data.lead_data || {},
+                });
                 // Wait for SIP.js state + AMI events to transition dialing -> ringing -> connected.
             } catch (e) {
                 this.callState = 'idle';
@@ -817,10 +892,7 @@ window.agentScreen = function() {
                 const campaign = this.crmCampaign();
                 const res = await window.axios.get('/api/leads/next', { params: { campaign } });
                 if (res.data.lead) {
-                    this.leadId = res.data.lead.lead_id || '';
-                    this.phoneNumber = res.data.lead.phone_number || '';
-                    this.clientName = res.data.lead.client_name || '';
-                    Alpine.store('call').number = this.phoneNumber;
+                    this.applyLeadData(res.data.lead);
                     Alpine.store('toast').success('Lead loaded.');
                 } else {
                     Alpine.store('toast').info(res.data.message || 'No leads available.');
@@ -921,9 +993,11 @@ window.agentScreen = function() {
                     Alpine.store('toast').info(res.data.message || 'No leads available in hopper.');
                     return;
                 }
-                this.leadId = res.data.lead.lead_id || '';
-                this.phoneNumber = res.data.lead.phone_number || '';
-                this.clientName = res.data.lead.client_name || '';
+                this.applyLeadData({
+                    ...res.data.lead,
+                    capture_data: res.data.lead_data || res.data.lead?.capture_data || {},
+                    client_name: res.data.client_name || res.data.lead?.client_name || '',
+                });
                 this.predictiveDelay = Number(res.data.predictive_delay_seconds || this.predictiveDelay || 3);
                 this.sessionId = res.data.session_id || null;
                 Alpine.store('call').number = this.phoneNumber;

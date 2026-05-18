@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\Telephony\CallOrchestrationService;
+use App\Services\Telephony\LeadHydrationService;
 use App\Services\Telephony\PredictiveDialerService;
 use App\Services\Telephony\TelephonyCampaignResolver;
 use Illuminate\Http\JsonResponse;
@@ -14,6 +15,7 @@ class CallController extends Controller
     public function __construct(
         protected CallOrchestrationService $orchestration,
         protected PredictiveDialerService $predictiveDialer,
+        protected LeadHydrationService $leadHydrationService,
     ) {}
 
     /**
@@ -51,9 +53,20 @@ class CallController extends Controller
             return response()->json($payload, 422);
         }
 
+        $hydrated = $this->leadHydrationService->hydrate(
+            $request->user(),
+            $campaign,
+            $request->input('lead_id') ? (int) $request->input('lead_id') : null,
+            (string) $phoneNumber,
+        );
+
         return response()->json([
             'success' => true,
             'session_id' => $result->data['session_id'],
+            'lead_id' => $hydrated['lead_id'],
+            'phone_number' => $hydrated['phone_number'] ?? $phoneNumber,
+            'client_name' => $hydrated['client_name'],
+            'lead_data' => $hydrated['capture_data'],
         ]);
     }
 
@@ -136,6 +149,27 @@ class CallController extends Controller
             ], 422);
         }
 
-        return response()->json(array_merge(['success' => true], (array) $result->data));
+        $payload = (array) $result->data;
+        $lead = (array) ($payload['lead'] ?? []);
+
+        if ($lead !== []) {
+            $hydrated = $this->leadHydrationService->hydrate(
+                $request->user(),
+                $campaign,
+                isset($lead['lead_id']) && is_numeric($lead['lead_id']) ? (int) $lead['lead_id'] : null,
+                isset($lead['phone_number']) ? (string) $lead['phone_number'] : null,
+            );
+
+            $payload['lead_data'] = $hydrated['capture_data'];
+            $payload['client_name'] = $hydrated['client_name'] ?? ($lead['client_name'] ?? null);
+            $payload['lead'] = array_merge($lead, [
+                'lead_id' => $hydrated['lead_id'] ?? ($lead['lead_id'] ?? null),
+                'phone_number' => $hydrated['phone_number'] ?? ($lead['phone_number'] ?? null),
+                'client_name' => $hydrated['client_name'] ?? ($lead['client_name'] ?? null),
+                'capture_data' => $hydrated['capture_data'],
+            ]);
+        }
+
+        return response()->json(array_merge(['success' => true], $payload));
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\Telephony\LeadHydrationService;
 use App\Services\Telephony\LeadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -49,6 +50,36 @@ class LeadController extends Controller
             (int) $validated['lead_id'],
             $validated['field_name'],
         ));
+    }
+
+    public function hydrate(Request $request, LeadHydrationService $hydrationService): JsonResponse
+    {
+        $validated = $request->validate([
+            'campaign' => ['nullable', 'string', 'max:50'],
+            'lead_id' => ['nullable', 'integer'],
+            'phone_number' => ['nullable', 'string', 'max:32'],
+        ]);
+
+        if (! isset($validated['lead_id']) && empty($validated['phone_number'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'lead_id or phone_number is required.',
+                'data' => null,
+            ], 422);
+        }
+
+        $data = $hydrationService->hydrate(
+            $request->user(),
+            $this->campaign($request, $validated),
+            isset($validated['lead_id']) ? (int) $validated['lead_id'] : null,
+            $validated['phone_number'] ?? null,
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => null,
+            'data' => $data,
+        ]);
     }
 
     public function add(Request $request, LeadService $service): JsonResponse
