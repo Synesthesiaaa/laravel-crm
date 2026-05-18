@@ -36,12 +36,6 @@
                             <span x-text="predictiveMode ? 'Predictive: ON' : 'Predictive: OFF'">Predictive: OFF</span>
                         </button>
                     </template>
-                    <button type="button" class="btn-secondary text-xs px-2 py-1" @click="fetchNextLead()" :disabled="callState !== 'idle' && callState !== 'wrapup' || loadingNextLead"
-                            title="Get next lead">
-                        <x-icon name="arrow-path" class="w-3.5 h-3.5" />
-                        <span x-text="loadingNextLead ? 'Loading...' : 'Next Lead'">Next Lead</span>
-                    </button>
-                    <x-badge :dot="false" type="info" x-text="leadId ? 'Lead #' + leadId : 'No lead loaded'">No lead loaded</x-badge>
                 </div>
             </div>
             <div class="grid grid-cols-2 gap-4">
@@ -301,7 +295,6 @@ window.agentScreen = function() {
         dispositionNotes: '',
         recentCalls: [],
         dialBlocked: false,
-        loadingNextLead: false,
         predictiveMode: false,
         predictiveDelay: 3,
         _predictiveTimer: null,
@@ -885,25 +878,6 @@ window.agentScreen = function() {
             return `${m}:${sec}`;
         },
 
-        async fetchNextLead() {
-            if (this.loadingNextLead || (this.callState !== 'idle' && this.callState !== 'wrapup')) return;
-            this.loadingNextLead = true;
-            try {
-                const campaign = this.crmCampaign();
-                const res = await window.axios.get('/api/leads/next', { params: { campaign } });
-                if (res.data.lead) {
-                    this.applyLeadData(res.data.lead);
-                    Alpine.store('toast').success('Lead loaded.');
-                } else {
-                    Alpine.store('toast').info(res.data.message || 'No leads available.');
-                }
-            } catch (e) {
-                Alpine.store('toast').error(e.response?.data?.message || 'Failed to fetch lead.');
-            } finally {
-                this.loadingNextLead = false;
-            }
-        },
-
         async saveDisposition() {
             if (!this.dispositionCode) return;
             this.savingDisposition = true;
@@ -954,8 +928,6 @@ window.agentScreen = function() {
             Alpine.store('call').state = 'idle';
             if (this.predictiveMode) {
                 this.schedulePredictiveDial();
-            } else {
-                this.fetchNextLead();
             }
         },
 
