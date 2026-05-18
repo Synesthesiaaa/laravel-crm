@@ -11,13 +11,23 @@ class NotificationsController extends Controller
 {
     public function __invoke(Request $request, NotificationService $notificationService): JsonResponse
     {
-        $items = $notificationService->getForUser($request->user(), 25);
-        $data = $items->map(fn ($h) => [
-            'id' => $h->id,
-            'form_type' => $h->form_type,
-            'created_at' => $h->created_at?->toIso8601String(),
-        ])->all();
+        $user = $request->user();
+        $readIds = $notificationService->getReadIds($user);
+        $readSet = array_fill_keys($readIds, true);
 
-        return response()->json(['success' => true, 'items' => $data]);
+        $rows = $notificationService->getForUser($user, 25);
+        $items = $rows->map(function ($h) use ($notificationService, $readSet) {
+            $read = isset($readSet[(int) $h->id]);
+
+            return $notificationService->formatHistoryRow($h, $read);
+        })->values()->all();
+
+        $unread = collect($items)->where('read', false)->count();
+
+        return response()->json([
+            'success' => true,
+            'items' => $items,
+            'unread' => $unread,
+        ]);
     }
 }

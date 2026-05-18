@@ -9,6 +9,33 @@ import TelephonyCore from './telephony-core';
 // Make ApexCharts available for dynamic import in views
 window.ApexChartsLoader = () => import('apexcharts').then(m => m.default);
 
+/** ApexCharts need a resize after layout is stable (full page load, sidebar transition, soft-nav). */
+window.resizeCrmDashboardCharts = function resizeCrmDashboardCharts() {
+    Object.values(window.__crmDashboardCharts || {}).forEach((c) => {
+        try {
+            c.resize();
+        } catch (_) {
+            /* noop */
+        }
+    });
+};
+
+function scheduleDashboardChartResize() {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        window.resizeCrmDashboardCharts();
+    }));
+}
+
+// Full page load (e.g. redirect after login): layout/fonts may settle after first chart render
+window.addEventListener('load', () => {
+    scheduleDashboardChartResize();
+});
+
+// After soft-nav layout settles
+window.addEventListener('soft-navigate', () => {
+    scheduleDashboardChartResize();
+});
+
 import Alpine from 'alpinejs';
 import focus from '@alpinejs/focus';
 import collapse from '@alpinejs/collapse';
@@ -19,12 +46,12 @@ Alpine.plugin(focus);
 Alpine.plugin(collapse);
 Alpine.plugin(intersect);
 
-// Global toast store
+// Global toast store (optional title = small label above message, e.g. flash category)
 Alpine.store('toast', {
     items: [],
-    add(type, message, duration = 4000) {
+    add(type, message, duration = 4000, title = null) {
         const id = Date.now() + Math.random();
-        this.items.push({ id, type, message });
+        this.items.push({ id, type, message, title: title || null });
         if (duration > 0) {
             setTimeout(() => this.remove(id), duration);
         }
@@ -33,10 +60,10 @@ Alpine.store('toast', {
     remove(id) {
         this.items = this.items.filter(t => t.id !== id);
     },
-    success(msg, duration = 4000) { return this.add('success', msg, duration); },
-    error(msg, duration = 5000)   { return this.add('error',   msg, duration); },
-    warning(msg, duration = 4500) { return this.add('warning', msg, duration); },
-    info(msg, duration = 4000)    { return this.add('info',    msg, duration); },
+    success(msg, duration = 4000, title = null) { return this.add('success', msg, duration, title); },
+    error(msg, duration = 5000, title = null) { return this.add('error', msg, duration, title); },
+    warning(msg, duration = 4500, title = null) { return this.add('warning', msg, duration, title); },
+    info(msg, duration = 4000, title = null) { return this.add('info', msg, duration, title); },
 });
 
 // Global modal store

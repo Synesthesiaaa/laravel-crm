@@ -120,10 +120,12 @@
                             <template x-for="n in items" :key="n.id">
                                 <div class="notif-item" :class="{ 'notif-unread': !n.read }">
                                     <div class="flex items-start gap-3">
-                                        <div class="notif-dot" :class="n.type === 'error' ? 'bg-red-500' : n.type === 'warning' ? 'bg-amber-500' : 'bg-[var(--color-primary)]'"></div>
+                                        <div class="notif-dot shrink-0 mt-1.5" :class="n.type === 'error' ? 'bg-red-500' : n.type === 'warning' ? 'bg-amber-500' : n.type === 'success' ? 'bg-emerald-500' : 'bg-[var(--color-primary)]'"></div>
                                         <div class="flex-1 min-w-0">
-                                            <p class="text-sm text-[var(--color-on-surface)] leading-snug" x-text="n.message"></p>
-                                            <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5" x-text="n.time"></p>
+                                            <p class="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]" x-text="n.source || 'Notification'"></p>
+                                            <p class="text-sm font-medium text-[var(--color-on-surface)] leading-snug mt-0.5" x-text="n.title || 'Update'"></p>
+                                            <p class="text-xs text-[var(--color-on-surface-muted)] leading-snug mt-0.5" x-text="n.message"></p>
+                                            <p class="text-[11px] text-[var(--color-on-surface-dim)] mt-1" x-text="n.time"></p>
                                         </div>
                                     </div>
                                 </div>
@@ -243,7 +245,10 @@
                         <template x-if="toast.type === 'warning'"><x-icon name="exclamation-triangle" class="w-5 h-5" /></template>
                         <template x-if="toast.type === 'info'"><x-icon name="information-circle" class="w-5 h-5" /></template>
                     </div>
-                    <p class="text-sm flex-1" x-text="toast.message"></p>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]" x-show="toast.title" x-text="toast.title"></p>
+                        <p class="text-sm" :class="toast.title ? 'mt-0.5' : ''" x-text="toast.message"></p>
+                    </div>
                     <button @click="$store.toast.remove(toast.id)" class="shrink-0 opacity-60 hover:opacity-100 transition-opacity" aria-label="Dismiss">
                         <x-icon name="x-mark" class="w-4 h-4" />
                     </button>
@@ -412,18 +417,39 @@
         </div>
     </div>
 
-    {{-- Session flash → Alpine toast (auto-trigger) --}}
+    {{-- Session flash → Alpine toast (all roles; Laravel uses several flash keys) --}}
     @if (session('success'))
         <script>
             document.addEventListener('alpine:init', () => {
-                Alpine.store('toast').success(@js(session('success')));
+                Alpine.store('toast').success(@js(session('success')), 4000, @js(__('Success')));
             });
         </script>
     @endif
     @if (session('error'))
         <script>
             document.addEventListener('alpine:init', () => {
-                Alpine.store('toast').error(@js(session('error')));
+                Alpine.store('toast').error(@js(session('error')), 5000, @js(__('Error')));
+            });
+        </script>
+    @endif
+    @if (session('warning'))
+        <script>
+            document.addEventListener('alpine:init', () => {
+                Alpine.store('toast').warning(@js(session('warning')), 4500, @js(__('Warning')));
+            });
+        </script>
+    @endif
+    @if (session('info'))
+        <script>
+            document.addEventListener('alpine:init', () => {
+                Alpine.store('toast').info(@js(session('info')), 4000, @js(__('Notice')));
+            });
+        </script>
+    @endif
+    @if (session('status'))
+        <script>
+            document.addEventListener('alpine:init', () => {
+                Alpine.store('toast').success(@js(session('status')), 4000, @js(__('Success')));
             });
         </script>
     @endif

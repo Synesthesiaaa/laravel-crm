@@ -20,16 +20,22 @@ class DashboardController extends Controller
         $campaignName = $request->session()->get('campaign_name', 'Dashboard');
         $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['forms' => []];
         $forms = $campaignConfig['forms'] ?? [];
-        $activityTrend = $this->dashboardStats->getActivityTrend($campaign, 14);
-        $topAgents = $this->dashboardStats->getTopAgents($campaign, 10);
+        $kpis = $this->dashboardStats->getKpisForCampaign($campaign);
+        $dailyActivity = $this->dashboardStats->getLast24HourActivityTrend($campaign);
+        $weeklyActivity = $this->dashboardStats->getWeeklyActivityTrend($campaign);
+        $monthlyActivity = $this->dashboardStats->getMonthlyActivityTrend($campaign);
+        $agentLeaderboard = $this->dashboardStats->getAgentLeaderboard($campaign);
 
         return view('dashboard', [
             'campaign' => $campaign,
             'campaignName' => $campaignName,
             'user' => $request->user(),
             'forms' => $forms,
-            'activityTrend' => $activityTrend,
-            'topAgents' => $topAgents,
+            'kpis' => $kpis,
+            'dailyActivity' => $dailyActivity,
+            'weeklyActivity' => $weeklyActivity,
+            'monthlyActivity' => $monthlyActivity,
+            'agentLeaderboard' => $agentLeaderboard,
         ]);
     }
 }
