@@ -176,7 +176,7 @@
                     </x-badge>
                 </td>
                 <td>
-                    <div class="table-actions relative" x-data="{ editOpen: false }">
+                    <div class="table-actions" x-data="{ editOpen: false }" @keydown.escape.window="editOpen = false">
                         <button type="button" class="btn-secondary text-xs px-2 py-1" @click="editOpen = !editOpen">
                             <x-icon name="pencil" class="w-3.5 h-3.5" />
                             <span x-text="editOpen ? 'Cancel' : 'Edit'">Edit</span>
@@ -195,76 +195,90 @@
                             </form>
                         </div>
 
-                        <div x-show="editOpen" x-collapse style="display:none; position: absolute; right: 1rem; top: 100%; z-index: 20; background: var(--color-surface-2); border: 1px solid var(--color-border-strong); border-radius: 10px; padding: 1rem; min-width: 34rem; box-shadow: var(--shadow-3);">
-                            <form method="POST" action="{{ route('admin.agent-screen.update', $f) }}"
-                                  x-data="{ fieldType: '{{ $f->field_type ?? 'text' }}', useCustomVici: @js((bool) $rowViciIsCustom), submitting: false }"
-                                  @submit="submitting = true">
-                                @csrf
-                                @method('PUT')
-                                <div class="grid grid-cols-2 gap-3">
-                                    <x-form.input name="field_key" label="Field Key" :value="$f->field_key" required />
-                                    <x-form.input name="field_label" label="Label" :value="$f->field_label" required />
-                                    <x-form.select name="direction" label="Direction" :options="$directionOptions" :selected="$f->direction ?? 'get'" />
-                                    <x-form.select name="field_type" label="Field Type" :options="$fieldTypeOptions" :selected="$f->field_type ?? 'text'" x-model="fieldType" />
-                                    <x-form.select name="field_width" label="Width" :options="$widthOptions" :selected="$f->field_width ?? 'full'" />
-                                    <x-form.input name="field_order" type="number" label="Order" :value="$f->field_order" />
-                                    <x-form.input name="placeholder" label="Placeholder" :value="$f->placeholder" />
-                                    <div class="form-field">
-                                        <label class="form-label">Required</label>
-                                        <x-form.checkbox name="is_required" label="Mark as required" :checked="$f->is_required" />
-                                    </div>
-                                </div>
-
-                                <div class="mt-3 rounded-lg border border-[var(--color-border)] p-3">
-                                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-                                        <p class="text-xs font-medium text-[var(--color-on-surface)]">Vicidial Field Mapping</p>
-                                        <label class="inline-flex items-center gap-2 text-xs text-[var(--color-on-surface-dim)]">
-                                            <input type="checkbox" class="w-4 h-4 accent-[var(--color-primary)]" x-model="useCustomVici">
-                                            Use custom
-                                        </label>
-                                    </div>
-                                    <div class="grid grid-cols-2 gap-3">
-                                        <div class="form-field" x-show="!useCustomVici" x-cloak>
-                                            <label class="form-label">Vicidial Field</label>
-                                            <select name="vici_field" class="form-select" x-bind:disabled="useCustomVici">
-                                                <option value="">-- Select field --</option>
-                                                @if($writeableViciFields->isNotEmpty())
-                                                    <optgroup label="Writeable">
-                                                        @foreach($writeableViciFields as $key => $meta)
-                                                            <option value="{{ $key }}" @selected($f->vici_field === $key)>{{ $meta['label'] ?? $key }} ({{ $key }})</option>
-                                                        @endforeach
-                                                    </optgroup>
-                                                @endif
-                                                @if($readonlyViciFields->isNotEmpty())
-                                                    <optgroup label="Read-only">
-                                                        @foreach($readonlyViciFields as $key => $meta)
-                                                            <option value="{{ $key }}" @selected($f->vici_field === $key)>{{ $meta['label'] ?? $key }} ({{ $key }})</option>
-                                                        @endforeach
-                                                    </optgroup>
-                                                @endif
-                                            </select>
+                        <div x-show="editOpen" x-transition.opacity x-cloak class="fixed inset-0 z-[60]">
+                            <div class="absolute inset-0 bg-black/45" @click="editOpen = false"></div>
+                            <div class="absolute inset-0 flex items-center justify-center p-4">
+                                <div class="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] p-4 shadow-xl"
+                                     @click.stop>
+                                    <form method="POST" action="{{ route('admin.agent-screen.update', $f) }}"
+                                          x-data="{ fieldType: '{{ $f->field_type ?? 'text' }}', useCustomVici: @js((bool) $rowViciIsCustom), submitting: false }"
+                                          @submit="submitting = true">
+                                        @csrf
+                                        @method('PUT')
+                                        <div class="flex items-center justify-between mb-3">
+                                            <h4 class="text-sm font-semibold text-[var(--color-on-surface)]">Edit Capture Field: {{ $f->field_key }}</h4>
+                                            <button type="button" class="btn-ghost text-xs px-2 py-1" @click="editOpen = false">
+                                                <x-icon name="x-mark" class="w-3.5 h-3.5" />
+                                                Close
+                                            </button>
                                         </div>
-                                        <x-form.input name="vici_field"
-                                                      label="Custom Vicidial Field"
-                                                      :value="$f->vici_field"
-                                                      placeholder="custom_1"
-                                                      x-show="useCustomVici"
-                                                      x-cloak
-                                                      x-bind:disabled="!useCustomVici" />
-                                    </div>
-                                </div>
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <x-form.input name="field_key" label="Field Key" :value="$f->field_key" required />
+                                            <x-form.input name="field_label" label="Label" :value="$f->field_label" required />
+                                            <x-form.select name="direction" label="Direction" :options="$directionOptions" :selected="$f->direction ?? 'get'" />
+                                            <x-form.select name="field_type" label="Field Type" :options="$fieldTypeOptions" :selected="$f->field_type ?? 'text'" x-model="fieldType" />
+                                            <x-form.select name="field_width" label="Width" :options="$widthOptions" :selected="$f->field_width ?? 'full'" />
+                                            <x-form.input name="field_order" type="number" label="Order" :value="$f->field_order" />
+                                            <x-form.input name="placeholder" label="Placeholder" :value="$f->placeholder" />
+                                            <div class="form-field">
+                                                <label class="form-label">Required</label>
+                                                <x-form.checkbox name="is_required" label="Mark as required" :checked="$f->is_required" />
+                                            </div>
+                                        </div>
 
-                                <div class="mt-3" x-show="fieldType === 'select'" x-cloak>
-                                    <x-form.textarea name="options" label="Select Options (one per line)" :value="$rowOptions" rows="3" />
-                                </div>
+                                        <div class="mt-3 rounded-lg border border-[var(--color-border)] p-3">
+                                            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                                <p class="text-xs font-medium text-[var(--color-on-surface)]">Vicidial Field Mapping</p>
+                                                <label class="inline-flex items-center gap-2 text-xs text-[var(--color-on-surface-dim)]">
+                                                    <input type="checkbox" class="w-4 h-4 accent-[var(--color-primary)]" x-model="useCustomVici">
+                                                    Use custom
+                                                </label>
+                                            </div>
+                                            <div class="grid grid-cols-2 gap-3">
+                                                <div class="form-field" x-show="!useCustomVici" x-cloak>
+                                                    <label class="form-label">Vicidial Field</label>
+                                                    <select name="vici_field" class="form-select" x-bind:disabled="useCustomVici">
+                                                        <option value="">-- Select field --</option>
+                                                        @if($writeableViciFields->isNotEmpty())
+                                                            <optgroup label="Writeable">
+                                                                @foreach($writeableViciFields as $key => $meta)
+                                                                    <option value="{{ $key }}" @selected($f->vici_field === $key)>{{ $meta['label'] ?? $key }} ({{ $key }})</option>
+                                                                @endforeach
+                                                            </optgroup>
+                                                        @endif
+                                                        @if($readonlyViciFields->isNotEmpty())
+                                                            <optgroup label="Read-only">
+                                                                @foreach($readonlyViciFields as $key => $meta)
+                                                                    <option value="{{ $key }}" @selected($f->vici_field === $key)>{{ $meta['label'] ?? $key }} ({{ $key }})</option>
+                                                                @endforeach
+                                                            </optgroup>
+                                                        @endif
+                                                    </select>
+                                                </div>
+                                                <x-form.input name="vici_field"
+                                                              label="Custom Vicidial Field"
+                                                              :value="$f->vici_field"
+                                                              placeholder="custom_1"
+                                                              x-show="useCustomVici"
+                                                              x-cloak
+                                                              x-bind:disabled="!useCustomVici" />
+                                            </div>
+                                        </div>
 
-                                <div class="mt-4">
-                                    <button type="submit" class="btn-primary text-sm" :disabled="submitting">
-                                        <x-icon name="check" class="w-4 h-4" />
-                                        Save Changes
-                                    </button>
+                                        <div class="mt-3" x-show="fieldType === 'select'" x-cloak>
+                                            <x-form.textarea name="options" label="Select Options (one per line)" :value="$rowOptions" rows="3" />
+                                        </div>
+
+                                        <div class="mt-4 flex items-center gap-2">
+                                            <button type="submit" class="btn-primary text-sm" :disabled="submitting">
+                                                <x-icon name="check" class="w-4 h-4" />
+                                                Save Changes
+                                            </button>
+                                            <button type="button" class="btn-secondary text-sm" @click="editOpen = false">Cancel</button>
+                                        </div>
+                                    </form>
                                 </div>
-                            </form>
+                            </div>
                         </div>
                     </div>
                 </td>
