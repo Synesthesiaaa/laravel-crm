@@ -16,8 +16,18 @@ class AgentScreenField extends Model
         'field_key',
         'vici_field',
         'field_label',
+        'field_type',
+        'direction',
+        'options',
+        'placeholder',
+        'is_required',
         'field_order',
         'field_width',
+    ];
+
+    protected $casts = [
+        'options' => 'array',
+        'is_required' => 'boolean',
     ];
 
     public function campaign(): BelongsTo

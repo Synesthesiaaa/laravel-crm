@@ -160,6 +160,7 @@ class LeadHydrationService
             ->forCampaign($campaign)
             ->whereNotNull('vici_field')
             ->where('vici_field', '!=', '')
+            ->whereIn('direction', ['get', 'both'])
             ->get(['field_key', 'vici_field']);
 
         foreach ($mappings as $mapping) {

@@ -38,7 +38,7 @@
                     </template>
                 </div>
             </div>
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div class="form-field">
                     <label class="form-label">Phone Number</label>
                     <div class="flex gap-2">
@@ -52,10 +52,6 @@
                 <div class="form-field">
                     <label class="form-label">Lead ID</label>
                     <input type="text" x-model="leadId" class="form-input" placeholder="ViciDial Lead ID" />
-                </div>
-                <div class="form-field">
-                    <label class="form-label">Client Name</label>
-                    <input type="text" x-model="clientName" class="form-input" placeholder="Client full name" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Campaign</label>
@@ -75,6 +71,7 @@
                         <div class="form-field">
                             <label class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
                             <textarea class="form-textarea" name="{{ $field->field_name }}" rows="3"
+                                      @if(!empty($field->placeholder)) placeholder="{{ $field->placeholder }}" @endif
                                       @if($field->required) required @endif></textarea>
                         </div>
                     @elseif($field->field_type === 'select')
@@ -92,6 +89,7 @@
                             <label class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
                             <input type="{{ ($field->field_type ?? 'text') === 'number' ? 'text' : ($field->field_type ?? 'text') }}" class="form-input"
                                    name="{{ $field->field_name }}"
+                                   @if(!empty($field->placeholder)) placeholder="{{ $field->placeholder }}" @endif
                                    @if($field->required) required @endif />
                         </div>
                     @endif
@@ -283,7 +281,6 @@ window.agentScreen = function() {
         sessionId: null,
         phoneNumber: '',
         leadId: '',
-        clientName: '',
         duration: 0,
         timer: null,
         muted: false,
@@ -476,7 +473,6 @@ window.agentScreen = function() {
         applyLeadData(payload = {}) {
             const leadId = payload.lead_id ?? null;
             const phoneNumber = payload.phone_number ?? null;
-            const clientName = payload.client_name ?? null;
             const captureData = payload.capture_data || payload.lead_data || {};
 
             this._suppressLeadWatcher = true;
@@ -488,9 +484,6 @@ window.agentScreen = function() {
                 if (phoneNumber !== null && phoneNumber !== undefined && String(phoneNumber).trim() !== '') {
                     this.phoneNumber = String(phoneNumber);
                     Alpine.store('call').number = this.phoneNumber;
-                }
-                if (clientName !== null && clientName !== undefined && String(clientName).trim() !== '') {
-                    this.clientName = String(clientName);
                 }
             } finally {
                 this._suppressLeadWatcher = false;
@@ -542,6 +535,14 @@ window.agentScreen = function() {
                 if (res.data.active && res.data.call) {
                     this.sessionId = res.data.call.session_id;
                     this.phoneNumber = res.data.call.phone_number || this.phoneNumber;
+                    const incomingLeadId = String(res.data.call.lead_id ?? '').trim();
+                    if (incomingLeadId && incomingLeadId !== this.leadId) {
+                        this._suppressLeadWatcher = true;
+                        this.leadId = incomingLeadId;
+                        this._lastHydratedLeadId = incomingLeadId;
+                        this._suppressLeadWatcher = false;
+                        this.hydrateLead(incomingLeadId);
+                    }
                     this.duration = res.data.call.duration_seconds || 0;
                     const statusMap = { dialing: 'dialing', ringing: 'ringing', answered: 'connected', in_call: 'connected', on_hold: 'hold' };
                     this.callState = statusMap[res.data.call.status] || 'connected';
@@ -591,10 +592,24 @@ window.agentScreen = function() {
                         const dataLine = lines.find(l => l.includes('INCALL') && l.includes('|'));
                         if (dataLine) {
                             const parts = dataLine.split('|');
+                            const lead = (parts[2] || '').trim();
+                            let shouldHydrate = false;
+                            let phoneChanged = false;
+                            if (lead && lead !== this.leadId) {
+                                this._suppressLeadWatcher = true;
+                                this.leadId = lead;
+                                this._lastHydratedLeadId = lead;
+                                this._suppressLeadWatcher = false;
+                                shouldHydrate = true;
+                            }
                             const phone = (parts[10] || '').trim();
-                            if (phone && /^\d+$/.test(phone)) {
+                            if (phone && /^\d+$/.test(phone) && phone !== this.phoneNumber) {
                                 this.phoneNumber = phone;
                                 Alpine.store('call').number = phone;
+                                phoneChanged = true;
+                            }
+                            if ((shouldHydrate || phoneChanged) && lead) {
+                                this.hydrateLead(lead);
                             }
                         }
                     }
@@ -832,7 +847,6 @@ window.agentScreen = function() {
                 this.applyLeadData({
                     lead_id: res.data.lead_id,
                     phone_number: res.data.phone_number,
-                    client_name: res.data.client_name,
                     capture_data: res.data.lead_data || {},
                 });
                 // Wait for SIP.js state + AMI events to transition dialing -> ringing -> connected.
@@ -968,7 +982,6 @@ window.agentScreen = function() {
                 this.applyLeadData({
                     ...res.data.lead,
                     capture_data: res.data.lead_data || res.data.lead?.capture_data || {},
-                    client_name: res.data.client_name || res.data.lead?.client_name || '',
                 });
                 this.predictiveDelay = Number(res.data.predictive_delay_seconds || this.predictiveDelay || 3);
                 this.sessionId = res.data.session_id || null;

@@ -112,6 +112,63 @@ class LeadHydrationServiceTest extends TestCase
         $this->assertSame([], $data['raw_fields']);
     }
 
+    public function test_hydrate_filters_capture_data_by_direction_get_and_both_only(): void
+    {
+        $user = User::factory()->create();
+        AgentScreenField::create([
+            'campaign_code' => 'mbsales',
+            'field_key' => 'email_get',
+            'vici_field' => 'email',
+            'direction' => 'get',
+            'field_label' => 'Email (GET)',
+            'field_order' => 1,
+            'field_width' => 'full',
+        ]);
+        AgentScreenField::create([
+            'campaign_code' => 'mbsales',
+            'field_key' => 'first_name_both',
+            'vici_field' => 'first_name',
+            'direction' => 'both',
+            'field_label' => 'First Name (BOTH)',
+            'field_order' => 2,
+            'field_width' => 'full',
+        ]);
+        AgentScreenField::create([
+            'campaign_code' => 'mbsales',
+            'field_key' => 'last_name_post',
+            'vici_field' => 'last_name',
+            'direction' => 'post',
+            'field_label' => 'Last Name (POST)',
+            'field_order' => 3,
+            'field_width' => 'full',
+        ]);
+        AgentScreenField::create([
+            'campaign_code' => 'mbsales',
+            'field_key' => 'phone_none',
+            'vici_field' => 'phone_number',
+            'direction' => 'none',
+            'field_label' => 'Phone (NONE)',
+            'field_order' => 4,
+            'field_width' => 'full',
+        ]);
+
+        $service = $this->makeService(OperationResult::success([
+            'rows' => [
+                ['lead_id', 'phone_number', 'first_name', 'last_name', 'email'],
+                ['909', '15550009999', 'Alice', 'Brown', 'alice@example.test'],
+            ],
+        ]));
+
+        $data = $service->hydrate($user, 'mbsales', 909, null);
+
+        $this->assertSame([
+            'email_get' => 'alice@example.test',
+            'first_name_both' => 'Alice',
+        ], $data['capture_data']);
+        $this->assertArrayNotHasKey('last_name_post', $data['capture_data']);
+        $this->assertArrayNotHasKey('phone_none', $data['capture_data']);
+    }
+
     private function makeService(OperationResult $result): LeadHydrationService
     {
         $leadService = Mockery::mock(LeadService::class);
