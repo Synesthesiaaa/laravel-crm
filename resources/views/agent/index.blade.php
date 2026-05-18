@@ -499,6 +499,15 @@ window.agentScreen = function() {
                 if (!Object.prototype.hasOwnProperty.call(captureData, el.name)) return;
                 const value = captureData[el.name];
                 if (value === null || value === undefined) return;
+                if (el instanceof HTMLInputElement && el.type === 'checkbox') {
+                    const normalized = typeof value === 'string' ? value.trim().toLowerCase() : value;
+                    el.checked = [true, 1, '1', 'true', 'yes', 'on'].includes(normalized);
+                    return;
+                }
+                if (el instanceof HTMLInputElement && el.type === 'radio') {
+                    el.checked = String(el.value) === String(value);
+                    return;
+                }
                 el.value = String(value);
             });
         },
