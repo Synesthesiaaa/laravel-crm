@@ -321,7 +321,6 @@ window.agentScreen = function() {
 
         _echoUnsubscribe: null,
         _statusPollInterval: null,
-        _inboundPollInterval: null,
         features: @js($telephonyFeatures ?? []),
 
         init() {
@@ -350,8 +349,6 @@ window.agentScreen = function() {
             if (this.featureEnabled('session_controls')) {
                 this.syncVicidialStatus();
             }
-            this.pollActiveInbound();
-            this._inboundPollInterval = setInterval(() => this.pollActiveInbound(), 3000);
 
             const te = window.TelephonyEcho;
             const wsAvailable = te && te.initEcho && te.isBroadcastEnabled();
@@ -546,37 +543,6 @@ window.agentScreen = function() {
             } catch (e) {
                 // Autofill is best-effort; avoid noisy toasts while typing lead IDs.
             }
-        },
-
-        async pollActiveInbound() {
-            if (this.sessionId) return;
-            if (this.leadId || this.phoneNumber) return;
-
-            try {
-                const res = await window.axios.get('/api/leads/active-inbound');
-                if (!res.data?.active) return;
-
-                const payload = {
-                    lead_id: res.data?.lead_id ?? null,
-                    phone_number: res.data?.phone_number ?? null,
-                    capture_data: res.data?.capture_data ?? {},
-                };
-
-                this.callState = 'connected';
-                Alpine.store('call').state = 'connected';
-                if (payload.phone_number) {
-                    Alpine.store('call').number = String(payload.phone_number);
-                }
-
-                this.applyLeadData(payload);
-
-                const captureData = payload.capture_data || {};
-                if (!captureData || Object.keys(captureData).length === 0) {
-                    if (payload.lead_id || payload.phone_number) {
-                        this.hydrateLead(payload.lead_id, payload.phone_number);
-                    }
-                }
-            } catch {}
         },
 
         featureEnabled(key) {

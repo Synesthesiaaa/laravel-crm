@@ -9,7 +9,6 @@ class LeadHydrationService
 {
     public function __construct(
         protected LeadService $leadService,
-        protected VicidialNonAgentApiService $nonAgentApi,
         protected TelephonyLogger $telephonyLogger,
     ) {}
 
@@ -69,61 +68,6 @@ class LeadHydrationService
         $payload['capture_data'] = $this->mapCaptureData($campaign, $rawFields);
 
         return $payload;
-    }
-
-    /**
-     * Probe VICIdial agent_status for active inbound call details.
-     *
-     * @return array{
-     *   lead_id:?string,
-     *   phone_number:?string,
-     *   client_name:?string,
-     *   capture_data:array<string,string>,
-     *   raw_fields:array<string,string>
-     * }|null
-     */
-    public function probeInbound(User $user, string $campaign): ?array
-    {
-        $result = $this->nonAgentApi->execute($user, $campaign, 'agent_status', [
-            'agent_user' => (string) $user->vici_user,
-            'stage' => 'pipe',
-        ], true);
-
-        if (! $result->success) {
-            return null;
-        }
-
-        $payload = (array) ($result->data ?? []);
-        $raw = (string) ($payload['raw_response'] ?? '');
-        if ($raw === '' || ! str_contains($raw, 'INCALL')) {
-            return null;
-        }
-
-        $dataLine = $this->extractIncallLine($raw);
-        if ($dataLine === null) {
-            return null;
-        }
-
-        [$leadId, $phoneNumber] = $this->extractLeadAndPhone($dataLine);
-        if (! $leadId && ! $phoneNumber) {
-            return null;
-        }
-
-        $hydrated = $this->hydrate(
-            $user,
-            $campaign,
-            $leadId ? (int) $leadId : null,
-            $phoneNumber ?: null,
-        );
-
-        $this->telephonyLogger->event('LeadHydrationService', 'probe_inbound', 'Active inbound probe result', [
-            'campaign' => $campaign,
-            'lead_id' => $hydrated['lead_id'] ?? null,
-            'phone_number' => $hydrated['phone_number'] ?? null,
-            'capture_keys' => array_keys($hydrated['capture_data'] ?? []),
-        ]);
-
-        return $hydrated;
     }
 
     /**
@@ -271,61 +215,5 @@ class LeadHydrationService
         }
 
         return preg_match('/^[a-z0-9_]+$/', $field) ? $field : '';
-    }
-
-    private function extractIncallLine(string $raw): ?string
-    {
-        $lines = preg_split("/\r\n|\n|\r/", $raw) ?: [];
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if ($line === '') {
-                continue;
-            }
-            if (str_contains($line, 'INCALL') && str_contains($line, '|')) {
-                return $line;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * @return array{0:?string,1:?string}
-     */
-    private function extractLeadAndPhone(string $dataLine): array
-    {
-        $parts = array_map('trim', explode('|', $dataLine));
-        $numericTokens = [];
-
-        foreach ($parts as $part) {
-            if ($part !== '' && ctype_digit($part)) {
-                $numericTokens[] = $part;
-            }
-        }
-
-        if ($numericTokens === []) {
-            return [null, null];
-        }
-
-        $phoneNumber = null;
-        foreach ($numericTokens as $token) {
-            $length = strlen($token);
-            if ($length >= 7 && $length <= 15) {
-                if ($phoneNumber === null || $length > strlen($phoneNumber)) {
-                    $phoneNumber = $token;
-                }
-            }
-        }
-
-        $leadId = null;
-        foreach ($numericTokens as $token) {
-            if ($phoneNumber !== null && $token === $phoneNumber) {
-                continue;
-            }
-            $leadId = $token;
-            break;
-        }
-
-        return [$leadId, $phoneNumber];
     }
 }
