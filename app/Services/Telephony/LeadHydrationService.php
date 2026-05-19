@@ -156,22 +156,88 @@ class LeadHydrationService
             $normalized[strtolower($key)] = $value;
         }
 
+        $aliasIndex = $this->buildAliasIndex((array) config('vicidial_fields.aliases', []));
         $mappings = AgentScreenField::query()
             ->forCampaign($campaign)
-            ->whereNotNull('vici_field')
-            ->where('vici_field', '!=', '')
-            ->whereIn('direction', ['get', 'both'])
-            ->get(['field_key', 'vici_field']);
+            ->where(function ($query) {
+                $query->whereNull('direction')
+                    ->orWhereIn('direction', ['get', 'both']);
+            })
+            ->get(['field_key', 'vici_field', 'direction']);
 
         foreach ($mappings as $mapping) {
-            $viciField = strtolower(trim((string) $mapping->vici_field));
-            if ($viciField === '' || ! array_key_exists($viciField, $normalized)) {
+            $viciField = $this->resolveViciKey(
+                (string) $mapping->field_key,
+                $mapping->vici_field !== null ? (string) $mapping->vici_field : null,
+                $aliasIndex
+            );
+            if ($viciField === null || ! array_key_exists($viciField, $normalized)) {
                 continue;
             }
+
             $captureData[$mapping->field_key] = (string) $normalized[$viciField];
         }
 
         return $captureData;
+    }
+
+    /**
+     * @param  array<string, mixed>  $aliases
+     * @return array<string, string>
+     */
+    protected function buildAliasIndex(array $aliases): array
+    {
+        $aliasIndex = [];
+
+        foreach ($aliases as $canonical => $variants) {
+            $canonicalKey = $this->normalizeFieldName((string) $canonical);
+            if ($canonicalKey === '') {
+                continue;
+            }
+
+            $aliasIndex[$canonicalKey] = $canonicalKey;
+            if (! is_array($variants)) {
+                continue;
+            }
+
+            foreach ($variants as $variant) {
+                $variantKey = $this->normalizeFieldName((string) $variant);
+                if ($variantKey === '') {
+                    continue;
+                }
+
+                $aliasIndex[$variantKey] = $canonicalKey;
+            }
+        }
+
+        return $aliasIndex;
+    }
+
+    /**
+     * @param  array<string, string>  $aliasIndex
+     */
+    protected function resolveViciKey(string $fieldKey, ?string $viciField, array $aliasIndex): ?string
+    {
+        $explicit = $this->normalizeFieldName((string) $viciField);
+        if ($explicit !== '') {
+            return $explicit;
+        }
+
+        $normalizedFieldKey = $this->normalizeFieldName($fieldKey);
+        if ($normalizedFieldKey === '') {
+            return null;
+        }
+
+        if (isset($aliasIndex[$normalizedFieldKey])) {
+            return $aliasIndex[$normalizedFieldKey];
+        }
+
+        $strippedFieldKey = preg_replace('/^(customer_|cust_|lead_)+/', '', $normalizedFieldKey) ?: '';
+        if ($strippedFieldKey !== '' && isset($aliasIndex[$strippedFieldKey])) {
+            return $aliasIndex[$strippedFieldKey];
+        }
+
+        return $normalizedFieldKey;
     }
 
     /**

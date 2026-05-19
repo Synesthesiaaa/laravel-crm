@@ -98,6 +98,64 @@ class LeadHydrationServiceTest extends TestCase
         $this->assertArrayNotHasKey('missing_field', $data['capture_data']);
     }
 
+    public function test_hydrate_falls_back_to_field_key_when_no_vici_field_set(): void
+    {
+        $user = User::factory()->create();
+
+        AgentScreenField::create([
+            'campaign_code' => 'mbsales',
+            'field_key' => 'email',
+            'vici_field' => null,
+            'direction' => 'get',
+            'field_label' => 'Email',
+            'field_order' => 1,
+            'field_width' => 'full',
+        ]);
+
+        $service = $this->makeService(OperationResult::success([
+            'rows' => [
+                ['lead_id', 'phone_number', 'email'],
+                ['404', '15554440000', 'fallback@example.test'],
+            ],
+        ]));
+
+        $data = $service->hydrate($user, 'mbsales', 404, null);
+
+        $this->assertSame(['email' => 'fallback@example.test'], $data['capture_data']);
+    }
+
+    public function test_hydrate_uses_alias_map_for_renamed_fields(): void
+    {
+        config([
+            'vicidial_fields.aliases' => [
+                'first_name' => ['customer_first_name'],
+            ],
+        ]);
+
+        $user = User::factory()->create();
+
+        AgentScreenField::create([
+            'campaign_code' => 'mbsales',
+            'field_key' => 'customer_first_name',
+            'vici_field' => null,
+            'direction' => 'get',
+            'field_label' => 'Customer First Name',
+            'field_order' => 1,
+            'field_width' => 'full',
+        ]);
+
+        $service = $this->makeService(OperationResult::success([
+            'rows' => [
+                ['lead_id', 'phone_number', 'first_name'],
+                ['505', '15555550000', 'AliasName'],
+            ],
+        ]));
+
+        $data = $service->hydrate($user, 'mbsales', 505, null);
+
+        $this->assertSame(['customer_first_name' => 'AliasName'], $data['capture_data']);
+    }
+
     public function test_hydrate_returns_safe_defaults_when_vicidial_lookup_fails(): void
     {
         $user = User::factory()->create();

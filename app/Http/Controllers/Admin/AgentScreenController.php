@@ -33,7 +33,7 @@ class AgentScreenController extends Controller
             'campaigns' => $campaigns,
             'fields' => $fields,
             'selectedCampaign' => $selectedCampaign,
-            'viciFields' => config('vicidial_fields', []),
+            'viciFields' => config('vicidial_fields.fields', []),
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
         ]);
     }

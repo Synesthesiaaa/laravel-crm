@@ -430,6 +430,11 @@ window.agentScreen = function() {
                     this.callState = 'connected';
                     Alpine.store('call').state = 'connected';
                     Alpine.store('call').startTimer();
+                    const wsLeadId = p.lead_id ?? this.leadId ?? null;
+                    const wsPhoneNumber = p.phone_number ?? this.phoneNumber ?? null;
+                    if (['answered', 'in_call'].includes(p.to_status) && !this.captureFormHasValues() && (wsLeadId || wsPhoneNumber)) {
+                        this.hydrateLead(wsLeadId, wsPhoneNumber);
+                    }
                     Alpine.store('toast').success('Call connected.');
                 }
             }
@@ -514,6 +519,25 @@ window.agentScreen = function() {
                     return;
                 }
                 el.value = String(value);
+            });
+        },
+
+        captureFormHasValues() {
+            const form = document.getElementById('capture-form');
+            if (!form) {
+                return false;
+            }
+
+            return Array.from(form.querySelectorAll('input, select, textarea')).some((el) => {
+                if (!el.name || el.name.startsWith('_')) {
+                    return false;
+                }
+
+                if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
+                    return !!el.checked;
+                }
+
+                return String(el.value ?? '').trim() !== '';
             });
         },
 
@@ -869,6 +893,11 @@ window.agentScreen = function() {
                     phone_number: res.data.phone_number,
                     capture_data: res.data.lead_data || {},
                 });
+                const returnedCaptureData = res.data.lead_data || {};
+                const hasReturnedCaptureData = returnedCaptureData && typeof returnedCaptureData === 'object' && Object.keys(returnedCaptureData).length > 0;
+                if (!hasReturnedCaptureData && (res.data.lead_id || res.data.phone_number)) {
+                    this.hydrateLead(res.data.lead_id ?? null, res.data.phone_number ?? null);
+                }
                 // Wait for SIP.js state + AMI events to transition dialing -> ringing -> connected.
             } catch (e) {
                 this.callState = 'idle';

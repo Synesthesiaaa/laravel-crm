@@ -71,7 +71,7 @@ class AgentCaptureController extends Controller
             return;
         }
 
-        $catalog = (array) config('vicidial_fields', []);
+        $catalog = (array) config('vicidial_fields.fields', []);
         $updateFields = ['lead_id' => $leadId];
 
         foreach ($fields as $field) {
