@@ -7,7 +7,7 @@
 @section('content')
 <x-page-header title="Edit Capture Record"
     description="Update captured details for this lead interaction."
-    :breadcrumbs="['Admin' => route('admin.dashboard'), 'Capture Records' => route('admin.capture-records.index'), 'Edit' => null]" />
+    :breadcrumbs="['Admin' => route('admin.dashboard'), 'Capture Records' => route('admin.capture-records.index', ['campaign' => $campaign]), 'Edit' => null]" />
 
 <x-validation-errors />
 
@@ -26,6 +26,7 @@
     <div class="p-6">
         <form method="POST" action="{{ route('admin.capture-records.update', ['record' => $record->id]) }}">
             @csrf
+            <input type="hidden" name="campaign" value="{{ $campaign }}">
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                 <x-form.input
@@ -99,7 +100,7 @@
                     <x-icon name="check" class="w-4 h-4" />
                     Update
                 </button>
-                <a href="{{ route('admin.capture-records.index') }}" class="btn-ghost">Cancel</a>
+                <a href="{{ route('admin.capture-records.index', ['campaign' => $campaign]) }}" class="btn-ghost">Cancel</a>
             </div>
         </form>
     </div>

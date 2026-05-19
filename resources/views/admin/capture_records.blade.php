@@ -25,6 +25,7 @@
 <div class="md-card mb-4">
     <div class="p-4">
         <form method="GET" action="{{ route('admin.capture-records.index') }}" class="flex flex-wrap items-end gap-4">
+            <x-form.select name="campaign" label="Campaign" :options="$campaigns" :selected="$selectedCampaign" :empty="false" />
             <x-form.input name="agent" label="Agent" :value="$filters['agent']" />
             <x-form.input name="lead_id" label="Lead ID" :value="$filters['lead_id']" />
             <x-form.input name="phone" label="Phone" :value="$filters['phone']" />
@@ -47,6 +48,7 @@
 <div class="mb-4 flex justify-end">
     <form method="POST" action="{{ route('admin.capture-records.export') }}">
         @csrf
+        <input type="hidden" name="campaign" value="{{ $selectedCampaign }}">
         <input type="hidden" name="agent" value="{{ $filters['agent'] }}">
         <input type="hidden" name="lead_id" value="{{ $filters['lead_id'] }}">
         <input type="hidden" name="phone" value="{{ $filters['phone'] }}">
@@ -63,6 +65,7 @@
     <thead>
         <tr>
             <th>Submitted At</th>
+            <th>Campaign</th>
             <th>Agent</th>
             <th>Lead ID</th>
             <th>Phone</th>
@@ -73,7 +76,7 @@
         </tr>
     </thead>
     @if($records->isEmpty())
-        <x-table.empty :colspan="5 + $fields->count()" message="No capture records found." />
+        <x-table.empty :colspan="6 + $fields->count()" message="No capture records found." />
     @else
     <tbody>
         @foreach($records as $record)
@@ -82,6 +85,7 @@
                 <td class="whitespace-nowrap text-sm text-[var(--color-on-surface-muted)]">
                     {{ $record->created_at?->format('Y-m-d H:i:s') }}
                 </td>
+                <td>{{ $campaigns[$record->campaign_code] ?? $record->campaign_code }}</td>
                 <td>{{ $record->agent }}</td>
                 <td class="font-mono text-sm">{{ $record->lead_id ?? '—' }}</td>
                 <td class="font-mono text-sm">{{ $record->phone_number ?? '—' }}</td>
@@ -93,7 +97,7 @@
                         const ok = await Alpine.store('confirm').ask('Delete capture record?', 'This record will be permanently removed.');
                         if (ok) form.submit();
                     }}">
-                        <a href="{{ route('admin.capture-records.edit', ['record' => $record->id]) }}"
+                        <a href="{{ route('admin.capture-records.edit', ['record' => $record->id, 'campaign' => $selectedCampaign]) }}"
                            class="btn-secondary text-xs px-2 py-1">
                             <x-icon name="pencil" class="w-3.5 h-3.5" />
                             Edit
@@ -101,6 +105,7 @@
                         <form method="POST" action="{{ route('admin.capture-records.destroy') }}" x-ref="delFormCR{{ $record->id }}">
                             @csrf
                             <input type="hidden" name="id" value="{{ $record->id }}">
+                            <input type="hidden" name="campaign" value="{{ $selectedCampaign }}">
                             <button type="button" class="btn-danger text-xs px-2 py-1"
                                     @click="del($refs['delFormCR{{ $record->id }}'])">
                                 <x-icon name="trash" class="w-3.5 h-3.5" />

@@ -5,29 +5,38 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\AgentCaptureRecord;
 use App\Models\AgentScreenField;
+use App\Services\CampaignService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CaptureRecordsController extends Controller
 {
+    public function __construct(
+        protected CampaignService $campaignService,
+    ) {}
+
     public function index(Request $request): View
     {
-        $campaign = $this->campaign($request);
+        $campaigns = $this->campaignsList();
+        $campaign = $this->resolveCampaign($request, $campaigns);
         $fields = $this->fieldsForCampaign($campaign);
         $records = $this->buildFilteredQuery($campaign, $request)
             ->paginate(50)
             ->withQueryString();
 
         return view('admin.capture_records', [
-            'campaign' => $campaign,
+            'campaigns' => $campaigns,
+            'selectedCampaign' => $campaign,
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
             'fields' => $fields,
             'records' => $records,
             'filters' => [
+                'campaign' => $campaign,
                 'agent' => (string) $request->input('agent', ''),
                 'lead_id' => (string) $request->input('lead_id', ''),
                 'phone' => (string) $request->input('phone', ''),
@@ -39,10 +48,11 @@ class CaptureRecordsController extends Controller
 
     public function edit(Request $request, AgentCaptureRecord $record): View|RedirectResponse
     {
-        $campaign = $this->campaign($request);
+        $campaigns = $this->campaignsList();
+        $campaign = $this->resolveCampaign($request, $campaigns);
         if (! $this->recordBelongsToCampaign($record, $campaign)) {
             return redirect()
-                ->route('admin.capture-records.index')
+                ->route('admin.capture-records.index', ['campaign' => $campaign])
                 ->with('error', 'Invalid capture record.');
         }
 
@@ -56,10 +66,11 @@ class CaptureRecordsController extends Controller
 
     public function update(Request $request, AgentCaptureRecord $record): RedirectResponse
     {
-        $campaign = $this->campaign($request);
+        $campaigns = $this->campaignsList();
+        $campaign = $this->resolveCampaign($request, $campaigns);
         if (! $this->recordBelongsToCampaign($record, $campaign)) {
             return redirect()
-                ->route('admin.capture-records.index')
+                ->route('admin.capture-records.index', ['campaign' => $campaign])
                 ->with('error', 'Invalid capture record.');
         }
 
@@ -82,13 +93,14 @@ class CaptureRecordsController extends Controller
         ]);
 
         return redirect()
-            ->route('admin.capture-records.index')
+            ->route('admin.capture-records.index', ['campaign' => $campaign])
             ->with('success', 'Capture record updated.');
     }
 
     public function destroy(Request $request): RedirectResponse
     {
-        $campaign = $this->campaign($request);
+        $campaigns = $this->campaignsList();
+        $campaign = $this->resolveCampaign($request, $campaigns);
         $validated = $request->validate([
             'id' => ['required', 'integer', 'exists:agent_capture_records,id'],
         ]);
@@ -101,13 +113,14 @@ class CaptureRecordsController extends Controller
         $record->delete();
 
         return redirect()
-            ->route('admin.capture-records.index')
+            ->route('admin.capture-records.index', ['campaign' => $campaign])
             ->with('success', 'Capture record deleted.');
     }
 
     public function export(Request $request): StreamedResponse
     {
-        $campaign = $this->campaign($request);
+        $campaigns = $this->campaignsList();
+        $campaign = $this->resolveCampaign($request, $campaigns);
         $request->validate([
             'agent' => ['nullable', 'string', 'max:255'],
             'lead_id' => ['nullable', 'string', 'max:50'],
@@ -123,13 +136,14 @@ class CaptureRecordsController extends Controller
 
         return response()->streamDownload(function () use ($query, $fieldKeys) {
             $out = fopen('php://output', 'w');
-            $header = ['id', 'created_at', 'agent', 'lead_id', 'phone_number', ...$fieldKeys];
+            $header = ['id', 'campaign', 'created_at', 'agent', 'lead_id', 'phone_number', ...$fieldKeys];
             fputcsv($out, $header);
 
             foreach ($query->cursor() as $record) {
                 $captureData = is_array($record->capture_data) ? $record->capture_data : [];
                 $row = [
                     (string) $record->id,
+                    (string) ($record->campaign_code ?? ''),
                     optional($record->created_at)->format('Y-m-d H:i:s') ?? '',
                     (string) ($record->agent ?? ''),
                     (string) ($record->lead_id ?? ''),
@@ -147,9 +161,32 @@ class CaptureRecordsController extends Controller
         }, $filename, ['Content-Type' => 'text/csv']);
     }
 
-    private function campaign(Request $request): string
+    /**
+     * @return array<string, string>  code => display name
+     */
+    private function campaignsList(): array
     {
-        return (string) $request->session()->get('campaign', 'mbsales');
+        return collect($this->campaignService->getCampaigns())
+            ->mapWithKeys(fn ($cfg, $code) => [$code => $cfg['name'] ?? $code])
+            ->all();
+    }
+
+    /**
+     * @param  array<string, string>  $campaigns
+     */
+    private function resolveCampaign(Request $request, array $campaigns): string
+    {
+        $input = trim((string) $request->input('campaign', ''));
+        if ($input !== '' && array_key_exists($input, $campaigns)) {
+            return $input;
+        }
+
+        $session = (string) $request->session()->get('campaign', '');
+        if ($session !== '' && array_key_exists($session, $campaigns)) {
+            return $session;
+        }
+
+        return array_key_first($campaigns) ?? 'mbsales';
     }
 
     /**

@@ -153,7 +153,7 @@ class CaptureRecordsAdminTest extends TestCase
                     'unknown_field' => 'should_not_save',
                 ],
             ])
-            ->assertRedirect(route('admin.capture-records.index'));
+            ->assertRedirect(route('admin.capture-records.index', ['campaign' => 'mbsales']));
 
         $record->refresh();
         $this->assertSame('202', (string) $record->lead_id);
@@ -174,7 +174,7 @@ class CaptureRecordsAdminTest extends TestCase
         $this->actingAs($this->admin)
             ->withSession($this->campaignSession())
             ->post(route('admin.capture-records.destroy'), ['id' => $record->id])
-            ->assertRedirect(route('admin.capture-records.index'));
+            ->assertRedirect(route('admin.capture-records.index', ['campaign' => 'mbsales']));
 
         $this->assertDatabaseMissing('agent_capture_records', ['id' => $record->id]);
     }
@@ -228,9 +228,98 @@ class CaptureRecordsAdminTest extends TestCase
         $response->assertOk()->assertStreamed();
 
         $content = $response->streamedContent();
-        $this->assertStringContainsString('id,created_at,agent,lead_id,phone_number,customer_email,consent', $content);
+        $this->assertStringContainsString('id,campaign,created_at,agent,lead_id,phone_number,customer_email,consent', $content);
         $this->assertStringContainsString('agent_export', $content);
         $this->assertStringContainsString('export@example.com', $content);
         $this->assertStringNotContainsString('other@example.com', $content);
+    }
+
+    public function test_index_filters_by_campaign_query_param_and_shows_campaign_column(): void
+    {
+        // Second campaign
+        Campaign::factory()->create([
+            'code' => 'othercamp',
+            'name' => 'Other Camp',
+            'color' => '#ef4444',
+        ]);
+
+        AgentCaptureRecord::create([
+            'campaign_code' => 'mbsales',
+            'lead_id' => 111,
+            'phone_number' => '639111111111',
+            'agent' => 'agent_mb',
+            'capture_data' => ['notes' => 'mb record'],
+        ]);
+        AgentCaptureRecord::create([
+            'campaign_code' => 'othercamp',
+            'lead_id' => 222,
+            'phone_number' => '639222222222',
+            'agent' => 'agent_oc',
+            'capture_data' => ['notes' => 'other record'],
+        ]);
+
+        // Default scope (session = mbsales) — sees only mbsales
+        $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->get(route('admin.capture-records.index'))
+            ->assertOk()
+            ->assertSee('Campaign')          // column header is present
+            ->assertSee('agent_mb')
+            ->assertDontSee('agent_oc');
+
+        // Explicit campaign=othercamp — sees only othercamp
+        $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->get(route('admin.capture-records.index', ['campaign' => 'othercamp']))
+            ->assertOk()
+            ->assertSee('Other Camp')        // campaign name in the row
+            ->assertSee('agent_oc')
+            ->assertDontSee('agent_mb');
+    }
+
+    public function test_export_respects_campaign_query_param(): void
+    {
+        Campaign::factory()->create([
+            'code' => 'othercamp',
+            'name' => 'Other Camp',
+            'color' => '#ef4444',
+        ]);
+
+        AgentScreenField::create([
+            'campaign_code' => 'othercamp',
+            'field_key' => 'sale_amount',
+            'field_label' => 'Sale Amount',
+            'field_order' => 1,
+            'field_width' => 'full',
+        ]);
+
+        AgentCaptureRecord::create([
+            'campaign_code' => 'mbsales',
+            'lead_id' => 500,
+            'phone_number' => '639100000000',
+            'agent' => 'agent_mb_exp',
+            'capture_data' => ['sale_amount' => '100'],
+        ]);
+        AgentCaptureRecord::create([
+            'campaign_code' => 'othercamp',
+            'lead_id' => 501,
+            'phone_number' => '639200000000',
+            'agent' => 'agent_oc_exp',
+            'capture_data' => ['sale_amount' => '250'],
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->post(route('admin.capture-records.export'), [
+                'campaign' => 'othercamp',
+            ]);
+
+        $response->assertOk()->assertStreamed();
+
+        $content = $response->streamedContent();
+        $this->assertStringContainsString('agent_oc_exp', $content);
+        $this->assertStringContainsString('250', $content);
+        $this->assertStringNotContainsString('agent_mb_exp', $content);
+        $this->assertStringNotContainsString('100', $content);
     }
 }

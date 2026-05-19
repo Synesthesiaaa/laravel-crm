@@ -463,10 +463,15 @@ window.agentScreen = function() {
 
         /** WebSocket handler: inbound/dialer call screen pop */
         _handleInboundCallWs(p) {
+            const incomingCaptureData = p.capture_data || p.lead_data || {};
             this.applyLeadData({
                 ...p,
-                capture_data: p.capture_data || p.lead_data || {},
+                capture_data: incomingCaptureData,
             });
+            const hasIncomingCaptureData = incomingCaptureData && typeof incomingCaptureData === 'object' && Object.keys(incomingCaptureData).length > 0;
+            if (!hasIncomingCaptureData) {
+                this.hydrateLead(p.lead_id ?? null, p.phone_number ?? null);
+            }
             Alpine.store('toast').info('Incoming call: ' + (p.phone_number || 'unknown'));
         },
 
@@ -512,18 +517,24 @@ window.agentScreen = function() {
             });
         },
 
-        async hydrateLead(leadIdOverride = null) {
+        async hydrateLead(leadIdOverride = null, phoneNumberOverride = null) {
             const leadId = String(leadIdOverride || this.leadId || '').trim();
-            if (!leadId) {
+            const phoneNumber = String(phoneNumberOverride || this.phoneNumber || '').trim();
+            if (!leadId && !phoneNumber) {
                 return;
             }
 
             try {
+                const params = {
+                    campaign: this.crmCampaign(),
+                };
+                if (leadId) {
+                    params.lead_id = leadId;
+                } else {
+                    params.phone_number = phoneNumber;
+                }
                 const res = await window.axios.get('/api/leads/hydrate', {
-                    params: {
-                        campaign: this.crmCampaign(),
-                        lead_id: leadId,
-                    },
+                    params,
                 });
                 const data = res.data?.data;
                 if (data) {
