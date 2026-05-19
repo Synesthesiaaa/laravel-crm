@@ -78,6 +78,7 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::get('api/leads/search', [\App\Http\Controllers\Api\LeadController::class, 'search'])->name('api.leads.search')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
     Route::get('api/leads/info', [\App\Http\Controllers\Api\LeadController::class, 'info'])->name('api.leads.info')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
     Route::get('api/leads/hydrate', [\App\Http\Controllers\Api\LeadController::class, 'hydrate'])->name('api.leads.hydrate')->middleware('throttle:api');
+    Route::get('api/leads/active-inbound', \App\Http\Controllers\Api\ActiveInboundController::class)->name('api.leads.active-inbound')->middleware('throttle:api');
     Route::get('api/leads/field', [\App\Http\Controllers\Api\LeadController::class, 'field'])->name('api.leads.field')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
     Route::post('api/leads/add', [\App\Http\Controllers\Api\LeadController::class, 'add'])->name('api.leads.add')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
     Route::post('api/leads/update', [\App\Http\Controllers\Api\LeadController::class, 'update'])->name('api.leads.update')->middleware(['throttle:api', 'telephony_feature:lead_tools']);

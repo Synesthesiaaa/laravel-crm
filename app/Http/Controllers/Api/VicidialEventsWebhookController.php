@@ -7,8 +7,8 @@ use App\Events\VicidialAgentEvent;
 use App\Http\Controllers\Controller;
 use App\Models\CallSession;
 use App\Models\User;
-use App\Models\VicidialAgentSession;
 use App\Services\Telephony\CallStateService;
+use App\Services\Telephony\AgentCampaignResolver;
 use App\Services\Telephony\LeadHydrationService;
 use App\Services\Telephony\TelephonyLogger;
 use Illuminate\Http\JsonResponse;
@@ -85,7 +85,7 @@ class VicidialEventsWebhookController extends Controller
             $this->callStateService->transition($session, CallSession::STATUS_IN_CALL);
         }
 
-        $campaignCode = $this->resolveCampaignForUser($user, $session);
+        $campaignCode = AgentCampaignResolver::resolveForUser($user, $session);
         $phoneNumber = $message ?: ($session?->phone_number ?? '');
         $hydrated = null;
         if ($leadId || $phoneNumber) {
@@ -120,32 +120,6 @@ class VicidialEventsWebhookController extends Controller
         return true;
     }
 
-    private function resolveCampaignForUser(User $user, ?CallSession $session): string
-    {
-        if ($session?->campaign_code) {
-            return (string) $session->campaign_code;
-        }
-
-        $vicidialSession = VicidialAgentSession::query()
-            ->where('user_id', $user->id)
-            ->whereNotNull('campaign_code')
-            ->where('campaign_code', '!=', '')
-            ->where('session_status', '!=', 'logged_out')
-            ->orderByDesc('logged_in_at')
-            ->orderByDesc('last_synced_at')
-            ->first();
-
-        if ($vicidialSession?->campaign_code) {
-            return (string) $vicidialSession->campaign_code;
-        }
-
-        if (! empty($user->default_campaign)) {
-            return (string) $user->default_campaign;
-        }
-
-        return (string) config('vicidial.default_campaign', 'mbsales');
-    }
-
     private function handleCallEnded(?User $user, string $event): bool
     {
         if (! $user) {
@@ -175,7 +149,7 @@ class VicidialEventsWebhookController extends Controller
     private function handleStateChange(?int $userId, string $viciUser, string $status, string $message): bool
     {
         if ($userId) {
-            VicidialAgentSession::where('user_id', $userId)
+            \App\Models\VicidialAgentSession::where('user_id', $userId)
                 ->latest()
                 ->first()
                 ?->update(['session_status' => $status]);
@@ -196,7 +170,7 @@ class VicidialEventsWebhookController extends Controller
     private function handleLogout(?int $userId, string $viciUser, string $event): bool
     {
         if ($userId) {
-            VicidialAgentSession::where('user_id', $userId)
+            \App\Models\VicidialAgentSession::where('user_id', $userId)
                 ->latest()
                 ->first()
                 ?->update(['session_status' => 'logged_out']);
