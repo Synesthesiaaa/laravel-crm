@@ -85,7 +85,7 @@ class VicidialEventsWebhookController extends Controller
             $this->callStateService->transition($session, CallSession::STATUS_IN_CALL);
         }
 
-        $campaignCode = (string) ($session?->campaign_code ?: config('vicidial.default_campaign', 'mbsales'));
+        $campaignCode = $this->resolveCampaignForUser($user, $session);
         $phoneNumber = $message ?: ($session?->phone_number ?? '');
         $hydrated = null;
         if ($leadId || $phoneNumber) {
@@ -95,6 +95,15 @@ class VicidialEventsWebhookController extends Controller
                 $leadId ? (int) $leadId : null,
                 $phoneNumber !== '' ? $phoneNumber : null,
             );
+
+            $this->logger->event('VicidialEventsWebhook', 'call_answered', 'Inbound hydration result', [
+                'campaign' => $campaignCode,
+                'lead_id' => $hydrated['lead_id'] ?? null,
+                'phone_number' => $hydrated['phone_number'] ?? null,
+                'client_name' => $hydrated['client_name'] ?? null,
+                'capture_keys' => array_keys($hydrated['capture_data'] ?? []),
+                'raw_keys' => array_keys($hydrated['raw_fields'] ?? []),
+            ]);
         }
 
         if ($phoneNumber || $leadId) {
@@ -109,6 +118,32 @@ class VicidialEventsWebhookController extends Controller
         }
 
         return true;
+    }
+
+    private function resolveCampaignForUser(User $user, ?CallSession $session): string
+    {
+        if ($session?->campaign_code) {
+            return (string) $session->campaign_code;
+        }
+
+        $vicidialSession = VicidialAgentSession::query()
+            ->where('user_id', $user->id)
+            ->whereNotNull('campaign_code')
+            ->where('campaign_code', '!=', '')
+            ->where('session_status', '!=', 'logged_out')
+            ->orderByDesc('logged_in_at')
+            ->orderByDesc('last_synced_at')
+            ->first();
+
+        if ($vicidialSession?->campaign_code) {
+            return (string) $vicidialSession->campaign_code;
+        }
+
+        if (! empty($user->default_campaign)) {
+            return (string) $user->default_campaign;
+        }
+
+        return (string) config('vicidial.default_campaign', 'mbsales');
     }
 
     private function handleCallEnded(?User $user, string $event): bool
