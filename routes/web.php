@@ -125,6 +125,11 @@ Route::middleware(['auth', 'campaign'])->group(function () {
         Route::get('data-master/edit/{id}', [\App\Http\Controllers\Admin\DataMasterController::class, 'edit'])->name('data-master.edit')->where('id', '[0-9]+');
         Route::post('data-master/update', [\App\Http\Controllers\Admin\DataMasterController::class, 'update'])->name('data-master.update');
         Route::post('data-master/delete', [\App\Http\Controllers\Admin\DataMasterController::class, 'destroy'])->name('data-master.destroy');
+        Route::get('capture-records', [\App\Http\Controllers\Admin\CaptureRecordsController::class, 'index'])->name('capture-records.index');
+        Route::get('capture-records/edit/{record}', [\App\Http\Controllers\Admin\CaptureRecordsController::class, 'edit'])->name('capture-records.edit')->where('record', '[0-9]+');
+        Route::post('capture-records/update/{record}', [\App\Http\Controllers\Admin\CaptureRecordsController::class, 'update'])->name('capture-records.update')->where('record', '[0-9]+');
+        Route::post('capture-records/delete', [\App\Http\Controllers\Admin\CaptureRecordsController::class, 'destroy'])->name('capture-records.destroy');
+        Route::post('capture-records/export', [\App\Http\Controllers\Admin\CaptureRecordsController::class, 'export'])->name('capture-records.export');
         Route::get('disposition-records', [\App\Http\Controllers\Admin\DispositionRecordsController::class, 'index'])->name('disposition-records.index');
         Route::get('disposition-codes', [\App\Http\Controllers\Admin\DispositionCodesController::class, 'index'])->name('disposition-codes.index');
         Route::post('disposition-codes', [\App\Http\Controllers\Admin\DispositionCodesController::class, 'store'])->name('disposition-codes.store');
