@@ -149,7 +149,6 @@
                      :class="{
                          'call-connected': callState === 'connected',
                          'call-ringing':   callState === 'dialing' || callState === 'ringing',
-                         'call-hold':      callState === 'hold',
                          'call-wrapup':    callState === 'wrapup',
                          'bg-[var(--color-surface-2)] text-[var(--color-on-surface-dim)] border border-[var(--color-border)]': callState === 'idle',
                      }">
@@ -158,7 +157,6 @@
                     <span x-show="callState === 'dialing'">Dialing...</span>
                     <span x-show="callState === 'ringing'">Ringing...</span>
                     <span x-show="callState === 'connected'" x-text="'Connected · ' + formatDuration(duration)"></span>
-                    <span x-show="callState === 'hold'">On Hold</span>
                     <span x-show="callState === 'wrapup'">Wrap-up</span>
                 </div>
 
@@ -179,12 +177,6 @@
                             @click="hangup()"
                             x-show="callState !== 'idle' && callState !== 'wrapup'">
                         <x-icon name="phone-x-mark" class="w-6 h-6" />
-                    </button>
-                    <button class="btn-secondary text-sm px-3 py-2"
-                            @click="toggleHold()"
-                            x-show="callState === 'connected'">
-                        <x-icon name="pause" class="w-4 h-4" />
-                        Hold
                     </button>
                 </div>
             </div>
@@ -234,21 +226,6 @@
             </button>
         </div>
 
-        {{-- Mute / controls --}}
-        <div class="md-card p-5" x-show="callState === 'connected' || callState === 'hold'">
-            <h3 class="text-sm font-semibold text-[var(--color-on-surface)] mb-3">Audio Controls</h3>
-            <div class="grid grid-cols-2 gap-2">
-                <button class="btn-secondary text-sm" @click="toggleMute()" :class="muted ? 'btn-danger' : ''">
-                    <x-icon name="microphone" class="w-4 h-4" />
-                    <span x-text="muted ? 'Unmute' : 'Mute'">Mute</span>
-                </button>
-                <button class="btn-secondary text-sm" @click="toggleHold()" :class="{ 'btn-warning': callState === 'hold' }">
-                    <x-icon name="pause" class="w-4 h-4" />
-                    <span x-text="callState === 'hold' ? 'Resume' : 'Hold'">Hold</span>
-                </button>
-            </div>
-        </div>
-
         @if(($telephonyFeatures['ingroup_management'] ?? true) === true)
             @include('agent.partials.ingroup-panel')
         @endif
@@ -283,7 +260,6 @@ window.agentScreen = function() {
         leadId: '',
         duration: 0,
         timer: null,
-        muted: false,
         saving: false,
         savingDisposition: false,
         dispositionError: null,
@@ -431,7 +407,7 @@ window.agentScreen = function() {
                     this.callState = 'ringing';
                     Alpine.store('call').state = 'ringing';
                     Alpine.store('toast').info('Call is ringing...');
-                } else if (['answered','in_call','on_hold'].includes(p.to_status)) {
+                } else if (['answered','in_call'].includes(p.to_status)) {
                     this.callState = 'connected';
                     Alpine.store('call').state = 'connected';
                     Alpine.store('call').startTimer();
@@ -646,7 +622,7 @@ window.agentScreen = function() {
                         this.hydrateLead(incomingLeadId);
                     }
                     this.duration = res.data.call.duration_seconds || 0;
-                    const statusMap = { dialing: 'dialing', ringing: 'ringing', answered: 'connected', in_call: 'connected', on_hold: 'hold' };
+                    const statusMap = { dialing: 'dialing', ringing: 'ringing', answered: 'connected', in_call: 'connected' };
                     this.callState = statusMap[res.data.call.status] || 'connected';
                     Alpine.store('call').state = this.callState;
                     Alpine.store('call').number = this.phoneNumber;
@@ -991,16 +967,6 @@ window.agentScreen = function() {
             } catch (e) {
                 Alpine.store('toast').warning('Backend hangup request failed — disposition may still be required.');
             }
-        },
-
-        async toggleHold() {
-            await Alpine.store('call').toggleHoldWebRTC();
-            this.callState = Alpine.store('call').state;
-        },
-
-        toggleMute() {
-            Alpine.store('call').toggleMuteWebRTC();
-            this.muted = Alpine.store('call').muted;
         },
 
         formatDuration(s) {

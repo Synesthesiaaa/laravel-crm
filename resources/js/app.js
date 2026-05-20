@@ -132,8 +132,6 @@ Alpine.store('call', {
     number: '',
     duration: 0,
     timer: null,
-    muted: false,
-    onHold: false,
     transferState: 'idle',
     recording: false,
     inbound: false,
@@ -154,20 +152,6 @@ Alpine.store('call', {
     // ── WebRTC delegation ──────────────────────────────────────────────────
     async hangupWebRTC() {
         await window.TelephonyCore?.hangup();
-    },
-    toggleMuteWebRTC() {
-        if (!window.TelephonyCore) return;
-        this.muted = !this.muted;
-        this.muted ? window.TelephonyCore.mute() : window.TelephonyCore.unmute();
-    },
-    async toggleHoldWebRTC() {
-        if (!window.TelephonyCore) return;
-        this.onHold = !this.onHold;
-        if (this.onHold) {
-            await window.TelephonyCore.hold();
-        } else {
-            await window.TelephonyCore.unhold();
-        }
     },
 });
 
