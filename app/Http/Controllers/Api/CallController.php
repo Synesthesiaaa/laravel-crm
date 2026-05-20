@@ -75,8 +75,14 @@ class CallController extends Controller
      */
     public function hangup(Request $request): JsonResponse
     {
-        $sessionId = $request->input('session_id') ? (int) $request->input('session_id') : null;
-        $result = $this->orchestration->hangup($request->user(), $sessionId);
+        $validated = $request->validate([
+            'session_id' => ['nullable', 'integer'],
+            'campaign' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $sessionId = isset($validated['session_id']) ? (int) $validated['session_id'] : null;
+        $campaign = TelephonyCampaignResolver::resolve($request, $validated['campaign'] ?? null);
+        $result = $this->orchestration->hangup($request->user(), $sessionId, $campaign);
 
         if (! $result->success) {
             return response()->json(['success' => false, 'message' => $result->message], 422);

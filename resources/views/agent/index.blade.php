@@ -586,6 +586,11 @@ window.agentScreen = function() {
                     },
                 });
                 const payload = response?.data || {};
+                const agentState = String(payload.agent_state || '').trim();
+                if (['paused', 'ready', 'in_call'].includes(agentState)) {
+                    Alpine.store('vicidial').status = agentState;
+                    Alpine.store('vicidial').loggedIn = true;
+                }
                 if (!payload.active) {
                     return;
                 }
@@ -613,9 +618,11 @@ window.agentScreen = function() {
                 if (leadId) {
                     this._lastDetectedLeadId = leadId;
                 }
-                if (['idle', 'ringing'].includes(this.callState)) {
+                const shouldStartTimer = ['idle', 'ringing'].includes(this.callState);
+                if (shouldStartTimer) {
                     this.callState = 'connected';
                     Alpine.store('call').state = 'connected';
+                    Alpine.store('call').startTimer();
                 }
             } catch (_) {}
         },
@@ -678,8 +685,12 @@ window.agentScreen = function() {
                 const raw = data?.agent_status?.data?.raw_response || '';
 
                 if (typeof raw === 'string' && raw.includes('INCALL')) {
+                    const wasConnected = this.callState === 'connected';
                     this.callState = 'connected';
                     Alpine.store('call').state = 'connected';
+                    if (!wasConnected) {
+                        Alpine.store('call').startTimer();
+                    }
 
                     // ViciDial agent_status pipe format (index 10 = phone_number):
                     // status|call_id|lead_id|campaign|calls_today|full_name|
@@ -973,6 +984,9 @@ window.agentScreen = function() {
             try {
                 await window.axios.post('/api/call/hangup', {
                     session_id: this.sessionId || null,
+                    campaign: this.telephonyCampaign(),
+                    lead_id: this.leadId || null,
+                    phone_number: this.phoneNumber || null,
                 });
             } catch (e) {
                 Alpine.store('toast').warning('Backend hangup request failed — disposition may still be required.');

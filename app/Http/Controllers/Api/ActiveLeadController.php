@@ -42,16 +42,19 @@ class ActiveLeadController extends Controller
                 'success' => true,
                 'active' => false,
                 'status' => null,
+                'agent_state' => null,
                 'message' => null,
             ]);
         }
 
         $statusCode = strtoupper((string) ($status['status'] ?? ''));
+        $agentState = $this->deriveAgentState($statusCode);
         if (! in_array($statusCode, ['INCALL', 'QUEUE'], true)) {
             return response()->json([
                 'success' => true,
                 'active' => false,
                 'status' => $statusCode,
+                'agent_state' => $agentState,
                 'message' => null,
             ]);
         }
@@ -71,6 +74,7 @@ class ActiveLeadController extends Controller
             'success' => true,
             'active' => true,
             'status' => $statusCode,
+            'agent_state' => $agentState,
             'lead_id' => $hydrated['lead_id'] ?? ($leadIdText !== '' ? $leadIdText : null),
             'phone_number' => $hydrated['phone_number'] ?? ($phoneNumber !== '' ? $phoneNumber : null),
             'client_name' => $hydrated['client_name'] ?? null,
@@ -110,5 +114,18 @@ class ActiveLeadController extends Controller
         $text = trim((string) $value);
 
         return $text !== '' ? $text : null;
+    }
+
+    private function deriveAgentState(string $statusCode): string
+    {
+        if (in_array($statusCode, ['INCALL', 'QUEUE'], true)) {
+            return 'in_call';
+        }
+
+        if (str_starts_with($statusCode, 'PAUSED') || $statusCode === 'PAUSE' || $statusCode === 'PAUSED') {
+            return 'paused';
+        }
+
+        return 'ready';
     }
 }
