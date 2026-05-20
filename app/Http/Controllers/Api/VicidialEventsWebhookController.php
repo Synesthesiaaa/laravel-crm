@@ -16,6 +16,8 @@ use Illuminate\Http\Request;
 
 /**
  * Receives ViciDial Agent Push Events.
+ * This is the instant push path when Agent Push Events is configured;
+ * `/api/telephony/active-lead` acts as the always-on polling fallback.
  * Configure Agent Push URL in ViciDial System Settings:
  *   get2post.php?HTTPURLTOPOST=http://CRM:8000/api/webhooks/vicidial-events
  *     ?user=--A--user--B--&event=--A--event--B--&message=--A--message--B--

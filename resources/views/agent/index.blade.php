@@ -321,6 +321,8 @@ window.agentScreen = function() {
 
         _echoUnsubscribe: null,
         _statusPollInterval: null,
+        _activeLeadInterval: null,
+        _lastDetectedLeadId: '',
         features: @js($telephonyFeatures ?? []),
 
         init() {
@@ -348,6 +350,8 @@ window.agentScreen = function() {
             this.syncCallStatus();
             if (this.featureEnabled('session_controls')) {
                 this.syncVicidialStatus();
+                this.probeActiveLead();
+                this._activeLeadInterval = setInterval(() => this.probeActiveLead(), 3000);
             }
 
             const te = window.TelephonyEcho;
@@ -414,6 +418,7 @@ window.agentScreen = function() {
                     Alpine.store('call').stopTimer();
                     this.callState = 'wrapup';
                     Alpine.store('call').state = 'wrapup';
+                    this._lastDetectedLeadId = '';
                     if (p.to_status === 'failed') {
                         Alpine.store('toast').warning('Call failed or ended before answer.');
                     } else {
@@ -569,6 +574,52 @@ window.agentScreen = function() {
             }
         },
 
+        async probeActiveLead() {
+            if (this.callState === 'wrapup' || this.savingDisposition) {
+                return;
+            }
+
+            try {
+                const response = await window.axios.get('/api/telephony/active-lead', {
+                    params: {
+                        campaign: this.telephonyCampaign(),
+                    },
+                });
+                const payload = response?.data || {};
+                if (!payload.active) {
+                    return;
+                }
+
+                const leadId = String(payload.lead_id || '').trim();
+                const phoneNumber = String(payload.phone_number || '').trim();
+                if (!leadId && !phoneNumber) {
+                    return;
+                }
+
+                const hasCaptureData = payload.capture_data
+                    && typeof payload.capture_data === 'object'
+                    && Object.keys(payload.capture_data).length > 0;
+
+                if (leadId === this._lastDetectedLeadId && this.captureFormHasValues()) {
+                    return;
+                }
+
+                this.applyLeadData({
+                    lead_id: leadId || null,
+                    phone_number: phoneNumber || null,
+                    capture_data: hasCaptureData ? payload.capture_data : {},
+                });
+
+                if (leadId) {
+                    this._lastDetectedLeadId = leadId;
+                }
+                if (['idle', 'ringing'].includes(this.callState)) {
+                    this.callState = 'connected';
+                    Alpine.store('call').state = 'connected';
+                }
+            } catch (_) {}
+        },
+
         featureEnabled(key) {
             return !!this.features[key];
         },
@@ -598,12 +649,14 @@ window.agentScreen = function() {
                     this.dialBlocked = true;
                     this.hasDispositionPending = true;
                     this.callState = 'wrapup';
+                    this._lastDetectedLeadId = '';
                     this.sessionId = res.data.pending_call.session_id;
                     this.phoneNumber = res.data.pending_call.phone_number || this.phoneNumber;
                     Alpine.store('call').state = 'wrapup';
                 } else {
                     this.dialBlocked = false;
                     this.hasDispositionPending = false;
+                    this._lastDetectedLeadId = '';
                     this.callState = 'idle';
                     Alpine.store('call').state = 'idle';
                 }
@@ -624,7 +677,7 @@ window.agentScreen = function() {
                 const data = await Alpine.store('vicidial').sync(this.telephonyCampaign());
                 const raw = data?.agent_status?.data?.raw_response || '';
 
-                if (!this.sessionId && typeof raw === 'string' && raw.includes('INCALL')) {
+                if (typeof raw === 'string' && raw.includes('INCALL')) {
                     this.callState = 'connected';
                     Alpine.store('call').state = 'connected';
 
@@ -913,6 +966,7 @@ window.agentScreen = function() {
             Alpine.store('call').stopTimer();
             this.callState = 'wrapup';
             Alpine.store('call').state = 'wrapup';
+            this._lastDetectedLeadId = '';
 
             // Notify backend so the call session is closed and ViciDial
             // receives external_pause + external_hangup.
