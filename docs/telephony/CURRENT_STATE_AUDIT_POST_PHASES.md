@@ -1,8 +1,8 @@
-# Telephony System – Current State Audit (Post Phases 2–7)
+# Telephony System – Current State Audit (Post Phases 2–8)
 
 **Date:** 2026-02-24  
 **Purpose:** Audit and map the telephony system after full implementation.  
-**Scope:** Call state, disposition, Asterisk/VICIdial sync, AMI webhooks, broadcasting, health, tests.  
+**Scope:** Call state, disposition, Asterisk/VICIdial sync, webhook ingestion, lead hydration, broadcasting, health, tests.  
 **No code modified – audit only.**
 
 ---
@@ -17,6 +17,8 @@
 | `SaveDispositionController` | Validates and saves via DispositionService; accepts `call_session_id` |
 | `DispositionController` | Returns disposition codes for campaign |
 | `AmiWebhookController` | Handles AMI events (Hangup, HangupRequest, SoftHangupRequest); idempotent; optional secret |
+| `VicidialEventsWebhookController` | Handles VICIdial agent push events (`call_answered`, state, login/logout, dispo), emits realtime agent events |
+| `ActiveLeadController` | Polling fallback endpoint (`/api/telephony/active-lead`) for active call/queue lead context |
 | `TelephonyHealthController` | GET `/api/telephony/health` – status, metrics, 503 on critical |
 
 ### 1.2 Services (Telephony)
@@ -28,6 +30,7 @@
 | `CallUuidMappingService` | LinkedID/channel/extension mapping; `findSessionForHangup`; `logUnmatched` |
 | `VicidialProxyService` | HTTP to VICIdial Agent API; `external_dial` with phone params |
 | `VicidialDispositionSyncService` | Write-back to VICIdial (`update_lead`); disposition mapping |
+| `LeadHydrationService` | Fetches `lead_all_info`, normalizes raw fields, maps configured capture data for agent autofill |
 | `TelephonyReconciliationService` | Compares DB vs external; auto-fix mismatched states |
 | `TelephonyHealthService` | Metrics: active calls, stuck calls, alerts; status: ok/degraded/critical |
 | `TelephonyAlertService` | Logs to `telephony_alerts`; severity levels |
@@ -57,12 +60,15 @@
 | `UnmatchedAmiEvent` | `unmatched_ami_events` | AMI events with no matching session |
 | `TelephonyAlert` | `telephony_alerts` | Alerts for monitoring |
 | `DispositionCode` | `disposition_codes` | Validated on save |
+| `AgentCaptureRecord` | `agent_capture_records` | Stores campaign-scoped capture payloads; source for admin capture record review/export |
+| `AgentScreenField` | `agent_screen_fields` | Field config now includes mapping/direction metadata (`vici_field`, `direction`, `field_type`, etc.) |
 
 ### 1.6 Webhooks / AMI
 
 | Route | Handler | Auth |
 |-------|---------|------|
 | `POST /api/webhooks/ami` | `AmiWebhookController` | None (X-Webhook-Secret optional) |
+| `POST /api/webhooks/vicidial-events` | `VicidialEventsWebhookController` | None (X-Webhook-Secret optional) |
 | CSRF exempt | `bootstrap/app.php` | Yes |
 
 ### 1.7 Broadcasting
@@ -149,6 +155,10 @@
 | POST | `/api/disposition/save` | auth | Save disposition; accepts call_session_id |
 | GET | `/api/disposition-codes` | auth | List codes for campaign |
 | POST | `/api/webhooks/ami` | None (optional secret) | AMI events (Hangup, etc.) |
+| POST | `/api/webhooks/vicidial-events` | None (optional secret) | VICIdial agent push events (call/state/dispo) |
+| GET | `/api/telephony/active-lead` | auth | Poll fallback for active lead context + mapped capture data |
+| GET | `/api/leads/hydrate` | auth | Manual lead hydration (`lead_id` or `phone_number` required) |
+| POST | `/api/agent/capture` | auth | Persist capture payload; optional VICIdial `update_fields` write-back |
 | GET | `/api/telephony/health` | None | Health check (503 on critical) |
 
 ---
@@ -206,6 +216,17 @@
 | VICIdial sync consistency | VicidialDispositionSyncService write-back |
 | Supervisor live monitoring | Private channel + Echo |
 | Production-grade reliability | Health endpoint, alerts, dead letter, 64 tests |
+
+---
+
+## 9. Phase 8 Documentation
+
+- See `docs/telephony/PHASE8_LEAD_HYDRATION_CAPTURE.md` for detailed architecture, route contracts, mapping rules, and runbook notes for:
+  - lead hydration (`LeadHydrationService`)
+  - active-lead polling fallback
+  - capture field direction/mapping
+  - VICIdial write-back gating
+  - capture records admin operations
 
 ---
 
