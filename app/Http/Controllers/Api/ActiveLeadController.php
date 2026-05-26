@@ -32,8 +32,10 @@ class ActiveLeadController extends Controller
             return response()->json([
                 'success' => false,
                 'active' => false,
+                'status' => null,
+                'agent_state' => null,
                 'message' => $result->message,
-            ], 422);
+            ]);
         }
 
         $status = $this->extractStatusSnapshot((array) data_get($result->data, 'rows', []));

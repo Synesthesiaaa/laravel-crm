@@ -43,6 +43,82 @@ import collapse from '@alpinejs/collapse';
 import intersect from '@alpinejs/intersect';
 import './attendance-status';
 
+const TELEPHONY_POLL_ENDPOINTS = [
+    '/api/notifications',
+    '/api/call/status',
+    '/api/vicidial/session/status',
+    '/api/sip/credentials',
+    '/api/supervisor/agents',
+    '/api/telephony/active-lead',
+];
+const telephonyPollBackoffUntil = new Map();
+
+function resolvePollEndpoint(url) {
+    if (!url) return null;
+
+    try {
+        const pathname = new URL(url, window.location.origin).pathname;
+        return TELEPHONY_POLL_ENDPOINTS.find((endpoint) => pathname.startsWith(endpoint)) || null;
+    } catch {
+        return null;
+    }
+}
+
+function parseRetryAfterMs(value) {
+    if (!value) return 5000;
+
+    const seconds = Number(value);
+    if (Number.isFinite(seconds) && seconds > 0) {
+        return Math.max(1000, seconds * 1000);
+    }
+
+    const timestamp = Date.parse(String(value));
+    if (Number.isFinite(timestamp)) {
+        return Math.max(1000, timestamp - Date.now());
+    }
+
+    return 5000;
+}
+
+window.crmPollBackoff = {
+    remainingMs(url) {
+        const endpoint = resolvePollEndpoint(url);
+        if (!endpoint) return 0;
+        const until = telephonyPollBackoffUntil.get(endpoint) || 0;
+
+        return Math.max(0, until - Date.now());
+    },
+};
+
+window.axios.interceptors.request.use((config) => {
+    const endpoint = resolvePollEndpoint(config?.url);
+    if (endpoint && String(config?.method || 'get').toLowerCase() === 'get') {
+        const remainingMs = window.crmPollBackoff.remainingMs(config.url);
+        if (remainingMs > 0) {
+            const canceled = new window.axios.CanceledError(`Backoff active for ${endpoint}`);
+            canceled.__crmPollBackoff = true;
+            canceled.__crmBackoffMs = remainingMs;
+
+            return Promise.reject(canceled);
+        }
+    }
+
+    return config;
+});
+
+window.axios.interceptors.response.use(undefined, (error) => {
+    const status = error?.response?.status;
+    const endpoint = resolvePollEndpoint(error?.config?.url);
+    const method = String(error?.config?.method || 'get').toLowerCase();
+    if (status === 429 && endpoint && method === 'get') {
+        const retryAfter = error?.response?.headers?.['retry-after'];
+        const waitMs = Math.min(60000, parseRetryAfterMs(retryAfter));
+        telephonyPollBackoffUntil.set(endpoint, Date.now() + waitMs);
+    }
+
+    return Promise.reject(error);
+});
+
 Alpine.plugin(focus);
 Alpine.plugin(collapse);
 Alpine.plugin(intersect);

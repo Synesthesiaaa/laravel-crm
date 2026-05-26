@@ -142,6 +142,26 @@ class ActiveLeadControllerTest extends TestCase
             ->assertJsonPath('agent_state', 'paused');
     }
 
+    public function test_active_lead_returns_ok_with_inactive_payload_when_vicidial_status_call_fails(): void
+    {
+        $nonAgentMock = Mockery::mock(VicidialNonAgentApiService::class);
+        $nonAgentMock->shouldReceive('execute')
+            ->once()
+            ->andReturn(OperationResult::failure('Agent status unavailable'));
+        $this->instance(VicidialNonAgentApiService::class, $nonAgentMock);
+
+        $response = $this->actingAs($this->agent)
+            ->withSession(['campaign' => 'testcamp', 'campaign_name' => 'Test Camp'])
+            ->getJson('/api/telephony/active-lead?campaign=testcamp');
+
+        $response->assertOk()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('active', false)
+            ->assertJsonPath('status', null)
+            ->assertJsonPath('agent_state', null)
+            ->assertJsonPath('message', 'Agent status unavailable');
+    }
+
     public function test_active_lead_works_in_iframe_only_mode(): void
     {
         config()->set('vicidial.session_iframe_agent_api_only', true);

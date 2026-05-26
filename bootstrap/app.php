@@ -53,6 +53,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'campaign' => \App\Http\Middleware\EnsureCampaignSelected::class,
             'role' => \App\Http\Middleware\CheckRole::class,
             'telephony_feature' => \App\Http\Middleware\EnsureTelephonyFeatureEnabled::class,
+            'log_throttle' => \App\Http\Middleware\LogThrottleResponses::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
@@ -65,6 +66,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
         RateLimiter::for('api', function (Request $request) {
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+        });
+
+        RateLimiter::for('telephony-poll', function (Request $request) {
+            return Limit::perMinute(240)->by($request->user()?->id ?: $request->ip());
         });
 
         RateLimiter::for('vicidial', function (Request $request) {

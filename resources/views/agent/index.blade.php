@@ -322,7 +322,11 @@ window.agentScreen = function() {
 
         _echoUnsubscribe: null,
         _statusPollInterval: null,
-        _activeLeadInterval: null,
+        _activeLeadTimer: null,
+        _activeLeadBaseIntervalMs: 5000,
+        _activeLeadBackoffMs: 5000,
+        _activeLeadFailureCount: 0,
+        _activeLeadMaxBackoffMs: 60000,
         _lastDetectedLeadId: '',
         features: @js($telephonyFeatures ?? []),
 
@@ -351,8 +355,7 @@ window.agentScreen = function() {
             this.syncCallStatus();
             if (this.featureEnabled('session_controls')) {
                 this.syncVicidialStatus();
-                this.probeActiveLead();
-                this._activeLeadInterval = setInterval(() => this.probeActiveLead(), 3000);
+                this.scheduleActiveLeadProbe(0);
             }
 
             const te = window.TelephonyEcho;
@@ -584,6 +587,10 @@ window.agentScreen = function() {
             if (this.callState === 'wrapup' || this.savingDisposition) {
                 return;
             }
+            if (Alpine.store('ws')?.isConnected) {
+                this.resetActiveLeadBackoff();
+                return;
+            }
 
             try {
                 const response = await window.axios.get('/api/telephony/active-lead', {
@@ -592,12 +599,18 @@ window.agentScreen = function() {
                     },
                 });
                 const payload = response?.data || {};
+                if (payload.success === false) {
+                    this.recordActiveLeadFailure();
+                    return;
+                }
+
                 const agentState = String(payload.agent_state || '').trim();
                 if (['paused', 'ready', 'in_call'].includes(agentState)) {
                     Alpine.store('vicidial').status = agentState;
                     Alpine.store('vicidial').loggedIn = true;
                 }
                 if (!payload.active) {
+                    this.resetActiveLeadBackoff();
                     return;
                 }
 
@@ -630,7 +643,37 @@ window.agentScreen = function() {
                     Alpine.store('call').state = 'connected';
                     Alpine.store('call').startTimer();
                 }
-            } catch (_) {}
+                this.resetActiveLeadBackoff();
+            } catch (error) {
+                if (error?.__crmPollBackoff || error?.code === 'ERR_CANCELED') {
+                    return;
+                }
+                this.recordActiveLeadFailure();
+            }
+        },
+
+        scheduleActiveLeadProbe(delayMs = this._activeLeadBaseIntervalMs) {
+            if (this._activeLeadTimer) {
+                clearTimeout(this._activeLeadTimer);
+            }
+            this._activeLeadTimer = setTimeout(async () => {
+                await this.probeActiveLead();
+                this.scheduleActiveLeadProbe(this._activeLeadBackoffMs);
+            }, Math.max(0, Number(delayMs) || this._activeLeadBaseIntervalMs));
+        },
+
+        recordActiveLeadFailure() {
+            this._activeLeadFailureCount += 1;
+            const factor = Math.max(1, 2 ** (this._activeLeadFailureCount - 1));
+            this._activeLeadBackoffMs = Math.min(
+                this._activeLeadMaxBackoffMs,
+                this._activeLeadBaseIntervalMs * factor
+            );
+        },
+
+        resetActiveLeadBackoff() {
+            this._activeLeadFailureCount = 0;
+            this._activeLeadBackoffMs = this._activeLeadBaseIntervalMs;
         },
 
         featureEnabled(key) {
