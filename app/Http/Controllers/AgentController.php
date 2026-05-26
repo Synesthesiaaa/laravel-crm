@@ -33,6 +33,7 @@ class AgentController extends Controller
                 'required' => (bool) $f->is_required,
                 'options_array' => is_array($f->options) ? $f->options : [],
                 'placeholder' => $f->placeholder,
+                'visibility' => is_array($f->visibility) ? $f->visibility : null,
                 'field_width' => $f->field_width ?? 'full',
             ];
         });

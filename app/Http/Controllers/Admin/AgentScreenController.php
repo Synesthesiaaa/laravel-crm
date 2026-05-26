@@ -50,6 +50,7 @@ class AgentScreenController extends Controller
         $maxOrder = AgentScreenField::where('campaign_code', $validated['campaign_code'])->max('field_order');
         $fieldType = (string) ($validated['field_type'] ?? 'text');
         $fieldOrder = isset($validated['field_order']) ? (int) $validated['field_order'] : (($maxOrder ?? 0) + 1);
+        $visibility = $this->normalizeVisibility($validated['visibility'] ?? null);
 
         AgentScreenField::create([
             'campaign_code' => $validated['campaign_code'],
@@ -61,6 +62,7 @@ class AgentScreenController extends Controller
             'options' => $fieldType === 'select' ? $this->parseOptions($validated['options'] ?? null) : [],
             'placeholder' => $this->normalizeNullable($validated['placeholder'] ?? null),
             'is_required' => (bool) ($validated['is_required'] ?? false),
+            'visibility' => $visibility,
             'field_order' => $fieldOrder,
             'field_width' => $validated['field_width'] ?? 'full',
         ]);
@@ -74,6 +76,7 @@ class AgentScreenController extends Controller
     {
         $validated = $request->validated();
         $fieldType = (string) ($validated['field_type'] ?? 'text');
+        $visibility = $this->normalizeVisibility($validated['visibility'] ?? null);
 
         $field->update([
             'field_key' => $validated['field_key'],
@@ -84,6 +87,7 @@ class AgentScreenController extends Controller
             'options' => $fieldType === 'select' ? $this->parseOptions($validated['options'] ?? null) : [],
             'placeholder' => $this->normalizeNullable($validated['placeholder'] ?? null),
             'is_required' => (bool) ($validated['is_required'] ?? false),
+            'visibility' => $visibility,
             'field_order' => isset($validated['field_order']) ? (int) $validated['field_order'] : $field->field_order,
             'field_width' => $validated['field_width'] ?? 'full',
         ]);
@@ -125,5 +129,48 @@ class AgentScreenController extends Controller
         $value = trim((string) $value);
 
         return $value !== '' ? $value : null;
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $visibility
+     * @return array<string, mixed>|null
+     */
+    private function normalizeVisibility(?array $visibility): ?array
+    {
+        $sourceField = trim((string) ($visibility['field'] ?? ''));
+        $operator = trim((string) ($visibility['operator'] ?? ''));
+        $rawValues = $visibility['values'] ?? [];
+
+        if (! is_array($rawValues)) {
+            $rawValues = [];
+        }
+
+        $values = [];
+        foreach ($rawValues as $value) {
+            $text = trim((string) $value);
+            if ($text === '') {
+                continue;
+            }
+
+            $parts = preg_split('/\r\n|\r|\n|,/', $text) ?: [];
+            foreach ($parts as $part) {
+                $token = trim((string) $part);
+                if ($token !== '') {
+                    $values[] = $token;
+                }
+            }
+        }
+
+        $values = array_values(array_unique($values));
+
+        if ($sourceField === '' || $operator === '' || $values === []) {
+            return null;
+        }
+
+        return [
+            'field' => $sourceField,
+            'operator' => $operator,
+            'values' => $values,
+        ];
     }
 }

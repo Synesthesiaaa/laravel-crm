@@ -231,3 +231,37 @@ This improves idempotency for UI and recovery paths where CRM session state and 
   - `LeadHydrationService` (lead fetch failure)
   - `AgentCaptureController` (update_fields push failure/exception)
 
+---
+
+## 11) Conditional Visibility and Percentage Fields
+
+Both campaign field systems (`agent_screen_fields` and `form_fields`) now support:
+
+- `field_type = percentage` (numeric percentage input, 0-100 with decimals)
+- Optional visibility rules stored in `visibility` JSON
+
+Visibility shape:
+
+```json
+{ "field": "customer_type", "operator": "in", "values": ["vip", "premium"] }
+```
+
+Supported operators:
+
+- `equals`
+- `not_equals`
+- `in`
+- `not_in`
+
+Important constraints:
+
+- Visibility is **UI-only** and is not enforced by backend business rules.
+- Hidden fields are excluded at submit time:
+  - Agent capture form (`/agent`) skips hidden controls before sending `/api/agent/capture`.
+  - Generic forms disable hidden controls so browser form POST excludes them.
+- VICIdial write-back behavior is unchanged; it still depends on field `direction` and writeable VICIdial mapping.
+
+Known pitfall:
+
+- If a source field referenced by a visibility rule is renamed (`field_key` or `field_name`), the rule no longer matches and the dependent field effectively becomes always-visible. Update visibility rules after renames.
+

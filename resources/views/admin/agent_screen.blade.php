@@ -29,6 +29,7 @@
     $fieldTypeOptions = [
         'text' => 'Text',
         'number' => 'Number',
+        'percentage' => 'Percentage (%)',
         'email' => 'Email',
         'tel' => 'Phone',
         'date' => 'Date',
@@ -36,6 +37,18 @@
         'select' => 'Select',
         'checkbox' => 'Checkbox',
     ];
+    $visibilityOperatorOptions = [
+        'equals' => 'Equals',
+        'not_equals' => 'Does not equal',
+        'in' => 'Any of',
+        'not_in' => 'None of',
+    ];
+    $visibilityFieldOptions = $fields
+        ->mapWithKeys(fn ($field) => [
+            $field->field_key => $field->field_label !== ''
+                ? $field->field_label.' ('.$field->field_key.')'
+                : $field->field_key,
+        ])->all();
     $directionOptions = [
         'get' => 'GET (autofill from Vicidial)',
         'post' => 'POST (push to Vicidial on save)',
@@ -132,6 +145,18 @@
                 <div class="sm:col-span-2 lg:col-span-4 form-field" x-show="fieldType === 'select'" x-cloak>
                     <x-form.textarea name="options" label="Select Options (one per line)" :value="old('options')" rows="4" placeholder="Option A&#10;Option B&#10;Option C" />
                 </div>
+
+                <div class="sm:col-span-2 lg:col-span-4 rounded-lg border border-[var(--color-border)] p-4">
+                    <p class="text-sm font-medium text-[var(--color-on-surface)] mb-3">Show When (optional)</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <x-form.select name="visibility[field]" label="Source Field" :options="$visibilityFieldOptions" :selected="old('visibility.field')" />
+                        <x-form.select name="visibility[operator]" label="Operator" :options="$visibilityOperatorOptions" :selected="old('visibility.operator')" />
+                        <div class="form-field sm:col-span-3">
+                            <x-form.textarea name="visibility[values][]" label="Values (comma or newline separated)" :value="old('visibility.values.0')" rows="3" placeholder="Yes&#10;No" />
+                        </div>
+                    </div>
+                    <p class="text-xs text-[var(--color-on-surface-dim)] mt-2">If no rule is configured, the field is always visible.</p>
+                </div>
             </div>
 
             <div class="mt-5">
@@ -161,6 +186,15 @@
             @php
                 $rowOptions = is_array($f->options) ? implode("\n", $f->options) : '';
                 $rowViciIsCustom = $f->vici_field && !array_key_exists($f->vici_field, $viciFields ?? []);
+                $rowVisibility = is_array($f->visibility) ? $f->visibility : [];
+                $rowVisibilityValueText = implode("\n", is_array($rowVisibility['values'] ?? null) ? $rowVisibility['values'] : []);
+                $rowVisibilityFields = $fields
+                    ->reject(fn ($item) => (int) $item->id === (int) $f->id)
+                    ->mapWithKeys(fn ($item) => [
+                        $item->field_key => $item->field_label !== ''
+                            ? $item->field_label.' ('.$item->field_key.')'
+                            : $item->field_key,
+                    ])->all();
             @endphp
             <tr>
                 <td>{{ $f->field_order }}</td>
@@ -267,6 +301,17 @@
 
                                         <div class="mt-3" x-show="fieldType === 'select'" x-cloak>
                                             <x-form.textarea name="options" label="Select Options (one per line)" :value="$rowOptions" rows="3" />
+                                        </div>
+
+                                        <div class="mt-3 rounded-lg border border-[var(--color-border)] p-3">
+                                            <p class="text-xs font-medium text-[var(--color-on-surface)] mb-2">Show When (optional)</p>
+                                            <div class="grid grid-cols-2 gap-3">
+                                                <x-form.select name="visibility[field]" label="Source Field" :options="$rowVisibilityFields" :selected="$rowVisibility['field'] ?? null" />
+                                                <x-form.select name="visibility[operator]" label="Operator" :options="$visibilityOperatorOptions" :selected="$rowVisibility['operator'] ?? null" />
+                                                <div class="form-field col-span-2">
+                                                    <x-form.textarea name="visibility[values][]" label="Values (comma or newline separated)" :value="$rowVisibilityValueText" rows="3" />
+                                                </div>
+                                            </div>
                                         </div>
 
                                         <div class="mt-4 flex items-center gap-2">

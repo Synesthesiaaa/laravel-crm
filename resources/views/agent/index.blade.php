@@ -64,31 +64,56 @@
         @if(isset($fields) && $fields->isNotEmpty())
         <div class="md-card p-5">
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)] mb-4">Capture Details</h3>
-            <form id="capture-form" @submit.prevent="saveForm()" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <form id="capture-form"
+                  x-data="formVisibility()"
+                  x-init="init({})"
+                  @submit.prevent="saveForm()"
+                  class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 @foreach($fields as $field)
-                <div class="@if(($field->field_width ?? '') === 'full') sm:col-span-2 @endif">
+                <div class="@if(($field->field_width ?? '') === 'full') sm:col-span-2 @endif"
+                     data-capture-field
+                     x-show="shouldShow('{{ $field->field_name }}', @js($field->visibility ?? null))">
                     @if($field->field_type === 'textarea')
                         <div class="form-field">
                             <label class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
                             <textarea class="form-textarea" name="{{ $field->field_name }}" rows="3"
+                                      x-model="values['{{ $field->field_name }}']"
                                       @if(!empty($field->placeholder)) placeholder="{{ $field->placeholder }}" @endif
                                       @if($field->required) required @endif></textarea>
                         </div>
                     @elseif($field->field_type === 'select')
                         <div class="form-field">
                             <label class="form-label">{{ $field->label }}</label>
-                            <select class="form-select" name="{{ $field->field_name }}" @if($field->required) required @endif>
+                            <select class="form-select" name="{{ $field->field_name }}" x-model="values['{{ $field->field_name }}']" @if($field->required) required @endif>
                                 <option value="">-- Select --</option>
                                 @foreach($field->options_array ?? [] as $opt)
                                     <option value="{{ $opt }}">{{ $opt }}</option>
                                 @endforeach
                             </select>
                         </div>
+                    @elseif($field->field_type === 'percentage')
+                        <div class="form-field">
+                            <label class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
+                            <div class="relative">
+                                <input type="number"
+                                       min="0"
+                                       max="100"
+                                       step="0.01"
+                                       class="form-input pr-8"
+                                       name="{{ $field->field_name }}"
+                                       x-model="values['{{ $field->field_name }}']"
+                                       @input="values['{{ $field->field_name }}'] = Math.max(0, Math.min(100, Number($event.target.value || 0))).toString()"
+                                       @if(!empty($field->placeholder)) placeholder="{{ $field->placeholder }}" @endif
+                                       @if($field->required) required @endif />
+                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-on-surface-dim)] text-sm">%</span>
+                            </div>
+                        </div>
                     @else
                         <div class="form-field">
                             <label class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
                             <input type="{{ ($field->field_type ?? 'text') === 'number' ? 'text' : ($field->field_type ?? 'text') }}" class="form-input"
                                    name="{{ $field->field_name }}"
+                                   x-model="values['{{ $field->field_name }}']"
                                    @if(!empty($field->placeholder)) placeholder="{{ $field->placeholder }}" @endif
                                    @if($field->required) required @endif />
                         </div>
@@ -493,13 +518,18 @@ window.agentScreen = function() {
                 if (el instanceof HTMLInputElement && el.type === 'checkbox') {
                     const normalized = typeof value === 'string' ? value.trim().toLowerCase() : value;
                     el.checked = [true, 1, '1', 'true', 'yes', 'on'].includes(normalized);
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
                     return;
                 }
                 if (el instanceof HTMLInputElement && el.type === 'radio') {
                     el.checked = String(el.value) === String(value);
+                    if (el.checked) {
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
                     return;
                 }
                 el.value = String(value);
+                el.dispatchEvent(new Event('input', { bubbles: true }));
             });
         },
 
@@ -1083,7 +1113,17 @@ window.agentScreen = function() {
             if (!form) { this.saving = false; return; }
             const captureData = {};
             form.querySelectorAll('input, select, textarea').forEach(el => {
-                if (el.name && !el.name.startsWith('_')) captureData[el.name] = el.value ?? '';
+                if (!el.name || el.name.startsWith('_')) return;
+
+                const wrapper = el.closest('[data-capture-field]');
+                if (wrapper && wrapper.offsetParent === null) return;
+
+                if (el.type === 'checkbox') {
+                    captureData[el.name] = el.checked ? '1' : '0';
+                    return;
+                }
+
+                captureData[el.name] = el.value ?? '';
             });
             try {
                 await window.axios.post('/api/agent/capture', {
@@ -1105,7 +1145,16 @@ window.agentScreen = function() {
         clearForm() {
             const form = document.getElementById('capture-form');
             if (form) {
-                form.querySelectorAll('input, select, textarea').forEach(el => { el.value = ''; });
+                form.querySelectorAll('input, select, textarea').forEach(el => {
+                    if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
+                        el.checked = false;
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+
+                        return;
+                    }
+                    el.value = '';
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                });
             }
         },
     };

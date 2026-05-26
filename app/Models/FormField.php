@@ -22,12 +22,14 @@ class FormField extends Model
         'options',
         'vici_params',
         'field_width',
+        'visibility',
     ];
 
     protected function casts(): array
     {
         return [
             'is_required' => 'boolean',
+            'visibility' => 'array',
         ];
     }
 

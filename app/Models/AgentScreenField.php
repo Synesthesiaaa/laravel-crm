@@ -21,6 +21,7 @@ class AgentScreenField extends Model
         'options',
         'placeholder',
         'is_required',
+        'visibility',
         'field_order',
         'field_width',
     ];
@@ -28,6 +29,7 @@ class AgentScreenField extends Model
     protected $casts = [
         'options' => 'array',
         'is_required' => 'boolean',
+        'visibility' => 'array',
     ];
 
     public function campaign(): BelongsTo

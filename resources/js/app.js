@@ -4,6 +4,7 @@ import './components';
 import './vicidial-session';
 import './phone-widget';
 import './soft-navigate';
+import './form-visibility';
 import TelephonyCore from './telephony-core';
 
 // Make ApexCharts available for dynamic import in views
