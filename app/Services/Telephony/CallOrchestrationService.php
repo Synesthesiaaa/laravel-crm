@@ -158,17 +158,15 @@ class CallOrchestrationService
      * ViciDial prescribed sequence: PAUSE → HANGUP → (dispo) → STATUS.
      * Each ViciDial call is wrapped so unreachability never blocks the CRM.
      */
-    public function hangup(User $user, ?int $sessionId = null): OperationResult
+    public function hangup(User $user, ?int $sessionId = null, ?string $campaignOverride = null): OperationResult
     {
         $session = $sessionId
             ? CallSession::where('user_id', $user->id)->find($sessionId)
             : CallSession::where('user_id', $user->id)->active()->first();
 
-        if (! $session) {
-            return OperationResult::failure('No active call found');
-        }
-
-        $campaign = $session->campaign_code;
+        $campaign = $session?->campaign_code
+            ?: trim((string) $campaignOverride)
+            ?: (string) config('vicidial.default_campaign', 'mbsales');
 
         // Step 1: Auto-pause the agent so ViciDial stops routing new calls.
         try {
@@ -177,7 +175,8 @@ class CallOrchestrationService
             ]);
         } catch (\Throwable $e) {
             $this->telephonyLogger->warning('CallOrchestrationService', 'external_pause failed (non-blocking)', [
-                'session_id' => $session->id,
+                'session_id' => $session?->id,
+                'campaign' => $campaign,
                 'error' => $e->getMessage(),
             ]);
         }
@@ -189,9 +188,14 @@ class CallOrchestrationService
             ]);
         } catch (\Throwable $e) {
             $this->telephonyLogger->warning('CallOrchestrationService', 'external_hangup failed (non-blocking)', [
-                'session_id' => $session->id,
+                'session_id' => $session?->id,
+                'campaign' => $campaign,
                 'error' => $e->getMessage(),
             ]);
+        }
+
+        if (! $session) {
+            return OperationResult::success(['vicidial_only' => true]);
         }
 
         // Step 3: Transition CRM call state to wrapup / ended.

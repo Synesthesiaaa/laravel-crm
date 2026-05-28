@@ -33,6 +33,7 @@ class AgentScreenController extends Controller
             'campaigns' => $campaigns,
             'fields' => $fields,
             'selectedCampaign' => $selectedCampaign,
+            'viciFields' => config('vicidial_fields.fields', []),
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
         ]);
     }
@@ -47,11 +48,22 @@ class AgentScreenController extends Controller
             return back()->with('error', 'Field key already exists for this campaign.');
         }
         $maxOrder = AgentScreenField::where('campaign_code', $validated['campaign_code'])->max('field_order');
+        $fieldType = (string) ($validated['field_type'] ?? 'text');
+        $fieldOrder = isset($validated['field_order']) ? (int) $validated['field_order'] : (($maxOrder ?? 0) + 1);
+        $visibility = $this->normalizeVisibility($validated['visibility'] ?? null);
+
         AgentScreenField::create([
             'campaign_code' => $validated['campaign_code'],
             'field_key' => $validated['field_key'],
+            'vici_field' => $this->normalizeNullable($validated['vici_field'] ?? null),
             'field_label' => $validated['field_label'],
-            'field_order' => ($maxOrder ?? 0) + 1,
+            'field_type' => $fieldType,
+            'direction' => (string) ($validated['direction'] ?? 'get'),
+            'options' => $fieldType === 'select' ? $this->parseOptions($validated['options'] ?? null) : [],
+            'placeholder' => $this->normalizeNullable($validated['placeholder'] ?? null),
+            'is_required' => (bool) ($validated['is_required'] ?? false),
+            'visibility' => $visibility,
+            'field_order' => $fieldOrder,
             'field_width' => $validated['field_width'] ?? 'full',
         ]);
         $this->campaignService->clearCampaignsCache();
@@ -63,8 +75,20 @@ class AgentScreenController extends Controller
     public function update(UpdateAgentScreenFieldRequest $request, AgentScreenField $field): RedirectResponse
     {
         $validated = $request->validated();
+        $fieldType = (string) ($validated['field_type'] ?? 'text');
+        $visibility = $this->normalizeVisibility($validated['visibility'] ?? null);
+
         $field->update([
+            'field_key' => $validated['field_key'],
             'field_label' => $validated['field_label'],
+            'vici_field' => $this->normalizeNullable($validated['vici_field'] ?? null),
+            'field_type' => $fieldType,
+            'direction' => (string) ($validated['direction'] ?? 'get'),
+            'options' => $fieldType === 'select' ? $this->parseOptions($validated['options'] ?? null) : [],
+            'placeholder' => $this->normalizeNullable($validated['placeholder'] ?? null),
+            'is_required' => (bool) ($validated['is_required'] ?? false),
+            'visibility' => $visibility,
+            'field_order' => isset($validated['field_order']) ? (int) $validated['field_order'] : $field->field_order,
             'field_width' => $validated['field_width'] ?? 'full',
         ]);
         $this->campaignService->clearCampaignsCache();
@@ -83,5 +107,70 @@ class AgentScreenController extends Controller
 
         return redirect()->route('admin.agent-screen.index', ['campaign' => $campaign])
             ->with('success', 'Field removed.');
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function parseOptions(?string $options): array
+    {
+        if (! $options) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(
+            static fn ($line) => trim((string) $line),
+            preg_split('/\r\n|\r|\n/', $options) ?: []
+        ), static fn ($line) => $line !== ''));
+    }
+
+    private function normalizeNullable(?string $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value !== '' ? $value : null;
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $visibility
+     * @return array<string, mixed>|null
+     */
+    private function normalizeVisibility(?array $visibility): ?array
+    {
+        $sourceField = trim((string) ($visibility['field'] ?? ''));
+        $operator = trim((string) ($visibility['operator'] ?? ''));
+        $rawValues = $visibility['values'] ?? [];
+
+        if (! is_array($rawValues)) {
+            $rawValues = [];
+        }
+
+        $values = [];
+        foreach ($rawValues as $value) {
+            $text = trim((string) $value);
+            if ($text === '') {
+                continue;
+            }
+
+            $parts = preg_split('/\r\n|\r|\n|,/', $text) ?: [];
+            foreach ($parts as $part) {
+                $token = trim((string) $part);
+                if ($token !== '') {
+                    $values[] = $token;
+                }
+            }
+        }
+
+        $values = array_values(array_unique($values));
+
+        if ($sourceField === '' || $operator === '' || $values === []) {
+            return null;
+        }
+
+        return [
+            'field' => $sourceField,
+            'operator' => $operator,
+            'values' => $values,
+        ];
     }
 }

@@ -36,15 +36,9 @@
                             <span x-text="predictiveMode ? 'Predictive: ON' : 'Predictive: OFF'">Predictive: OFF</span>
                         </button>
                     </template>
-                    <button type="button" class="btn-secondary text-xs px-2 py-1" @click="fetchNextLead()" :disabled="callState !== 'idle' && callState !== 'wrapup' || loadingNextLead"
-                            title="Get next lead">
-                        <x-icon name="arrow-path" class="w-3.5 h-3.5" />
-                        <span x-text="loadingNextLead ? 'Loading...' : 'Next Lead'">Next Lead</span>
-                    </button>
-                    <x-badge :dot="false" type="info" x-text="leadId ? 'Lead #' + leadId : 'No lead loaded'">No lead loaded</x-badge>
                 </div>
             </div>
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div class="form-field">
                     <label class="form-label">Phone Number</label>
                     <div class="flex gap-2">
@@ -60,10 +54,6 @@
                     <input type="text" x-model="leadId" class="form-input" placeholder="ViciDial Lead ID" />
                 </div>
                 <div class="form-field">
-                    <label class="form-label">Client Name</label>
-                    <input type="text" x-model="clientName" class="form-input" placeholder="Client full name" />
-                </div>
-                <div class="form-field">
                     <label class="form-label">Campaign</label>
                     <input type="text" value="{{ session('campaign_name') }}" class="form-input" readonly />
                 </div>
@@ -74,30 +64,57 @@
         @if(isset($fields) && $fields->isNotEmpty())
         <div class="md-card p-5">
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)] mb-4">Capture Details</h3>
-            <form id="capture-form" @submit.prevent="saveForm()" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <form id="capture-form"
+                  x-data="formVisibility()"
+                  x-init="init({})"
+                  @submit.prevent="saveForm()"
+                  class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 @foreach($fields as $field)
-                <div class="@if(($field->field_width ?? '') === 'full') sm:col-span-2 @endif">
+                <div class="@if(($field->field_width ?? '') === 'full') sm:col-span-2 @endif"
+                     data-capture-field
+                     x-show="shouldShow('{{ $field->field_name }}', @js($field->visibility ?? null))">
                     @if($field->field_type === 'textarea')
                         <div class="form-field">
                             <label class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
                             <textarea class="form-textarea" name="{{ $field->field_name }}" rows="3"
+                                      x-model="values['{{ $field->field_name }}']"
+                                      @if(!empty($field->placeholder)) placeholder="{{ $field->placeholder }}" @endif
                                       @if($field->required) required @endif></textarea>
                         </div>
                     @elseif($field->field_type === 'select')
                         <div class="form-field">
                             <label class="form-label">{{ $field->label }}</label>
-                            <select class="form-select" name="{{ $field->field_name }}" @if($field->required) required @endif>
+                            <select class="form-select" name="{{ $field->field_name }}" x-model="values['{{ $field->field_name }}']" @if($field->required) required @endif>
                                 <option value="">-- Select --</option>
                                 @foreach($field->options_array ?? [] as $opt)
                                     <option value="{{ $opt }}">{{ $opt }}</option>
                                 @endforeach
                             </select>
                         </div>
+                    @elseif($field->field_type === 'percentage')
+                        <div class="form-field">
+                            <label class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
+                            <div class="relative">
+                                <input type="number"
+                                       min="0"
+                                       max="100"
+                                       step="0.01"
+                                       class="form-input pr-8"
+                                       name="{{ $field->field_name }}"
+                                       x-model="values['{{ $field->field_name }}']"
+                                       @input="values['{{ $field->field_name }}'] = Math.max(0, Math.min(100, Number($event.target.value || 0))).toString()"
+                                       @if(!empty($field->placeholder)) placeholder="{{ $field->placeholder }}" @endif
+                                       @if($field->required) required @endif />
+                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-on-surface-dim)] text-sm">%</span>
+                            </div>
+                        </div>
                     @else
                         <div class="form-field">
                             <label class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
                             <input type="{{ ($field->field_type ?? 'text') === 'number' ? 'text' : ($field->field_type ?? 'text') }}" class="form-input"
                                    name="{{ $field->field_name }}"
+                                   x-model="values['{{ $field->field_name }}']"
+                                   @if(!empty($field->placeholder)) placeholder="{{ $field->placeholder }}" @endif
                                    @if($field->required) required @endif />
                         </div>
                     @endif
@@ -157,7 +174,6 @@
                      :class="{
                          'call-connected': callState === 'connected',
                          'call-ringing':   callState === 'dialing' || callState === 'ringing',
-                         'call-hold':      callState === 'hold',
                          'call-wrapup':    callState === 'wrapup',
                          'bg-[var(--color-surface-2)] text-[var(--color-on-surface-dim)] border border-[var(--color-border)]': callState === 'idle',
                      }">
@@ -166,7 +182,6 @@
                     <span x-show="callState === 'dialing'">Dialing...</span>
                     <span x-show="callState === 'ringing'">Ringing...</span>
                     <span x-show="callState === 'connected'" x-text="'Connected · ' + formatDuration(duration)"></span>
-                    <span x-show="callState === 'hold'">On Hold</span>
                     <span x-show="callState === 'wrapup'">Wrap-up</span>
                 </div>
 
@@ -187,12 +202,6 @@
                             @click="hangup()"
                             x-show="callState !== 'idle' && callState !== 'wrapup'">
                         <x-icon name="phone-x-mark" class="w-6 h-6" />
-                    </button>
-                    <button class="btn-secondary text-sm px-3 py-2"
-                            @click="toggleHold()"
-                            x-show="callState === 'connected'">
-                        <x-icon name="pause" class="w-4 h-4" />
-                        Hold
                     </button>
                 </div>
             </div>
@@ -242,21 +251,6 @@
             </button>
         </div>
 
-        {{-- Mute / controls --}}
-        <div class="md-card p-5" x-show="callState === 'connected' || callState === 'hold'">
-            <h3 class="text-sm font-semibold text-[var(--color-on-surface)] mb-3">Audio Controls</h3>
-            <div class="grid grid-cols-2 gap-2">
-                <button class="btn-secondary text-sm" @click="toggleMute()" :class="muted ? 'btn-danger' : ''">
-                    <x-icon name="microphone" class="w-4 h-4" />
-                    <span x-text="muted ? 'Unmute' : 'Mute'">Mute</span>
-                </button>
-                <button class="btn-secondary text-sm" @click="toggleHold()" :class="{ 'btn-warning': callState === 'hold' }">
-                    <x-icon name="pause" class="w-4 h-4" />
-                    <span x-text="callState === 'hold' ? 'Resume' : 'Hold'">Hold</span>
-                </button>
-            </div>
-        </div>
-
         @if(($telephonyFeatures['ingroup_management'] ?? true) === true)
             @include('agent.partials.ingroup-panel')
         @endif
@@ -289,10 +283,8 @@ window.agentScreen = function() {
         sessionId: null,
         phoneNumber: '',
         leadId: '',
-        clientName: '',
         duration: 0,
         timer: null,
-        muted: false,
         saving: false,
         savingDisposition: false,
         dispositionError: null,
@@ -301,10 +293,12 @@ window.agentScreen = function() {
         dispositionNotes: '',
         recentCalls: [],
         dialBlocked: false,
-        loadingNextLead: false,
         predictiveMode: false,
         predictiveDelay: 3,
         _predictiveTimer: null,
+        _leadHydrateTimer: null,
+        _suppressLeadWatcher: false,
+        _lastHydratedLeadId: '',
         transfer: {
             phone_number: '',
             ingroup: '',
@@ -328,6 +322,12 @@ window.agentScreen = function() {
 
         _echoUnsubscribe: null,
         _statusPollInterval: null,
+        _activeLeadTimer: null,
+        _activeLeadBaseIntervalMs: 5000,
+        _activeLeadBackoffMs: 5000,
+        _activeLeadFailureCount: 0,
+        _activeLeadMaxBackoffMs: 60000,
+        _lastDetectedLeadId: '',
         features: @js($telephonyFeatures ?? []),
 
         init() {
@@ -336,12 +336,26 @@ window.agentScreen = function() {
             this.$watch('$store.call.state', (v) => { if (v) this.callState = v; });
             this.$watch('$store.call.number', (v) => { if (v) this.phoneNumber = v; });
             this.$watch('$store.call.sessionId', (v) => { if (v) this.sessionId = v; });
+            this.$watch('leadId', (value) => {
+                if (this._suppressLeadWatcher) {
+                    return;
+                }
+                if (this._leadHydrateTimer) {
+                    clearTimeout(this._leadHydrateTimer);
+                }
+                const leadId = String(value || '').trim();
+                if (!leadId || leadId === this._lastHydratedLeadId) {
+                    return;
+                }
+                this._leadHydrateTimer = setTimeout(() => this.hydrateLead(leadId), 400);
+            });
             if (!this.featureEnabled('predictive_dialing')) {
                 this.predictiveMode = false;
             }
             this.syncCallStatus();
             if (this.featureEnabled('session_controls')) {
                 this.syncVicidialStatus();
+                this.scheduleActiveLeadProbe(0);
             }
 
             const te = window.TelephonyEcho;
@@ -408,6 +422,7 @@ window.agentScreen = function() {
                     Alpine.store('call').stopTimer();
                     this.callState = 'wrapup';
                     Alpine.store('call').state = 'wrapup';
+                    this._lastDetectedLeadId = '';
                     if (p.to_status === 'failed') {
                         Alpine.store('toast').warning('Call failed or ended before answer.');
                     } else {
@@ -420,10 +435,15 @@ window.agentScreen = function() {
                     this.callState = 'ringing';
                     Alpine.store('call').state = 'ringing';
                     Alpine.store('toast').info('Call is ringing...');
-                } else if (['answered','in_call','on_hold'].includes(p.to_status)) {
+                } else if (['answered','in_call'].includes(p.to_status)) {
                     this.callState = 'connected';
                     Alpine.store('call').state = 'connected';
                     Alpine.store('call').startTimer();
+                    const wsLeadId = p.lead_id ?? this.leadId ?? null;
+                    const wsPhoneNumber = p.phone_number ?? this.phoneNumber ?? null;
+                    if (['answered', 'in_call'].includes(p.to_status) && !this.captureFormHasValues() && (wsLeadId || wsPhoneNumber)) {
+                        this.hydrateLead(wsLeadId, wsPhoneNumber);
+                    }
                     Alpine.store('toast').success('Call connected.');
                 }
             }
@@ -457,17 +477,203 @@ window.agentScreen = function() {
 
         /** WebSocket handler: inbound/dialer call screen pop */
         _handleInboundCallWs(p) {
-            if (p.phone_number) {
-                this.phoneNumber = p.phone_number;
-                Alpine.store('call').number = p.phone_number;
-            }
-            if (p.lead_id) {
-                this.leadId = String(p.lead_id);
-            }
-            if (p.client_name) {
-                this.clientName = p.client_name;
+            const incomingCaptureData = p.capture_data || p.lead_data || {};
+            this.applyLeadData({
+                ...p,
+                capture_data: incomingCaptureData,
+            });
+            const hasIncomingCaptureData = incomingCaptureData && typeof incomingCaptureData === 'object' && Object.keys(incomingCaptureData).length > 0;
+            if (!hasIncomingCaptureData) {
+                this.hydrateLead(p.lead_id ?? null, p.phone_number ?? null);
             }
             Alpine.store('toast').info('Incoming call: ' + (p.phone_number || 'unknown'));
+        },
+
+        applyLeadData(payload = {}) {
+            const leadId = payload.lead_id ?? null;
+            const phoneNumber = payload.phone_number ?? null;
+            const captureData = payload.capture_data || payload.lead_data || {};
+
+            this._suppressLeadWatcher = true;
+            try {
+                if (leadId !== null && leadId !== undefined && String(leadId).trim() !== '') {
+                    this.leadId = String(leadId);
+                    this._lastHydratedLeadId = String(leadId);
+                }
+                if (phoneNumber !== null && phoneNumber !== undefined && String(phoneNumber).trim() !== '') {
+                    this.phoneNumber = String(phoneNumber);
+                    Alpine.store('call').number = this.phoneNumber;
+                }
+            } finally {
+                this._suppressLeadWatcher = false;
+            }
+
+            const form = document.getElementById('capture-form');
+            if (!form || !captureData || typeof captureData !== 'object') {
+                return;
+            }
+
+            form.querySelectorAll('input, select, textarea').forEach((el) => {
+                if (!el.name || el.name.startsWith('_')) return;
+                if (!Object.prototype.hasOwnProperty.call(captureData, el.name)) return;
+                const value = captureData[el.name];
+                if (value === null || value === undefined) return;
+                if (el instanceof HTMLInputElement && el.type === 'checkbox') {
+                    const normalized = typeof value === 'string' ? value.trim().toLowerCase() : value;
+                    el.checked = [true, 1, '1', 'true', 'yes', 'on'].includes(normalized);
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    return;
+                }
+                if (el instanceof HTMLInputElement && el.type === 'radio') {
+                    el.checked = String(el.value) === String(value);
+                    if (el.checked) {
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    return;
+                }
+                el.value = String(value);
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+        },
+
+        captureFormHasValues() {
+            const form = document.getElementById('capture-form');
+            if (!form) {
+                return false;
+            }
+
+            return Array.from(form.querySelectorAll('input, select, textarea')).some((el) => {
+                if (!el.name || el.name.startsWith('_')) {
+                    return false;
+                }
+
+                if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
+                    return !!el.checked;
+                }
+
+                return String(el.value ?? '').trim() !== '';
+            });
+        },
+
+        async hydrateLead(leadIdOverride = null, phoneNumberOverride = null) {
+            const leadId = String(leadIdOverride || this.leadId || '').trim();
+            const phoneNumber = String(phoneNumberOverride || this.phoneNumber || '').trim();
+            if (!leadId && !phoneNumber) {
+                return;
+            }
+
+            try {
+                const params = {
+                    campaign: this.crmCampaign(),
+                };
+                if (leadId) {
+                    params.lead_id = leadId;
+                } else {
+                    params.phone_number = phoneNumber;
+                }
+                const res = await window.axios.get('/api/leads/hydrate', {
+                    params,
+                });
+                const data = res.data?.data;
+                if (data) {
+                    this.applyLeadData(data);
+                }
+            } catch (e) {
+                // Autofill is best-effort; avoid noisy toasts while typing lead IDs.
+            }
+        },
+
+        async probeActiveLead() {
+            if (this.callState === 'wrapup' || this.savingDisposition) {
+                return;
+            }
+            if (Alpine.store('ws')?.isConnected) {
+                this.resetActiveLeadBackoff();
+                return;
+            }
+
+            try {
+                const response = await window.axios.get('/api/telephony/active-lead', {
+                    params: {
+                        campaign: this.telephonyCampaign(),
+                    },
+                });
+                const payload = response?.data || {};
+                if (payload.success === false) {
+                    this.recordActiveLeadFailure();
+                    return;
+                }
+
+                const agentState = String(payload.agent_state || '').trim();
+                if (['paused', 'ready', 'in_call'].includes(agentState)) {
+                    Alpine.store('vicidial').status = agentState;
+                    Alpine.store('vicidial').loggedIn = true;
+                }
+                if (!payload.active) {
+                    this.resetActiveLeadBackoff();
+                    return;
+                }
+
+                const leadId = String(payload.lead_id || '').trim();
+                const phoneNumber = String(payload.phone_number || '').trim();
+                if (!leadId && !phoneNumber) {
+                    return;
+                }
+
+                const hasCaptureData = payload.capture_data
+                    && typeof payload.capture_data === 'object'
+                    && Object.keys(payload.capture_data).length > 0;
+
+                if (leadId === this._lastDetectedLeadId && this.captureFormHasValues()) {
+                    return;
+                }
+
+                this.applyLeadData({
+                    lead_id: leadId || null,
+                    phone_number: phoneNumber || null,
+                    capture_data: hasCaptureData ? payload.capture_data : {},
+                });
+
+                if (leadId) {
+                    this._lastDetectedLeadId = leadId;
+                }
+                const shouldStartTimer = ['idle', 'ringing'].includes(this.callState);
+                if (shouldStartTimer) {
+                    this.callState = 'connected';
+                    Alpine.store('call').state = 'connected';
+                    Alpine.store('call').startTimer();
+                }
+                this.resetActiveLeadBackoff();
+            } catch (error) {
+                if (error?.__crmPollBackoff || error?.code === 'ERR_CANCELED') {
+                    return;
+                }
+                this.recordActiveLeadFailure();
+            }
+        },
+
+        scheduleActiveLeadProbe(delayMs = this._activeLeadBaseIntervalMs) {
+            if (this._activeLeadTimer) {
+                clearTimeout(this._activeLeadTimer);
+            }
+            this._activeLeadTimer = setTimeout(async () => {
+                await this.probeActiveLead();
+                this.scheduleActiveLeadProbe(this._activeLeadBackoffMs);
+            }, Math.max(0, Number(delayMs) || this._activeLeadBaseIntervalMs));
+        },
+
+        recordActiveLeadFailure() {
+            this._activeLeadFailureCount += 1;
+            const factor = Math.max(1, 2 ** (this._activeLeadFailureCount - 1));
+            this._activeLeadBackoffMs = Math.min(
+                this._activeLeadMaxBackoffMs,
+                this._activeLeadBaseIntervalMs * factor
+            );
+        },
+
+        resetActiveLeadBackoff() {
+            this._activeLeadFailureCount = 0;
+            this._activeLeadBackoffMs = this._activeLeadBaseIntervalMs;
         },
 
         featureEnabled(key) {
@@ -480,8 +686,16 @@ window.agentScreen = function() {
                 if (res.data.active && res.data.call) {
                     this.sessionId = res.data.call.session_id;
                     this.phoneNumber = res.data.call.phone_number || this.phoneNumber;
+                    const incomingLeadId = String(res.data.call.lead_id ?? '').trim();
+                    if (incomingLeadId && incomingLeadId !== this.leadId) {
+                        this._suppressLeadWatcher = true;
+                        this.leadId = incomingLeadId;
+                        this._lastHydratedLeadId = incomingLeadId;
+                        this._suppressLeadWatcher = false;
+                        this.hydrateLead(incomingLeadId);
+                    }
                     this.duration = res.data.call.duration_seconds || 0;
-                    const statusMap = { dialing: 'dialing', ringing: 'ringing', answered: 'connected', in_call: 'connected', on_hold: 'hold' };
+                    const statusMap = { dialing: 'dialing', ringing: 'ringing', answered: 'connected', in_call: 'connected' };
                     this.callState = statusMap[res.data.call.status] || 'connected';
                     Alpine.store('call').state = this.callState;
                     Alpine.store('call').number = this.phoneNumber;
@@ -491,12 +705,14 @@ window.agentScreen = function() {
                     this.dialBlocked = true;
                     this.hasDispositionPending = true;
                     this.callState = 'wrapup';
+                    this._lastDetectedLeadId = '';
                     this.sessionId = res.data.pending_call.session_id;
                     this.phoneNumber = res.data.pending_call.phone_number || this.phoneNumber;
                     Alpine.store('call').state = 'wrapup';
                 } else {
                     this.dialBlocked = false;
                     this.hasDispositionPending = false;
+                    this._lastDetectedLeadId = '';
                     this.callState = 'idle';
                     Alpine.store('call').state = 'idle';
                 }
@@ -517,9 +733,13 @@ window.agentScreen = function() {
                 const data = await Alpine.store('vicidial').sync(this.telephonyCampaign());
                 const raw = data?.agent_status?.data?.raw_response || '';
 
-                if (!this.sessionId && typeof raw === 'string' && raw.includes('INCALL')) {
+                if (typeof raw === 'string' && raw.includes('INCALL')) {
+                    const wasConnected = this.callState === 'connected';
                     this.callState = 'connected';
                     Alpine.store('call').state = 'connected';
+                    if (!wasConnected) {
+                        Alpine.store('call').startTimer();
+                    }
 
                     // ViciDial agent_status pipe format (index 10 = phone_number):
                     // status|call_id|lead_id|campaign|calls_today|full_name|
@@ -529,10 +749,24 @@ window.agentScreen = function() {
                         const dataLine = lines.find(l => l.includes('INCALL') && l.includes('|'));
                         if (dataLine) {
                             const parts = dataLine.split('|');
+                            const lead = (parts[2] || '').trim();
+                            let shouldHydrate = false;
+                            let phoneChanged = false;
+                            if (lead && lead !== this.leadId) {
+                                this._suppressLeadWatcher = true;
+                                this.leadId = lead;
+                                this._lastHydratedLeadId = lead;
+                                this._suppressLeadWatcher = false;
+                                shouldHydrate = true;
+                            }
                             const phone = (parts[10] || '').trim();
-                            if (phone && /^\d+$/.test(phone)) {
+                            if (phone && /^\d+$/.test(phone) && phone !== this.phoneNumber) {
                                 this.phoneNumber = phone;
                                 Alpine.store('call').number = phone;
+                                phoneChanged = true;
+                            }
+                            if ((shouldHydrate || phoneChanged) && lead) {
+                                this.hydrateLead(lead);
                             }
                         }
                     }
@@ -767,6 +1001,16 @@ window.agentScreen = function() {
                     Alpine.store('toast').error(res.data.message || 'Call failed.');
                     return;
                 }
+                this.applyLeadData({
+                    lead_id: res.data.lead_id,
+                    phone_number: res.data.phone_number,
+                    capture_data: res.data.lead_data || {},
+                });
+                const returnedCaptureData = res.data.lead_data || {};
+                const hasReturnedCaptureData = returnedCaptureData && typeof returnedCaptureData === 'object' && Object.keys(returnedCaptureData).length > 0;
+                if (!hasReturnedCaptureData && (res.data.lead_id || res.data.phone_number)) {
+                    this.hydrateLead(res.data.lead_id ?? null, res.data.phone_number ?? null);
+                }
                 // Wait for SIP.js state + AMI events to transition dialing -> ringing -> connected.
             } catch (e) {
                 this.callState = 'idle';
@@ -782,54 +1026,26 @@ window.agentScreen = function() {
             Alpine.store('call').stopTimer();
             this.callState = 'wrapup';
             Alpine.store('call').state = 'wrapup';
+            this._lastDetectedLeadId = '';
 
             // Notify backend so the call session is closed and ViciDial
             // receives external_pause + external_hangup.
             try {
                 await window.axios.post('/api/call/hangup', {
                     session_id: this.sessionId || null,
+                    campaign: this.telephonyCampaign(),
+                    lead_id: this.leadId || null,
+                    phone_number: this.phoneNumber || null,
                 });
             } catch (e) {
                 Alpine.store('toast').warning('Backend hangup request failed — disposition may still be required.');
             }
         },
 
-        async toggleHold() {
-            await Alpine.store('call').toggleHoldWebRTC();
-            this.callState = Alpine.store('call').state;
-        },
-
-        toggleMute() {
-            Alpine.store('call').toggleMuteWebRTC();
-            this.muted = Alpine.store('call').muted;
-        },
-
         formatDuration(s) {
             const m = String(Math.floor(s / 60)).padStart(2, '0');
             const sec = String(s % 60).padStart(2, '0');
             return `${m}:${sec}`;
-        },
-
-        async fetchNextLead() {
-            if (this.loadingNextLead || (this.callState !== 'idle' && this.callState !== 'wrapup')) return;
-            this.loadingNextLead = true;
-            try {
-                const campaign = this.crmCampaign();
-                const res = await window.axios.get('/api/leads/next', { params: { campaign } });
-                if (res.data.lead) {
-                    this.leadId = res.data.lead.lead_id || '';
-                    this.phoneNumber = res.data.lead.phone_number || '';
-                    this.clientName = res.data.lead.client_name || '';
-                    Alpine.store('call').number = this.phoneNumber;
-                    Alpine.store('toast').success('Lead loaded.');
-                } else {
-                    Alpine.store('toast').info(res.data.message || 'No leads available.');
-                }
-            } catch (e) {
-                Alpine.store('toast').error(e.response?.data?.message || 'Failed to fetch lead.');
-            } finally {
-                this.loadingNextLead = false;
-            }
         },
 
         async saveDisposition() {
@@ -882,8 +1098,6 @@ window.agentScreen = function() {
             Alpine.store('call').state = 'idle';
             if (this.predictiveMode) {
                 this.schedulePredictiveDial();
-            } else {
-                this.fetchNextLead();
             }
         },
 
@@ -921,9 +1135,10 @@ window.agentScreen = function() {
                     Alpine.store('toast').info(res.data.message || 'No leads available in hopper.');
                     return;
                 }
-                this.leadId = res.data.lead.lead_id || '';
-                this.phoneNumber = res.data.lead.phone_number || '';
-                this.clientName = res.data.lead.client_name || '';
+                this.applyLeadData({
+                    ...res.data.lead,
+                    capture_data: res.data.lead_data || res.data.lead?.capture_data || {},
+                });
                 this.predictiveDelay = Number(res.data.predictive_delay_seconds || this.predictiveDelay || 3);
                 this.sessionId = res.data.session_id || null;
                 Alpine.store('call').number = this.phoneNumber;
@@ -941,7 +1156,17 @@ window.agentScreen = function() {
             if (!form) { this.saving = false; return; }
             const captureData = {};
             form.querySelectorAll('input, select, textarea').forEach(el => {
-                if (el.name && !el.name.startsWith('_')) captureData[el.name] = el.value ?? '';
+                if (!el.name || el.name.startsWith('_')) return;
+
+                const wrapper = el.closest('[data-capture-field]');
+                if (wrapper && wrapper.offsetParent === null) return;
+
+                if (el.type === 'checkbox') {
+                    captureData[el.name] = el.checked ? '1' : '0';
+                    return;
+                }
+
+                captureData[el.name] = el.value ?? '';
             });
             try {
                 await window.axios.post('/api/agent/capture', {
@@ -963,7 +1188,16 @@ window.agentScreen = function() {
         clearForm() {
             const form = document.getElementById('capture-form');
             if (form) {
-                form.querySelectorAll('input, select, textarea').forEach(el => { el.value = ''; });
+                form.querySelectorAll('input, select, textarea').forEach(el => {
+                    if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
+                        el.checked = false;
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+
+                        return;
+                    }
+                    el.value = '';
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                });
             }
         },
     };

@@ -716,33 +716,19 @@ html[data-theme="light"] {
   /* ---- Theme toggle ---- */
   .theme-toggle { }
 
-  /* ---- Login (public auth page — WebGL bg + glass card) ---- */
+  /* ---- Login (public auth page) ---- */
   .login-root {
     position: relative;
     min-height: 100vh;
     overflow: hidden;
-    background: var(--color-surface);
+    background:
+      radial-gradient(circle at 12% 16%, color-mix(in srgb, var(--color-primary) 18%, transparent) 0%, transparent 42%),
+      linear-gradient(160deg, var(--color-surface) 0%, var(--color-surface-1) 46%, var(--color-surface-2) 100%);
   }
-  .login-bg {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-  }
-  .login-bg canvas {
-    display: block;
-    width: 100%;
-    height: 100%;
-  }
-  .login-scrim {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    pointer-events: none;
-    background: color-mix(in srgb, var(--color-surface) 55%, transparent);
-  }
-  html[data-theme="light"] .login-scrim {
-    background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+  html[data-theme="light"] .login-root {
+    background:
+      radial-gradient(circle at 12% 16%, color-mix(in srgb, var(--color-primary) 12%, transparent) 0%, transparent 44%),
+      linear-gradient(160deg, #ffffff 0%, var(--color-surface-2) 56%, var(--color-surface-3) 100%);
   }
   .login-content {
     position: relative;

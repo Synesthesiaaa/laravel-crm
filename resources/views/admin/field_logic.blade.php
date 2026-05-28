@@ -14,6 +14,20 @@
     <div class="mb-4 p-4 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm">{{ session('success') }}</div>
 @endif
 <x-validation-errors />
+@php
+    $visibilityOperatorOptions = [
+        'equals' => 'Equals',
+        'not_equals' => 'Does not equal',
+        'in' => 'Any of',
+        'not_in' => 'None of',
+    ];
+    $visibilityFieldOptions = collect($fields)
+        ->mapWithKeys(fn ($field) => [
+            $field->field_name => $field->field_label !== ''
+                ? $field->field_label.' ('.$field->field_name.')'
+                : $field->field_name,
+        ])->all();
+@endphp
 
 {{-- Form selector --}}
 <div class="md-card mb-6">
@@ -66,6 +80,7 @@
                     <option value="date">Date</option>
                     <option value="select">Select</option>
                     <option value="multiselect">Multi-select (checkboxes)</option>
+                    <option value="percentage">Percentage (%)</option>
                 </select>
             </div>
             <div class="form-field">
@@ -96,6 +111,16 @@
                 <label class="form-label">Options <span class="text-[var(--color-on-surface-muted)] font-normal">(one per line)</span></label>
                 <textarea name="options" rows="4" class="form-textarea font-mono text-sm" placeholder="Option A&#10;Option B&#10;Option C">{{ old('options') }}</textarea>
                 <p class="form-help mt-1">Required for single select and multi-select fields.</p>
+            </div>
+            <div class="rounded-lg border border-[var(--color-border)] p-4 max-w-3xl">
+                <p class="text-sm font-medium text-[var(--color-on-surface)] mb-3">Show When (optional)</p>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <x-form.select name="visibility[field]" label="Source Field" :options="$visibilityFieldOptions" :selected="old('visibility.field')" />
+                    <x-form.select name="visibility[operator]" label="Operator" :options="$visibilityOperatorOptions" :selected="old('visibility.operator')" />
+                    <div class="form-field sm:col-span-3">
+                        <x-form.textarea name="visibility[values][]" label="Values (comma or newline separated)" :value="old('visibility.values.0')" rows="3" placeholder="Yes&#10;No" />
+                    </div>
+                </div>
             </div>
         </form>
     </div>
@@ -134,7 +159,7 @@
                              }}">
                             <button type="button"
                                     class="btn-secondary text-xs px-2 py-1"
-                                    @click="$store.modal.show('edit-field-logic', {{ json_encode(array_merge($f->only(['id','field_name','field_label','field_type','is_required','field_order','field_width']), ['options_text' => $f->optionsTextForAdmin()])) }})">
+                                    @click="$store.modal.show('edit-field-logic', {{ json_encode(array_merge($f->only(['id','field_name','field_label','field_type','is_required','field_order','field_width']), ['options_text' => $f->optionsTextForAdmin(), 'visibility' => is_array($f->visibility) ? $f->visibility : []])) }})">
                                 <x-icon name="pencil" class="w-3.5 h-3.5" />
                                 Edit
                             </button>
@@ -162,8 +187,8 @@
 {{-- Edit field modal --}}
 <x-modal name="edit-field-logic" title="Edit field" maxWidth="lg">
     <div x-data="{
-        edit: { id: null, field_name: '', field_label: '', field_type: 'text', field_width: 'full', field_order: 0, is_required: false, options_text: '' }
-    }" x-effect="$store.modal.is('edit-field-logic') && $store.modal.data && $store.modal.data.id && (edit = { id: $store.modal.data.id, field_name: $store.modal.data.field_name || '', field_label: $store.modal.data.field_label || '', field_type: $store.modal.data.field_type || 'text', field_width: $store.modal.data.field_width || 'full', field_order: $store.modal.data.field_order ?? 0, is_required: !!$store.modal.data.is_required, options_text: $store.modal.data.options_text || '' })">
+        edit: { id: null, field_name: '', field_label: '', field_type: 'text', field_width: 'full', field_order: 0, is_required: false, options_text: '', visibility_field: '', visibility_operator: '', visibility_values_text: '' }
+    }" x-effect="$store.modal.is('edit-field-logic') && $store.modal.data && $store.modal.data.id && (edit = { id: $store.modal.data.id, field_name: $store.modal.data.field_name || '', field_label: $store.modal.data.field_label || '', field_type: $store.modal.data.field_type || 'text', field_width: $store.modal.data.field_width || 'full', field_order: $store.modal.data.field_order ?? 0, is_required: !!$store.modal.data.is_required, options_text: $store.modal.data.options_text || '', visibility_field: $store.modal.data.visibility?.field || '', visibility_operator: $store.modal.data.visibility?.operator || '', visibility_values_text: Array.isArray($store.modal.data.visibility?.values) ? $store.modal.data.visibility.values.join('\n') : '' })">
         <form method="POST" x-show="edit.id"
               :action="'{{ url('admin/field-logic') }}/' + edit.id"
               x-data="{ submitting: false }"
@@ -188,6 +213,7 @@
                         <option value="date">Date</option>
                         <option value="select">Select</option>
                         <option value="multiselect">Multi-select (checkboxes)</option>
+                        <option value="percentage">Percentage (%)</option>
                     </select>
                 </div>
                 <div class="form-field">
@@ -211,6 +237,16 @@
                 <div class="form-field sm:col-span-2" x-show="edit.field_type === 'select' || edit.field_type === 'multiselect'">
                     <label class="form-label">Options <span class="text-[var(--color-on-surface-muted)] font-normal">(one per line)</span></label>
                     <textarea name="options" rows="4" class="form-textarea font-mono text-sm" x-model="edit.options_text" placeholder="Option A&#10;Option B"></textarea>
+                </div>
+                <div class="sm:col-span-2 rounded-lg border border-[var(--color-border)] p-3">
+                    <p class="text-sm font-medium text-[var(--color-on-surface)] mb-2">Show When (optional)</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <x-form.select name="visibility[field]" label="Source Field" :options="$visibilityFieldOptions" x-model="edit.visibility_field" />
+                        <x-form.select name="visibility[operator]" label="Operator" :options="$visibilityOperatorOptions" x-model="edit.visibility_operator" />
+                        <div class="form-field sm:col-span-2">
+                            <x-form.textarea name="visibility[values][]" label="Values (comma or newline separated)" rows="3" x-model="edit.visibility_values_text" />
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="mt-6 flex justify-end gap-2">

@@ -31,6 +31,7 @@ class FormFieldRepository implements FormFieldRepositoryInterface
                 'options' => $field->options ? (is_string($field->options) ? json_decode($field->options, true) : $field->options) : null,
                 'vici_params' => $field->vici_params,
                 'field_width' => $field->field_width ?? 'full',
+                'visibility' => is_array($field->visibility) ? $field->visibility : null,
             ];
             if (! empty($field->vici_params)) {
                 $vici[] = $arr;

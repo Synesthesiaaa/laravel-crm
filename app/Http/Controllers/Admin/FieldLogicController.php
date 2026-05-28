@@ -53,6 +53,7 @@ class FieldLogicController extends Controller
         if (! in_array($validated['field_type'], ['select', 'multiselect'], true)) {
             $options = null;
         }
+        $visibility = $this->normalizeVisibility($validated['visibility'] ?? null);
         $maxOrder = FormField::where('campaign_code', $validated['campaign_code'])
             ->where('form_type', $validated['form_type'])
             ->max('field_order');
@@ -66,6 +67,7 @@ class FieldLogicController extends Controller
             'field_order' => $validated['field_order'] ?? ($maxOrder ?? 0) + 1,
             'field_width' => $validated['field_width'] ?? 'full',
             'options' => $options,
+            'visibility' => $visibility,
         ]);
         $this->campaignService->clearCampaignsCache();
 
@@ -87,6 +89,7 @@ class FieldLogicController extends Controller
         if (! in_array($newType, ['select', 'multiselect'], true)) {
             $options = null;
         }
+        $visibility = $this->normalizeVisibility($validated['visibility'] ?? null);
         $field->update([
             'field_label' => $validated['field_label'],
             'field_name' => $validated['field_name'] ?? $field->field_name,
@@ -95,6 +98,7 @@ class FieldLogicController extends Controller
             'field_order' => $validated['field_order'] ?? $field->field_order,
             'field_width' => $validated['field_width'] ?? $field->field_width,
             'options' => $options,
+            'visibility' => $visibility,
         ]);
         $this->campaignService->clearCampaignsCache();
 
@@ -118,6 +122,49 @@ class FieldLogicController extends Controller
         }
 
         return $opts === [] ? null : json_encode(array_values($opts));
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $visibility
+     * @return array<string, mixed>|null
+     */
+    private function normalizeVisibility(?array $visibility): ?array
+    {
+        $sourceField = trim((string) ($visibility['field'] ?? ''));
+        $operator = trim((string) ($visibility['operator'] ?? ''));
+        $rawValues = $visibility['values'] ?? [];
+
+        if (! is_array($rawValues)) {
+            $rawValues = [];
+        }
+
+        $values = [];
+        foreach ($rawValues as $value) {
+            $text = trim((string) $value);
+            if ($text === '') {
+                continue;
+            }
+
+            $parts = preg_split('/\r\n|\r|\n|,/', $text) ?: [];
+            foreach ($parts as $part) {
+                $token = trim((string) $part);
+                if ($token !== '') {
+                    $values[] = $token;
+                }
+            }
+        }
+
+        $values = array_values(array_unique($values));
+
+        if ($sourceField === '' || $operator === '' || $values === []) {
+            return null;
+        }
+
+        return [
+            'field' => $sourceField,
+            'operator' => $operator,
+            'values' => $values,
+        ];
     }
 
     public function destroy(Request $request): RedirectResponse

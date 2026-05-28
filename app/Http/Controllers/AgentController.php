@@ -28,10 +28,12 @@ class AgentController extends Controller
         $fields = $rawFields->map(function (AgentScreenField $f) {
             return (object) [
                 'field_name' => $f->field_key,
-                'field_type' => 'text',
+                'field_type' => $f->field_type ?: 'text',
                 'label' => $f->field_label,
-                'required' => false,
-                'options_array' => [],
+                'required' => (bool) $f->is_required,
+                'options_array' => is_array($f->options) ? $f->options : [],
+                'placeholder' => $f->placeholder,
+                'visibility' => is_array($f->visibility) ? $f->visibility : null,
                 'field_width' => $f->field_width ?? 'full',
             ];
         });

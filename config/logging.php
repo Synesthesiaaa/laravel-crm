@@ -167,6 +167,14 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'rate-limit' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/rate-limit.log'),
+            'level' => 'warning',
+            'days' => env('LOG_RATE_LIMIT_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
     ],
 
 ];

@@ -9,12 +9,15 @@ use App\Models\CallSession;
 use App\Models\User;
 use App\Models\VicidialAgentSession;
 use App\Services\Telephony\CallStateService;
+use App\Services\Telephony\LeadHydrationService;
 use App\Services\Telephony\TelephonyLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
  * Receives ViciDial Agent Push Events.
+ * This is the instant push path when Agent Push Events is configured;
+ * `/api/telephony/active-lead` acts as the always-on polling fallback.
  * Configure Agent Push URL in ViciDial System Settings:
  *   get2post.php?HTTPURLTOPOST=http://CRM:8000/api/webhooks/vicidial-events
  *     ?user=--A--user--B--&event=--A--event--B--&message=--A--message--B--
@@ -24,6 +27,7 @@ class VicidialEventsWebhookController extends Controller
 {
     public function __construct(
         protected CallStateService $callStateService,
+        protected LeadHydrationService $leadHydrationService,
         protected TelephonyLogger $logger,
     ) {}
 
@@ -83,12 +87,26 @@ class VicidialEventsWebhookController extends Controller
             $this->callStateService->transition($session, CallSession::STATUS_IN_CALL);
         }
 
+        $campaignCode = (string) ($session?->campaign_code ?: config('vicidial.default_campaign', 'mbsales'));
         $phoneNumber = $message ?: ($session?->phone_number ?? '');
+        $hydrated = null;
+        if ($leadId || $phoneNumber) {
+            $hydrated = $this->leadHydrationService->hydrate(
+                $user,
+                $campaignCode,
+                $leadId ? (int) $leadId : null,
+                $phoneNumber !== '' ? $phoneNumber : null,
+            );
+        }
+
         if ($phoneNumber || $leadId) {
             event(new InboundCallReceived(
                 userId: $user->id,
-                phoneNumber: $phoneNumber,
-                leadId: $leadId ? (int) $leadId : null,
+                phoneNumber: (string) ($hydrated['phone_number'] ?? $phoneNumber),
+                leadId: ($hydrated['lead_id'] ?? null) ? (int) $hydrated['lead_id'] : ($leadId ? (int) $leadId : null),
+                clientName: $hydrated['client_name'] ?? null,
+                campaignCode: $campaignCode,
+                leadData: (array) ($hydrated['capture_data'] ?? []),
             ));
         }
 
