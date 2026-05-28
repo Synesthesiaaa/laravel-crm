@@ -16,16 +16,30 @@ class RecordsListController extends Controller
     public function index(Request $request): View
     {
         $campaign = $request->session()->get('campaign', 'mbsales');
-        $history = $this->callHistoryService->getHistoryForCampaign(
+        $activeTab = $request->query('tab') === 'calls' ? 'calls' : 'submissions';
+
+        $submissions = $this->callHistoryService->getHistoryForCampaign(
             $campaign,
             $request->query('start_date'),
             $request->query('end_date'),
             $request->query('agent'),
             25,
-        );
+        )->appends($request->except('page'));
+
+        $callSessions = $this->callHistoryService->getCallSessionsForCampaign(
+            $campaign,
+            $request->query('start_date'),
+            $request->query('end_date'),
+            $request->query('agent'),
+            $request->query('phone'),
+            $request->query('status'),
+            25,
+        )->appends($request->except('page'));
 
         return view('admin.records_list', [
-            'history' => $history,
+            'submissions' => $submissions,
+            'callSessions' => $callSessions,
+            'activeTab' => $activeTab,
             'campaign' => $campaign,
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
         ]);
