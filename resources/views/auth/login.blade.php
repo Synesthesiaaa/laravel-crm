@@ -32,7 +32,7 @@
                     <div class="login-alert login-alert--error" role="alert">{{ $errors->first() }}</div>
                 @endif
 
-                <form method="POST" action="{{ route('login') }}">
+                <form method="POST" action="{{ route('login') }}" data-loading-submit data-loading-text="Signing in...">
                     @csrf
 
                     <div class="login-field login-field-float">
@@ -98,6 +98,17 @@
           setTimeout(function() { btn.classList.remove('login-theme-toggle--spin'); }, 560);
         });
         applyTheme(html.getAttribute('data-theme') || 'dark');
+      })();
+      (function() {
+        document.querySelectorAll('[data-loading-submit]').forEach(function(form) {
+          form.addEventListener('submit', function() {
+            var button = form.querySelector('button[type="submit"]');
+            if (!button || button.disabled) return;
+            button.disabled = true;
+            button.dataset.originalText = button.textContent;
+            button.textContent = form.getAttribute('data-loading-text') || 'Working...';
+          });
+        });
       })();
     </script>
 </body>

@@ -288,6 +288,49 @@ Alpine.store('vicidial', {
 window.Alpine = Alpine;
 window.TelephonyCore = TelephonyCore;
 
+function loadingTextForSubmit(button) {
+    const text = (button?.textContent || '').trim().toLowerCase();
+    if (text.includes('delete') || text.includes('deactivate') || text.includes('remove')) return 'Deleting...';
+    if (text.includes('export')) return 'Exporting...';
+    if (text.includes('sign out')) return 'Signing out...';
+    if (text.includes('login') || text.includes('sign in')) return 'Signing in...';
+    if (text.includes('load') || text.includes('filter')) return 'Loading...';
+    if (text.includes('add')) return 'Adding...';
+    if (text.includes('update')) return 'Updating...';
+    if (text.includes('save')) return 'Saving...';
+    return 'Working...';
+}
+
+window.crmLockSubmitForm = function crmLockSubmitForm(form, loadingText = null) {
+    if (!form || form.dataset.submitLocked === '1') return false;
+    form.dataset.submitLocked = '1';
+
+    const controls = form.querySelectorAll('button');
+    controls.forEach((control) => {
+        if (control instanceof HTMLButtonElement && control.type === 'submit') {
+            control.dataset.originalText = control.textContent;
+            control.textContent = loadingText || form.dataset.loadingText || loadingTextForSubmit(control);
+        }
+        control.disabled = true;
+    });
+
+    return true;
+};
+
+document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement) || form.hasAttribute('data-no-submit-lock')) return;
+    if (form.dataset.submitLocked === '1') {
+        event.preventDefault();
+        return;
+    }
+
+    const method = String(form.getAttribute('method') || 'get').toLowerCase();
+    if (method === 'post') {
+        window.crmLockSubmitForm(form);
+    }
+}, true);
+
 /**
  * Graceful logout: hang up active call, unregister SIP.js, close Vicidial session,
  * blank the session iframe, then submit the real logout form.
@@ -296,6 +339,8 @@ window.TelephonyCore = TelephonyCore;
  * without a 15-line inline arrow function.
  */
 window.crmGracefulLogout = async function () {
+    if (window.__crmLogoutBusy) return;
+    window.__crmLogoutBusy = true;
     try {
         const call = Alpine.store('call');
         if (call.state !== 'idle' && call.sessionId) {

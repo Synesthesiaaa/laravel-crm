@@ -34,6 +34,7 @@ document.addEventListener('alpine:init', () => {
             }
         },
         async start(code) {
+            if (this.loading) return;
             this.loading = true;
             try {
                 await window.axios.post('/api/attendance/start', { code });
@@ -51,6 +52,7 @@ document.addEventListener('alpine:init', () => {
             }
         },
         async end() {
+            if (this.loading) return;
             this.loading = true;
             try {
                 await window.axios.post('/api/attendance/end', {});

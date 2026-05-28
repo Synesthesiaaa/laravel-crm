@@ -61,15 +61,20 @@
                             <span x-text="editOpen ? '{{ __('Cancel') }}' : '{{ __('Edit') }}'">{{ __('Edit') }}</span>
                         </button>
                         @if($type->is_active)
-                        <div x-data="{ async del(form) {
+                        <div x-data="{ deleting: false, async del(form) {
+                            if (this.deleting) return;
                             const ok = await Alpine.store('confirm').ask('{{ __('Deactivate?') }}', '{{ __('This status will no longer appear for new breaks.') }}');
-                            if (ok) form.submit();
+                            if (!ok) return;
+                            this.deleting = true;
+                            window.crmLockSubmitForm?.(form, 'Deleting...');
+                            HTMLFormElement.prototype.submit.call(form);
                         }}">
                             <form method="POST" action="{{ route('admin.attendance-statuses.destroy') }}" x-ref="delForm{{ $type->id }}">
                                 @csrf
                                 <input type="hidden" name="id" value="{{ $type->id }}">
-                                <button type="button" class="btn-danger text-xs px-2 py-1"
-                                        @click="del($refs['delForm{{ $type->id }}'])">
+                                    <button type="button" class="btn-danger text-xs px-2 py-1"
+                                            :disabled="deleting"
+                                            @click="del($refs['delForm{{ $type->id }}'])">
                                     <x-icon name="trash" class="w-3.5 h-3.5" />
                                     {{ __('Deactivate') }}
                                 </button>

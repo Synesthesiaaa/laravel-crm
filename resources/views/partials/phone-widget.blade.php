@@ -104,7 +104,7 @@
                             x-show="vici.agent_campaigns?.length"
                             x-model="vici.vici_campaign"
                             @change="onViciCampaignChange()"
-                            :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase) || vici.agent_campaigns_loading">
+                            :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase) || vici.agent_campaigns_loading || vici.campaign_saving">
                         <template x-for="c in (vici.agent_campaigns || [])" :key="c.id">
                             <option :value="c.id" x-text="c.name && c.name !== c.id ? (c.id + ' — ' + c.name) : c.id"></option>
                         </template>
@@ -115,6 +115,7 @@
                            :disabled="$store.vicidial.loggedIn"
                            title="CRM session campaign" />
                     <p x-show="vici.agent_campaigns_loading" class="text-[11px] text-amber-600 mt-1">Loading campaigns…</p>
+                    <p x-show="vici.campaign_saving" class="text-[11px] text-amber-600 mt-1">Saving campaign...</p>
                     <p class="text-[11px] text-red-600 mt-1" x-show="vici.agent_campaigns_error" x-text="vici.agent_campaigns_error"></p>
                 </div>
 
@@ -161,8 +162,8 @@
                 <div class="flex flex-wrap gap-2">
                     <template x-if="!$store.vicidial.loggedIn">
                         <button class="btn-primary text-xs" @click="viciLogin()"
-                                :disabled="['requesting','iframe_loading','syncing'].includes(vici.phase) || !vici.phone_login || !vici.vd_login">
-                            <x-icon name="power" class="w-3.5 h-3.5" />
+                                :disabled="vici.loading || ['requesting','iframe_loading','syncing'].includes(vici.phase) || !vici.phone_login || !vici.vd_login">
+                            <x-icon name="power" class="w-3.5 h-3.5" x-bind:class="vici.loading ? 'animate-spin' : ''" />
                             <span x-text="['requesting','iframe_loading','syncing'].includes(vici.phase) ? 'Connecting…' : 'Login'"></span>
                         </button>
                     </template>
@@ -174,16 +175,19 @@
                     </template>
                     <template x-if="$store.vicidial.loggedIn">
                         <button type="button" class="btn-ghost text-xs" @click="viciLogout()"
-                                :disabled="vici.loading">Logout</button>
+                                :disabled="vici.loading">
+                            <span x-text="vici.loading ? 'Working...' : 'Logout'">Logout</span>
+                        </button>
                     </template>
                 </div>
 
                 <div x-show="$store.vicidial.loggedIn && (vici.phase === 'ready' || vici.phase === 'syncing' || vici.phase === 'iframe_loading')" class="space-y-1">
                     <button type="button"
                             class="btn-ghost text-xs w-full flex items-center gap-1.5 justify-center border border-[var(--color-border)] rounded-lg py-1.5"
-                            @click="viciPopout()">
-                        <x-icon name="arrow-top-right-on-square" class="w-3.5 h-3.5" />
-                        Open VICIdial in new window
+                            @click="viciPopout()"
+                            :disabled="vici.popout_loading">
+                        <x-icon name="arrow-top-right-on-square" class="w-3.5 h-3.5" x-bind:class="vici.popout_loading ? 'animate-spin' : ''" />
+                        <span x-text="vici.popout_loading ? 'Opening...' : 'Open VICIdial in new window'">Open VICIdial in new window</span>
                     </button>
                 </div>
             </div>

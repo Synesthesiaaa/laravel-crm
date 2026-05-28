@@ -19,9 +19,9 @@
          class="phone-widget-panel mb-2 flex items-center gap-3">
         <span class="text-sm text-[var(--color-on-surface)] truncate max-w-[140px]" x-text="$store.call.number || 'Call in progress'"></span>
         <span x-show="$store.call.state === 'connected'" class="text-xs text-[var(--color-on-surface-dim)]" x-text="'· ' + $store.call.formattedDuration()"></span>
-        <button type="button" @click="hangup()" class="btn-danger shrink-0 text-sm py-1 px-3 rounded-lg flex items-center gap-1">
-            <x-icon name="phone-x-mark" class="w-4 h-4" />
-            Hang up
+        <button type="button" @click="hangup()" class="btn-danger shrink-0 text-sm py-1 px-3 rounded-lg flex items-center gap-1" :disabled="hangingUp">
+            <x-icon name="phone-x-mark" class="w-4 h-4" :class="hangingUp ? 'animate-spin' : ''" />
+            <span x-text="hangingUp ? 'Ending...' : 'Hang up'">Hang up</span>
         </button>
     </div>
 
@@ -45,15 +45,16 @@
                    @keydown.enter="dial()"
                    class="form-input"
                    placeholder="+63 XXX XXX XXXX"
+                   :disabled="dialing"
                    x-ref="phoneInput"
                    x-init="$nextTick(() => open && $refs.phoneInput.focus())" />
         </div>
         <div class="flex gap-2">
-            <button @click="dial()" class="btn-primary flex-1 text-sm" :disabled="!phoneNumber">
-                <x-icon name="phone" class="w-4 h-4" />
-                Dial
+            <button @click="dial()" class="btn-primary flex-1 text-sm" :disabled="!phoneNumber || dialing">
+                <x-icon name="phone" class="w-4 h-4" :class="dialing ? 'animate-spin' : ''" />
+                <span x-text="dialing ? 'Dialing...' : 'Dial'">Dial</span>
             </button>
-            <button @click="open = false" class="btn-ghost text-sm">Cancel</button>
+            <button @click="open = false" class="btn-ghost text-sm" :disabled="dialing">Cancel</button>
         </div>
     </div>
 </div>

@@ -11,8 +11,14 @@
         </label>
     </div>
     <div class="flex gap-2">
-        <button class="btn-secondary text-xs" @click="updateIngroups('CHANGE')">Replace</button>
-        <button class="btn-secondary text-xs" @click="updateIngroups('ADD')">Add</button>
-        <button class="btn-secondary text-xs" @click="updateIngroups('REMOVE')">Remove</button>
+        <button class="btn-secondary text-xs" @click="updateIngroups('CHANGE')" :disabled="busy.ingroups">
+            <span x-text="busy.ingroups === 'CHANGE' ? 'Replacing...' : 'Replace'">Replace</span>
+        </button>
+        <button class="btn-secondary text-xs" @click="updateIngroups('ADD')" :disabled="busy.ingroups">
+            <span x-text="busy.ingroups === 'ADD' ? 'Adding...' : 'Add'">Add</span>
+        </button>
+        <button class="btn-secondary text-xs" @click="updateIngroups('REMOVE')" :disabled="busy.ingroups">
+            <span x-text="busy.ingroups === 'REMOVE' ? 'Removing...' : 'Remove'">Remove</span>
+        </button>
     </div>
 </div>
