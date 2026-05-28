@@ -106,9 +106,13 @@
             </td>
             <td class="text-sm text-[var(--color-on-surface-muted)]">{{ $s->priority }}</td>
             <td>
-                <div class="table-actions" x-data="{ async del(form) {
+                <div class="table-actions" x-data="{ deleting: false, async del(form) {
+                    if (this.deleting) return;
                     const ok = await Alpine.store('confirm').ask('Delete server?', '{{ addslashes($s->server_name) }} will be removed.');
-                    if (ok) form.submit();
+                    if (!ok) return;
+                    this.deleting = true;
+                    window.crmLockSubmitForm?.(form, 'Deleting...');
+                    HTMLFormElement.prototype.submit.call(form);
                 }}">
                     <button type="button" class="btn-secondary text-xs px-2 py-1" @click="editOpen = !editOpen">
                         <x-icon name="pencil" class="w-3.5 h-3.5" />
@@ -118,6 +122,7 @@
                         @csrf
                         <input type="hidden" name="id" value="{{ $s->id }}">
                         <button type="button" class="btn-danger text-xs px-2 py-1"
+                                :disabled="deleting"
                                 @click="del($refs['delFormS{{ $s->id }}'])">
                             <x-icon name="trash" class="w-3.5 h-3.5" />
                             Delete

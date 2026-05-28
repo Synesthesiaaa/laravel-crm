@@ -117,14 +117,19 @@
                             <span x-text="editOpen ? 'Cancel' : 'Edit'">Edit</span>
                         </button>
                         @if($usr->id !== auth()->id())
-                        <div x-data="{ async del(form) {
+                        <div x-data="{ deleting: false, async del(form) {
+                            if (this.deleting) return;
                             const ok = await Alpine.store('confirm').ask('Delete user?', 'Remove {{ $usr->username }} from the system. This cannot be undone.');
-                            if (ok) form.submit();
+                            if (!ok) return;
+                            this.deleting = true;
+                            window.crmLockSubmitForm?.(form, 'Deleting...');
+                            HTMLFormElement.prototype.submit.call(form);
                         }}">
                             <form method="POST" action="{{ route('admin.users.destroy') }}" x-ref="delForm{{ $usr->id }}">
                                 @csrf
                                 <input type="hidden" name="id" value="{{ $usr->id }}">
                                 <button type="button" class="btn-danger text-xs px-2 py-1"
+                                        :disabled="deleting"
                                         @click="del($refs['delForm{{ $usr->id }}'])">
                                     <x-icon name="trash" class="w-3.5 h-3.5" />
                                     Delete

@@ -298,6 +298,7 @@ html[data-theme="light"] {
     white-space: nowrap;
   }
   .btn-secondary:hover { background: var(--color-surface-3); border-color: var(--color-border-strong); }
+  .btn-secondary:disabled { opacity: .5; cursor: not-allowed; }
 
   .btn-ghost {
     display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
@@ -311,6 +312,7 @@ html[data-theme="light"] {
     white-space: nowrap;
   }
   .btn-ghost:hover { background: var(--color-surface-2); color: var(--color-on-surface); border-color: var(--color-border-strong); }
+  .btn-ghost:disabled { opacity: .5; cursor: not-allowed; }
 
   .btn-danger {
     display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
@@ -324,6 +326,7 @@ html[data-theme="light"] {
   }
   .btn-danger:hover { background: var(--color-danger-hover); }
   .btn-danger:active { transform: scale(.98); }
+  .btn-danger:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 
   /* ---- Cards ---- */
   .md-card {

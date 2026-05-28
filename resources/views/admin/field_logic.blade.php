@@ -153,9 +153,13 @@
                     </td>
                     <td class="py-3 px-4">
                         <div class="table-actions flex justify-end gap-2"
-                             x-data="{ async doDelete(el) {
+                             x-data="{ deleting: false, async doDelete(el) {
+                                if (this.deleting) return;
                                 const ok = await Alpine.store('confirm').ask('Delete field?', 'Remove this field? This cannot be undone.');
-                                if (ok) el.submit();
+                                if (!ok) return;
+                                this.deleting = true;
+                                window.crmLockSubmitForm?.(el, 'Deleting...');
+                                HTMLFormElement.prototype.submit.call(el);
                              }}">
                             <button type="button"
                                     class="btn-secondary text-xs px-2 py-1"
@@ -167,6 +171,7 @@
                                 @csrf
                                 <input type="hidden" name="id" value="{{ $f->id }}">
                                 <button type="button" class="btn-danger text-xs px-2 py-1"
+                                        :disabled="deleting"
                                         @click="doDelete($refs.delForm)">
                                     <x-icon name="trash" class="w-3.5 h-3.5" />
                                     Delete
