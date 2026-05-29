@@ -23,8 +23,7 @@
                 <x-form.input name="code" label="{{ __('Code') }}" required placeholder="e.g. training" />
                 <x-form.input name="label" label="{{ __('Label') }}" required placeholder="{{ __('Training') }}" />
                 <x-form.input name="sort_order" type="number" label="{{ __('Sort order') }}" value="0" />
-                <div class="form-field">
-                    <label class="form-label">&nbsp;</label>
+                <div class="form-actions-bottom">
                     <button type="submit" class="btn-primary" :disabled="submitting">
                         <x-icon name="plus" class="w-4 h-4" />
                         {{ __('Add') }}
@@ -81,19 +80,19 @@
                             </form>
                         </div>
                         @endif
-                        <div x-show="editOpen" x-collapse
-                             style="display:none; position: absolute; right: 1rem; top: 100%; z-index: 20; background: var(--color-surface-2); border: 1px solid var(--color-border-strong); border-radius: 10px; padding: 1rem; min-width: 28rem; box-shadow: var(--shadow-3);">
+                        <div x-show="editOpen" x-collapse class="inline-edit-panel"
+                             style="display:none;">
                             <form method="POST" action="{{ route('admin.attendance-statuses.update', $type->id) }}"
                                   x-data="{ submitting: false }" @submit="submitting = true">
                                 @csrf
                                 @method('PUT')
-                                <div class="grid grid-cols-3 gap-3">
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     <x-form.input name="code" label="{{ __('Code') }}" :value="$type->code" />
                                     <x-form.input name="label" label="{{ __('Label') }}" :value="$type->label" />
                                     <x-form.input name="sort_order" type="number" label="{{ __('Order') }}" :value="$type->sort_order" />
                                 </div>
-                                <div class="mt-3 flex items-center gap-2">
-                                    <label class="inline-flex items-center gap-2 text-sm text-[var(--color-on-surface-muted)]">
+                                <div class="mt-3">
+                                    <label class="checkbox-row">
                                         <input type="hidden" name="is_active" value="0">
                                         <input type="checkbox" name="is_active" value="1" class="rounded border-[var(--color-border-strong)]"
                                                @checked($type->is_active)>

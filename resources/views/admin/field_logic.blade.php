@@ -41,8 +41,7 @@
                     @endforeach
                 </select>
             </div>
-            <div class="form-field">
-                <label class="form-label">&nbsp;</label>
+            <div class="form-actions-bottom">
                 <button type="submit" class="btn-primary">
                     <x-icon name="funnel" class="w-4 h-4" />
                     Load
@@ -95,12 +94,13 @@
                 <label class="form-label">Order</label>
                 <input type="number" name="field_order" class="form-input w-24" value="" placeholder="auto" min="0" step="1">
             </div>
-            <div class="form-field flex items-center gap-2 pt-6">
-                <input type="checkbox" name="is_required" value="1" id="add_req" class="rounded border-gray-300">
-                <label for="add_req" class="text-sm text-[var(--color-on-surface)]">Required</label>
+            <div class="form-actions-bottom">
+                <label class="checkbox-row">
+                <input type="checkbox" name="is_required" value="1" id="add_req">
+                <span>Required</span>
+                </label>
             </div>
-            <div class="form-field">
-                <label class="form-label">&nbsp;</label>
+            <div class="form-actions-bottom">
                 <button type="submit" class="btn-primary" :disabled="submitting">
                     <x-icon name="plus" class="w-4 h-4" />
                     Add
@@ -236,7 +236,7 @@
                 <div class="form-field flex items-center gap-2 pt-6">
                     <input type="checkbox" name="is_required" value="1" id="edit_req"
                            x-model="edit.is_required"
-                           class="rounded border-gray-300">
+                           class="rounded border-[var(--color-border-strong)] accent-[var(--color-primary)]">
                     <label for="edit_req" class="text-sm text-[var(--color-on-surface)]">Required</label>
                 </div>
                 <div class="form-field sm:col-span-2" x-show="edit.field_type === 'select' || edit.field_type === 'multiselect'">

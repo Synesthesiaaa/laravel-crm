@@ -64,8 +64,7 @@
     <div class="p-4">
         <form method="GET" action="{{ route('admin.agent-screen.index') }}" class="flex flex-wrap items-end gap-4">
             <x-form.select name="campaign" label="Campaign" :options="$campaignOptions" :selected="$selectedCampaign" />
-            <div class="form-field">
-                <label class="form-label">&nbsp;</label>
+            <div class="form-actions-bottom">
                 <button type="submit" class="btn-secondary">
                     <x-icon name="funnel" class="w-4 h-4" />
                     Load

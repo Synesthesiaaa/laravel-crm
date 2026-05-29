@@ -39,12 +39,8 @@
 
     {{-- Main layout --}}
     <div id="main-layout"
-         class="flex-1 flex flex-col min-h-screen transition-all duration-[280ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
-         :class="{
-             'lg:ml-[280px]': !$store.sidebar.collapsed,
-             'lg:ml-[72px]':   $store.sidebar.collapsed,
-             'ml-0': true
-         }">
+         class="md-main-layout"
+         :data-collapsed="$store.sidebar.collapsed ? 'true' : 'false'">
 
         {{-- Sticky header --}}
         <header class="md-header" role="banner">
@@ -152,7 +148,7 @@
                      style="display: none;">
                     <x-icon name="phone" class="w-3.5 h-3.5" />
                     <span x-show="$store.call.state === 'ringing'">Ringing...</span>
-                    <span x-show="$store.call.state === 'connected'" x-text="'On Call · ' + $store.call.formattedDuration()"></span>
+                    <span x-show="$store.call.state === 'connected'" x-text="'On Call - ' + $store.call.formattedDuration()"></span>
                     <span x-show="$store.call.state === 'hold'">On Hold</span>
                     <span x-show="$store.call.state === 'wrapup'">Wrap-up</span>
                 </div>
@@ -162,8 +158,8 @@
                      style="display: none;">
                     <x-icon name="signal" class="w-3.5 h-3.5" />
                     <span x-text="'Vici: ' + ($store.vicidial.status || 'ready')"></span>
-                    <span x-show="$store.vicidial.pauseCode">· <span x-text="$store.vicidial.pauseCode"></span></span>
-                    <span>· Q:<span x-text="$store.vicidial.queueCount"></span></span>
+                    <span x-show="$store.vicidial.pauseCode">- <span x-text="$store.vicidial.pauseCode"></span></span>
+                    <span>- Q:<span x-text="$store.vicidial.queueCount"></span></span>
                 </div>
 
                 {{-- Theme toggle --}}

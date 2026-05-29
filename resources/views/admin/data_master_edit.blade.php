@@ -3,7 +3,7 @@
 @section('title', 'Edit Record - Admin')
 
 @section('header-icon')
-    <span class="mr-3 text-indigo-600">💾</span>
+    <x-icon name="pencil" class="w-5 h-5 text-[var(--color-primary)]" />
 @endsection
 
 @section('header-title')
@@ -12,27 +12,33 @@
 
 @section('content')
     @if(session('error'))
-        <div class="mb-4 p-4 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm">{{ session('error') }}</div>
+        <x-alert type="error" class="mb-4">{{ session('error') }}</x-alert>
     @endif
     <x-validation-errors />
-    <div class="bg-white rounded-xl shadow border border-gray-100 overflow-hidden max-w-2xl">
+    <x-page-header title="Edit Record"
+        :breadcrumbs="['Admin' => route('admin.dashboard'), 'Data Master' => route('admin.data-master.index', ['type' => $type]), 'Edit Record' => null]" />
+
+    <div class="md-card max-w-2xl overflow-hidden">
         <div class="p-6">
-            <form method="POST" action="{{ route('admin.data-master.update') }}">
+            <form method="POST" action="{{ route('admin.data-master.update') }}" class="space-y-4">
                 @csrf
                 <input type="hidden" name="_table" value="{{ $tableName }}">
                 <input type="hidden" name="_id" value="{{ $record->id ?? $record['id'] }}">
                 <input type="hidden" name="_type" value="{{ $type }}">
                 @foreach($columns as $col)
                     @if(!in_array($col, ['id', 'created_at', 'updated_at'], true))
-                        <div class="mb-4">
-                            <label class="block text-xs font-bold text-gray-600 uppercase mb-1">{{ $headers[$col] ?? $col }}</label>
-                            <input type="text" name="{{ $col }}" value="{{ is_object($record) ? ($record->$col ?? '') : ($record[$col] ?? '') }}" class="w-full px-3 py-2 border border-gray-200 rounded">
+                        <div class="form-field">
+                            <label class="form-label">{{ $headers[$col] ?? $col }}</label>
+                            <input type="text" name="{{ $col }}" value="{{ is_object($record) ? ($record->$col ?? '') : ($record[$col] ?? '') }}" class="form-input">
                         </div>
                     @endif
                 @endforeach
-                <div class="flex gap-2">
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Update</button>
-                    <a href="{{ route('admin.data-master.index', ['type' => $type]) }}" class="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50">Cancel</a>
+                <div class="form-actions-bottom pt-2">
+                    <button type="submit" class="btn-primary">
+                        <x-icon name="check" class="w-4 h-4" />
+                        Update
+                    </button>
+                    <a href="{{ route('admin.data-master.index', ['type' => $type]) }}" class="btn-ghost">Cancel</a>
                 </div>
             </form>
         </div>

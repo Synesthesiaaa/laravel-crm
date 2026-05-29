@@ -58,8 +58,7 @@
                 <x-form.input name="phone" label="Phone" :value="request('phone')" placeholder="Phone number" />
                 <x-form.select name="status" label="Status" :options="$statusOptions" :selected="request('status')" empty="All statuses" />
             @endif
-            <div class="form-field">
-                <label class="form-label">&nbsp;</label>
+            <div class="form-actions-bottom">
                 <div class="flex gap-2">
                     <button type="submit" class="btn-primary"><x-icon name="funnel" class="w-4 h-4" /> Filter</button>
                     <a href="{{ route('admin.records.index', ['tab' => $activeTab]) }}" class="btn-ghost">Clear</a>

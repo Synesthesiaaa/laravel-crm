@@ -30,7 +30,7 @@
         <p class="text-xs text-[var(--color-on-surface-muted)] mt-1">{{ __('Start or end lunch, break, or other statuses configured by your administrator. Login and logout are recorded automatically.') }}</p>
     </div>
     <div class="p-6">
-        <p class="text-sm text-[var(--color-on-surface-muted)]" x-show="!ready">{{ __('Loading…') }}</p>
+        <p class="text-sm text-[var(--color-on-surface-muted)]" x-show="!ready">{{ __('Loading...') }}</p>
         <template x-if="ready && open">
             <div class="flex flex-wrap items-center gap-3">
                 <x-badge type="info"><span x-text="open?.label"></span></x-badge>
@@ -51,7 +51,7 @@
             </div>
         </template>
         <p class="text-sm text-[var(--color-on-surface-dim)]" x-show="ready && !open && !types.length">
-            {{ __('No away statuses are available. Ask a Super Admin to configure them under Admin → Attendance Statuses.') }}
+            {{ __('No away statuses are available. Ask a Super Admin to configure them under Admin > Attendance Statuses.') }}
         </p>
     </div>
 </div>
@@ -60,8 +60,7 @@
     <div class="p-4">
         <form method="GET" action="{{ route('attendance.index') }}" class="flex items-end gap-4">
             <x-form.input name="date" type="date" label="Date" :value="$date" />
-            <div class="form-field">
-                <label class="form-label">&nbsp;</label>
+            <div class="form-actions-bottom">
                 <button type="submit" class="btn-primary">
                     <x-icon name="magnifying-glass" class="w-4 h-4" />
                     View
@@ -85,7 +84,7 @@
                     </x-badge>
                 </td>
                 <td class="font-mono text-sm text-[var(--color-on-surface-muted)]">{{ $log->event_time?->timezone(config('app.timezone'))->format('Y-m-d H:i:s T') }}</td>
-                <td class="font-mono text-sm text-[var(--color-on-surface-dim)]">{{ $log->ip_address ?? '—' }}</td>
+                <td class="font-mono text-sm text-[var(--color-on-surface-dim)]">{{ $log->ip_address ?? '-' }}</td>
             </tr>
         @endforeach
     </tbody>

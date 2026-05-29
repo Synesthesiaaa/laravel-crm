@@ -3,7 +3,7 @@
 $icons = ['success' => 'check-circle', 'error' => 'x-circle', 'warning' => 'exclamation-triangle', 'info' => 'information-circle'];
 $icon  = $icons[$type] ?? 'information-circle';
 @endphp
-<div class="alert alert-{{ $type }}" role="alert" @if($dismissible) x-data="{ show: true }" x-show="show" @endif>
+<div {{ $attributes->class(['alert', 'alert-'.$type]) }} role="alert" @if($dismissible) x-data="{ show: true }" x-show="show" @endif>
     <x-icon :name="$icon" class="w-4 h-4 shrink-0 mt-0.5" />
     <div class="flex-1 min-w-0">
         @if($title) <p class="font-semibold mb-0.5">{{ $title }}</p> @endif

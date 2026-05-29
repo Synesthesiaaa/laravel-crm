@@ -15,8 +15,7 @@
             <x-form.select name="type" label="Form Type"
                 :options="collect($forms)->mapWithKeys(fn($v,$k) => [$k => $v['name'] ?? $k])->all()"
                 :selected="$type" :empty="false" />
-            <div class="form-field">
-                <label class="form-label">&nbsp;</label>
+            <div class="form-actions-bottom">
                 <button type="submit" class="btn-primary"><x-icon name="funnel" class="w-4 h-4" /> Load</button>
             </div>
         </form>

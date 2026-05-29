@@ -18,8 +18,7 @@
                 :options="collect($campaigns)->mapWithKeys(fn($v,$k) => [$k => $v['name'] ?? $k])->all()"
                 :selected="$filterCampaign"
                 empty="Global (all campaigns)" />
-            <div class="form-field">
-                <label class="form-label">&nbsp;</label>
+            <div class="form-actions-bottom">
                 <button type="submit" class="btn-secondary">
                     <x-icon name="funnel" class="w-4 h-4" />
                     Filter
@@ -43,8 +42,7 @@
                 <x-form.input name="code"  label="Code"   required placeholder="e.g. SALE" />
                 <x-form.input name="label" label="Label"  required placeholder="Sale" />
                 <x-form.input name="sort_order" type="number" label="Sort Order" value="0" />
-                <div class="form-field">
-                    <label class="form-label">&nbsp;</label>
+                <div class="form-actions-bottom">
                     <button type="submit" class="btn-primary" :disabled="submitting">
                         <x-icon name="plus" class="w-4 h-4" />
                         Add
@@ -101,13 +99,13 @@
                             </form>
                         </div>
                         {{-- Inline edit --}}
-                        <div x-show="editOpen" x-collapse
-                             style="display:none; position: absolute; right: 1rem; top: 100%; z-index: 20; background: var(--color-surface-2); border: 1px solid var(--color-border-strong); border-radius: 10px; padding: 1rem; min-width: 28rem; box-shadow: var(--shadow-3);">
+                        <div x-show="editOpen" x-collapse class="inline-edit-panel"
+                             style="display:none;">
                             <form method="POST" action="{{ route('admin.disposition-codes.update', $code->id) }}"
                                   x-data="{ submitting: false }" @submit="submitting = true">
                                 @csrf
                                 @method('PUT')
-                                <div class="grid grid-cols-3 gap-3">
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     <x-form.input name="code"  label="Code"  :value="$code->code" />
                                     <x-form.input name="label" label="Label" :value="$code->label" />
                                     <x-form.input name="sort_order" type="number" label="Order" :value="$code->sort_order" />
