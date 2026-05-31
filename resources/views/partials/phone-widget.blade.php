@@ -13,15 +13,16 @@
 @endphp
 {{-- VICIdial session: FAB + expandable panel. Iframe is never inside x-show (WebRTC). Collapsed = 1×1px viewport slot. --}}
 <div id="phone-widget-root"
-     class="fixed z-40 flex flex-col-reverse items-end gap-2"
+     class="fixed z-40"
      x-data="phoneWidget(@js($phoneWidgetBoot))"
      :style="widgetStyle"
      x-init="init()"
      @click.stop>
 
     <button type="button"
-            class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-[var(--color-on-surface)] shadow-lg transition hover:bg-[var(--color-surface-2)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] relative"
-            @click="toggleOpen()"
+            class="absolute left-0 top-0 z-20 flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-[var(--color-on-surface)] shadow-lg transition hover:bg-[var(--color-surface-2)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] relative cursor-move"
+            @pointerdown="onIconPointerDown($event)"
+            @click="toggleOpen($event)"
             :aria-expanded="open"
             aria-controls="phone-widget-shell"
             title="Phone / VICIdial session">
@@ -40,7 +41,7 @@
     </button>
 
     <div id="phone-widget-shell"
-         class="relative flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg transition-all duration-300 ease-out"
+         class="absolute right-[calc(100%+0.5rem)] bottom-[calc(100%+0.5rem)] origin-bottom-right relative flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg transition-all duration-300 ease-out"
          :style="shellStyle">
 
         {{-- Controls: hidden when minimized (display:none OK here — not wrapping the iframe) --}}
