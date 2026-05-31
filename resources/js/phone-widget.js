@@ -56,6 +56,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
 
     return {
         open: false,
+        movable: boot.movable !== false,
         panelW,
         panelH,
         x: Math.max(0, window.innerWidth - panelW - 16),
@@ -175,6 +176,13 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         },
 
         clampAnchorPosition(x, y) {
+            if (!this.movable) {
+                const iconSize = 48;
+                return {
+                    x: Math.max(0, window.innerWidth - iconSize - 16),
+                    y: Math.max(0, window.innerHeight - iconSize - 16),
+                };
+            }
             const iconSize = 48;
             return {
                 x: Math.min(Math.max(Number(x) || 0, 0), Math.max(0, window.innerWidth - iconSize)),
@@ -189,6 +197,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         },
 
         beginAnchorDrag(event) {
+            if (!this.movable) return;
             if (event.button !== undefined && event.button !== 0) return;
             const originX = event.clientX;
             const originY = event.clientY;

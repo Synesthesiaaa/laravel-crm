@@ -2,12 +2,14 @@
     window.__VICIDIAL_SESSION_IFRAME_ONLY = @json((bool) config('vicidial.session_iframe_agent_api_only', false));
 </script>
 @php
+    $isFormsPage = request()->routeIs('forms.show');
     $phoneWidgetBoot = [
         'vici_campaign' => (string) (session('vicidial_campaign') ?? session('campaign', 'mbsales')),
         'phone_login' => (string) (auth()->user()->extension ?? ''),
         'vd_login' => (string) (auth()->user()->vici_user ?? ''),
         'panelW' => (int) config('vicidial.session_iframe_panel_width_px', 440),
         'panelH' => (int) config('vicidial.session_iframe_panel_height_px', 360),
+        'movable' => $isFormsPage,
         'sessionControls' => true,
     ];
 @endphp
@@ -20,7 +22,8 @@
      @click.stop>
 
     <button type="button"
-            class="absolute left-0 top-0 z-20 flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-[var(--color-on-surface)] shadow-lg transition hover:bg-[var(--color-surface-2)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] relative cursor-move"
+            class="widget-launcher absolute left-0 top-0 z-20 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-elevated)] text-[var(--color-on-surface)] shadow-lg transition hover:bg-[var(--color-surface-2)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] relative"
+            :class="movable ? 'cursor-move' : 'cursor-pointer'"
             @pointerdown="onIconPointerDown($event)"
             @click="toggleOpen($event)"
             :aria-expanded="open"
@@ -41,7 +44,7 @@
     </button>
 
     <div id="phone-widget-shell"
-         class="absolute right-[calc(100%+0.5rem)] bottom-[calc(100%+0.5rem)] origin-bottom-right relative flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg transition-all duration-300 ease-out"
+         class="widget-panel-upper-left absolute origin-bottom-right relative flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg transition-all duration-300 ease-out"
          :style="shellStyle">
 
         {{-- Controls: hidden when minimized (display:none OK here — not wrapping the iframe) --}}

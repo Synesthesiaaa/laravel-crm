@@ -763,6 +763,18 @@ html[data-theme="light"] {
     background: var(--color-surface-3);
   }
 
+  .widget-launcher {
+    border: 2px solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border-strong) 45%);
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--color-surface) 70%, transparent),
+      var(--shadow-2);
+  }
+
+  .widget-panel-upper-left {
+    right: calc(100% + 0.5rem);
+    bottom: calc(100% + 0.5rem);
+  }
+
   /* ---- Loading / skeleton ---- */
   .skeleton {
     background: linear-gradient(90deg, var(--color-surface-2) 25%, var(--color-surface-3) 50%, var(--color-surface-2) 75%);
