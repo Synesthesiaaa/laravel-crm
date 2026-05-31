@@ -35,7 +35,7 @@ class QuickFormController extends Controller
             'campaign_name' => (string) ($campaignConfig['name'] ?? $campaign),
             'form_type' => $firstType,
             'form_name' => (string) ($firstConfig['name'] ?? $firstType),
-            'form_url' => route('forms.show', ['type' => $firstType, 'campaign' => $campaign]),
+            'form_url' => route('forms.show', ['type' => $firstType, 'campaign' => $campaign, 'widget_embed' => 1]),
         ]);
     }
 }

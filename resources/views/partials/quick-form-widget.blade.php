@@ -6,7 +6,7 @@
         'current_form_type' => $currentFormType,
         'current_campaign' => $currentCampaign,
         'current_form_url' => $isFormsPage && $currentFormType
-            ? route('forms.show', ['type' => $currentFormType, 'campaign' => $currentCampaign])
+            ? route('forms.show', ['type' => $currentFormType, 'campaign' => $currentCampaign, 'widget_embed' => 1])
             : null,
     ];
 @endphp
@@ -27,7 +27,7 @@
     </button>
 
     <div id="quick-form-widget-shell"
-         class="flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg transition-all duration-300 ease-out"
+         class="relative flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg transition-all duration-300 ease-out"
          :style="shellStyle">
         <div x-show="open"
              x-transition.opacity.duration.200ms

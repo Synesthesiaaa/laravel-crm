@@ -159,6 +159,7 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         async init() {
             widgetCtx = this;
             window.addEventListener('resize', this.onWindowResize.bind(this));
+            this.onWindowResize();
             await persistence.load();
             await this.resolveDefaultSource();
         },

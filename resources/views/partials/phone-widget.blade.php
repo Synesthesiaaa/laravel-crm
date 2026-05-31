@@ -40,7 +40,7 @@
     </button>
 
     <div id="phone-widget-shell"
-         class="flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg transition-all duration-300 ease-out"
+         class="relative flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg transition-all duration-300 ease-out"
          :style="shellStyle">
 
         {{-- Controls: hidden when minimized (display:none OK here — not wrapping the iframe) --}}

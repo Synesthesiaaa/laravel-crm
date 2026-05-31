@@ -37,7 +37,7 @@ class FormController extends Controller
             'date' => now()->format('Y-m-d'),
         ]);
 
-        return view('forms.show', [
+        $viewData = [
             'campaign' => $campaign,
             'campaignName' => $campaignConfig['name'] ?? $campaign,
             'formType' => $type,
@@ -48,7 +48,13 @@ class FormController extends Controller
             'prefill' => $prefill,
             'leadId' => $request->query('lead_id'),
             'phoneNumber' => $request->query('phone_number'),
-        ]);
+        ];
+
+        if ($request->boolean('widget_embed')) {
+            return view('forms.widget', $viewData);
+        }
+
+        return view('forms.show', $viewData);
     }
 
     public function store(FormSubmissionRequest $request): RedirectResponse

@@ -351,6 +351,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             window.addEventListener('vicidial-ws-phase', this._onWsPhase.bind(this));
             window.addEventListener('telephony-shortcut-pause', this._pauseShortcut.bind(this));
             window.addEventListener('resize', this.onWindowResize.bind(this));
+            this.onWindowResize();
             await persistence.load();
 
             if (!this.sessionControls) return;
