@@ -460,6 +460,7 @@
     @auth
     <audio id="remoteAudio" autoplay playsinline style="display:none;" aria-hidden="true"></audio>
     @include('partials.phone-widget')
+    @include('partials.quick-form-widget')
     @php
         $telephonyBootstrap = session()->pull('telephony_bootstrap');
     @endphp

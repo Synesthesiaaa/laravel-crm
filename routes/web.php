@@ -102,6 +102,9 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::post('api/notifications/read-all', \App\Http\Controllers\Api\MarkNotificationsReadController::class)->name('api.notifications.read-all')->middleware('throttle:api');
     Route::post('api/disposition/save', \App\Http\Controllers\Api\SaveDispositionController::class)->name('api.disposition.save')->middleware('throttle:api');
     Route::post('api/client-errors', fn () => response()->json(['ok' => true]))->name('api.client-errors');
+    Route::get('api/widgets/layouts', [\App\Http\Controllers\Api\WidgetLayoutController::class, 'index'])->name('api.widgets.layouts')->middleware('throttle:api');
+    Route::put('api/widgets/layouts/{widget}', [\App\Http\Controllers\Api\WidgetLayoutController::class, 'update'])->name('api.widgets.layouts.update')->middleware('throttle:api');
+    Route::get('api/forms/quick/bootstrap', [\App\Http\Controllers\Api\QuickFormController::class, 'bootstrap'])->name('api.forms.quick.bootstrap')->middleware('throttle:api');
     Route::get('attendance', [AttendanceController::class, 'index'])->name('attendance.index');
     Route::post('api/attendance/start', [\App\Http\Controllers\Api\AttendanceStatusController::class, 'start'])->name('api.attendance.start')->middleware('throttle:api');
     Route::post('api/attendance/end', [\App\Http\Controllers\Api\AttendanceStatusController::class, 'end'])->name('api.attendance.end')->middleware('throttle:api');

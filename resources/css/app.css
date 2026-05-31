@@ -751,6 +751,18 @@ html[data-theme="light"] {
   }
   .phone-hangup-btn:hover { transform: scale(1.05); }
 
+  .widget-resize-handle {
+    position: absolute;
+    right: 0.25rem;
+    bottom: 0.25rem;
+    width: 1rem;
+    height: 1rem;
+    cursor: nwse-resize;
+    border-radius: 4px;
+    border: 1px solid var(--color-border-strong);
+    background: var(--color-surface-3);
+  }
+
   /* ---- Loading / skeleton ---- */
   .skeleton {
     background: linear-gradient(90deg, var(--color-surface-2) 25%, var(--color-surface-3) 50%, var(--color-surface-2) 75%);

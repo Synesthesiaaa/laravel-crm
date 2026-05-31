@@ -107,4 +107,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(VicidialAgentSession::class);
     }
+
+    public function widgetLayouts(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(UserWidgetLayout::class);
+    }
 }

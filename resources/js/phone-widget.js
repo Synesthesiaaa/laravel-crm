@@ -1,3 +1,10 @@
+import {
+    beginPointerDrag,
+    beginPointerResize,
+    clampLayout,
+    createLayoutPersistence,
+} from './widgets/layout-manager';
+
 /**
  * Global floating phone / VICIdial session widget (see resources/views/partials/phone-widget.blade.php).
  * `window.__VICIDIAL_SESSION_IFRAME_ONLY` is set inline in the Blade partial before Alpine inits.
@@ -36,11 +43,29 @@ window.getPhoneWidgetCtx = function getPhoneWidgetCtx() {
 window.phoneWidget = function phoneWidget(boot = {}) {
     const panelW = Number(boot.panelW) || 440;
     const panelH = Number(boot.panelH) || 360;
+    const bounds = {
+        minWidth: 340,
+        minHeight: 260,
+        maxWidthPadding: 16,
+        maxHeightPadding: 16,
+    };
+    let widgetCtx = null;
+    const persistence = createLayoutPersistence({
+        widgetKey: 'softphone',
+        onHydrate: (layout) => widgetCtx?.applyLayout(layout),
+    });
 
     return {
         open: false,
         panelW,
         panelH,
+        x: Math.max(0, window.innerWidth - panelW - 16),
+        y: Math.max(0, window.innerHeight - panelH - 96),
+        width: panelW,
+        height: panelH,
+        isDragging: false,
+        isResizing: false,
+        bounds,
         sessionControls: boot.sessionControls !== false,
 
         vici: {
@@ -66,6 +91,126 @@ window.phoneWidget = function phoneWidget(boot = {}) {
                 .split(/[,\s]+/)
                 .map((v) => v.trim())
                 .filter(Boolean);
+        },
+
+        get widgetStyle() {
+            return {
+                left: `${this.x}px`,
+                top: `${this.y}px`,
+            };
+        },
+
+        get shellStyle() {
+            if (!this.open) {
+                return {
+                    width: '1px',
+                    height: '1px',
+                    maxHeight: '1px',
+                    maxWidth: '1px',
+                    overflow: 'hidden',
+                    opacity: 1,
+                };
+            }
+
+            return {
+                width: `${this.width}px`,
+                maxWidth: `${this.width}px`,
+            };
+        },
+
+        get frameWrapStyle() {
+            if (!this.open) {
+                return {
+                    width: '1px',
+                    height: '1px',
+                    minHeight: '1px',
+                    minWidth: '1px',
+                    overflow: 'hidden',
+                };
+            }
+
+            const frameHeight = Math.max(200, this.height - 130);
+
+            return {
+                minHeight: '200px',
+                height: `${frameHeight}px`,
+            };
+        },
+
+        applyLayout(layout) {
+            const next = clampLayout({
+                x: Number(layout?.x ?? this.x),
+                y: Number(layout?.y ?? this.y),
+                width: Number(layout?.width ?? this.width),
+                height: Number(layout?.height ?? this.height),
+            }, this.bounds);
+
+            this.x = next.x;
+            this.y = next.y;
+            this.width = next.width;
+            this.height = next.height;
+
+            if (typeof layout?.open === 'boolean') {
+                this.open = layout.open;
+            }
+        },
+
+        currentLayout() {
+            return {
+                x: Math.round(this.x),
+                y: Math.round(this.y),
+                width: Math.round(this.width),
+                height: Math.round(this.height),
+                open: this.open,
+            };
+        },
+
+        persistLayout() {
+            persistence.scheduleSave(() => this.currentLayout());
+        },
+
+        toggleOpen() {
+            this.open = !this.open;
+            this.persistLayout();
+        },
+
+        closePanel() {
+            this.open = false;
+            this.persistLayout();
+        },
+
+        onDragStart(event) {
+            event.preventDefault();
+            const prevOnEnd = this.onEnd;
+            this.onEnd = () => {
+                this.persistLayout();
+                this.onEnd = prevOnEnd;
+            };
+            beginPointerDrag(event, this);
+        },
+
+        onResizeStart(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const prevOnEnd = this.onEnd;
+            this.onEnd = () => {
+                this.persistLayout();
+                this.onEnd = prevOnEnd;
+            };
+            beginPointerResize(event, this);
+        },
+
+        onWindowResize() {
+            const next = clampLayout({
+                x: this.x,
+                y: this.y,
+                width: this.width,
+                height: this.height,
+            }, this.bounds);
+            this.x = next.x;
+            this.y = next.y;
+            this.width = next.width;
+            this.height = next.height;
         },
 
         /** VICIdial / dialer campaign only — never reads CRM `data-campaign`. */
@@ -202,8 +347,11 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         },
 
         async init() {
+            widgetCtx = this;
             window.addEventListener('vicidial-ws-phase', this._onWsPhase.bind(this));
             window.addEventListener('telephony-shortcut-pause', this._pauseShortcut.bind(this));
+            window.addEventListener('resize', this.onWindowResize.bind(this));
+            await persistence.load();
 
             if (!this.sessionControls) return;
 

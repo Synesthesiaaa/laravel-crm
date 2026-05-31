@@ -13,14 +13,15 @@
 @endphp
 {{-- VICIdial session: FAB + expandable panel. Iframe is never inside x-show (WebRTC). Collapsed = 1×1px viewport slot. --}}
 <div id="phone-widget-root"
-     class="fixed bottom-4 right-4 z-40 flex flex-col-reverse items-end gap-2"
+     class="fixed z-40 flex flex-col-reverse items-end gap-2"
      x-data="phoneWidget(@js($phoneWidgetBoot))"
+     :style="widgetStyle"
      x-init="init()"
      @click.stop>
 
     <button type="button"
             class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-[var(--color-on-surface)] shadow-lg transition hover:bg-[var(--color-surface-2)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] relative"
-            @click="open = !open"
+            @click="toggleOpen()"
             :aria-expanded="open"
             aria-controls="phone-widget-shell"
             title="Phone / VICIdial session">
@@ -40,10 +41,7 @@
 
     <div id="phone-widget-shell"
          class="flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg transition-all duration-300 ease-out"
-         :class="open ? '' : 'fixed bottom-4 right-4 z-30'"
-         :style="open
-            ? { width: 'min(' + panelW + 'px, calc(100vw - 2rem))', maxWidth: 'calc(100vw - 2rem)' }
-            : { width: '1px', height: '1px', maxHeight: '1px', maxWidth: '1px', overflow: 'hidden', opacity: 1 }">
+         :style="shellStyle">
 
         {{-- Controls: hidden when minimized (display:none OK here — not wrapping the iframe) --}}
         <div x-show="open"
@@ -52,6 +50,12 @@
              class="flex max-h-[min(50vh,520px)] flex-col border-b border-[var(--color-border)]">
             <div class="flex items-center justify-between gap-2 bg-[var(--color-surface-elevated)] px-3 py-2 shrink-0">
                 <div class="flex items-center gap-2 min-w-0">
+                    <button type="button"
+                            class="btn-ghost text-[10px] px-2 py-1 shrink-0 cursor-move"
+                            @pointerdown="onDragStart($event)"
+                            title="Drag widget">
+                        <x-icon name="bars-3" class="w-3.5 h-3.5" />
+                    </button>
                     <span class="text-xs font-semibold text-[var(--color-on-surface)] truncate">Phone</span>
                     <span class="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border shrink-0"
                           :class="{
@@ -73,7 +77,7 @@
                 </div>
                 <button type="button"
                         class="btn-ghost text-[10px] px-2 py-1 shrink-0"
-                        @click="open = false"
+                        @click="closePanel()"
                         title="Minimize (session keeps running)">
                     <x-icon name="chevron-down" class="w-4 h-4" />
                 </button>
@@ -196,9 +200,7 @@
         {{-- Iframe: always in DOM; size follows open state (never display:none) --}}
         <div id="vici-session-frame-wrap"
              class="relative bg-black/5 shrink-0"
-             :style="open
-                ? { minHeight: '200px', height: 'min(40vh, ' + panelH + 'px)' }
-                : { width: '1px', height: '1px', minHeight: '1px', minWidth: '1px', overflow: 'hidden' }">
+             :style="frameWrapStyle">
             <iframe id="vici-session-frame"
                     src="about:blank"
                     class="block border-0 bg-transparent"
@@ -207,5 +209,11 @@
                     allow="microphone *; autoplay *"
                     title="VICIdial agent session"></iframe>
         </div>
+        <button x-show="open"
+                type="button"
+                class="widget-resize-handle"
+                @pointerdown="onResizeStart($event)"
+                aria-label="Resize softphone widget"
+                style="display: none;"></button>
     </div>
 </div>

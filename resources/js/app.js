@@ -3,6 +3,7 @@ import './echo';
 import './components';
 import './vicidial-session';
 import './phone-widget';
+import './quick-form-widget';
 import './soft-navigate';
 import './form-visibility';
 import TelephonyCore from './telephony-core';
