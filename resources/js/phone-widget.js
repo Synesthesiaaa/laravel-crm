@@ -56,16 +56,11 @@ window.phoneWidget = function phoneWidget(boot = {}) {
 
     return {
         open: false,
-        movable: boot.movable !== false,
         panelW,
         panelH,
-        x: Math.max(0, window.innerWidth - panelW - 16),
-        y: Math.max(0, window.innerHeight - panelH - 96),
         width: panelW,
         height: panelH,
-        isDragging: false,
         isResizing: false,
-        suppressToggleClick: false,
         bounds,
         sessionControls: boot.sessionControls !== false,
 
@@ -92,13 +87,6 @@ window.phoneWidget = function phoneWidget(boot = {}) {
                 .split(/[,\s]+/)
                 .map((v) => v.trim())
                 .filter(Boolean);
-        },
-
-        get widgetStyle() {
-            return {
-                left: `${this.x}px`,
-                top: `${this.y}px`,
-            };
         },
 
         get shellStyle() {
@@ -149,13 +137,6 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             this.width = nextSize.width;
             this.height = nextSize.height;
 
-            const anchor = this.clampAnchorPosition(
-                Number(layout?.x ?? this.x),
-                Number(layout?.y ?? this.y),
-            );
-            this.x = anchor.x;
-            this.y = anchor.y;
-
             if (typeof layout?.open === 'boolean') {
                 this.open = layout.open;
             }
@@ -163,8 +144,6 @@ window.phoneWidget = function phoneWidget(boot = {}) {
 
         currentLayout() {
             return {
-                x: Math.round(this.x),
-                y: Math.round(this.y),
                 width: Math.round(this.width),
                 height: Math.round(this.height),
                 open: this.open,
@@ -175,69 +154,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             persistence.scheduleSave(() => this.currentLayout());
         },
 
-        clampAnchorPosition(x, y) {
-            if (!this.movable) {
-                const iconSize = 48;
-                return {
-                    x: Math.max(0, window.innerWidth - iconSize - 16),
-                    y: Math.max(0, window.innerHeight - iconSize - 16),
-                };
-            }
-            const iconSize = 48;
-            return {
-                x: Math.min(Math.max(Number(x) || 0, 0), Math.max(0, window.innerWidth - iconSize)),
-                y: Math.min(Math.max(Number(y) || 0, 0), Math.max(0, window.innerHeight - iconSize)),
-            };
-        },
-
-        moveAnchorByDelta(startX, startY, deltaX, deltaY) {
-            const anchor = this.clampAnchorPosition(startX + deltaX, startY + deltaY);
-            this.x = anchor.x;
-            this.y = anchor.y;
-        },
-
-        beginAnchorDrag(event) {
-            if (!this.movable) return;
-            if (event.button !== undefined && event.button !== 0) return;
-            const originX = event.clientX;
-            const originY = event.clientY;
-            const startX = this.x;
-            const startY = this.y;
-            let moved = false;
-
-            this.isDragging = true;
-
-            const onMove = (moveEvent) => {
-                const dx = moveEvent.clientX - originX;
-                const dy = moveEvent.clientY - originY;
-                if (!moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
-                    moved = true;
-                }
-                this.moveAnchorByDelta(startX, startY, dx, dy);
-            };
-
-            const onUp = () => {
-                this.isDragging = false;
-                window.removeEventListener('pointermove', onMove);
-                window.removeEventListener('pointerup', onUp);
-                if (moved) {
-                    this.suppressToggleClick = true;
-                    this.persistLayout();
-                    window.setTimeout(() => {
-                        this.suppressToggleClick = false;
-                    }, 0);
-                }
-            };
-
-            window.addEventListener('pointermove', onMove);
-            window.addEventListener('pointerup', onUp, { once: true });
-        },
-
-        toggleOpen(event = null) {
-            if (this.suppressToggleClick) {
-                if (event?.preventDefault) event.preventDefault();
-                return;
-            }
+        toggleOpen() {
             this.open = !this.open;
             this.persistLayout();
         },
@@ -245,15 +162,6 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         closePanel() {
             this.open = false;
             this.persistLayout();
-        },
-
-        onDragStart(event) {
-            event.preventDefault();
-            this.beginAnchorDrag(event);
-        },
-
-        onIconPointerDown(event) {
-            this.beginAnchorDrag(event);
         },
 
         onResizeStart(event) {
@@ -276,9 +184,6 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             }, this.bounds);
             this.width = nextSize.width;
             this.height = nextSize.height;
-            const anchor = this.clampAnchorPosition(this.x, this.y);
-            this.x = anchor.x;
-            this.y = anchor.y;
         },
 
         /** VICIdial / dialer campaign only — never reads CRM `data-campaign`. */

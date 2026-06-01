@@ -2,30 +2,25 @@
     window.__VICIDIAL_SESSION_IFRAME_ONLY = @json((bool) config('vicidial.session_iframe_agent_api_only', false));
 </script>
 @php
-    $isFormsPage = request()->routeIs('forms.show');
     $phoneWidgetBoot = [
         'vici_campaign' => (string) (session('vicidial_campaign') ?? session('campaign', 'mbsales')),
         'phone_login' => (string) (auth()->user()->extension ?? ''),
         'vd_login' => (string) (auth()->user()->vici_user ?? ''),
         'panelW' => (int) config('vicidial.session_iframe_panel_width_px', 440),
         'panelH' => (int) config('vicidial.session_iframe_panel_height_px', 360),
-        'movable' => $isFormsPage,
         'sessionControls' => true,
     ];
 @endphp
 {{-- VICIdial session: FAB + expandable panel. Iframe is never inside x-show (WebRTC). Collapsed = 1×1px viewport slot. --}}
 <div id="phone-widget-root"
-     class="fixed z-40"
+     class="fixed bottom-4 right-4 z-40 flex flex-col-reverse items-end gap-2"
      x-data="phoneWidget(@js($phoneWidgetBoot))"
-     :style="widgetStyle"
      x-init="init()"
      @click.stop>
 
     <button type="button"
-            class="widget-launcher absolute left-0 top-0 z-20 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-elevated)] text-[var(--color-on-surface)] shadow-lg transition hover:bg-[var(--color-surface-2)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] relative"
-            :class="movable ? 'cursor-move' : 'cursor-pointer'"
-            @pointerdown="onIconPointerDown($event)"
-            @click="toggleOpen($event)"
+            class="widget-launcher flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-elevated)] text-[var(--color-on-surface)] shadow-lg transition hover:bg-[var(--color-surface-2)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] relative"
+            @click="toggleOpen()"
             :aria-expanded="open"
             aria-controls="phone-widget-shell"
             title="Phone / VICIdial session">
@@ -44,7 +39,7 @@
     </button>
 
     <div id="phone-widget-shell"
-         class="widget-panel-upper-left absolute origin-bottom-right relative flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg transition-all duration-300 ease-out"
+         class="relative flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg transition-all duration-300 ease-out"
          :style="shellStyle">
 
         {{-- Controls: hidden when minimized (display:none OK here — not wrapping the iframe) --}}
@@ -54,12 +49,6 @@
              class="flex max-h-[min(50vh,520px)] flex-col border-b border-[var(--color-border)]">
             <div class="flex items-center justify-between gap-2 bg-[var(--color-surface-elevated)] px-3 py-2 shrink-0">
                 <div class="flex items-center gap-2 min-w-0">
-                    <button type="button"
-                            class="btn-ghost text-[10px] px-2 py-1 shrink-0 cursor-move"
-                            @pointerdown="onDragStart($event)"
-                            title="Drag widget">
-                        <x-icon name="bars-3" class="w-3.5 h-3.5" />
-                    </button>
                     <span class="text-xs font-semibold text-[var(--color-on-surface)] truncate">Phone</span>
                     <span class="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border shrink-0"
                           :class="{
