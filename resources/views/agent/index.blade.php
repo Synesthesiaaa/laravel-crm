@@ -599,11 +599,6 @@ window.agentScreen = function() {
             if (this.callState === 'wrapup' || this.savingDisposition) {
                 return;
             }
-            if (Alpine.store('ws')?.isConnected) {
-                this.resetActiveLeadBackoff();
-                return;
-            }
-
             try {
                 const response = await window.axios.get('/api/telephony/active-lead', {
                     params: {
@@ -636,7 +631,8 @@ window.agentScreen = function() {
                     && typeof payload.capture_data === 'object'
                     && Object.keys(payload.capture_data).length > 0;
 
-                if (leadId === this._lastDetectedLeadId && this.captureFormHasValues()) {
+                const detectedLeadKey = leadId || phoneNumber;
+                if (detectedLeadKey === this._lastDetectedLeadId && this.captureFormHasValues()) {
                     return;
                 }
 
@@ -646,8 +642,8 @@ window.agentScreen = function() {
                     capture_data: hasCaptureData ? payload.capture_data : {},
                 });
 
-                if (leadId) {
-                    this._lastDetectedLeadId = leadId;
+                if (detectedLeadKey) {
+                    this._lastDetectedLeadId = detectedLeadKey;
                 }
                 const shouldStartTimer = ['idle', 'ringing'].includes(this.callState);
                 if (shouldStartTimer) {

@@ -84,6 +84,59 @@ class ActiveLeadControllerTest extends TestCase
             ->assertJsonPath('capture_data.first_name', 'John');
     }
 
+    public function test_active_lead_reads_lead_and_phone_by_agent_status_headers(): void
+    {
+        AgentScreenField::create([
+            'campaign_code' => 'testcamp',
+            'field_key' => 'first_name',
+            'field_label' => 'First Name',
+            'field_order' => 1,
+            'field_width' => 'full',
+        ]);
+
+        $nonAgentMock = Mockery::mock(VicidialNonAgentApiService::class);
+        $nonAgentMock->shouldReceive('execute')
+            ->once()
+            ->andReturn(OperationResult::success([
+                'raw_response' => "STATUS|PHONE_NUMBER|CAMPAIGN|LEAD_ID|CALL_ID\nINCALL|63900111222|testcamp|654|1",
+                'rows' => [
+                    ['STATUS', 'PHONE_NUMBER', 'CAMPAIGN', 'LEAD_ID', 'CALL_ID'],
+                    ['INCALL', '63900111222', 'testcamp', '654', '1'],
+                ],
+            ]));
+        $this->instance(VicidialNonAgentApiService::class, $nonAgentMock);
+
+        $leadServiceMock = Mockery::mock(LeadService::class);
+        $leadServiceMock->shouldReceive('allInfo')
+            ->once()
+            ->with(
+                Mockery::on(fn ($authUser) => (int) $authUser->id === (int) $this->agent->id),
+                'testcamp',
+                654,
+                '63900111222',
+            )
+            ->andReturn(OperationResult::success([
+                'rows' => [
+                    ['first_name', 'Header'],
+                    ['last_name', 'Order'],
+                    ['lead_id', '654'],
+                    ['phone_number', '63900111222'],
+                ],
+            ]));
+        $this->instance(LeadService::class, $leadServiceMock);
+
+        $response = $this->actingAs($this->agent)
+            ->withSession(['campaign' => 'testcamp', 'campaign_name' => 'Test Camp'])
+            ->getJson('/api/telephony/active-lead?campaign=testcamp');
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('active', true)
+            ->assertJsonPath('lead_id', '654')
+            ->assertJsonPath('phone_number', '63900111222')
+            ->assertJsonPath('capture_data.first_name', 'Header');
+    }
+
     public function test_active_lead_returns_inactive_when_agent_status_is_ready(): void
     {
         $nonAgentMock = Mockery::mock(VicidialNonAgentApiService::class);

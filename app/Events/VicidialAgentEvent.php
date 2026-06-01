@@ -27,6 +27,7 @@ class VicidialAgentEvent implements ShouldBroadcastNow
     public function broadcastOn(): array
     {
         return [
+            new PrivateChannel('App.Models.User.'.$this->userId),
             new PrivateChannel('agent.'.$this->userId),
             new PrivateChannel('telephony.supervisor'),
         ];
