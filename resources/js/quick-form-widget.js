@@ -3,26 +3,12 @@ import {
 } from './widgets/layout-manager';
 
 const FORM_ROUTE_PATTERN = /\/forms\/([^/?#]+)/i;
+const ICON_GAP_PX = 8;
 
-function getResizeMultipliers(corner) {
-    switch (corner) {
-    case 'nw':
-        return { w: -1, h: -1 };
-    case 'ne':
-        return { w: 1, h: -1 };
-    case 'sw':
-        return { w: -1, h: 1 };
-    case 'se':
-    default:
-        return { w: 1, h: 1 };
-    }
-}
-
-function getAnchorDeltaAxes(corner) {
-    return {
-        x: corner === 'ne' || corner === 'se',
-        y: corner === 'sw' || corner === 'se',
-    };
+function clamp(value, min, max) {
+    if (value < min) return min;
+    if (value > max) return max;
+    return value;
 }
 
 window.quickFormWidget = function quickFormWidget(boot = {}) {
@@ -279,13 +265,25 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
             const startY = this.y;
             const startWidth = this.width;
             const startHeight = this.height;
-            const multipliers = getResizeMultipliers(corner);
-            const anchorAxes = getAnchorDeltaAxes(corner);
-            const iconGap = 8;
-            const fixedNW = {
-                x: startX - iconGap - startWidth,
-                y: startY - iconGap - startHeight,
-            };
+            const minWidth = this.bounds.minWidth;
+            const minHeight = this.bounds.minHeight;
+
+            const leftLimit = Math.max(8, this.bounds.maxWidthPadding || 16);
+            const topLimit = Math.max(8, this.bounds.maxHeightPadding || 16);
+
+            const anchorMinX = 0;
+            const anchorMaxX = Math.max(0, window.innerWidth - 48);
+            const anchorMinY = 0;
+            const anchorMaxY = Math.max(0, window.innerHeight - 48);
+            const rightMin = anchorMinX - ICON_GAP_PX;
+            const rightMax = anchorMaxX - ICON_GAP_PX;
+            const bottomMin = anchorMinY - ICON_GAP_PX;
+            const bottomMax = anchorMaxY - ICON_GAP_PX;
+
+            const startRight = startX - ICON_GAP_PX;
+            const startBottom = startY - ICON_GAP_PX;
+            const startLeft = startRight - startWidth;
+            const startTop = startBottom - startHeight;
 
             this.isResizing = true;
 
@@ -293,33 +291,33 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
                 const dx = moveEvent.clientX - originX;
                 const dy = moveEvent.clientY - originY;
 
-                const nextWidth = startWidth + (dx * multipliers.w);
-                const nextHeight = startHeight + (dy * multipliers.h);
-                const rawAnchor = {
-                    x: startX + (anchorAxes.x ? dx : 0),
-                    y: startY + (anchorAxes.y ? dy : 0),
-                };
-                const nextAnchor = this.clampAnchorPosition(rawAnchor.x, rawAnchor.y);
+                let left = startLeft;
+                let right = startRight;
+                let top = startTop;
+                let bottom = startBottom;
 
-                if (corner === 'se') {
-                    let size = this.clampSizeForAnchorAt(nextAnchor.x, nextAnchor.y, nextWidth, nextHeight);
-                    const reconcileAnchor = this.clampAnchorPosition(
-                        fixedNW.x + iconGap + size.width,
-                        fixedNW.y + iconGap + size.height,
-                    );
-                    size = this.clampSizeForAnchorAt(reconcileAnchor.x, reconcileAnchor.y, size.width, size.height);
-                    this.x = reconcileAnchor.x;
-                    this.y = reconcileAnchor.y;
-                    this.width = size.width;
-                    this.height = size.height;
-                    return;
+                if (corner === 'nw') {
+                    left = clamp(startLeft + dx, leftLimit, right - minWidth);
+                    top = clamp(startTop + dy, topLimit, bottom - minHeight);
+                } else if (corner === 'ne') {
+                    right = clamp(startRight + dx, startLeft + minWidth, rightMax);
+                    top = clamp(startTop + dy, topLimit, bottom - minHeight);
+                } else if (corner === 'sw') {
+                    left = clamp(startLeft + dx, leftLimit, right - minWidth);
+                    bottom = clamp(startBottom + dy, startTop + minHeight, bottomMax);
+                } else {
+                    // se
+                    right = clamp(startRight + dx, startLeft + minWidth, rightMax);
+                    bottom = clamp(startBottom + dy, startTop + minHeight, bottomMax);
                 }
 
-                this.x = nextAnchor.x;
-                this.y = nextAnchor.y;
-                const size = this.clampSizeForAnchorAt(nextAnchor.x, nextAnchor.y, nextWidth, nextHeight);
-                this.width = size.width;
-                this.height = size.height;
+                right = Math.max(right, rightMin);
+                bottom = Math.max(bottom, bottomMin);
+
+                this.width = Math.max(minWidth, right - left);
+                this.height = Math.max(minHeight, bottom - top);
+                this.x = right + ICON_GAP_PX;
+                this.y = bottom + ICON_GAP_PX;
             };
 
             const onUp = () => {
