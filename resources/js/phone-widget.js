@@ -3,6 +3,20 @@ import {
     createLayoutPersistence,
 } from './widgets/layout-manager';
 
+function getResizeMultipliers(corner) {
+    switch (corner) {
+    case 'nw':
+        return { w: -1, h: -1 };
+    case 'ne':
+        return { w: 1, h: -1 };
+    case 'sw':
+        return { w: -1, h: 1 };
+    case 'se':
+    default:
+        return { w: 1, h: 1 };
+    }
+}
+
 /**
  * Global floating phone / VICIdial session widget (see resources/views/partials/phone-widget.blade.php).
  * `window.__VICIDIAL_SESSION_IFRAME_ONLY` is set inline in the Blade partial before Alpine inits.
@@ -163,7 +177,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             this.persistLayout();
         },
 
-        onResizeStart(event) {
+        onResizeStart(event, corner = 'se') {
             event.preventDefault();
             event.stopPropagation();
             const originX = event.clientX;
@@ -171,6 +185,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             const startWidth = this.width;
             const startHeight = this.height;
             const margin = Math.max(8, this.bounds.maxWidthPadding || 16);
+            const multipliers = getResizeMultipliers(corner);
 
             this.isResizing = true;
 
@@ -178,8 +193,8 @@ window.phoneWidget = function phoneWidget(boot = {}) {
                 const maxWidth = Math.max(this.bounds.minWidth, window.innerWidth - (margin * 2));
                 const maxHeight = Math.max(this.bounds.minHeight, window.innerHeight - (margin * 2));
 
-                const nextWidth = startWidth + (moveEvent.clientX - originX);
-                const nextHeight = startHeight + (moveEvent.clientY - originY);
+                const nextWidth = startWidth + ((moveEvent.clientX - originX) * multipliers.w);
+                const nextHeight = startHeight + ((moveEvent.clientY - originY) * multipliers.h);
 
                 this.width = Math.min(Math.max(nextWidth, this.bounds.minWidth), maxWidth);
                 this.height = Math.min(Math.max(nextHeight, this.bounds.minHeight), maxHeight);

@@ -3,6 +3,29 @@ import {
     createLayoutPersistence,
 } from './widgets/layout-manager';
 
+const FORM_ROUTE_PATTERN = /^\/forms\/([^/?#]+)/i;
+
+function getResizeMultipliers(corner) {
+    switch (corner) {
+    case 'nw':
+        return { w: -1, h: -1 };
+    case 'ne':
+        return { w: 1, h: -1 };
+    case 'sw':
+        return { w: -1, h: 1 };
+    case 'se':
+    default:
+        return { w: 1, h: 1 };
+    }
+}
+
+function getAnchorDeltaAxes(corner) {
+    return {
+        x: corner === 'ne' || corner === 'se',
+        y: corner === 'sw' || corner === 'se',
+    };
+}
+
 window.quickFormWidget = function quickFormWidget(boot = {}) {
     const defaultWidth = 520;
     const defaultHeight = 640;
@@ -31,6 +54,8 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         loading: false,
         error: null,
         frameSrc: boot.current_form_url || null,
+        currentCampaign: boot.current_campaign || null,
+        currentFormType: boot.current_form_type || null,
 
         get widgetStyle() {
             return {
@@ -125,6 +150,43 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
             };
         },
 
+        buildEmbedFormUrl(formType, campaign) {
+            const params = new URLSearchParams({
+                campaign: String(campaign || ''),
+                widget_embed: '1',
+            });
+            return `/forms/${encodeURIComponent(String(formType || ''))}?${params.toString()}`;
+        },
+
+        syncFrameSrc(formType, campaign) {
+            if (!formType || !campaign) return;
+            const nextSrc = this.buildEmbedFormUrl(formType, campaign);
+            if (this.frameSrc === nextSrc) return;
+            this.currentFormType = formType;
+            this.currentCampaign = campaign;
+            this.frameSrc = nextSrc;
+            this.error = null;
+        },
+
+        syncFromUrl(rawUrl) {
+            let url;
+            try {
+                url = new URL(rawUrl || window.location.href, window.location.origin);
+            } catch (_) {
+                return false;
+            }
+
+            const match = url.pathname.match(FORM_ROUTE_PATTERN);
+            if (!match?.[1]) {
+                return false;
+            }
+
+            const formType = decodeURIComponent(match[1]);
+            const campaign = url.searchParams.get('campaign') || document.body?.dataset?.campaign || 'mbsales';
+            this.syncFrameSrc(formType, campaign);
+            return true;
+        },
+
         moveAnchorByDelta(startX, startY, deltaX, deltaY) {
             const anchor = this.clampAnchorPosition(startX + deltaX, startY + deltaY);
             this.x = anchor.x;
@@ -190,19 +252,32 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
             this.beginAnchorDrag(event);
         },
 
-        onResizeStart(event) {
+        onResizeStart(event, corner = 'se') {
             event.preventDefault();
             event.stopPropagation();
             const originX = event.clientX;
             const originY = event.clientY;
+            const startX = this.x;
+            const startY = this.y;
             const startWidth = this.width;
             const startHeight = this.height;
+            const multipliers = getResizeMultipliers(corner);
+            const anchorAxes = getAnchorDeltaAxes(corner);
 
             this.isResizing = true;
 
             const onMove = (moveEvent) => {
-                const nextWidth = startWidth + (moveEvent.clientX - originX);
-                const nextHeight = startHeight + (moveEvent.clientY - originY);
+                const dx = moveEvent.clientX - originX;
+                const dy = moveEvent.clientY - originY;
+
+                const nextWidth = startWidth + (dx * multipliers.w);
+                const nextHeight = startHeight + (dy * multipliers.h);
+                const nextAnchor = this.clampAnchorPosition(
+                    startX + (anchorAxes.x ? dx : 0),
+                    startY + (anchorAxes.y ? dy : 0),
+                );
+                this.x = nextAnchor.x;
+                this.y = nextAnchor.y;
                 const size = this.clampSizeForCurrentAnchor(nextWidth, nextHeight);
                 this.width = size.width;
                 this.height = size.height;
@@ -260,9 +335,18 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         async init() {
             widgetCtx = this;
             window.addEventListener('resize', this.onWindowResize.bind(this));
+            window.addEventListener('soft-navigate', (event) => {
+                const switched = this.syncFromUrl(event?.detail?.url || window.location.href);
+                if (!switched && !this.frameSrc) {
+                    this.resolveDefaultSource();
+                }
+            });
             this.onWindowResize();
             await persistence.load();
-            await this.resolveDefaultSource();
+            const switched = this.syncFromUrl(window.location.href);
+            if (!switched) {
+                await this.resolveDefaultSource();
+            }
         },
     };
 };

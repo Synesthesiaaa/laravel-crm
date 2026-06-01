@@ -753,14 +753,36 @@ html[data-theme="light"] {
 
   .widget-resize-handle {
     position: absolute;
-    right: 0.25rem;
-    bottom: 0.25rem;
     width: 1rem;
     height: 1rem;
-    cursor: nwse-resize;
+    z-index: 5;
     border-radius: 4px;
     border: 1px solid var(--color-border-strong);
     background: var(--color-surface-3);
+  }
+
+  .widget-resize-handle--nw {
+    left: 0.25rem;
+    top: 0.25rem;
+    cursor: nwse-resize;
+  }
+
+  .widget-resize-handle--ne {
+    right: 0.25rem;
+    top: 0.25rem;
+    cursor: nesw-resize;
+  }
+
+  .widget-resize-handle--sw {
+    left: 0.25rem;
+    bottom: 0.25rem;
+    cursor: nesw-resize;
+  }
+
+  .widget-resize-handle--se {
+    right: 0.25rem;
+    bottom: 0.25rem;
+    cursor: nwse-resize;
   }
 
   .widget-launcher {

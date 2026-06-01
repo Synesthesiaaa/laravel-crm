@@ -66,9 +66,23 @@
 
         <button x-show="open"
                 type="button"
-                class="widget-resize-handle"
-                @pointerdown="onResizeStart($event)"
-                aria-label="Resize quick form widget"
-                style="display: none;"></button>
+                class="widget-resize-handle widget-resize-handle--nw"
+                @pointerdown="onResizeStart($event, 'nw')"
+                aria-label="Resize quick form widget from top-left"></button>
+        <button x-show="open"
+                type="button"
+                class="widget-resize-handle widget-resize-handle--ne"
+                @pointerdown="onResizeStart($event, 'ne')"
+                aria-label="Resize quick form widget from top-right"></button>
+        <button x-show="open"
+                type="button"
+                class="widget-resize-handle widget-resize-handle--sw"
+                @pointerdown="onResizeStart($event, 'sw')"
+                aria-label="Resize quick form widget from bottom-left"></button>
+        <button x-show="open"
+                type="button"
+                class="widget-resize-handle widget-resize-handle--se"
+                @pointerdown="onResizeStart($event, 'se')"
+                aria-label="Resize quick form widget from bottom-right"></button>
     </div>
 </div>
