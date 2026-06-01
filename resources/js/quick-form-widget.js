@@ -20,8 +20,8 @@ function getResizeMultipliers(corner) {
 
 function getAnchorDeltaAxes(corner) {
     return {
-        x: corner === 'se',
-        y: corner === 'se',
+        x: corner === 'ne' || corner === 'se',
+        y: corner === 'sw' || corner === 'se',
     };
 }
 
@@ -315,9 +315,9 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
                     return;
                 }
 
-                this.x = startX;
-                this.y = startY;
-                const size = this.clampSizeForAnchorAt(startX, startY, nextWidth, nextHeight);
+                this.x = nextAnchor.x;
+                this.y = nextAnchor.y;
+                const size = this.clampSizeForAnchorAt(nextAnchor.x, nextAnchor.y, nextWidth, nextHeight);
                 this.width = size.width;
                 this.height = size.height;
             };
