@@ -1,5 +1,4 @@
 import {
-    beginPointerResize,
     clampLayout,
     createLayoutPersistence,
 } from './widgets/layout-manager';
@@ -59,21 +58,19 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         },
 
         applyLayout(layout) {
-            const nextSize = clampLayout({
-                x: 0,
-                y: 0,
-                width: Number(layout?.width ?? this.width),
-                height: Number(layout?.height ?? this.height),
-            }, this.bounds);
-            this.width = nextSize.width;
-            this.height = nextSize.height;
-
             const anchor = this.clampAnchorPosition(
                 Number(layout?.x ?? this.x),
                 Number(layout?.y ?? this.y),
             );
             this.x = anchor.x;
             this.y = anchor.y;
+
+            const size = this.clampSizeForCurrentAnchor(
+                Number(layout?.width ?? this.width),
+                Number(layout?.height ?? this.height),
+            );
+            this.width = size.width;
+            this.height = size.height;
 
             if (typeof layout?.open === 'boolean') {
                 this.open = layout.open;
@@ -92,6 +89,32 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
 
         persistLayout() {
             persistence.scheduleSave(() => this.currentLayout());
+        },
+
+        maxWidthForCurrentAnchor() {
+            // Panel opens upper-left from icon, so width is limited by left-side space.
+            const iconGap = 8; // 0.5rem
+            const minLeftMargin = Math.max(8, this.bounds.maxWidthPadding || 16);
+            const available = this.x - iconGap - minLeftMargin;
+            return Math.max(this.bounds.minWidth, available);
+        },
+
+        maxHeightForCurrentAnchor() {
+            // Panel opens upper-left from icon, so height is limited by top-side space.
+            const iconGap = 8; // 0.5rem
+            const minTopMargin = Math.max(8, this.bounds.maxHeightPadding || 16);
+            const available = this.y - iconGap - minTopMargin;
+            return Math.max(this.bounds.minHeight, available);
+        },
+
+        clampSizeForCurrentAnchor(width, height) {
+            const maxWidth = this.maxWidthForCurrentAnchor();
+            const maxHeight = this.maxHeightForCurrentAnchor();
+
+            return {
+                width: Math.min(Math.max(width, this.bounds.minWidth), maxWidth),
+                height: Math.min(Math.max(height, this.bounds.minHeight), maxHeight),
+            };
         },
 
         clampAnchorPosition(x, y) {
@@ -170,12 +193,30 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         onResizeStart(event) {
             event.preventDefault();
             event.stopPropagation();
-            const prevOnEnd = this.onEnd;
-            this.onEnd = () => {
-                this.persistLayout();
-                this.onEnd = prevOnEnd;
+            const originX = event.clientX;
+            const originY = event.clientY;
+            const startWidth = this.width;
+            const startHeight = this.height;
+
+            this.isResizing = true;
+
+            const onMove = (moveEvent) => {
+                const nextWidth = startWidth + (moveEvent.clientX - originX);
+                const nextHeight = startHeight + (moveEvent.clientY - originY);
+                const size = this.clampSizeForCurrentAnchor(nextWidth, nextHeight);
+                this.width = size.width;
+                this.height = size.height;
             };
-            beginPointerResize(event, this);
+
+            const onUp = () => {
+                this.isResizing = false;
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+                this.persistLayout();
+            };
+
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp, { once: true });
         },
 
         onWindowResize() {
@@ -185,11 +226,12 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
                 width: this.width,
                 height: this.height,
             }, this.bounds);
-            this.width = nextSize.width;
-            this.height = nextSize.height;
             const anchor = this.clampAnchorPosition(this.x, this.y);
             this.x = anchor.x;
             this.y = anchor.y;
+            const size = this.clampSizeForCurrentAnchor(nextSize.width, nextSize.height);
+            this.width = size.width;
+            this.height = size.height;
         },
 
         async resolveDefaultSource() {

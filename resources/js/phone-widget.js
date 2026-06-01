@@ -1,5 +1,4 @@
 import {
-    beginPointerResize,
     clampLayout,
     createLayoutPersistence,
 } from './widgets/layout-manager';
@@ -167,12 +166,34 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         onResizeStart(event) {
             event.preventDefault();
             event.stopPropagation();
-            const prevOnEnd = this.onEnd;
-            this.onEnd = () => {
-                this.persistLayout();
-                this.onEnd = prevOnEnd;
+            const originX = event.clientX;
+            const originY = event.clientY;
+            const startWidth = this.width;
+            const startHeight = this.height;
+            const margin = Math.max(8, this.bounds.maxWidthPadding || 16);
+
+            this.isResizing = true;
+
+            const onMove = (moveEvent) => {
+                const maxWidth = Math.max(this.bounds.minWidth, window.innerWidth - (margin * 2));
+                const maxHeight = Math.max(this.bounds.minHeight, window.innerHeight - (margin * 2));
+
+                const nextWidth = startWidth + (moveEvent.clientX - originX);
+                const nextHeight = startHeight + (moveEvent.clientY - originY);
+
+                this.width = Math.min(Math.max(nextWidth, this.bounds.minWidth), maxWidth);
+                this.height = Math.min(Math.max(nextHeight, this.bounds.minHeight), maxHeight);
             };
-            beginPointerResize(event, this);
+
+            const onUp = () => {
+                this.isResizing = false;
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+                this.persistLayout();
+            };
+
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp, { once: true });
         },
 
         onWindowResize() {
