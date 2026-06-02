@@ -67,19 +67,14 @@
                             <x-icon name="document-text" class="w-3.5 h-3.5" />
                             Forms
                         </a>
-                        <div x-data="{ deleting: false, async del(form) {
-                            if (this.deleting) return;
+                        <div x-data="{ async del(form) {
                             const ok = await Alpine.store('confirm').ask('Deactivate campaign?', '{{ $c->name }} will be disabled.');
-                            if (!ok) return;
-                            this.deleting = true;
-                            window.crmLockSubmitForm?.(form, 'Deleting...');
-                            HTMLFormElement.prototype.submit.call(form);
+                            if (ok) form.submit();
                         }}">
                             <form method="POST" action="{{ route('admin.campaigns.destroy') }}" x-ref="delFormC{{ $c->id }}">
                                 @csrf
                                 <input type="hidden" name="id" value="{{ $c->id }}">
                                 <button type="button" class="btn-danger text-xs px-2 py-1"
-                                        :disabled="deleting"
                                         @click="del($refs['delFormC{{ $c->id }}'])">
                                     <x-icon name="minus" class="w-3.5 h-3.5" />
                                     Deactivate

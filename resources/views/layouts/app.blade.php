@@ -102,18 +102,12 @@
                          style="display: none;">
                         <div class="flex items-center justify-between p-4 border-b border-[var(--color-border)]">
                             <span class="font-semibold text-sm text-[var(--color-on-surface)]">Notifications</span>
-                            <button x-show="unread > 0" @click="markAllRead()" :disabled="markingRead" class="text-xs text-[var(--color-primary)] hover:underline disabled:opacity-50">
-                                <span x-text="markingRead ? 'Marking...' : 'Mark all read'">Mark all read</span>
+                            <button x-show="unread > 0" @click="markAllRead()" class="text-xs text-[var(--color-primary)] hover:underline">
+                                Mark all read
                             </button>
                         </div>
                         <div class="max-h-80 overflow-y-auto">
-                            <template x-if="loading && items.length === 0">
-                                <div class="p-6 flex items-center justify-center gap-2 text-sm text-[var(--color-on-surface-dim)]">
-                                    <x-icon name="arrow-path" class="w-4 h-4 animate-spin" />
-                                    Loading notifications...
-                                </div>
-                            </template>
-                            <template x-if="!loading && items.length === 0">
+                            <template x-if="items.length === 0">
                                 <div class="p-6 text-center text-sm text-[var(--color-on-surface-dim)]">
                                     <x-icon name="bell-slash" class="w-8 h-8 mx-auto mb-2 opacity-40" />
                                     No notifications
@@ -200,11 +194,11 @@
                             My Attendance
                         </a>
                         <div class="border-t border-[var(--color-border)] mt-1 pt-1">
-                            <form method="POST" action="{{ route('logout') }}" id="logout-form" x-data="{ loggingOut: false }" @submit.prevent="if (loggingOut) return; loggingOut = true; window.crmGracefulLogout && window.crmGracefulLogout()">
+                            <form method="POST" action="{{ route('logout') }}" id="logout-form" @submit.prevent="window.crmGracefulLogout && window.crmGracefulLogout()">
                                 @csrf
-                                <button type="submit" class="dropdown-item w-full text-red-400 hover:text-red-300 disabled:opacity-60" :disabled="loggingOut">
-                                    <x-icon name="arrow-right-on-rectangle" class="w-4 h-4" x-bind:class="loggingOut ? 'animate-spin' : ''" />
-                                    <span x-text="loggingOut ? 'Signing out...' : 'Sign out'">Sign out</span>
+                                <button type="submit" class="dropdown-item w-full text-red-400 hover:text-red-300">
+                                    <x-icon name="arrow-right-on-rectangle" class="w-4 h-4" />
+                                    Sign out
                                 </button>
                             </form>
                         </div>
@@ -412,7 +406,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn-primary" @click="submit()" :disabled="!selectedCode || submitting">
-                    <x-icon name="check" class="w-4 h-4" x-bind:class="submitting ? 'animate-spin' : ''" />
+                    <x-icon name="check" class="w-4 h-4" />
                     <span x-text="submitting ? 'Saving...' : 'Save & Ready'">Save & Ready</span>
                 </button>
             </div>

@@ -75,7 +75,6 @@ window.telephonyReports = function () {
     return {
         tab: 'status',
         loading: false,
-        recordingLoading: false,
         filters: {
             campaigns: '---ALL---',
             query_date: new Date().toISOString().slice(0, 10),
@@ -117,7 +116,6 @@ window.telephonyReports = function () {
         },
 
         async refreshAll() {
-            if (this.loading) return;
             this.loading = true;
             try {
                 const [status, agents, dispo] = await Promise.all([
@@ -136,15 +134,11 @@ window.telephonyReports = function () {
         },
 
         async lookupRecordings(filters = {}) {
-            if (this.recordingLoading) return;
-            this.recordingLoading = true;
             try {
                 const res = await window.axios.get('/api/call/recording/lookup', { params: filters });
                 this.payloads.recording = res.data;
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Failed to lookup recordings.');
-            } finally {
-                this.recordingLoading = false;
             }
         },
     };

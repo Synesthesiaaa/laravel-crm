@@ -10,8 +10,6 @@ window.notificationDropdown = function() {
         items: [],
         unread: 0,
         loaded: false,
-        loading: false,
-        markingRead: false,
         init() {
             // Badge count without opening the panel (runs again after soft-nav Alpine.initTree)
             this.refreshSummary();
@@ -32,8 +30,6 @@ window.notificationDropdown = function() {
             }
         },
         async load() {
-            if (this.loading) return;
-            this.loading = true;
             try {
                 const res = await window.axios.get('/api/notifications');
                 this.items = res.data.items ?? [];
@@ -41,26 +37,14 @@ window.notificationDropdown = function() {
                 this.loaded = true;
             } catch {
                 this.items = [];
-            } finally {
-                this.loading = false;
             }
         },
         async markAllRead() {
-            if (this.markingRead || this.unread === 0) return;
-            this.markingRead = true;
-            const previousItems = this.items;
-            const previousUnread = this.unread;
-            this.items = this.items.map(n => ({ ...n, read: true }));
-            this.unread = 0;
             try {
                 await window.axios.post('/api/notifications/read-all');
-            } catch {
-                this.items = previousItems;
-                this.unread = previousUnread;
-                Alpine.store('toast').error('Could not mark notifications read.');
-            } finally {
-                this.markingRead = false;
-            }
+                this.items = this.items.map(n => ({ ...n, read: true }));
+                this.unread = 0;
+            } catch {}
         },
     };
 };
@@ -72,23 +56,17 @@ window.globalSearch = function() {
         results: [],
         loading: false,
         focused: -1,
-        _requestId: 0,
         async search() {
             const q = this.query.trim();
             if (q.length < 2) { this.results = []; return; }
-            const requestId = ++this._requestId;
             this.loading = true;
             try {
                 const res = await window.axios.get('/api/search', { params: { q } });
-                if (requestId !== this._requestId) return;
                 this.results = res.data.groups ?? [];
             } catch {
-                if (requestId !== this._requestId) return;
                 this.results = [];
             } finally {
-                if (requestId === this._requestId) {
-                    this.loading = false;
-                }
+                this.loading = false;
             }
         },
         useRecent(q) {
@@ -152,16 +130,13 @@ window.clickToCall = function() {
         phoneNumber: '',
         leadId: null,
         open: false,
-        dialing: false,
-        hangingUp: false,
         show(number, leadId = null) {
             this.phoneNumber = number;
             this.leadId = leadId;
             this.open = true;
         },
         async dial() {
-            if (!this.phoneNumber || this.dialing) return;
-            this.dialing = true;
+            if (!this.phoneNumber) return;
             const store = Alpine.store('call');
             store.state = 'ringing';
             store.number = this.phoneNumber;
@@ -182,30 +157,22 @@ window.clickToCall = function() {
                     || e.response?.data?.message
                     || 'Failed to originate call';
                 Alpine.store('toast').error(errMsg);
-            } finally {
-                this.dialing = false;
             }
         },
         async hangup() {
-            if (this.hangingUp) return;
-            this.hangingUp = true;
             // Delegate to TelephonyCore which handles SIP BYE + API notification
-            try {
-                if (window.TelephonyCore?.hasActiveCall()) {
-                    await window.TelephonyCore.hangup();
-                } else {
-                    // Fallback: API-only hangup (e.g. SIP not registered but session exists)
-                    const store = Alpine.store('call');
-                    store.stopTimer();
-                    try {
-                        await window.axios.post('/api/call/hangup', { session_id: store.sessionId });
-                    } catch {
-                        Alpine.store('toast').warning('Call ended locally.');
-                    }
-                    store.state = 'wrapup';
+            if (window.TelephonyCore?.hasActiveCall()) {
+                await window.TelephonyCore.hangup();
+            } else {
+                // Fallback: API-only hangup (e.g. SIP not registered but session exists)
+                const store = Alpine.store('call');
+                store.stopTimer();
+                try {
+                    await window.axios.post('/api/call/hangup', { session_id: store.sessionId });
+                } catch {
+                    Alpine.store('toast').warning('Call ended locally.');
                 }
-            } finally {
-                this.hangingUp = false;
+                store.state = 'wrapup';
             }
         },
         toggleMute() {
@@ -222,7 +189,6 @@ window.bulkActions = function() {
     return {
         selected: [],
         allSelected: false,
-        deleting: false,
         toggleAll(ids) {
             this.allSelected = !this.allSelected;
             this.selected = this.allSelected ? [...ids] : [];
@@ -235,14 +201,13 @@ window.bulkActions = function() {
         isSelected(id) { return this.selected.includes(id); },
         get count() { return this.selected.length; },
         async bulkDelete(url) {
-            if (this.selected.length === 0 || this.deleting) return;
+            if (this.selected.length === 0) return;
             const ok = await Alpine.store('confirm').ask(
                 `Delete ${this.selected.length} item(s)?`,
                 'This action cannot be undone.',
                 { confirmText: 'Delete All', variant: 'danger' }
             );
             if (!ok) return;
-            this.deleting = true;
             try {
                 await window.axios.post(url, { ids: this.selected });
                 Alpine.store('toast').success(`${this.selected.length} items deleted.`);
@@ -250,8 +215,6 @@ window.bulkActions = function() {
                 window.location.reload();
             } catch {
                 Alpine.store('toast').error('Failed to delete. Please try again.');
-            } finally {
-                this.deleting = false;
             }
         },
     };
@@ -274,7 +237,6 @@ window.dispositionModal = function() {
             this.open   = true;
         },
         async submit() {
-            if (this.submitting) return;
             if (!this.selectedCode) {
                 Alpine.store('toast').warning('Please select a disposition code.');
                 return;

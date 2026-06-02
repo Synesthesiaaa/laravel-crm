@@ -74,26 +74,16 @@
                 <div class="login-warn" style="border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.1);">{{ $errors->first() }}</div>
             @endif
             <div class="btn-row">
-                <form method="POST" action="{{ route('login.pending.confirm') }}" data-loading-submit data-loading-text="Continuing...">
+                <form method="POST" action="{{ route('login.pending.confirm') }}">
                     @csrf
                     <button type="submit" class="btn-login">Continue and sign out other sessions</button>
                 </form>
-                <form method="POST" action="{{ route('login.pending.cancel') }}" data-loading-submit data-loading-text="Canceling...">
+                <form method="POST" action="{{ route('login.pending.cancel') }}">
                     @csrf
                     <button type="submit" class="btn-ghost">Cancel</button>
                 </form>
             </div>
         </div>
     </div>
-    <script>
-      document.querySelectorAll('[data-loading-submit]').forEach(function(form) {
-        form.addEventListener('submit', function() {
-          var button = form.querySelector('button[type="submit"]');
-          if (!button || button.disabled) return;
-          button.disabled = true;
-          button.textContent = form.getAttribute('data-loading-text') || 'Working...';
-        });
-      });
-    </script>
 </body>
 </html>

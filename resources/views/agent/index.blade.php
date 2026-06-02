@@ -32,8 +32,7 @@
                         <button type="button"
                                 class="text-xs px-2 py-1 rounded-md border"
                                 :class="predictiveMode ? 'border-emerald-500 text-emerald-600 bg-emerald-50' : 'border-[var(--color-border)] text-[var(--color-on-surface-dim)]'"
-                                @click="togglePredictiveMode()"
-                                :disabled="busy.predictive">
+                                @click="togglePredictiveMode()">
                             <span x-text="predictiveMode ? 'Predictive: ON' : 'Predictive: OFF'">Predictive: OFF</span>
                         </button>
                     </template>
@@ -126,7 +125,7 @@
                         <x-icon name="check" class="w-4 h-4" />
                         <span x-text="saving ? 'Saving...' : 'Save Record'">Save Record</span>
                     </button>
-                    <button type="button" class="btn-ghost" @click="clearForm()" :disabled="saving">Clear</button>
+                    <button type="button" class="btn-ghost" @click="clearForm()">Clear</button>
                 </div>
             </form>
         </div>
@@ -201,9 +200,8 @@
                     </button>
                     <button class="phone-hangup-btn"
                             @click="hangup()"
-                            x-show="callState !== 'idle' && callState !== 'wrapup'"
-                            :disabled="busy.hangup">
-                        <x-icon name="phone-x-mark" class="w-6 h-6" x-bind:class="busy.hangup ? 'animate-spin' : ''" />
+                            x-show="callState !== 'idle' && callState !== 'wrapup'">
+                        <x-icon name="phone-x-mark" class="w-6 h-6" />
                     </button>
                 </div>
             </div>
@@ -320,16 +318,6 @@ window.agentScreen = function() {
         leadTools: {
             phone_search: '',
             raw: '',
-        },
-        busy: {
-            hangup: false,
-            predictive: false,
-            transfer: null,
-            recording: null,
-            dtmf: null,
-            callback: null,
-            lead: null,
-            ingroups: null,
         },
 
         _echoUnsubscribe: null,
@@ -784,24 +772,16 @@ window.agentScreen = function() {
 
         async updateIngroups(action) {
             if (!this.featureEnabled('ingroup_management')) return;
-            if (this.busy.ingroups) return;
-            this.busy.ingroups = action;
             if (window.VicidialSession?.updateIngroups) {
                 const ctx = typeof window.getPhoneWidgetCtx === 'function' ? window.getPhoneWidgetCtx() : null;
-                try {
-                    await window.VicidialSession.updateIngroups(
-                        action,
-                        this.parseIngroups(Alpine.store('vicidial').ingroupsRaw || ''),
-                        Alpine.store('vicidial').blended,
-                        this.telephonyCampaign(),
-                        ctx
-                    );
-                } finally {
-                    this.busy.ingroups = null;
-                }
-                return;
+                await window.VicidialSession.updateIngroups(
+                    action,
+                    this.parseIngroups(Alpine.store('vicidial').ingroupsRaw || ''),
+                    Alpine.store('vicidial').blended,
+                    this.telephonyCampaign(),
+                    ctx
+                );
             }
-            this.busy.ingroups = null;
         },
 
         parseIngroups(raw) {
@@ -845,69 +825,50 @@ window.agentScreen = function() {
         async swapPark(target) { if (!this.featureEnabled('transfer_controls')) return; await this.transferAction('/api/call/swap-park', { target }); },
 
         async transferAction(url, data = {}) {
-            if (this.busy.transfer) return;
-            this.busy.transfer = url;
             try {
                 await window.axios.post(url, { campaign: this.telephonyCampaign(), ...data });
                 Alpine.store('toast').success('Transfer action sent.');
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Transfer action failed.');
-            } finally {
-                this.busy.transfer = null;
             }
         },
 
         async startRecording() {
             if (!this.featureEnabled('recording_controls')) return;
-            if (this.busy.recording) return;
-            this.busy.recording = 'start';
-            this.recording.statusText = 'Starting recording...';
             try {
                 const res = await window.axios.post('/api/call/recording/start', { campaign: this.telephonyCampaign() });
                 this.recording.statusText = res.data?.data?.raw_response || 'Recording started.';
                 Alpine.store('toast').success('Recording start sent.');
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Failed to start recording.');
-            } finally {
-                this.busy.recording = null;
             }
         },
 
         async stopRecording() {
             if (!this.featureEnabled('recording_controls')) return;
-            if (this.busy.recording) return;
-            this.busy.recording = 'stop';
-            this.recording.statusText = 'Stopping recording...';
             try {
                 const res = await window.axios.post('/api/call/recording/stop', { campaign: this.telephonyCampaign() });
                 this.recording.statusText = res.data?.data?.raw_response || 'Recording stopped.';
                 Alpine.store('toast').info('Recording stop sent.');
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Failed to stop recording.');
-            } finally {
-                this.busy.recording = null;
             }
         },
 
         async recordingStatus() {
             if (!this.featureEnabled('recording_controls')) return;
-            if (this.busy.recording) return;
-            this.busy.recording = 'status';
             try {
                 const res = await window.axios.get('/api/call/recording/status', { params: { campaign: this.telephonyCampaign() } });
                 this.recording.statusText = res.data?.data?.raw_response || 'No status';
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Failed to fetch recording status.');
-            } finally {
-                this.busy.recording = null;
             }
         },
 
         async sendDtmf(digit) {
             if (!this.featureEnabled('dtmf_controls')) return;
             const digits = (digit || '').toString().trim();
-            if (!digits || this.busy.dtmf) return;
-            this.busy.dtmf = digits;
+            if (!digits) return;
             try {
                 await window.axios.post('/api/call/dtmf', {
                     campaign: this.telephonyCampaign(),
@@ -916,15 +877,12 @@ window.agentScreen = function() {
                 Alpine.store('toast').info('DTMF sent: ' + digits);
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Failed to send DTMF.');
-            } finally {
-                this.busy.dtmf = null;
             }
         },
 
         async scheduleCallback() {
             if (!this.featureEnabled('callback_controls')) return;
-            if (!this.leadId || !this.callbackForm.datetime || this.busy.callback) return;
-            this.busy.callback = 'schedule';
+            if (!this.leadId || !this.callbackForm.datetime) return;
             try {
                 await window.axios.post('/api/callbacks/schedule', {
                     campaign: this.telephonyCampaign(),
@@ -937,15 +895,12 @@ window.agentScreen = function() {
                 Alpine.store('toast').success('Callback scheduled.');
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Unable to schedule callback.');
-            } finally {
-                this.busy.callback = null;
             }
         },
 
         async removeCallback() {
             if (!this.featureEnabled('callback_controls')) return;
-            if (!this.leadId || this.busy.callback) return;
-            this.busy.callback = 'remove';
+            if (!this.leadId) return;
             try {
                 await window.axios.post('/api/callbacks/remove', {
                     campaign: this.telephonyCampaign(),
@@ -954,15 +909,12 @@ window.agentScreen = function() {
                 Alpine.store('toast').info('Callback removed.');
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Unable to remove callback.');
-            } finally {
-                this.busy.callback = null;
             }
         },
 
         async callbackInfo() {
             if (!this.featureEnabled('callback_controls')) return;
-            if (!this.leadId || this.busy.callback) return;
-            this.busy.callback = 'info';
+            if (!this.leadId) return;
             try {
                 const res = await window.axios.get('/api/callbacks/info', {
                     params: {
@@ -973,15 +925,12 @@ window.agentScreen = function() {
                 this.leadTools.raw = res.data?.data?.raw_response || '';
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Unable to fetch callback info.');
-            } finally {
-                this.busy.callback = null;
             }
         },
 
         async searchLead() {
             if (!this.featureEnabled('lead_tools')) return;
-            if (!this.leadTools.phone_search || this.busy.lead) return;
-            this.busy.lead = 'search';
+            if (!this.leadTools.phone_search) return;
             try {
                 const res = await window.axios.get('/api/leads/search', {
                     params: {
@@ -992,15 +941,11 @@ window.agentScreen = function() {
                 this.leadTools.raw = res.data?.data?.raw_response || '';
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Lead search failed.');
-            } finally {
-                this.busy.lead = null;
             }
         },
 
         async loadLeadInfo() {
             if (!this.featureEnabled('lead_tools')) return;
-            if (this.busy.lead) return;
-            this.busy.lead = 'info';
             try {
                 const params = { campaign: this.crmCampaign() };
                 if (this.leadId) params.lead_id = this.leadId;
@@ -1009,15 +954,12 @@ window.agentScreen = function() {
                 this.leadTools.raw = res.data?.data?.raw_response || '';
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Unable to fetch lead info.');
-            } finally {
-                this.busy.lead = null;
             }
         },
 
         async switchLead() {
             if (!this.featureEnabled('lead_tools')) return;
-            if (!this.leadId || this.busy.lead) return;
-            this.busy.lead = 'switch';
+            if (!this.leadId) return;
             try {
                 const res = await window.axios.post('/api/leads/switch', {
                     campaign: this.crmCampaign(),
@@ -1027,8 +969,6 @@ window.agentScreen = function() {
                 Alpine.store('toast').success('Lead switch request sent.');
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Lead switch failed.');
-            } finally {
-                this.busy.lead = null;
             }
         },
 
@@ -1076,11 +1016,7 @@ window.agentScreen = function() {
         },
 
         async hangup() {
-            if (this.busy.hangup) return;
-            this.busy.hangup = true;
-            try {
-                await Alpine.store('call').hangupWebRTC();
-            } catch (_) {}
+            await Alpine.store('call').hangupWebRTC();
             clearInterval(this.timer);
             this.timer = null;
             Alpine.store('call').stopTimer();
@@ -1099,8 +1035,6 @@ window.agentScreen = function() {
                 });
             } catch (e) {
                 Alpine.store('toast').warning('Backend hangup request failed — disposition may still be required.');
-            } finally {
-                this.busy.hangup = false;
             }
         },
 
@@ -1111,7 +1045,7 @@ window.agentScreen = function() {
         },
 
         async saveDisposition() {
-            if (!this.dispositionCode || this.savingDisposition) return;
+            if (!this.dispositionCode) return;
             this.savingDisposition = true;
             this.dispositionError = null;
             const campaign = this.crmCampaign();
@@ -1185,8 +1119,7 @@ window.agentScreen = function() {
 
         async predictiveDial() {
             if (!this.featureEnabled('predictive_dialing')) return;
-            if (!this.predictiveMode || this.callState !== 'idle' || this.dialBlocked || this.busy.predictive) return;
-            this.busy.predictive = true;
+            if (!this.predictiveMode || this.callState !== 'idle' || this.dialBlocked) return;
             try {
                 const campaign = this.telephonyCampaign();
                 const res = await window.axios.post('/api/call/predictive-dial?campaign=' + encodeURIComponent(campaign));
@@ -1210,13 +1143,10 @@ window.agentScreen = function() {
                 Alpine.store('call').state = 'dialing';
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Predictive dial request failed.');
-            } finally {
-                this.busy.predictive = false;
             }
         },
 
         async saveForm() {
-            if (this.saving) return;
             this.saving = true;
             const form = document.getElementById('capture-form');
             if (!form) { this.saving = false; return; }

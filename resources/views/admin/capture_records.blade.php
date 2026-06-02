@@ -92,13 +92,9 @@
                     <td>{{ $captureData[$field->field_key] ?? '-' }}</td>
                 @endforeach
                 <td>
-                    <div class="table-actions" x-data="{ deleting: false, async del(form) {
-                        if (this.deleting) return;
+                    <div class="table-actions" x-data="{ async del(form) {
                         const ok = await Alpine.store('confirm').ask('Delete capture record?', 'This record will be permanently removed.');
-                        if (!ok) return;
-                        this.deleting = true;
-                        window.crmLockSubmitForm?.(form, 'Deleting...');
-                        HTMLFormElement.prototype.submit.call(form);
+                        if (ok) form.submit();
                     }}">
                         <a href="{{ route('admin.capture-records.edit', ['record' => $record->id, 'campaign' => $selectedCampaign]) }}"
                            class="btn-secondary text-xs px-2 py-1">
@@ -110,7 +106,6 @@
                             <input type="hidden" name="id" value="{{ $record->id }}">
                             <input type="hidden" name="campaign" value="{{ $selectedCampaign }}">
                             <button type="button" class="btn-danger text-xs px-2 py-1"
-                                    :disabled="deleting"
                                     @click="del($refs['delFormCR{{ $record->id }}'])">
                                 <x-icon name="trash" class="w-3.5 h-3.5" />
                                 Delete

@@ -3,15 +3,9 @@
     <div class="grid grid-cols-1 gap-2">
         <input class="form-input" x-model="leadTools.phone_search" placeholder="Phone number for lead search" />
         <div class="flex gap-2">
-            <button class="btn-secondary text-xs" @click="searchLead()" :disabled="busy.lead || !leadTools.phone_search">
-                <span x-text="busy.lead === 'search' ? 'Searching...' : 'Search'">Search</span>
-            </button>
-            <button class="btn-secondary text-xs" @click="loadLeadInfo()" :disabled="busy.lead">
-                <span x-text="busy.lead === 'info' ? 'Loading...' : 'Load Info'">Load Info</span>
-            </button>
-            <button class="btn-secondary text-xs" @click="switchLead()" :disabled="busy.lead || !leadId">
-                <span x-text="busy.lead === 'switch' ? 'Switching...' : 'Switch Lead'">Switch Lead</span>
-            </button>
+            <button class="btn-secondary text-xs" @click="searchLead()">Search</button>
+            <button class="btn-secondary text-xs" @click="loadLeadInfo()">Load Info</button>
+            <button class="btn-secondary text-xs" @click="switchLead()">Switch Lead</button>
         </div>
         <textarea class="form-textarea" rows="3" x-model="leadTools.raw" placeholder="Lead API raw response"></textarea>
     </div>

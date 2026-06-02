@@ -10,14 +10,8 @@
         <textarea class="form-textarea" rows="2" x-model="callbackForm.comments" placeholder="Comments"></textarea>
     </div>
     <div class="flex gap-2">
-        <button class="btn-secondary text-xs" @click="scheduleCallback()" :disabled="busy.callback || !leadId || !callbackForm.datetime">
-            <span x-text="busy.callback === 'schedule' ? 'Scheduling...' : 'Schedule'">Schedule</span>
-        </button>
-        <button class="btn-ghost text-xs" @click="removeCallback()" :disabled="busy.callback || !leadId">
-            <span x-text="busy.callback === 'remove' ? 'Removing...' : 'Remove'">Remove</span>
-        </button>
-        <button class="btn-ghost text-xs" @click="callbackInfo()" :disabled="busy.callback || !leadId">
-            <span x-text="busy.callback === 'info' ? 'Loading...' : 'Info'">Info</span>
-        </button>
+        <button class="btn-secondary text-xs" @click="scheduleCallback()">Schedule</button>
+        <button class="btn-ghost text-xs" @click="removeCallback()">Remove</button>
+        <button class="btn-ghost text-xs" @click="callbackInfo()">Info</button>
     </div>
 </div>

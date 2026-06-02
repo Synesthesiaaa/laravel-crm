@@ -84,8 +84,6 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             agent_campaigns: [],
             agent_campaigns_loading: false,
             agent_campaigns_error: null,
-            campaign_saving: false,
-            popout_loading: false,
             vd_login: boot.vd_login || '',
             vd_pass: '',
             phone_login: boot.phone_login || '',
@@ -231,8 +229,6 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         async persistViciCampaignToSession() {
             const code = this.vici.vici_campaign;
             const row = (this.vici.agent_campaigns || []).find((c) => c.id === code);
-            if (this.vici.campaign_saving) return;
-            this.vici.campaign_saving = true;
             try {
                 await window.axios.post('/api/vicidial/session/select-campaign', {
                     campaign: code,
@@ -240,11 +236,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
                 });
                 if (document.body?.dataset) document.body.dataset.telephonyCampaign = code;
                 Alpine.store('vicidial').campaign = code;
-            } catch (_) {
-                Alpine.store('toast').error('Could not save VICIdial campaign.');
-            } finally {
-                this.vici.campaign_saving = false;
-            }
+            } catch (_) {}
         },
 
         async onViciCampaignChange() {
@@ -294,7 +286,6 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         },
 
         async viciLogin() {
-            if (this.vici.loading || ['requesting','iframe_loading','syncing'].includes(this.vici.phase)) return;
             if (!this.sessionControls || !window.VicidialSession) {
                 Alpine.store('toast').error('VICIdial session module is not loaded.');
                 return;
@@ -314,7 +305,6 @@ window.phoneWidget = function phoneWidget(boot = {}) {
 
         async viciPause(value) {
             if (!this.sessionControls || !window.VicidialSession?.pause) return;
-            if (this.vici.loading) return;
             await window.VicidialSession.pause(value, this.telephonyCampaign(), this);
         },
 
@@ -330,19 +320,12 @@ window.phoneWidget = function phoneWidget(boot = {}) {
 
         async viciLogout() {
             if (!this.sessionControls || !window.VicidialSession?.logout) return;
-            if (this.vici.loading) return;
             await window.VicidialSession.logout(this.telephonyCampaign(), this);
         },
 
         async viciPopout() {
             if (!this.sessionControls || !window.VicidialSession?.popout) return;
-            if (this.vici.popout_loading) return;
-            this.vici.popout_loading = true;
-            try {
-                await window.VicidialSession.popout(this.telephonyCampaign(), this);
-            } finally {
-                this.vici.popout_loading = false;
-            }
+            await window.VicidialSession.popout(this.telephonyCampaign(), this);
         },
 
         _onWsPhase(e) {

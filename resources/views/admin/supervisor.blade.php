@@ -68,9 +68,7 @@
                     <input type="checkbox" x-model="notification.confetti" />
                     Confetti
                 </label>
-                <button class="btn-secondary w-full text-xs" @click="sendNotification()" :disabled="busy.notification || !notification.recipient">
-                    <span x-text="busy.notification ? 'Sending...' : 'Send'">Send</span>
-                </button>
+                <button class="btn-secondary w-full text-xs" @click="sendNotification()">Send</button>
             </div>
         </div>
     </div>
@@ -100,11 +98,11 @@
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">
                 Agent Status — <span x-text="agents.length + ' agents'" class="text-[var(--color-primary)]"></span>
             </h3>
-            <button @click="refresh()" class="btn-secondary text-xs" :disabled="loading">
+            <button @click="refresh()" class="btn-secondary text-xs">
                 <span class="inline-flex" :class="loading ? 'animate-spin' : ''">
                     <x-icon name="arrow-path" class="w-3.5 h-3.5" />
                 </span>
-                <span x-text="loading ? 'Refreshing...' : 'Refresh'">Refresh</span>
+                Refresh
             </button>
         </div>
         <template x-if="loading && agents.length === 0">
@@ -148,21 +146,21 @@
                     <div class="text-[11px] text-[var(--color-on-surface-dim)] mt-1" x-text="'Vici: ' + (agent.vici_status || 'unknown') + ' · Queue: ' + (agent.queue_count ?? 0)"></div>
                     {{-- Supervisor controls --}}
                     <div class="flex gap-1.5 mt-2 flex-wrap">
-                        <button class="btn-ghost text-xs px-2 py-1" @click="monitorAgent(agent)" :disabled="busy.agentAction" title="Monitor (listen only)">
+                        <button class="btn-ghost text-xs px-2 py-1" @click="monitorAgent(agent)" title="Monitor (listen only)">
                             <x-icon name="eye" class="w-3 h-3" />
-                            <span x-text="busy.agentAction === 'monitor:' + agent.id ? 'Monitoring...' : 'Monitor'">Monitor</span>
+                            Monitor
                         </button>
-                        <button class="btn-ghost text-xs px-2 py-1" @click="whisperAgent(agent)" :disabled="busy.agentAction" title="Whisper (agent only)">
+                        <button class="btn-ghost text-xs px-2 py-1" @click="whisperAgent(agent)" title="Whisper (agent only)">
                             <x-icon name="microphone" class="w-3 h-3" />
-                            <span x-text="busy.agentAction === 'whisper:' + agent.id ? 'Whispering...' : 'Whisper'">Whisper</span>
+                            Whisper
                         </button>
-                        <button class="btn-ghost text-xs px-2 py-1" @click="forcePause(agent)" :disabled="busy.agentAction" title="Force pause agent">
+                        <button class="btn-ghost text-xs px-2 py-1" @click="forcePause(agent)" title="Force pause agent">
                             <x-icon name="pause" class="w-3 h-3" />
-                            <span x-text="busy.agentAction === 'pause:' + agent.id ? 'Pausing...' : 'Pause'">Pause</span>
+                            Pause
                         </button>
-                        <button class="btn-ghost text-xs px-2 py-1" @click="forceLogout(agent)" :disabled="busy.agentAction" title="Force logout agent">
+                        <button class="btn-ghost text-xs px-2 py-1" @click="forceLogout(agent)" title="Force logout agent">
                             <x-icon name="arrow-right-on-rectangle" class="w-3 h-3" />
-                            <span x-text="busy.agentAction === 'logout:' + agent.id ? 'Logging out...' : 'Logout'">Logout</span>
+                            Logout
                         </button>
                     </div>
                 </div>
@@ -278,10 +276,6 @@ window.supervisorDashboard = function() {
             text: '',
             confetti: false,
         },
-        busy: {
-            agentAction: null,
-            notification: false,
-        },
 
         async init() {
             await this.refresh();
@@ -339,73 +333,39 @@ window.supervisorDashboard = function() {
         },
 
         async monitorAgent(agent) {
-            if (this.busy.agentAction) return;
-            this.busy.agentAction = `monitor:${agent.id}`;
-            try {
-                await window.axios.post('/api/supervisor/monitor', { agent_user_id: agent.id });
-                Alpine.store('toast').info(`Monitoring ${agent.name}`);
-            } catch (e) {
-                Alpine.store('toast').error(e.response?.data?.message || 'Monitor command failed.');
-            } finally {
-                this.busy.agentAction = null;
-            }
+            await window.axios.post('/api/supervisor/monitor', { agent_user_id: agent.id })
+                .catch(() => {});
+            Alpine.store('toast').info(`Monitoring ${agent.name}`);
         },
 
         async whisperAgent(agent) {
-            if (this.busy.agentAction) return;
-            this.busy.agentAction = `whisper:${agent.id}`;
-            try {
-                await window.axios.post('/api/supervisor/whisper', { agent_user_id: agent.id });
-                Alpine.store('toast').info(`Whispering to ${agent.name}`);
-            } catch (e) {
-                Alpine.store('toast').error(e.response?.data?.message || 'Whisper command failed.');
-            } finally {
-                this.busy.agentAction = null;
-            }
+            await window.axios.post('/api/supervisor/whisper', { agent_user_id: agent.id })
+                .catch(() => {});
+            Alpine.store('toast').info(`Whispering to ${agent.name}`);
         },
 
         async forcePause(agent) {
-            if (this.busy.agentAction) return;
-            this.busy.agentAction = `pause:${agent.id}`;
-            try {
-                await window.axios.post('/api/supervisor/force-pause', { agent_user_id: agent.id });
-                Alpine.store('toast').warning(`Pause command sent to ${agent.name}`);
-            } catch (e) {
-                Alpine.store('toast').error(e.response?.data?.message || 'Pause command failed.');
-            } finally {
-                this.busy.agentAction = null;
-            }
+            await window.axios.post('/api/supervisor/force-pause', { agent_user_id: agent.id }).catch(() => {});
+            Alpine.store('toast').warning(`Pause command sent to ${agent.name}`);
         },
 
         async forceLogout(agent) {
-            if (this.busy.agentAction) return;
-            this.busy.agentAction = `logout:${agent.id}`;
-            try {
-                await window.axios.post('/api/supervisor/force-logout', { agent_user_id: agent.id });
-                Alpine.store('toast').warning(`Logout command sent to ${agent.name}`);
-            } catch (e) {
-                Alpine.store('toast').error(e.response?.data?.message || 'Logout command failed.');
-            } finally {
-                this.busy.agentAction = null;
-            }
+            await window.axios.post('/api/supervisor/force-logout', { agent_user_id: agent.id }).catch(() => {});
+            Alpine.store('toast').warning(`Logout command sent to ${agent.name}`);
         },
 
         async sendNotification() {
-            if (!this.notification.recipient || this.busy.notification) return;
-            this.busy.notification = true;
-            try {
-                await window.axios.post('/api/supervisor/send-notification', {
-                    recipient_type: this.notification.recipient_type,
-                    recipient: this.notification.recipient,
-                    notification_text: this.notification.text,
-                    show_confetti: this.notification.confetti,
-                });
+            if (!this.notification.recipient) return;
+            await window.axios.post('/api/supervisor/send-notification', {
+                recipient_type: this.notification.recipient_type,
+                recipient: this.notification.recipient,
+                notification_text: this.notification.text,
+                show_confetti: this.notification.confetti,
+            }).then(() => {
                 Alpine.store('toast').success('Notification sent.');
-            } catch (e) {
+            }).catch((e) => {
                 Alpine.store('toast').error(e.response?.data?.message || 'Failed to send notification.');
-            } finally {
-                this.busy.notification = false;
-            }
+            });
         },
 
         async renderCharts() {
