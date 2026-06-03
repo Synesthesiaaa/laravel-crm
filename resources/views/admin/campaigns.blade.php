@@ -47,9 +47,9 @@
         ['label' => 'Status'],
         ['label' => 'Actions', 'align' => 'right'],
     ]" />
-    <tbody>
-        @forelse($campaigns as $c)
-            <tr x-data="{ editOpen: false }">
+    @forelse($campaigns as $c)
+        <tbody x-data="{ editOpen: false }">
+            <tr>
                 <td><span class="font-mono font-semibold text-[var(--color-on-surface)] text-sm">{{ $c->code }}</span></td>
                 <td>{{ $c->name }}</td>
                 <td>
@@ -109,9 +109,9 @@
                     </form>
                 </td>
             </tr>
-        @empty
-            <x-table.empty :colspan="4" message="No campaigns yet." />
-        @endforelse
-    </tbody>
+        </tbody>
+    @empty
+        <x-table.empty :colspan="4" message="No campaigns yet." />
+    @endforelse
 </x-table.index>
 @endsection

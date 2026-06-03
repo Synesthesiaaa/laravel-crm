@@ -77,14 +77,9 @@
             ['label' => 'Table'],
             ['label' => 'Actions', 'align' => 'right'],
         ]" />
-        <tbody>
-            @forelse($forms as $f)
-                @php
-                    $shouldOpenEdit = $errors->isNotEmpty()
-                        && old('campaign_code') === $f->campaign_code
-                        && (old('form_code') === $f->form_code || request()->routeIs('admin.forms.update'));
-                @endphp
-                <tr x-data="{ editOpen: @js($shouldOpenEdit) }">
+        @forelse($forms as $f)
+            <tbody x-data="{ editOpen: @js($errors->isNotEmpty() && (int) old('_editing') === $f->id) }">
+                <tr>
                     <td><span class="font-mono font-semibold text-sm text-[var(--color-on-surface)]">{{ $f->form_code }}</span></td>
                     <td>{{ $f->name }}</td>
                     <td class="font-mono text-sm">{{ $f->table_name }}</td>
@@ -115,13 +110,14 @@
                         </div>
                     </td>
                 </tr>
-                <tr x-show="editOpen" x-collapse class="inline-edit-row">
+                <tr x-show="editOpen" x-collapse class="inline-edit-row" style="display: none;">
                     <td colspan="4">
                         <form method="POST" action="{{ route('admin.forms.update', $f) }}"
                               x-data="{ submitting: false }" @submit="submitting = true">
                             @csrf
                             @method('PUT')
                             <input type="hidden" name="campaign_code" value="{{ $f->campaign_code }}">
+                            <input type="hidden" name="_editing" value="{{ $f->id }}">
                             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div class="form-field">
                                     <label class="form-label">Form Code</label>
@@ -140,9 +136,9 @@
                         </form>
                     </td>
                 </tr>
-            @empty
-                <x-table.empty :colspan="4" message="No forms for this campaign." description="Add a form above to get started." />
-            @endforelse
-        </tbody>
+            </tbody>
+        @empty
+            <x-table.empty :colspan="4" message="No forms for this campaign." description="Add a form above to get started." />
+        @endforelse
     </x-table.index>
 @endsection
