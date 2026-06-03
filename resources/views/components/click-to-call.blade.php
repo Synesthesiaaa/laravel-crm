@@ -3,7 +3,7 @@
   Floating click-to-call widget. Available for agents on any page.
   Connects to Alpine.js store 'call'.
 --}}
-<div class="phone-widget" x-data="clickToCall()" x-show="open || $store.call.state !== 'idle'" style="display: none;">
+<div class="phone-widget fab-stack-0" x-data="clickToCall()" x-show="open || $store.call.state !== 'idle'" style="display: none;">
     {{-- Trigger fab (idle only) --}}
     <button type="button"
             @click="open = !open"
@@ -19,15 +19,9 @@
          class="phone-widget-panel mb-2 flex items-center gap-3">
         <span class="text-sm text-[var(--color-on-surface)] truncate max-w-[140px]" x-text="$store.call.number || 'Call in progress'"></span>
         <span x-show="$store.call.state === 'connected'" class="text-xs text-[var(--color-on-surface-dim)]" x-text="'· ' + $store.call.formattedDuration()"></span>
-<<<<<<< HEAD
         <button type="button" @click="hangup()" class="btn-danger shrink-0 text-sm py-1 px-3 rounded-lg flex items-center gap-1" x-bind:disabled="hangingUp">
             <x-icon name="phone-x-mark" class="w-4 h-4" x-bind:class="hangingUp ? 'animate-spin' : ''" />
             <span x-text="hangingUp ? 'Ending...' : 'Hang up'">Hang up</span>
-=======
-        <button type="button" @click="hangup()" class="btn-danger shrink-0 text-sm py-1 px-3 rounded-lg flex items-center gap-1">
-            <x-icon name="phone-x-mark" class="w-4 h-4" />
-            Hang up
->>>>>>> parent of ca0cb7a (Prevent duplicate actions & add UI busy states)
         </button>
     </div>
 
@@ -51,27 +45,16 @@
                    @keydown.enter="dial()"
                    class="form-input"
                    placeholder="+63 XXX XXX XXXX"
-<<<<<<< HEAD
                    x-bind:disabled="dialing"
-=======
->>>>>>> parent of ca0cb7a (Prevent duplicate actions & add UI busy states)
                    x-ref="phoneInput"
                    x-init="$nextTick(() => open && $refs.phoneInput.focus())" />
         </div>
         <div class="flex gap-2">
-<<<<<<< HEAD
             <button @click="dial()" class="btn-primary flex-1 text-sm" x-bind:disabled="!phoneNumber || dialing">
                 <x-icon name="phone" class="w-4 h-4" x-bind:class="dialing ? 'animate-spin' : ''" />
                 <span x-text="dialing ? 'Dialing...' : 'Dial'">Dial</span>
             </button>
             <button @click="open = false" class="btn-ghost text-sm" x-bind:disabled="dialing">Cancel</button>
-=======
-            <button @click="dial()" class="btn-primary flex-1 text-sm" :disabled="!phoneNumber">
-                <x-icon name="phone" class="w-4 h-4" />
-                Dial
-            </button>
-            <button @click="open = false" class="btn-ghost text-sm">Cancel</button>
->>>>>>> parent of ca0cb7a (Prevent duplicate actions & add UI busy states)
         </div>
     </div>
 </div>

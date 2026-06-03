@@ -115,6 +115,8 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             return {
                 width: `${this.width}px`,
                 maxWidth: `${this.width}px`,
+                height: `${this.height}px`,
+                maxHeight: `${this.height}px`,
             };
         },
 

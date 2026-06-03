@@ -32,12 +32,13 @@
 @endphp
 
 @section('content')
-<x-page-header title="Call History" description="Your call activity and outcomes."
-    :breadcrumbs="['Call History' => null]" />
+<nav class="mb-4 text-sm text-[var(--color-on-surface-dim)]" aria-label="Breadcrumb">
+    <span class="text-[var(--color-on-surface-muted)]">Call History</span>
+</nav>
 
-<div class="md-card mb-4">
+<div class="md-card mb-4 md-card--static">
     <div class="p-4">
-        <form method="GET" action="{{ route('records.index') }}" class="flex flex-wrap items-end gap-4">
+        <form method="GET" action="{{ route('records.index') }}" class="filter-row">
             <x-form.input name="start_date" type="date" label="Start Date" :value="request('start_date')" />
             <x-form.input name="end_date" type="date" label="End Date" :value="request('end_date')" />
             <x-form.input name="phone" label="Phone" :value="request('phone')" placeholder="Phone number" />
@@ -47,12 +48,10 @@
                     <x-icon name="funnel" class="w-4 h-4" />
                     Filter
                 </button>
-            </div>
-            @if(request()->hasAny(['start_date','end_date','phone','status']))
-                <div class="form-actions-bottom">
+                @if(request()->hasAny(['start_date','end_date','phone','status']))
                     <a href="{{ route('records.index') }}" class="btn-ghost">Clear</a>
-                </div>
-            @endif
+                @endif
+            </div>
         </form>
     </div>
 </div>
@@ -86,6 +85,8 @@
         @endforeach
     </tbody>
     @endif
+    <x-slot:footer>
+        <x-table.pagination :paginator="$history" />
+    </x-slot:footer>
 </x-table.index>
-<x-table.pagination :paginator="$history" />
 @endsection

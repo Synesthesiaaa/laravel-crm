@@ -68,8 +68,10 @@
         @endforeach
     </tbody>
     @endif
+    <x-slot:footer>
+        <x-table.pagination :paginator="$records" />
+    </x-slot:footer>
 </x-table.index>
-<x-table.pagination :paginator="$records" />
 @else
 <div class="md-card">
     <div class="table-empty py-12">

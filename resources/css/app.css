@@ -40,6 +40,7 @@
   --color-surface-2:         #1a1a1a;
   --color-surface-3:         #242424;
   --color-surface-card:      #141414;
+  --color-surface-elevated:  #1f1f1f;
 
   /* Text scale — dark */
   --color-on-surface:        #fafafa;
@@ -61,6 +62,11 @@
   --sidebar-width:           280px;
   --sidebar-collapsed-width: 72px;
   --header-height:           64px;
+
+  /* Bottom-right FAB stack */
+  --fab-stack-base-bottom:   1.5rem;
+  --fab-stack-base-right:    1.5rem;
+  --fab-stack-gap:           3.5rem;
 }
 
 /* ===========================================================================
@@ -72,6 +78,7 @@ html[data-theme="light"] {
   --color-surface-2:         #fafafa;
   --color-surface-3:         #f0f0f0;
   --color-surface-card:      #ffffff;
+  --color-surface-elevated:  #ffffff;
   --color-on-surface:        #0a0a0a;
   --color-on-surface-muted:  #52525b;
   --color-on-surface-dim:    #71717a;
@@ -291,7 +298,7 @@ html[data-theme="light"] {
     transition: background .2s, transform .15s, box-shadow .2s;
     white-space: nowrap;
   }
-  .btn-primary:hover { background: var(--color-primary-hover); box-shadow: var(--shadow-glow); }
+  .btn-primary:hover:not(:disabled) { background: var(--color-primary-hover); box-shadow: var(--shadow-glow); }
   .btn-primary:active { transform: scale(.98); }
   .btn-primary:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 
@@ -306,7 +313,7 @@ html[data-theme="light"] {
     transition: background .2s, border-color .2s;
     white-space: nowrap;
   }
-  .btn-secondary:hover { background: var(--color-surface-3); border-color: var(--color-border-strong); }
+  .btn-secondary:hover:not(:disabled) { background: var(--color-surface-3); border-color: var(--color-border-strong); }
   .btn-secondary:disabled { opacity: .5; cursor: not-allowed; }
 
   .btn-ghost {
@@ -320,7 +327,7 @@ html[data-theme="light"] {
     transition: background .2s, color .2s, border-color .2s;
     white-space: nowrap;
   }
-  .btn-ghost:hover { background: var(--color-surface-2); color: var(--color-on-surface); border-color: var(--color-border-strong); }
+  .btn-ghost:hover:not(:disabled) { background: var(--color-surface-2); color: var(--color-on-surface); border-color: var(--color-border-strong); }
   .btn-ghost:disabled { opacity: .5; cursor: not-allowed; }
 
   .btn-danger {
@@ -333,7 +340,7 @@ html[data-theme="light"] {
     transition: background .2s, transform .15s;
     white-space: nowrap;
   }
-  .btn-danger:hover { background: var(--color-danger-hover); }
+  .btn-danger:hover:not(:disabled) { background: var(--color-danger-hover); }
   .btn-danger:active { transform: scale(.98); }
   .btn-danger:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 
@@ -346,6 +353,7 @@ html[data-theme="light"] {
     transition: transform .25s cubic-bezier(.4,0,.2,1), box-shadow .25s cubic-bezier(.4,0,.2,1), border-color .2s;
   }
   .md-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); border-color: var(--color-border-strong); }
+  .md-card--static:hover { transform: none; box-shadow: var(--shadow-1); border-color: var(--color-border); }
 
   .md-hero {
     background: linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface-1) 50%, var(--color-surface-3) 100%);
@@ -490,8 +498,12 @@ html[data-theme="light"] {
   .md-table-wrap tbody tr:last-child td { border-bottom: none; }
   .md-table-wrap .table-actions { display: flex; gap: .375rem; justify-content: flex-end; align-items: center; }
 
-  /* Overflow scroll with fade indicator */
-  .table-scroll-wrap { overflow-x: auto; position: relative; }
+  .table-scroll-wrap {
+    overflow-x: auto;
+    position: relative;
+    -webkit-mask-image: linear-gradient(to right, #000 96%, transparent);
+    mask-image: linear-gradient(to right, #000 96%, transparent);
+  }
 
   /* Empty state */
   .table-empty {
@@ -711,9 +723,23 @@ html[data-theme="light"] {
   .call-wrapup    { background: var(--color-danger-muted);  border-color: rgba(239,68,68,.4);  color: var(--color-danger-fg); }
   .call-ringing   { background: var(--color-info-muted);    border-color: rgba(59,130,246,.4); color: var(--color-info-fg); }
 
+  /* ---- Bottom-right FAB stack ---- */
+  .fab-stack-0 {
+    position: fixed;
+    bottom: var(--fab-stack-base-bottom);
+    right: var(--fab-stack-base-right);
+    z-index: 40;
+  }
+  .fab-stack-1 {
+    position: fixed;
+    bottom: calc(var(--fab-stack-base-bottom) + var(--fab-stack-gap));
+    right: var(--fab-stack-base-right);
+    z-index: 40;
+  }
+
   /* ---- Telephony widget ---- */
   .phone-widget {
-    position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 45;
+    z-index: 40;
   }
   .phone-widget-panel {
     background: var(--color-surface-2);
@@ -751,11 +777,51 @@ html[data-theme="light"] {
   }
   .phone-hangup-btn:hover { transform: scale(1.05); }
 
+  .status-chip-ready {
+    border: 1px solid rgba(34, 197, 94, 0.4);
+    background: var(--color-success-muted);
+    color: var(--color-success-fg);
+  }
+  .status-chip-warn {
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    background: var(--color-warning-muted);
+    color: var(--color-warning-fg);
+  }
+  .status-chip-error {
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    background: var(--color-danger-muted);
+    color: var(--color-danger-fg);
+  }
+  .status-chip-idle {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    color: var(--color-on-surface-dim);
+  }
+
+  .ws-health-banner {
+    position: fixed;
+    top: var(--header-height);
+    left: 0;
+    right: 0;
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .75rem;
+    padding: .5rem 1rem;
+    font-size: .875rem;
+    font-weight: 500;
+    color: var(--color-warning-fg);
+    background: var(--color-warning-muted);
+    border-bottom: 1px solid rgba(245, 158, 11, 0.35);
+    box-shadow: var(--shadow-1);
+  }
+
   .widget-resize-handle {
     position: absolute;
     width: 1.25rem;
     height: 1.25rem;
-    z-index: 5;
+    z-index: 20;
     border-radius: 4px;
     border: 1px solid var(--color-border-strong);
     background: var(--color-surface-3);

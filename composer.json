@@ -16,11 +16,13 @@
         "marcelog/pami": "2.*",
         "pusher/pusher-php-server": "*",
         "spatie/laravel-activitylog": "^4.12",
-        "spatie/laravel-permission": "^6.24"
+        "spatie/laravel-permission": "^6.24",
+        "symfony/css-selector": "7.0"
     },
     "require-dev": {
         "cweagans/composer-patches": "^1.7",
         "fakerphp/faker": "^1.23",
+        "laravel/boost": "^2.4",
         "laravel/pail": "^1.2.2",
         "laravel/pint": "^1.24",
         "laravel/sail": "^1.41",

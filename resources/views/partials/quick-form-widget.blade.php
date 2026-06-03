@@ -28,7 +28,7 @@
     </button>
 
     <div id="quick-form-widget-shell"
-         class="widget-panel-upper-left absolute origin-bottom-right relative flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg"
+         class="widget-panel-upper-left absolute origin-bottom-right flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg"
          :class="isResizing ? 'transition-none' : 'transition-all duration-300 ease-out'"
          :style="shellStyle">
         <div x-show="open"

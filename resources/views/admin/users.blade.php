@@ -226,8 +226,10 @@
         @empty
         <tbody><tr><td colspan="4" class="py-8 text-center text-[var(--color-on-surface-muted)]">No users yet.</td></tr></tbody>
         @endforelse
+    @if($users instanceof \Illuminate\Pagination\LengthAwarePaginator)
+        <x-slot:footer>
+            <x-table.pagination :paginator="$users" />
+        </x-slot:footer>
+    @endif
 </x-table.index>
-@if($users instanceof \Illuminate\Pagination\LengthAwarePaginator)
-    <x-table.pagination :paginator="$users" />
-@endif
 @endsection

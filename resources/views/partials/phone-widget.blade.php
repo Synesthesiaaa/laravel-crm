@@ -13,7 +13,7 @@
 @endphp
 {{-- VICIdial session: FAB + expandable panel. Iframe is never inside x-show (WebRTC). Collapsed = 1×1px viewport slot. --}}
 <div id="phone-widget-root"
-     class="fixed bottom-4 right-4 z-40 flex flex-col-reverse items-end gap-2"
+     class="fab-stack-1 flex flex-col-reverse items-end gap-2"
      x-data="phoneWidget(@js($phoneWidgetBoot))"
      x-init="init()"
      @click.stop>
@@ -46,16 +46,16 @@
         <div x-show="open"
              x-transition.opacity.duration.200ms
              id="phone-widget-panel"
-             class="flex max-h-[min(50vh,520px)] flex-col border-b border-[var(--color-border)]">
+             class="flex flex-col border-b border-[var(--color-border)] min-h-0">
             <div class="flex items-center justify-between gap-2 bg-[var(--color-surface-elevated)] px-3 py-2 shrink-0">
                 <div class="flex items-center gap-2 min-w-0">
                     <span class="text-xs font-semibold text-[var(--color-on-surface)] truncate">Phone</span>
-                    <span class="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border shrink-0"
+                    <span class="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0"
                           :class="{
-                              'border-emerald-400 text-emerald-600 bg-emerald-50':  vici.phase === 'ready',
-                              'border-amber-400  text-amber-600  bg-amber-50':   ['requesting','iframe_loading','syncing'].includes(vici.phase),
-                              'border-red-400    text-red-600    bg-red-50':     ['failed','timeout'].includes(vici.phase),
-                              'border-[var(--color-border)] text-[var(--color-on-surface-dim)]': vici.phase === 'idle',
+                              'status-chip-ready':  vici.phase === 'ready',
+                              'status-chip-warn':   ['requesting','iframe_loading','syncing'].includes(vici.phase),
+                              'status-chip-error':  ['failed','timeout'].includes(vici.phase),
+                              'status-chip-idle':   vici.phase === 'idle',
                           }"
                           x-text="{
                               idle:          'Offline',

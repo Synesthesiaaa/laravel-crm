@@ -5,6 +5,25 @@ const DEFAULT_BOUNDS = {
     maxHeightPadding: 24,
 };
 
+/** Shared bottom-right FAB stack (click-to-call, softphone, quick-form anchor). */
+export const FAB_STACK = {
+    baseBottomPx: 24,
+    baseRightPx: 24,
+    gapPx: 56,
+    sizePx: 48,
+};
+
+export function defaultQuickFormPosition(width, height) {
+    const reservedBottom = FAB_STACK.baseBottomPx
+        + (2 * (FAB_STACK.sizePx + FAB_STACK.gapPx))
+        + 16;
+
+    return {
+        x: Math.max(0, window.innerWidth - width - FAB_STACK.baseRightPx),
+        y: Math.max(0, window.innerHeight - height - reservedBottom),
+    };
+}
+
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }

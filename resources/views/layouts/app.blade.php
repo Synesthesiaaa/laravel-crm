@@ -18,7 +18,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @stack('styles')
 </head>
-<body class="min-h-screen flex" style="margin: 0;" x-data x-cloak
+<body class="min-h-screen flex" style="margin: 0;" x-data
       data-campaign="{{ session('campaign', 'mbsales') }}"
       data-telephony-campaign="{{ session('vicidial_campaign') ?? session('campaign', 'mbsales') }}">
 
@@ -376,11 +376,13 @@
     <x-click-to-call />
     @endauth
 
-    {{-- Disposition modal (post-call wrap-up) --}}
+    {{-- Disposition modal (post-call wrap-up; agent screen uses inline card) --}}
+    @unless(request()->routeIs('agent.index'))
     <div x-show="$store.call.state === 'wrapup'"
          class="modal-backdrop"
          style="display: none;"
          x-data="dispositionModal()"
+         x-cloak
          x-trap.noscroll="$store.call.state === 'wrapup'">
         <div class="modal-box max-w-md" @click.stop>
             <div class="modal-header">
@@ -412,6 +414,7 @@
             </div>
         </div>
     </div>
+    @endunless
 
     {{-- Session flash → Alpine toast (all roles; Laravel uses several flash keys) --}}
     @if (session('success'))

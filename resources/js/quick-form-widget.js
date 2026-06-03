@@ -1,5 +1,6 @@
 import {
     createLayoutPersistence,
+    defaultQuickFormPosition,
 } from './widgets/layout-manager';
 
 const FORM_ROUTE_PATTERN = /\/forms\/([^/?#]+)/i;
@@ -26,10 +27,12 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         onHydrate: (layout) => widgetCtx?.applyLayout(layout),
     });
 
+    const defaultPosition = defaultQuickFormPosition(defaultWidth, defaultHeight);
+
     return {
         open: false,
-        x: Math.max(0, window.innerWidth - defaultWidth - 84),
-        y: Math.max(0, window.innerHeight - defaultHeight - 32),
+        x: defaultPosition.x,
+        y: defaultPosition.y,
         width: defaultWidth,
         height: defaultHeight,
         isDragging: false,

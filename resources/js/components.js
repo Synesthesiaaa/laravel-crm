@@ -130,14 +130,19 @@ window.clickToCall = function() {
         phoneNumber: '',
         leadId: null,
         open: false,
+        dialing: false,
+        hangingUp: false,
         show(number, leadId = null) {
             this.phoneNumber = number;
             this.leadId = leadId;
             this.open = true;
         },
         async dial() {
-            if (!this.phoneNumber) return;
+            if (!this.phoneNumber || this.dialing) {
+                return;
+            }
             const store = Alpine.store('call');
+            this.dialing = true;
             store.state = 'ringing';
             store.number = this.phoneNumber;
             this.open = false;
@@ -157,22 +162,32 @@ window.clickToCall = function() {
                     || e.response?.data?.message
                     || 'Failed to originate call';
                 Alpine.store('toast').error(errMsg);
+            } finally {
+                this.dialing = false;
             }
         },
         async hangup() {
-            // Delegate to TelephonyCore which handles SIP BYE + API notification
-            if (window.TelephonyCore?.hasActiveCall()) {
-                await window.TelephonyCore.hangup();
-            } else {
-                // Fallback: API-only hangup (e.g. SIP not registered but session exists)
-                const store = Alpine.store('call');
-                store.stopTimer();
-                try {
-                    await window.axios.post('/api/call/hangup', { session_id: store.sessionId });
-                } catch {
-                    Alpine.store('toast').warning('Call ended locally.');
+            if (this.hangingUp) {
+                return;
+            }
+            this.hangingUp = true;
+            try {
+                // Delegate to TelephonyCore which handles SIP BYE + API notification
+                if (window.TelephonyCore?.hasActiveCall()) {
+                    await window.TelephonyCore.hangup();
+                } else {
+                    // Fallback: API-only hangup (e.g. SIP not registered but session exists)
+                    const store = Alpine.store('call');
+                    store.stopTimer();
+                    try {
+                        await window.axios.post('/api/call/hangup', { session_id: store.sessionId });
+                    } catch {
+                        Alpine.store('toast').warning('Call ended locally.');
+                    }
+                    store.state = 'wrapup';
                 }
-                store.state = 'wrapup';
+            } finally {
+                this.hangingUp = false;
             }
         },
         toggleMute() {

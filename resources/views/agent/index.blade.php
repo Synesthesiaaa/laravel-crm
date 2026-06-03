@@ -10,12 +10,13 @@
     {{-- WebSocket health banner --}}
     <div x-show="$store.ws.isDisconnected && !$store.ws.dismissed"
          x-transition.opacity
-         class="fixed top-0 left-0 right-0 z-50 flex items-center justify-center gap-3 px-4 py-2 text-sm font-medium text-amber-900 bg-amber-100 border-b border-amber-300 shadow-sm">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-amber-600 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+         class="ws-health-banner"
+         role="status">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 animate-pulse shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
         </svg>
         <span>Real-time updates unavailable &mdash; reconnecting<span class="animate-pulse">...</span></span>
-        <button @click="$store.ws.dismiss()" class="ml-2 text-amber-700 hover:text-amber-900 underline text-xs">Dismiss</button>
+        <button type="button" @click="$store.ws.dismiss()" class="btn-ghost text-xs py-1 px-2">Dismiss</button>
     </div>
     {{-- Reset dismissed when connection restored --}}
     <template x-effect="if ($store.ws.isConnected) $store.ws.dismissed = false"></template>
@@ -24,14 +25,14 @@
     <div class="flex-1 min-w-0 space-y-4">
 
         {{-- Current lead card --}}
-        <div class="md-card p-5">
+        <div class="md-card md-card--static p-5">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Lead Information</h3>
                 <div class="flex items-center gap-2">
                     <template x-if="featureEnabled('predictive_dialing')">
                         <button type="button"
                                 class="text-xs px-2 py-1 rounded-md border"
-                                :class="predictiveMode ? 'border-emerald-500 text-emerald-600 bg-emerald-50' : 'border-[var(--color-border)] text-[var(--color-on-surface-dim)]'"
+                                :class="predictiveMode ? 'status-chip-ready' : 'status-chip-idle'"
                                 @click="togglePredictiveMode()">
                             <span x-text="predictiveMode ? 'Predictive: ON' : 'Predictive: OFF'">Predictive: OFF</span>
                         </button>
@@ -165,7 +166,7 @@
     <div class="lg:w-72 xl:w-80 shrink-0 space-y-4">
 
         {{-- Call status --}}
-        <div class="md-card p-5">
+        <div class="md-card md-card--static p-5">
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)] mb-4">Call Controls</h3>
 
             <div class="text-center py-4">
@@ -208,7 +209,7 @@
         </div>
 
         {{-- Disposition --}}
-        <div class="md-card p-5" x-show="callState === 'wrapup'">
+        <div class="md-card md-card--static p-5" x-show="callState === 'wrapup'">
             <div class="flex items-center justify-between mb-3">
                 <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Disposition</h3>
                 {{-- Show dismiss only when there is an error so agent is never stuck --}}

@@ -33,23 +33,33 @@
 @endphp
 
 @section('content')
-<x-page-header title="Records List" :breadcrumbs="['Admin' => route('admin.dashboard'), 'Records List' => null]" />
+<nav class="mb-4 text-sm text-[var(--color-on-surface-dim)]" aria-label="Breadcrumb">
+    <a href="{{ route('admin.dashboard') }}" class="link-primary">Admin</a>
+    <span class="mx-1.5">/</span>
+    <span class="text-[var(--color-on-surface-muted)]">Records List</span>
+</nav>
 
-<div class="md-card mb-4">
+<div class="md-card mb-4 md-card--static">
     <div class="px-4 pt-4 border-b border-[var(--color-border)]">
-        <div class="flex flex-wrap gap-2" role="tablist" aria-label="Records list sections">
+        <div class="flex flex-wrap gap-2 overflow-x-auto" role="tablist" aria-label="Records list sections">
             <a href="{{ route('admin.records.index', array_merge($tabParams, ['tab' => 'submissions'])) }}"
-               class="px-4 py-2 text-sm font-medium border-b-2 transition-colors {{ $activeTab === 'submissions' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-on-surface-dim)] hover:text-[var(--color-on-surface)]' }}">
+               role="tab"
+               aria-selected="{{ $activeTab === 'submissions' ? 'true' : 'false' }}"
+               id="records-tab-submissions"
+               class="px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap {{ $activeTab === 'submissions' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-on-surface-dim)] hover:text-[var(--color-on-surface)]' }}">
                 Submitted Records
             </a>
             <a href="{{ route('admin.records.index', array_merge($tabParams, ['tab' => 'calls'])) }}"
-               class="px-4 py-2 text-sm font-medium border-b-2 transition-colors {{ $activeTab === 'calls' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-on-surface-dim)] hover:text-[var(--color-on-surface)]' }}">
+               role="tab"
+               aria-selected="{{ $activeTab === 'calls' ? 'true' : 'false' }}"
+               id="records-tab-calls"
+               class="px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap {{ $activeTab === 'calls' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-on-surface-dim)] hover:text-[var(--color-on-surface)]' }}">
                 Call Sessions
             </a>
         </div>
     </div>
     <div class="p-4">
-        <form method="GET" action="{{ route('admin.records.index') }}" class="flex flex-wrap items-end gap-4">
+        <form method="GET" action="{{ route('admin.records.index') }}" class="filter-row">
             <input type="hidden" name="tab" value="{{ $activeTab }}">
             <x-form.input name="start_date" type="date" label="Start Date" :value="request('start_date')" />
             <x-form.input name="end_date" type="date" label="End Date" :value="request('end_date')" />
@@ -59,17 +69,15 @@
                 <x-form.select name="status" label="Status" :options="$statusOptions" :selected="request('status')" empty="All statuses" />
             @endif
             <div class="form-actions-bottom">
-                <div class="flex gap-2">
-                    <button type="submit" class="btn-primary"><x-icon name="funnel" class="w-4 h-4" /> Filter</button>
-                    <a href="{{ route('admin.records.index', ['tab' => $activeTab]) }}" class="btn-ghost">Clear</a>
-                </div>
+                <button type="submit" class="btn-primary"><x-icon name="funnel" class="w-4 h-4" /> Filter</button>
+                <a href="{{ route('admin.records.index', ['tab' => $activeTab]) }}" class="btn-ghost">Clear</a>
             </div>
         </form>
     </div>
 </div>
 
 @if($activeTab === 'calls')
-    <x-table.index caption="Call session records">
+    <x-table.index caption="Call session records" role="tabpanel" aria-labelledby="records-tab-calls">
         <x-table.head :columns="[
             ['label' => 'Date/Time'],
             ['label' => 'Agent'],
@@ -100,10 +108,12 @@
             @endforeach
         </tbody>
         @endif
+        <x-slot:footer>
+            <x-table.pagination :paginator="$callSessions" />
+        </x-slot:footer>
     </x-table.index>
-    <x-table.pagination :paginator="$callSessions" />
 @else
-    <x-table.index caption="Submitted CRM records">
+    <x-table.index caption="Submitted CRM records" role="tabpanel" aria-labelledby="records-tab-submissions">
         <x-table.head :columns="[
             ['label' => 'Date'],
             ['label' => 'Form'],
@@ -126,7 +136,9 @@
             @endforeach
         </tbody>
         @endif
+        <x-slot:footer>
+            <x-table.pagination :paginator="$submissions" />
+        </x-slot:footer>
     </x-table.index>
-    <x-table.pagination :paginator="$submissions" />
 @endif
 @endsection
