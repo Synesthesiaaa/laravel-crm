@@ -2,10 +2,13 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Admin\Concerns\NormalizesVisibilityInput;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreFieldLogicRequest extends FormRequest
 {
+    use NormalizesVisibilityInput;
+
     public function authorize(): bool
     {
         return $this->user()?->isAdmin() ?? false;
@@ -27,7 +30,7 @@ class StoreFieldLogicRequest extends FormRequest
             'visibility.field' => ['nullable', 'string', 'max:80', 'regex:/^[a-zA-Z0-9_]+$/'],
             'visibility.operator' => ['nullable', 'in:equals,not_equals,in,not_in'],
             'visibility.values' => ['nullable', 'array'],
-            'visibility.values.*' => ['string', 'max:120'],
+            'visibility.values.*' => ['nullable', 'string', 'max:120'],
         ];
     }
 }

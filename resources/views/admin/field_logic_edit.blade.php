@@ -99,7 +99,7 @@
                         <x-form.select name="visibility[field]" label="Source Field" :options="$visibilityFieldOptions" :selected="old('visibility.field', $visibility['field'] ?? '')" empty="— None —" />
                         <x-form.select name="visibility[operator]" label="Operator" :options="$visibilityOperatorOptions" :selected="old('visibility.operator', $visibility['operator'] ?? '')" empty="— None —" />
                         <div class="form-field sm:col-span-2">
-                            <x-form.textarea name="visibility[values][]" label="Values (comma or newline separated)" :value="$visibilityValuesText" rows="3" placeholder="Yes&#10;No" />
+                            <x-form.textarea name="visibility[values][0]" label="Values (comma or newline separated)" :value="$visibilityValuesText" rows="3" placeholder="Yes&#10;No" />
                         </div>
                     </div>
                 </div>

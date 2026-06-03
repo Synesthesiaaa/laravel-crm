@@ -151,7 +151,7 @@
                         <x-form.select name="visibility[field]" label="Source Field" :options="$visibilityFieldOptions" :selected="old('visibility.field')" />
                         <x-form.select name="visibility[operator]" label="Operator" :options="$visibilityOperatorOptions" :selected="old('visibility.operator')" />
                         <div class="form-field sm:col-span-3">
-                            <x-form.textarea name="visibility[values][]" label="Values (comma or newline separated)" :value="old('visibility.values.0')" rows="3" placeholder="Yes&#10;No" />
+                            <x-form.textarea name="visibility[values][0]" label="Values (comma or newline separated)" :value="old('visibility.values.0')" rows="3" placeholder="Yes&#10;No" />
                         </div>
                     </div>
                     <p class="text-xs text-[var(--color-on-surface-dim)] mt-2">If no rule is configured, the field is always visible.</p>
@@ -308,7 +308,7 @@
                                                 <x-form.select name="visibility[field]" label="Source Field" :options="$rowVisibilityFields" :selected="$rowVisibility['field'] ?? null" />
                                                 <x-form.select name="visibility[operator]" label="Operator" :options="$visibilityOperatorOptions" :selected="$rowVisibility['operator'] ?? null" />
                                                 <div class="form-field col-span-2">
-                                                    <x-form.textarea name="visibility[values][]" label="Values (comma or newline separated)" :value="$rowVisibilityValueText" rows="3" />
+                                                    <x-form.textarea name="visibility[values][0]" label="Values (comma or newline separated)" :value="$rowVisibilityValueText" rows="3" />
                                                 </div>
                                             </div>
                                         </div>

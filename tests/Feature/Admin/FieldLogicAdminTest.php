@@ -156,4 +156,115 @@ class FieldLogicAdminTest extends TestCase
 
         $this->assertSame('Call Notes', $field->fresh()->field_label);
     }
+
+    public function test_update_to_percentage_with_empty_visibility_values_passes_validation(): void
+    {
+        Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'lead_capture',
+            'name' => 'Lead Capture',
+            'table_name' => 'lead_capture',
+            'display_order' => 1,
+            'is_active' => true,
+        ]);
+        app(CampaignService::class)->clearCampaignsCache();
+
+        $field = FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'lead_capture',
+            'field_name' => 'discount_rate',
+            'field_label' => 'Discount Rate',
+            'field_type' => 'number',
+            'field_order' => 1,
+            'field_width' => 'full',
+            'is_required' => false,
+            'visibility' => [
+                'field' => 'customer_tier',
+                'operator' => 'in',
+                'values' => ['gold', 'platinum'],
+            ],
+        ]);
+
+        $this->actingAs($this->superAdmin)
+            ->from(route('admin.field-logic.edit', $field))
+            ->put(route('admin.field-logic.update', $field->id), [
+                'field_name' => 'discount_rate',
+                'field_label' => 'Discount Rate',
+                'field_type' => 'percentage',
+                'field_width' => 'full',
+                'field_order' => 1,
+                'visibility' => [
+                    'field' => 'customer_tier',
+                    'operator' => 'in',
+                    'values' => [''],
+                ],
+            ])
+            ->assertRedirect(route('admin.field-logic.index', ['form' => 'lead_capture']))
+            ->assertSessionHasNoErrors();
+
+        $field->refresh();
+        $this->assertSame('percentage', $field->field_type);
+        $this->assertNull($field->visibility);
+    }
+
+    public function test_update_to_percentage_preserves_visibility_from_textarea(): void
+    {
+        Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'lead_capture',
+            'name' => 'Lead Capture',
+            'table_name' => 'lead_capture',
+            'display_order' => 1,
+            'is_active' => true,
+        ]);
+        app(CampaignService::class)->clearCampaignsCache();
+
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'lead_capture',
+            'field_name' => 'customer_tier',
+            'field_label' => 'Customer Tier',
+            'field_type' => 'select',
+            'field_order' => 0,
+            'field_width' => 'full',
+            'is_required' => false,
+            'options' => json_encode(['gold', 'platinum']),
+        ]);
+
+        $field = FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'lead_capture',
+            'field_name' => 'discount_rate',
+            'field_label' => 'Discount Rate',
+            'field_type' => 'number',
+            'field_order' => 1,
+            'field_width' => 'full',
+            'is_required' => false,
+        ]);
+
+        $this->actingAs($this->superAdmin)
+            ->from(route('admin.field-logic.edit', $field))
+            ->put(route('admin.field-logic.update', $field->id), [
+                'field_name' => 'discount_rate',
+                'field_label' => 'Discount Rate',
+                'field_type' => 'percentage',
+                'field_width' => 'full',
+                'field_order' => 1,
+                'visibility' => [
+                    'field' => 'customer_tier',
+                    'operator' => 'in',
+                    'values' => ["gold\nplatinum"],
+                ],
+            ])
+            ->assertRedirect(route('admin.field-logic.index', ['form' => 'lead_capture']))
+            ->assertSessionHasNoErrors();
+
+        $field->refresh();
+        $this->assertSame('percentage', $field->field_type);
+        $this->assertSame([
+            'field' => 'customer_tier',
+            'operator' => 'in',
+            'values' => ['gold', 'platinum'],
+        ], $field->visibility);
+    }
 }

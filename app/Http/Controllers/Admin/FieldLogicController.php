@@ -66,7 +66,10 @@ class FieldLogicController extends Controller
         $visibility = is_array($formField->visibility) ? $formField->visibility : [];
         $visibilityValuesText = '';
         if (! empty($visibility['values']) && is_array($visibility['values'])) {
-            $visibilityValuesText = implode("\n", $visibility['values']);
+            $visibilityValuesText = implode("\n", array_map(
+                static fn ($value) => is_scalar($value) ? (string) $value : '',
+                $visibility['values'],
+            ));
         }
 
         return view('admin.field_logic_edit', [
