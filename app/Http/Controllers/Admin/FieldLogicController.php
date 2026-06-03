@@ -41,6 +41,45 @@ class FieldLogicController extends Controller
         ]);
     }
 
+    public function edit(Request $request, FormField $formField): View
+    {
+        $campaign = $request->session()->get('campaign', 'mbsales');
+        $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['forms' => []];
+        $forms = $campaignConfig['forms'] ?? [];
+
+        $siblingFields = FormField::query()
+            ->where('campaign_code', $formField->campaign_code)
+            ->where('form_type', $formField->form_type)
+            ->where('id', '!=', $formField->id)
+            ->orderBy('field_order')
+            ->orderBy('id')
+            ->get();
+
+        $visibilityFieldOptions = $siblingFields
+            ->mapWithKeys(fn (FormField $field) => [
+                $field->field_name => $field->field_label !== ''
+                    ? $field->field_label.' ('.$field->field_name.')'
+                    : $field->field_name,
+            ])
+            ->all();
+
+        $visibility = is_array($formField->visibility) ? $formField->visibility : [];
+        $visibilityValuesText = '';
+        if (! empty($visibility['values']) && is_array($visibility['values'])) {
+            $visibilityValuesText = implode("\n", $visibility['values']);
+        }
+
+        return view('admin.field_logic_edit', [
+            'campaign' => $campaign,
+            'campaignName' => $request->session()->get('campaign_name', 'CRM'),
+            'forms' => $forms,
+            'formType' => $formField->form_type,
+            'field' => $formField,
+            'visibilityFieldOptions' => $visibilityFieldOptions,
+            'visibilityValuesText' => old('visibility.values.0', $visibilityValuesText),
+        ]);
+    }
+
     public function store(StoreFieldLogicRequest $request): RedirectResponse
     {
         $validated = $request->validated();

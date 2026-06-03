@@ -3,8 +3,10 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\Campaign;
+use App\Models\Form;
 use App\Models\FormField;
 use App\Models\User;
+use App\Services\CampaignService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -77,5 +79,81 @@ class FieldLogicAdminTest extends TestCase
             ])
             ->assertSessionHasErrors(['visibility.operator']);
     }
-}
 
+    public function test_field_logic_edit_page_renders_instead_of_modal(): void
+    {
+        Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'lead_capture',
+            'name' => 'Lead Capture',
+            'table_name' => 'lead_capture',
+            'display_order' => 1,
+            'is_active' => true,
+        ]);
+        app(CampaignService::class)->clearCampaignsCache();
+
+        $field = FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'lead_capture',
+            'field_name' => 'customer_tier',
+            'field_label' => 'Customer Tier',
+            'field_type' => 'text',
+            'field_order' => 1,
+            'field_width' => 'full',
+            'is_required' => false,
+        ]);
+
+        $this->actingAs($this->superAdmin)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('admin.field-logic.edit', $field))
+            ->assertOk()
+            ->assertSee('Edit field', false)
+            ->assertSee('Update field', false)
+            ->assertSee('customer_tier', false);
+
+        $this->actingAs($this->superAdmin)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('admin.field-logic.index', ['form' => 'lead_capture']))
+            ->assertOk()
+            ->assertSee('field-logic/'.$field->id.'/edit', false)
+            ->assertDontSee('edit-field-logic', false);
+    }
+
+    public function test_field_logic_update_from_edit_page_redirects_to_index(): void
+    {
+        Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'lead_capture',
+            'name' => 'Lead Capture',
+            'table_name' => 'lead_capture',
+            'display_order' => 1,
+            'is_active' => true,
+        ]);
+        app(CampaignService::class)->clearCampaignsCache();
+
+        $field = FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'lead_capture',
+            'field_name' => 'notes',
+            'field_label' => 'Notes',
+            'field_type' => 'textarea',
+            'field_order' => 2,
+            'field_width' => 'full',
+            'is_required' => false,
+        ]);
+
+        $this->actingAs($this->superAdmin)
+            ->from(route('admin.field-logic.edit', $field))
+            ->put(route('admin.field-logic.update', $field->id), [
+                'field_name' => 'notes',
+                'field_label' => 'Call Notes',
+                'field_type' => 'textarea',
+                'field_width' => 'full',
+                'field_order' => 2,
+            ])
+            ->assertRedirect(route('admin.field-logic.index', ['form' => 'lead_capture']))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('Call Notes', $field->fresh()->field_label);
+    }
+}

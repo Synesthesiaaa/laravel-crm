@@ -140,6 +140,7 @@ Route::middleware(['auth', 'campaign'])->group(function () {
         Route::put('disposition-codes/{id}', [\App\Http\Controllers\Admin\DispositionCodesController::class, 'update'])->name('disposition-codes.update');
         Route::post('disposition-codes/delete', [\App\Http\Controllers\Admin\DispositionCodesController::class, 'destroy'])->name('disposition-codes.destroy');
         Route::get('field-logic', [\App\Http\Controllers\Admin\FieldLogicController::class, 'index'])->name('field-logic.index');
+        Route::get('field-logic/{formField}/edit', [\App\Http\Controllers\Admin\FieldLogicController::class, 'edit'])->name('field-logic.edit');
         Route::post('field-logic', [\App\Http\Controllers\Admin\FieldLogicController::class, 'store'])->name('field-logic.store');
         Route::put('field-logic/{id}', [\App\Http\Controllers\Admin\FieldLogicController::class, 'update'])->name('field-logic.update');
         Route::post('field-logic/delete', [\App\Http\Controllers\Admin\FieldLogicController::class, 'destroy'])->name('field-logic.destroy');
