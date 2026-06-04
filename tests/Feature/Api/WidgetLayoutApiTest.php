@@ -49,7 +49,14 @@ class WidgetLayoutApiTest extends TestCase
 
         $this->actingAs($userA)
             ->putJson('/api/widgets/layouts/softphone', [
-                'layout' => ['x' => 32, 'y' => 48, 'width' => 520, 'height' => 480, 'open' => true],
+                'layout' => [
+                    'x' => 32,
+                    'y' => 48,
+                    'width' => 520,
+                    'height' => 480,
+                    'controlsHeight' => 280,
+                    'open' => true,
+                ],
             ])
             ->assertOk()
             ->assertJsonPath('success', true);
@@ -64,6 +71,7 @@ class WidgetLayoutApiTest extends TestCase
             ->getJson('/api/widgets/layouts')
             ->assertOk()
             ->assertJsonPath('layouts.softphone.x', 32)
+            ->assertJsonPath('layouts.softphone.controlsHeight', 280)
             ->assertJsonPath('layouts.softphone.open', true);
 
         $this->actingAs($userB)

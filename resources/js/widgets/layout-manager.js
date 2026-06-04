@@ -24,6 +24,16 @@ export function defaultQuickFormPosition(width, height) {
     };
 }
 
+/** Max shell height for softphone widget anchored above the FAB stack. */
+export function maxShellHeightForFabStack(bounds = DEFAULT_BOUNDS) {
+    const reservedBottom = FAB_STACK.baseBottomPx
+        + FAB_STACK.gapPx
+        + FAB_STACK.sizePx
+        + (bounds.maxHeightPadding || 16);
+
+    return Math.max(bounds.minHeight, window.innerHeight - reservedBottom);
+}
+
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }

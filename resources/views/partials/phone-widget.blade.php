@@ -39,44 +39,52 @@
     </button>
 
     <div id="phone-widget-shell"
-         class="relative flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg transition-all duration-300 ease-out"
+         class="phone-widget-shell relative flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg"
+         :class="{
+             'phone-widget-shell--open': open,
+             'transition-none': isResizing || isSplitterResizing,
+             'transition-all duration-300 ease-out': !isResizing && !isSplitterResizing,
+         }"
          :style="shellStyle">
 
-        {{-- Controls: hidden when minimized (display:none OK here — not wrapping the iframe) --}}
+        <div x-show="open"
+             x-transition.opacity.duration.200ms
+             class="flex items-center justify-between gap-2 bg-[var(--color-surface-elevated)] px-3 py-2 shrink-0 border-b border-[var(--color-border)]">
+            <div class="flex items-center gap-2 min-w-0">
+                <span class="text-xs font-semibold text-[var(--color-on-surface)] truncate">Phone</span>
+                <span class="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0"
+                      :class="{
+                          'status-chip-ready':  vici.phase === 'ready',
+                          'status-chip-warn':   ['requesting','iframe_loading','syncing'].includes(vici.phase),
+                          'status-chip-error':  ['failed','timeout'].includes(vici.phase),
+                          'status-chip-idle':   vici.phase === 'idle',
+                      }"
+                      x-text="{
+                          idle:          'Offline',
+                          requesting:    'Starting…',
+                          iframe_loading:'Opening…',
+                          syncing:       'Confirming…',
+                          ready:         'Online',
+                          failed:        'Failed',
+                          timeout:       'Timed out',
+                      }[vici.phase] || vici.phase">
+                </span>
+            </div>
+            <button type="button"
+                    class="btn-ghost text-[10px] px-2 py-1 shrink-0"
+                    @click="closePanel()"
+                    title="Minimize (session keeps running)">
+                <x-icon name="chevron-down" class="w-4 h-4" />
+            </button>
+        </div>
+
+        {{-- Login controls: fixed height via splitter; hidden when minimized (not wrapping iframe) --}}
         <div x-show="open"
              x-transition.opacity.duration.200ms
              id="phone-widget-panel"
-             class="flex flex-col border-b border-[var(--color-border)] min-h-0">
-            <div class="flex items-center justify-between gap-2 bg-[var(--color-surface-elevated)] px-3 py-2 shrink-0">
-                <div class="flex items-center gap-2 min-w-0">
-                    <span class="text-xs font-semibold text-[var(--color-on-surface)] truncate">Phone</span>
-                    <span class="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0"
-                          :class="{
-                              'status-chip-ready':  vici.phase === 'ready',
-                              'status-chip-warn':   ['requesting','iframe_loading','syncing'].includes(vici.phase),
-                              'status-chip-error':  ['failed','timeout'].includes(vici.phase),
-                              'status-chip-idle':   vici.phase === 'idle',
-                          }"
-                          x-text="{
-                              idle:          'Offline',
-                              requesting:    'Starting…',
-                              iframe_loading:'Opening…',
-                              syncing:       'Confirming…',
-                              ready:         'Online',
-                              failed:        'Failed',
-                              timeout:       'Timed out',
-                          }[vici.phase] || vici.phase">
-                    </span>
-                </div>
-                <button type="button"
-                        class="btn-ghost text-[10px] px-2 py-1 shrink-0"
-                        @click="closePanel()"
-                        title="Minimize (session keeps running)">
-                    <x-icon name="chevron-down" class="w-4 h-4" />
-                </button>
-            </div>
-
-            <div class="overflow-y-auto px-3 py-3 space-y-3 text-[var(--color-on-surface)]">
+             class="flex flex-col shrink-0 overflow-hidden border-b border-[var(--color-border)] min-h-0"
+             :style="controlsPanelStyle">
+            <div class="overflow-y-auto flex-1 min-h-0 px-3 py-3 space-y-3 text-[var(--color-on-surface)]">
                 <p class="text-[11px] text-[var(--color-on-surface-dim)] leading-snug">
                     Minimize to a corner chip — the dialer stays loaded for WebRTC.
                 </p>
@@ -186,14 +194,21 @@
             </div>
         </div>
 
-        {{-- Iframe: always in DOM; size follows open state (never display:none) --}}
+        <div x-show="open"
+             role="separator"
+             aria-orientation="horizontal"
+             aria-label="Resize dialer panel"
+             class="widget-splitter shrink-0"
+             @pointerdown="onSplitterResizeStart($event)"></div>
+
+        {{-- Iframe: always in DOM; flex fill when open (never display:none) --}}
         <div id="vici-session-frame-wrap"
-             class="relative bg-black/5 shrink-0"
-             :style="frameWrapStyle">
+             class="relative min-h-0 overflow-hidden bg-black/5"
+             :class="open ? 'flex-1' : 'shrink-0'">
             <iframe id="vici-session-frame"
                     src="about:blank"
                     class="block border-0 bg-transparent"
-                    :class="open ? 'h-full min-h-[200px] w-full' : 'h-px w-px'"
+                    :class="open ? 'h-full w-full' : 'h-px w-px'"
                     style="min-width: 1px; min-height: 1px;"
                     allow="microphone *; autoplay *"
                     title="VICIdial agent session"></iframe>

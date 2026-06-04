@@ -1,7 +1,12 @@
 import {
-    clampLayout,
     createLayoutPersistence,
+    maxShellHeightForFabStack,
 } from './widgets/layout-manager';
+
+const HEADER_CHROME_HEIGHT = 40;
+const SPLITTER_HEIGHT = 8;
+const MIN_CONTROLS_HEIGHT = 140;
+const MIN_IFRAME_HEIGHT = 200;
 
 function getResizeMultipliers(corner) {
     switch (corner) {
@@ -57,10 +62,11 @@ window.phoneWidget = function phoneWidget(boot = {}) {
     const panelH = Number(boot.panelH) || 360;
     const bounds = {
         minWidth: 340,
-        minHeight: 260,
+        minHeight: Math.max(260, HEADER_CHROME_HEIGHT + SPLITTER_HEIGHT + MIN_CONTROLS_HEIGHT + MIN_IFRAME_HEIGHT),
         maxWidthPadding: 16,
         maxHeightPadding: 16,
     };
+    const defaultControlsHeight = Math.round(panelH * 0.45) || 280;
     let widgetCtx = null;
     const persistence = createLayoutPersistence({
         widgetKey: 'softphone',
@@ -73,7 +79,9 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         panelH,
         width: panelW,
         height: panelH,
+        controlsHeight: defaultControlsHeight,
         isResizing: false,
+        isSplitterResizing: false,
         bounds,
         sessionControls: boot.sessionControls !== false,
 
@@ -100,6 +108,37 @@ window.phoneWidget = function phoneWidget(boot = {}) {
                 .filter(Boolean);
         },
 
+        chromeHeight() {
+            return HEADER_CHROME_HEIGHT + SPLITTER_HEIGHT;
+        },
+
+        maxControlsHeightForShell(shellHeight = this.height) {
+            const available = shellHeight - this.chromeHeight() - MIN_IFRAME_HEIGHT;
+
+            return Math.max(80, available);
+        },
+
+        clampControlsHeight(value, shellHeight = this.height) {
+            const maxControls = this.maxControlsHeightForShell(shellHeight);
+            const minControls = Math.min(MIN_CONTROLS_HEIGHT, maxControls);
+
+            return Math.min(Math.max(value, minControls), maxControls);
+        },
+
+        clampShellDimensions(width, height) {
+            const margin = Math.max(8, this.bounds.maxWidthPadding || 16);
+            const maxWidth = Math.max(this.bounds.minWidth, window.innerWidth - (margin * 2));
+            const maxHeight = Math.min(
+                Math.max(this.bounds.minHeight, window.innerHeight - (margin * 2)),
+                maxShellHeightForFabStack(this.bounds),
+            );
+
+            return {
+                width: Math.min(Math.max(width, this.bounds.minWidth), maxWidth),
+                height: Math.min(Math.max(height, this.bounds.minHeight), maxHeight),
+            };
+        },
+
         get shellStyle() {
             if (!this.open) {
                 return {
@@ -120,35 +159,36 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             };
         },
 
-        get frameWrapStyle() {
+        get controlsPanelStyle() {
             if (!this.open) {
-                return {
-                    width: '1px',
-                    height: '1px',
-                    minHeight: '1px',
-                    minWidth: '1px',
-                    overflow: 'hidden',
-                };
+                return {};
             }
 
-            const frameHeight = Math.max(200, this.height - 130);
+            const height = this.clampControlsHeight(this.controlsHeight);
 
             return {
-                minHeight: '200px',
-                height: `${frameHeight}px`,
+                height: `${height}px`,
+                maxHeight: `${height}px`,
             };
         },
 
         applyLayout(layout) {
-            const nextSize = clampLayout({
-                x: 0,
-                y: 0,
-                width: Number(layout?.width ?? this.width),
-                height: Number(layout?.height ?? this.height),
-            }, this.bounds);
+            const nextSize = this.clampShellDimensions(
+                Number(layout?.width ?? this.width),
+                Number(layout?.height ?? this.height),
+            );
 
             this.width = nextSize.width;
             this.height = nextSize.height;
+
+            if (layout?.controlsHeight != null) {
+                this.controlsHeight = this.clampControlsHeight(
+                    Number(layout.controlsHeight),
+                    this.height,
+                );
+            } else {
+                this.controlsHeight = this.clampControlsHeight(this.controlsHeight, this.height);
+            }
 
             if (typeof layout?.open === 'boolean') {
                 this.open = layout.open;
@@ -159,6 +199,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             return {
                 width: Math.round(this.width),
                 height: Math.round(this.height),
+                controlsHeight: Math.round(this.clampControlsHeight(this.controlsHeight)),
                 open: this.open,
             };
         },
@@ -169,6 +210,9 @@ window.phoneWidget = function phoneWidget(boot = {}) {
 
         toggleOpen() {
             this.open = !this.open;
+            if (this.open) {
+                this.controlsHeight = this.clampControlsHeight(this.controlsHeight, this.height);
+            }
             this.persistLayout();
         },
 
@@ -184,20 +228,20 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             const originY = event.clientY;
             const startWidth = this.width;
             const startHeight = this.height;
-            const margin = Math.max(8, this.bounds.maxWidthPadding || 16);
+            const startControlsHeight = this.controlsHeight;
             const multipliers = getResizeMultipliers(corner);
 
             this.isResizing = true;
 
             const onMove = (moveEvent) => {
-                const maxWidth = Math.max(this.bounds.minWidth, window.innerWidth - (margin * 2));
-                const maxHeight = Math.max(this.bounds.minHeight, window.innerHeight - (margin * 2));
+                const next = this.clampShellDimensions(
+                    startWidth + ((moveEvent.clientX - originX) * multipliers.w),
+                    startHeight + ((moveEvent.clientY - originY) * multipliers.h),
+                );
 
-                const nextWidth = startWidth + ((moveEvent.clientX - originX) * multipliers.w);
-                const nextHeight = startHeight + ((moveEvent.clientY - originY) * multipliers.h);
-
-                this.width = Math.min(Math.max(nextWidth, this.bounds.minWidth), maxWidth);
-                this.height = Math.min(Math.max(nextHeight, this.bounds.minHeight), maxHeight);
+                this.width = next.width;
+                this.height = next.height;
+                this.controlsHeight = this.clampControlsHeight(startControlsHeight, this.height);
             };
 
             const onUp = () => {
@@ -211,15 +255,39 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             window.addEventListener('pointerup', onUp, { once: true });
         },
 
+        onSplitterResizeStart(event) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const originY = event.clientY;
+            const startControlsHeight = this.controlsHeight;
+
+            this.isSplitterResizing = true;
+
+            const onMove = (moveEvent) => {
+                const deltaY = moveEvent.clientY - originY;
+                this.controlsHeight = this.clampControlsHeight(
+                    startControlsHeight + deltaY,
+                    this.height,
+                );
+            };
+
+            const onUp = () => {
+                this.isSplitterResizing = false;
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+                this.persistLayout();
+            };
+
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp, { once: true });
+        },
+
         onWindowResize() {
-            const nextSize = clampLayout({
-                x: 0,
-                y: 0,
-                width: this.width,
-                height: this.height,
-            }, this.bounds);
+            const nextSize = this.clampShellDimensions(this.width, this.height);
             this.width = nextSize.width;
             this.height = nextSize.height;
+            this.controlsHeight = this.clampControlsHeight(this.controlsHeight, this.height);
         },
 
         /** VICIdial / dialer campaign only — never reads CRM `data-campaign`. */
@@ -342,6 +410,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
 
         async init() {
             widgetCtx = this;
+            this.controlsHeight = this.clampControlsHeight(this.controlsHeight, this.height);
             window.addEventListener('vicidial-ws-phase', this._onWsPhase.bind(this));
             window.addEventListener('telephony-shortcut-pause', this._pauseShortcut.bind(this));
             window.addEventListener('resize', this.onWindowResize.bind(this));

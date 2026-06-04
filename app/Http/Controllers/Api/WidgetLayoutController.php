@@ -30,6 +30,7 @@ class WidgetLayoutController extends Controller
             'layout.width' => ['nullable', 'numeric', 'min:200', 'max:2400'],
             'layout.height' => ['nullable', 'numeric', 'min:120', 'max:2400'],
             'layout.open' => ['nullable', 'boolean'],
+            'layout.controlsHeight' => ['nullable', 'numeric', 'min:120', 'max:1200'],
             'layout.z' => ['nullable', 'integer', 'min:1', 'max:999'],
             'layout.formType' => ['nullable', 'string', 'max:100'],
             'layout.campaign' => ['nullable', 'string', 'max:100'],
