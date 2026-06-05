@@ -207,7 +207,7 @@ class LeadHydrationServiceTest extends TestCase
 
         $this->assertSame('707', $data['lead_id']);
         $this->assertSame('15557770000', $data['phone_number']);
-        $this->assertSame('Casey Normalized', $data['client_name']);
+        $this->assertSame('Casey Normalized', $ data['client_name']);
         $this->assertSame(['first_name' => 'Casey'], $data['capture_data']);
     }
 
