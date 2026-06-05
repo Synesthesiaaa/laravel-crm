@@ -436,13 +436,7 @@ class VicidialSessionService
     {
         $response = $this->agentApi->execute($user, $campaign, 'logout', ['value' => 'LOGOUT']);
 
-        $session = $this->getOrCreateSession($user, $campaign);
-        $session->update([
-            'session_status' => 'logged_out',
-            'pause_code' => null,
-            'last_iframe_url' => null,
-            'last_synced_at' => now(),
-        ]);
+        $this->markLoggedOutLocally($user, $campaign);
 
         if (! $response['success']) {
             return OperationResult::success([
@@ -452,6 +446,17 @@ class VicidialSessionService
         }
 
         return OperationResult::success(['raw_response' => $response['raw_response']]);
+    }
+
+    public function markLoggedOutLocally(User $user, string $campaign): void
+    {
+        $session = $this->getOrCreateSession($user, $campaign);
+        $session->update([
+            'session_status' => 'logged_out',
+            'pause_code' => null,
+            'last_iframe_url' => null,
+            'last_synced_at' => now(),
+        ]);
     }
 
     public function changeIngroups(

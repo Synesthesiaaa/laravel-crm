@@ -13,7 +13,23 @@
 <div class="md-card max-w-xl">
     <div class="p-6">
         <form method="POST" action="{{ route('admin.extraction.export') }}"
-              x-data="{ submitting: false }" @submit="submitting = true">
+              x-data="{
+                  submitting: false,
+                  resetTimer: null,
+                  init() {
+                      window.addEventListener('pageshow', () => {
+                          this.submitting = false;
+                      });
+                  },
+                  submitExport() {
+                      this.submitting = true;
+                      clearTimeout(this.resetTimer);
+                      this.resetTimer = setTimeout(() => {
+                          this.submitting = false;
+                      }, 1500);
+                  },
+              }"
+              @submit="submitExport()">
             @csrf
             <div class="space-y-4">
                 <x-form.input name="start_date" type="date" label="Start Date" required />

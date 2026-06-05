@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Models\VicidialAgentSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class LoginTest extends TestCase
@@ -37,5 +39,34 @@ class LoginTest extends TestCase
         ]);
         $response->assertSessionHasErrors('username');
         $this->assertGuest();
+    }
+
+    public function test_logout_redirects_to_login_and_marks_vicidial_session_logged_out_locally(): void
+    {
+        Http::fake();
+
+        $user = User::factory()->create(['role' => User::ROLE_AGENT]);
+        VicidialAgentSession::factory()->create([
+            'user_id' => $user->id,
+            'campaign_code' => 'testcamp',
+            'session_status' => 'ready',
+            'pause_code' => 'BREAK',
+            'last_iframe_url' => 'https://vici.example.com/agc/vicidial.php?x=1',
+        ]);
+
+        $response = $this->actingAs($user)
+            ->withSession(['campaign' => 'testcamp', 'campaign_name' => 'Test Campaign'])
+            ->post(route('logout'));
+
+        $response->assertRedirect(route('login'));
+        $this->assertGuest();
+        $this->assertDatabaseHas('vicidial_agent_sessions', [
+            'user_id' => $user->id,
+            'campaign_code' => 'testcamp',
+            'session_status' => 'logged_out',
+            'pause_code' => null,
+            'last_iframe_url' => null,
+        ]);
+        Http::assertNothingSent();
     }
 }

@@ -290,27 +290,43 @@ window.Alpine = Alpine;
 window.TelephonyCore = TelephonyCore;
 
 /**
- * Graceful logout: hang up active call, unregister SIP.js, close Vicidial session,
- * blank the session iframe, then submit the real logout form.
+ * Graceful logout: do bounded browser cleanup, blank the session iframe, then
+ * submit the real logout form without waiting on external telephony APIs.
  *
  * Exposed on window so the header dropdown can call it from `@submit.prevent`
  * without a 15-line inline arrow function.
  */
+let crmLogoutInProgress = false;
+
 window.crmGracefulLogout = async function () {
+    if (crmLogoutInProgress) {
+        return;
+    }
+
+    crmLogoutInProgress = true;
+
+    const withTimeout = (promise, milliseconds) => Promise.race([
+        promise,
+        new Promise((resolve) => setTimeout(resolve, milliseconds)),
+    ]);
+
     try {
         const call = Alpine.store('call');
         if (call.state !== 'idle' && call.sessionId) {
-            try { await window.axios.post('/api/call/hangup', { session_id: call.sessionId }); } catch (_) {}
+            try {
+                await withTimeout(
+                    window.axios.post('/api/call/hangup', { session_id: call.sessionId }),
+                    750,
+                );
+            } catch (_) {}
         }
         call.state = 'idle';
         call.sessionId = null;
         call.stopTimer();
 
         if (window.TelephonyCore) {
-            try { await window.TelephonyCore.destroy(); } catch (_) {}
+            try { await withTimeout(window.TelephonyCore.destroy(), 750); } catch (_) {}
         }
-
-        try { await window.axios.post('/api/vicidial/session/logout'); } catch (_) {}
 
         const frame = document.getElementById('vici-session-frame');
         if (frame) {
