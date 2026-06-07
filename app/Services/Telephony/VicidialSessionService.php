@@ -280,7 +280,8 @@ class VicidialSessionService
                     $combined = $raw.$msg;
 
                     if ($naResult->success) {
-                        if (str_contains($raw, 'agent not logged in')) {
+                        if (str_contains($raw, 'agent not logged in')
+                            || ! $this->nonAgentStatusConfirmsLiveAgent($naResult, $user, $campaign)) {
                             $session->update([
                                 'session_status' => 'login_pending',
                                 'last_synced_at' => now(),
@@ -639,6 +640,68 @@ class VicidialSessionService
         $loggedIn = $result->success && ! str_contains($raw, 'agent not logged in');
 
         return ['logged_in' => $loggedIn, 'payload' => $payload];
+    }
+
+    private function nonAgentStatusConfirmsLiveAgent(OperationResult $result, User $user, string $campaign): bool
+    {
+        $payload = (array) ($result->data ?? []);
+        $rows = (array) ($payload['rows'] ?? []);
+        $rawResponse = strtolower((string) ($payload['raw_response'] ?? ''));
+
+        if (str_contains($rawResponse, 'agent not logged in')) {
+            return false;
+        }
+
+        foreach ($rows as $row) {
+            if ($this->statusRowConfirmsLiveAgent((array) $row, $user, $campaign)) {
+                return true;
+            }
+        }
+
+        return $this->statusTextConfirmsLiveAgent($rawResponse, $user, $campaign);
+    }
+
+    /**
+     * @param  array<int|string, mixed>  $row
+     */
+    private function statusRowConfirmsLiveAgent(array $row, User $user, string $campaign): bool
+    {
+        $text = strtolower(implode('|', array_map(
+            static fn ($value) => is_scalar($value) || $value === null ? (string) $value : '',
+            $row,
+        )));
+
+        return $this->statusTextConfirmsLiveAgent($text, $user, $campaign);
+    }
+
+    private function statusTextConfirmsLiveAgent(string $text, User $user, string $campaign): bool
+    {
+        $agentIdentifiers = collect([
+            (string) $user->vici_user,
+            (string) $user->extension,
+        ])->map(fn (string $identifier) => strtolower(trim($identifier)))
+            ->filter()
+            ->unique()
+            ->values();
+        $campaign = strtolower(trim($campaign));
+
+        if ($agentIdentifiers->isEmpty() || $campaign === '' || $text === '') {
+            return false;
+        }
+
+        $hasExpectedAgent = $agentIdentifiers
+            ->contains(fn (string $identifier) => $this->statusTextContainsValue($text, $identifier));
+        $hasExpectedCampaign = $this->statusTextContainsValue($text, $campaign);
+        $hasLiveStatus = preg_match('/\b(ready|active|incall|queue|paused|pause)\b/i', $text) === 1;
+
+        return $hasExpectedAgent && $hasExpectedCampaign && $hasLiveStatus;
+    }
+
+    private function statusTextContainsValue(string $text, string $value): bool
+    {
+        $value = preg_quote($value, '/');
+
+        return preg_match('/(?<![a-z0-9_])'.$value.'(?![a-z0-9_])/i', $text) === 1;
     }
 
     protected function getOrCreateSession(User $user, string $campaign): VicidialAgentSession

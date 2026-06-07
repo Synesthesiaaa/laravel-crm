@@ -30,7 +30,7 @@
          x-transition:leave="transition-opacity ease-in duration-150"
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0"
-         class="fixed inset-0 bg-black/60 z-30 lg:hidden"
+         class="fixed inset-0 bg-black/60 z-[60] lg:hidden"
          @click="$store.sidebar.closeMobile()"
          style="display: none;">
     </div>
@@ -535,13 +535,13 @@
             //    extension (documented: config/webrtc.php `media_path`).
             //    TelephonyCore is a singleton – calling register() when already
             //    registered is a no-op, so page navigation is safe.
-            const mediaPath = window.__telephonyMediaPath || 'sipjs';
-            if (window.TelephonyCore && (mediaPath === 'sipjs' || mediaPath === 'both')) {
+            const mediaPath = window.TelephonyMediaPath?.current?.() || window.__telephonyMediaPath || 'sipjs';
+            if (window.TelephonyCore && (window.TelephonyMediaPath?.shouldRegisterSip?.() ?? ['sipjs', 'both'].includes(mediaPath))) {
                 window.TelephonyCore.register().catch(err => {
                     console.warn('[TelephonyInit] SIP register error:', err);
                 });
             }
-            if (mediaPath === 'both') {
+            if (window.TelephonyMediaPath?.isDual?.() ?? (mediaPath === 'both')) {
                 console.warn('[TelephonyInit] media_path=both: both SIP.js and ViciPhone are active. Use only while migrating.');
             }
         })();

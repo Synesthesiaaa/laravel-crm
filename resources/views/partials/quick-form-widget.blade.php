@@ -12,7 +12,7 @@
 @endphp
 
 <div id="quick-form-widget-root"
-     class="fixed z-40"
+     class="fixed z-20"
      x-data="quickFormWidget(@js($quickFormBoot))"
      :style="widgetStyle"
      x-init="init()"

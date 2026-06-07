@@ -247,7 +247,7 @@ async function register() {
  * Hang up the active SIP session.
  * Also notifies Laravel API to update call state.
  */
-async function hangup() {
+async function hangup(options = {}) {
     clearNoAnswerTimer();
 
     if (_activeSession) {
@@ -269,12 +269,14 @@ async function hangup() {
         _activeSession = null;
     }
 
-    // Notify backend
+    // Notify backend unless the caller will send a richer, campaign-aware request.
     const callStore = getAlpineStore('call');
     const sessionId = callStore?.sessionId ?? null;
-    try {
-        await window.axios.post('/api/call/hangup', { session_id: sessionId });
-    } catch (_) {}
+    if (options?.notifyBackend !== false) {
+        try {
+            await window.axios.post('/api/call/hangup', { session_id: sessionId });
+        } catch (_) {}
+    }
 
     callStore?.stopTimer?.();
     setCallState(callStore?.state === 'connected' ? 'wrapup' : 'idle');

@@ -1,3 +1,5 @@
+import { shouldRegisterSip } from './telephony-media-path';
+
 const DEFAULT_VERIFY_MAX = 15;
 const DEFAULT_VERIFY_DELAY_MS = 1500;
 const DEFAULT_TIMEOUT_MS = 20000;
@@ -99,7 +101,7 @@ async function pollVerify(campaign, ctx = null, maxAttempts = DEFAULT_VERIFY_MAX
                 state.inflight = false;
                 window.Alpine.store('toast').success('VICIdial session is live and ready.');
                 await syncStatus(campaign, ctx);
-                if (window.TelephonyCore?.register) {
+                if (shouldRegisterSip() && window.TelephonyCore?.register) {
                     window.TelephonyCore.register().catch(() => {});
                 }
                 return;
@@ -148,7 +150,7 @@ async function verifyOnceAfterIframeLoad(campaign, ctx = null) {
                     : 'VICIdial session is live and ready.'
             );
             await syncStatus(effectiveCampaign, ctx);
-            if (window.TelephonyCore?.register) {
+            if (shouldRegisterSip() && window.TelephonyCore?.register) {
                 window.TelephonyCore.register().catch(() => {});
             }
             return;

@@ -393,6 +393,55 @@ class VicidialSessionApiTest extends TestCase
         ]);
     }
 
+    public function test_verify_iframe_non_agent_success_without_matching_live_agent_stays_pending(): void
+    {
+        config(['vicidial.session_iframe_agent_api_only' => true]);
+        config(['vicidial.session_iframe_confirm_non_agent_live' => true]);
+        config(['vicidial.session_iframe_skip_non_agent_live_check' => false]);
+
+        $server = VicidialServer::factory()->create([
+            'campaign_code' => 'testcamp',
+            'api_url' => 'https://vici.example.com/agc/api.php',
+            'api_user' => 'apiu',
+            'api_pass' => 'apip',
+            'is_active' => true,
+            'is_default' => true,
+        ]);
+
+        VicidialAgentSession::factory()->create([
+            'user_id' => $this->agent->id,
+            'campaign_code' => 'testcamp',
+            'session_status' => 'login_pending',
+        ]);
+
+        $mock = Mockery::mock(VicidialNonAgentApiService::class);
+        $mock->shouldReceive('getServerForCampaign')->with('testcamp')->andReturn($server);
+        $mock->shouldReceive('execute')->andReturn(
+            OperationResult::success([
+                'raw_response' => "status|agent_user|campaign\nREADY|someone_else|othercamp",
+                'rows' => [
+                    ['status', 'agent_user', 'campaign'],
+                    ['READY', 'someone_else', 'othercamp'],
+                ],
+            ]),
+        );
+        $this->instance(VicidialNonAgentApiService::class, $mock);
+
+        $response = $this->actingAs($this->agent)
+            ->withSession($this->campaignSession())
+            ->postJson('/api/vicidial/session/verify', ['campaign' => 'testcamp'])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('login_state', 'login_pending');
+
+        $this->assertStringContainsString('testagent', (string) $response->json('message'));
+        $this->assertDatabaseHas('vicidial_agent_sessions', [
+            'user_id' => $this->agent->id,
+            'campaign_code' => 'testcamp',
+            'session_status' => 'login_pending',
+        ]);
+    }
+
     public function test_verify_iframe_skips_non_agent_when_skip_config_enabled(): void
     {
         config(['vicidial.session_iframe_agent_api_only' => true]);

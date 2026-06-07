@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api;
 
 use App\Models\AgentScreenField;
+use App\Models\CallSession;
 use App\Models\User;
 use App\Services\Telephony\LeadService;
 use App\Support\OperationResult;
@@ -77,7 +78,7 @@ class AgentCaptureApiTest extends TestCase
                         && ($payload['comments'] ?? null) === 'Follow up tomorrow'
                         && ! array_key_exists('first_name', $payload)
                         && ! array_key_exists('status', $payload);
-                })
+                }),
             )
             ->andReturn(OperationResult::success(['raw_response' => 'SUCCESS']));
         $this->instance(LeadService::class, $leadService);
@@ -103,5 +104,88 @@ class AgentCaptureApiTest extends TestCase
             'lead_id' => '123',
             'phone_number' => '15551234567',
         ]);
+    }
+
+    public function test_capture_rejects_call_session_owned_by_another_agent(): void
+    {
+        $user = User::factory()->create(['role' => 'Agent']);
+        $otherUser = User::factory()->create(['role' => 'Agent']);
+        $session = CallSession::factory()->create([
+            'user_id' => $otherUser->id,
+            'campaign_code' => 'mbsales',
+        ]);
+
+        AgentScreenField::create([
+            'campaign_code' => 'mbsales',
+            'field_key' => 'email_capture',
+            'field_label' => 'Email',
+            'field_order' => 1,
+            'field_width' => 'full',
+        ]);
+
+        $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->postJson('/api/agent/capture', [
+                'campaign_code' => 'mbsales',
+                'call_session_id' => $session->id,
+                'capture_data' => [
+                    'email_capture' => 'agent@example.test',
+                ],
+                'visible_fields' => ['email_capture'],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['call_session_id']);
+    }
+
+    public function test_capture_requires_visible_required_fields(): void
+    {
+        $user = User::factory()->create(['role' => 'Agent']);
+
+        AgentScreenField::create([
+            'campaign_code' => 'mbsales',
+            'field_key' => 'email_capture',
+            'field_label' => 'Email',
+            'is_required' => true,
+            'field_order' => 1,
+            'field_width' => 'full',
+        ]);
+
+        $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->postJson('/api/agent/capture', [
+                'campaign_code' => 'mbsales',
+                'capture_data' => [
+                    'email_capture' => '',
+                ],
+                'visible_fields' => ['email_capture'],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['capture_data.email_capture']);
+    }
+
+    public function test_capture_does_not_require_hidden_required_fields(): void
+    {
+        $user = User::factory()->create(['role' => 'Agent']);
+
+        AgentScreenField::create([
+            'campaign_code' => 'mbsales',
+            'field_key' => 'email_capture',
+            'field_label' => 'Email',
+            'is_required' => true,
+            'field_order' => 1,
+            'field_width' => 'full',
+        ]);
+
+        $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->postJson('/api/agent/capture', [
+                'campaign_code' => 'mbsales',
+                'capture_data' => [
+                    'email_capture' => '',
+                ],
+                'visible_fields' => [],
+            ])
+            ->assertOk()
+            ->assertJsonPath('success', true);
     }
 }

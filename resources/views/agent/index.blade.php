@@ -323,15 +323,21 @@ window.agentScreen = function() {
 
         _echoUnsubscribe: null,
         _statusPollInterval: null,
+        _vicidialStatusPollInterval: null,
         _activeLeadTimer: null,
         _activeLeadBaseIntervalMs: 5000,
+        _activeLeadFallbackIntervalMs: 5000,
+        _activeLeadRealtimeIntervalMs: 60000,
         _activeLeadBackoffMs: 5000,
         _activeLeadFailureCount: 0,
         _activeLeadMaxBackoffMs: 60000,
         _lastDetectedLeadId: '',
+        _shortcutHandlers: [],
+        _destroyed: false,
         features: @js($telephonyFeatures ?? []),
 
         init() {
+            this._destroyed = false;
             this.$watch('callState', (v) => Alpine.store('call').state = v);
             this.$watch('$store.call.duration', (v) => { this.duration = v; });
             this.$watch('$store.call.state', (v) => { if (v) this.callState = v; });
@@ -354,10 +360,6 @@ window.agentScreen = function() {
                 this.predictiveMode = false;
             }
             this.syncCallStatus();
-            if (this.featureEnabled('session_controls')) {
-                this.syncVicidialStatus();
-                this.scheduleActiveLeadProbe(0);
-            }
 
             const te = window.TelephonyEcho;
             const wsAvailable = te && te.initEcho && te.isBroadcastEnabled();
@@ -378,29 +380,73 @@ window.agentScreen = function() {
                 // With WS active, use a slow 60s heartbeat fallback instead of 15s polling
                 this._statusPollInterval = setInterval(() => this.syncCallStatus(), 60000);
                 if (this.featureEnabled('session_controls')) {
-                    setInterval(() => this.syncVicidialStatus(), 60000);
+                    this._vicidialStatusPollInterval = setInterval(() => this.syncVicidialStatus(), 60000);
                 }
             } else {
                 // No WebSocket — use 15s polling as before
                 this._statusPollInterval = setInterval(() => this.syncCallStatus(), 15000);
                 if (this.featureEnabled('session_controls')) {
-                    setInterval(() => this.syncVicidialStatus(), 15000);
+                    this._vicidialStatusPollInterval = setInterval(() => this.syncVicidialStatus(), 15000);
                 }
             }
 
-            window.addEventListener('telephony-shortcut-dial', () => this.dial());
-            window.addEventListener('telephony-shortcut-hangup', () => this.hangup());
-            window.addEventListener('telephony-shortcut-transfer', () => {
-                const panel = document.querySelector('[x-data=\"agentScreen()\"]');
-                if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            });
-            window.addEventListener('telephony-shortcut-recording', () => {
-                if (!this.featureEnabled('recording_controls')) return;
-                this.startRecording();
-            });
+            if (this.featureEnabled('session_controls')) {
+                this._activeLeadBaseIntervalMs = wsAvailable
+                    ? this._activeLeadRealtimeIntervalMs
+                    : this._activeLeadFallbackIntervalMs;
+                this.resetActiveLeadBackoff();
+                this.syncVicidialStatus();
+                this.probeActiveLead().finally(() => {
+                    if (!this._destroyed) {
+                        this.scheduleActiveLeadProbe(this._activeLeadBackoffMs);
+                    }
+                });
+            }
+
+            this._shortcutHandlers = [
+                ['telephony-shortcut-dial', () => this.dial()],
+                ['telephony-shortcut-hangup', () => this.hangup()],
+                ['telephony-shortcut-transfer', () => {
+                    const panel = document.querySelector('[x-data=\"agentScreen()\"]');
+                    if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }],
+                ['telephony-shortcut-recording', () => {
+                    if (!this.featureEnabled('recording_controls')) return;
+                    this.startRecording();
+                }],
+            ];
+            this._shortcutHandlers.forEach(([eventName, handler]) => window.addEventListener(eventName, handler));
         },
 
         /** CRM login campaign — hopper, forms, dispositions, lead tools. */
+        destroy() {
+            this._destroyed = true;
+
+            if (typeof this._echoUnsubscribe === 'function') {
+                try {
+                    this._echoUnsubscribe();
+                } catch {}
+            }
+            this._echoUnsubscribe = null;
+
+            clearInterval(this._statusPollInterval);
+            clearInterval(this._vicidialStatusPollInterval);
+            clearInterval(this.timer);
+            clearTimeout(this._activeLeadTimer);
+            clearTimeout(this._leadHydrateTimer);
+            clearTimeout(this._predictiveTimer);
+
+            this._statusPollInterval = null;
+            this._vicidialStatusPollInterval = null;
+            this.timer = null;
+            this._activeLeadTimer = null;
+            this._leadHydrateTimer = null;
+            this._predictiveTimer = null;
+
+            this._shortcutHandlers.forEach(([eventName, handler]) => window.removeEventListener(eventName, handler));
+            this._shortcutHandlers = [];
+        },
+
         crmCampaign() {
             return document.body?.dataset?.campaign || this.$el?.dataset?.campaign || 'mbsales';
         },
@@ -457,7 +503,7 @@ window.agentScreen = function() {
                 store.loggedIn = true;
                 store.status = 'ready';
                 window.dispatchEvent(new CustomEvent('vicidial-ws-phase', { detail: { phase: 'ready' } }));
-                if (window.TelephonyCore?.register) {
+                if ((window.TelephonyMediaPath?.shouldRegisterSip?.() ?? true) && window.TelephonyCore?.register) {
                     window.TelephonyCore.register().catch(() => {});
                 }
             } else if (p.event === 'state_paused') {
@@ -557,6 +603,9 @@ window.agentScreen = function() {
         },
 
         async hydrateLead(leadIdOverride = null, phoneNumberOverride = null) {
+            if (this._destroyed) {
+                return;
+            }
             const leadId = String(leadIdOverride || this.leadId || '').trim();
             const phoneNumber = String(phoneNumberOverride || this.phoneNumber || '').trim();
             if (!leadId && !phoneNumber) {
@@ -575,6 +624,9 @@ window.agentScreen = function() {
                 const res = await window.axios.get('/api/leads/hydrate', {
                     params,
                 });
+                if (this._destroyed) {
+                    return;
+                }
                 const data = res.data?.data;
                 if (data) {
                     this.applyLeadData(data);
@@ -585,6 +637,9 @@ window.agentScreen = function() {
         },
 
         async probeActiveLead() {
+            if (this._destroyed) {
+                return;
+            }
             if (this.callState === 'wrapup' || this.savingDisposition) {
                 return;
             }
@@ -594,6 +649,9 @@ window.agentScreen = function() {
                         campaign: this.telephonyCampaign(),
                     },
                 });
+                if (this._destroyed) {
+                    return;
+                }
                 const payload = response?.data || {};
                 if (payload.success === false) {
                     this.recordActiveLeadFailure();
@@ -650,12 +708,20 @@ window.agentScreen = function() {
         },
 
         scheduleActiveLeadProbe(delayMs = this._activeLeadBaseIntervalMs) {
+            if (this._destroyed) {
+                return;
+            }
             if (this._activeLeadTimer) {
                 clearTimeout(this._activeLeadTimer);
             }
             this._activeLeadTimer = setTimeout(async () => {
+                if (this._destroyed) {
+                    return;
+                }
                 await this.probeActiveLead();
-                this.scheduleActiveLeadProbe(this._activeLeadBackoffMs);
+                if (!this._destroyed) {
+                    this.scheduleActiveLeadProbe(this._activeLeadBackoffMs);
+                }
             }, Math.max(0, Number(delayMs) || this._activeLeadBaseIntervalMs));
         },
 
@@ -678,8 +744,14 @@ window.agentScreen = function() {
         },
 
         async syncCallStatus() {
+            if (this._destroyed) {
+                return;
+            }
             try {
                 const res = await window.axios.get('/api/call/status');
+                if (this._destroyed) {
+                    return;
+                }
                 if (res.data.active && res.data.call) {
                     this.sessionId = res.data.call.session_id;
                     this.phoneNumber = res.data.call.phone_number || this.phoneNumber;
@@ -714,6 +786,9 @@ window.agentScreen = function() {
                     Alpine.store('call').state = 'idle';
                 }
             } catch (e) {
+                if (this._destroyed) {
+                    return;
+                }
                 // On network/auth error, reset to idle so the UI is never
                 // permanently stuck in a non-interactive state.
                 if (this.callState !== 'connected' && this.callState !== 'dialing' && this.callState !== 'ringing') {
@@ -726,8 +801,14 @@ window.agentScreen = function() {
         },
 
         async syncVicidialStatus() {
+            if (this._destroyed) {
+                return;
+            }
             try {
                 const data = await Alpine.store('vicidial').sync(this.telephonyCampaign());
+                if (this._destroyed) {
+                    return;
+                }
                 const raw = data?.agent_status?.data?.raw_response || '';
 
                 if (typeof raw === 'string' && raw.includes('INCALL')) {
@@ -1017,7 +1098,7 @@ window.agentScreen = function() {
         },
 
         async hangup() {
-            await Alpine.store('call').hangupWebRTC();
+            await Alpine.store('call').hangupWebRTC({ notifyBackend: false });
             clearInterval(this.timer);
             this.timer = null;
             Alpine.store('call').stopTimer();
@@ -1115,7 +1196,11 @@ window.agentScreen = function() {
             if (!this.featureEnabled('predictive_dialing')) return;
             if (!this.predictiveMode || this.callState !== 'idle') return;
             if (this._predictiveTimer) clearTimeout(this._predictiveTimer);
-            this._predictiveTimer = setTimeout(() => this.predictiveDial(), Math.max(1, this.predictiveDelay) * 1000);
+            this._predictiveTimer = setTimeout(() => {
+                if (!this._destroyed) {
+                    this.predictiveDial();
+                }
+            }, Math.max(1, this.predictiveDelay) * 1000);
         },
 
         async predictiveDial() {
@@ -1152,11 +1237,15 @@ window.agentScreen = function() {
             const form = document.getElementById('capture-form');
             if (!form) { this.saving = false; return; }
             const captureData = {};
+            const visibleFields = [];
             form.querySelectorAll('input, select, textarea').forEach(el => {
                 if (!el.name || el.name.startsWith('_')) return;
 
                 const wrapper = el.closest('[data-capture-field]');
                 if (wrapper && wrapper.offsetParent === null) return;
+                if (!visibleFields.includes(el.name)) {
+                    visibleFields.push(el.name);
+                }
 
                 if (el.type === 'checkbox') {
                     captureData[el.name] = el.checked ? '1' : '0';
@@ -1172,6 +1261,7 @@ window.agentScreen = function() {
                     lead_id: this.leadId,
                     phone_number: this.phoneNumber,
                     capture_data: captureData,
+                    visible_fields: visibleFields,
                 });
                 Alpine.store('toast').success('Record saved.');
                 this.clearForm();

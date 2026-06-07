@@ -112,6 +112,13 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             return HEADER_CHROME_HEIGHT + SPLITTER_HEIGHT;
         },
 
+        minShellWidth() {
+            const margin = Math.max(8, this.bounds.maxWidthPadding || 16);
+            const viewportWidth = Math.max(0, window.innerWidth - (margin * 2));
+
+            return Math.min(this.bounds.minWidth, Math.max(260, viewportWidth));
+        },
+
         maxControlsHeightForShell(shellHeight = this.height) {
             const available = shellHeight - this.chromeHeight() - MIN_IFRAME_HEIGHT;
 
@@ -127,14 +134,15 @@ window.phoneWidget = function phoneWidget(boot = {}) {
 
         clampShellDimensions(width, height) {
             const margin = Math.max(8, this.bounds.maxWidthPadding || 16);
-            const maxWidth = Math.max(this.bounds.minWidth, window.innerWidth - (margin * 2));
+            const minWidth = this.minShellWidth();
+            const maxWidth = Math.max(minWidth, window.innerWidth - (margin * 2));
             const maxHeight = Math.min(
                 Math.max(this.bounds.minHeight, window.innerHeight - (margin * 2)),
                 maxShellHeightForFabStack(this.bounds),
             );
 
             return {
-                width: Math.min(Math.max(width, this.bounds.minWidth), maxWidth),
+                width: Math.min(Math.max(width, minWidth), maxWidth),
                 height: Math.min(Math.max(height, this.bounds.minHeight), maxHeight),
             };
         },

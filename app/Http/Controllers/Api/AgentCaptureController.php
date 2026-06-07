@@ -10,6 +10,8 @@ use App\Services\Telephony\TelephonyLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AgentCaptureController extends Controller
 {
@@ -20,18 +22,26 @@ class AgentCaptureController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $user = $request->user();
+
         $request->validate([
             'campaign_code' => ['required', 'string', 'max:50'],
-            'call_session_id' => ['nullable', 'integer', 'exists:call_sessions,id'],
+            'call_session_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('call_sessions', 'id')->where('user_id', $user->id),
+            ],
             'lead_id' => ['nullable', 'string', 'max:50'],
             'phone_number' => ['nullable', 'string', 'max:50'],
             'capture_data' => ['required', 'array'],
+            'visible_fields' => ['nullable', 'array'],
+            'visible_fields.*' => ['string', 'max:100'],
         ]);
 
         $campaign = $request->input('campaign_code');
         $fields = AgentScreenField::query()
             ->forCampaign($campaign)
-            ->get(['field_key', 'vici_field', 'direction']);
+            ->get(['field_key', 'vici_field', 'direction', 'is_required']);
         $allowedKeys = $fields->pluck('field_key')->toArray();
 
         $captureData = [];
@@ -41,7 +51,7 @@ class AgentCaptureController extends Controller
             }
         }
 
-        $user = $request->user();
+        $this->validateRequiredCaptureData($request, $fields, $captureData);
 
         $record = AgentCaptureRecord::create([
             'campaign_code' => $campaign,
@@ -59,6 +69,37 @@ class AgentCaptureController extends Controller
             'success' => true,
             'id' => $record->id,
         ]);
+    }
+
+    /**
+     * @param  array<string, string>  $captureData
+     */
+    private function validateRequiredCaptureData(Request $request, Collection $fields, array $captureData): void
+    {
+        $visibleFields = collect($request->input('visible_fields', []))
+            ->filter(fn ($field) => is_string($field) && $field !== '')
+            ->values();
+        $hasVisibleFieldList = $request->has('visible_fields');
+        $errors = [];
+
+        foreach ($fields as $field) {
+            if (! (bool) ($field->is_required ?? false)) {
+                continue;
+            }
+
+            $fieldKey = (string) $field->field_key;
+            if ($hasVisibleFieldList && ! $visibleFields->contains($fieldKey)) {
+                continue;
+            }
+
+            if (trim((string) ($captureData[$fieldKey] ?? '')) === '') {
+                $errors["capture_data.{$fieldKey}"] = 'This field is required.';
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
     }
 
     /**

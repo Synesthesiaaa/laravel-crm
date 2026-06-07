@@ -6,6 +6,7 @@ import './phone-widget';
 import './quick-form-widget';
 import './soft-navigate';
 import './form-visibility';
+import './telephony-media-path';
 import TelephonyCore from './telephony-core';
 
 // Make ApexCharts available for dynamic import in views
@@ -213,6 +214,7 @@ Alpine.store('call', {
     transferState: 'idle',
     recording: false,
     inbound: false,
+    muted: false,
 
     startTimer() {
         this.duration = 0;
@@ -228,8 +230,25 @@ Alpine.store('call', {
     },
 
     // ── WebRTC delegation ──────────────────────────────────────────────────
-    async hangupWebRTC() {
-        await window.TelephonyCore?.hangup();
+    async hangupWebRTC(options = {}) {
+        await window.TelephonyCore?.hangup(options);
+    },
+    toggleMuteWebRTC() {
+        this.muted = !this.muted;
+        if (this.muted) {
+            window.TelephonyCore?.mute();
+        } else {
+            window.TelephonyCore?.unmute();
+        }
+    },
+    async toggleHoldWebRTC() {
+        if (this.state === 'hold') {
+            await window.TelephonyCore?.unhold();
+
+            return;
+        }
+
+        await window.TelephonyCore?.hold();
     },
 });
 

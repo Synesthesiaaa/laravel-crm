@@ -106,12 +106,33 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
             persistence.scheduleSave(() => this.currentLayout());
         },
 
+        minPanelWidth() {
+            const margin = Math.max(8, this.bounds.maxWidthPadding || 16);
+            const iconSize = 48;
+            const viewportWidth = Math.max(0, window.innerWidth - iconSize - ICON_GAP_PX - margin);
+
+            return Math.min(this.bounds.minWidth, Math.max(220, viewportWidth));
+        },
+
+        ensurePanelFitsViewport() {
+            const margin = Math.max(8, this.bounds.maxWidthPadding || 16);
+            const iconSize = 48;
+            const maxAnchorX = Math.max(0, window.innerWidth - iconSize);
+            const requiredAnchorX = this.width + ICON_GAP_PX + margin;
+
+            if (this.x - ICON_GAP_PX - this.width < margin) {
+                this.x = Math.min(maxAnchorX, requiredAnchorX);
+            }
+        },
+
         maxWidthForCurrentAnchor() {
             // Panel opens upper-left from icon, so width is limited by left-side space.
             const iconGap = 8; // 0.5rem
             const minLeftMargin = Math.max(8, this.bounds.maxWidthPadding || 16);
             const available = this.x - iconGap - minLeftMargin;
-            return Math.max(this.bounds.minWidth, available);
+            const minWidth = this.minPanelWidth();
+
+            return Math.max(minWidth, available);
         },
 
         maxHeightForCurrentAnchor() {
@@ -126,11 +147,12 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
             const iconGap = 8;
             const minLeftMargin = Math.max(8, this.bounds.maxWidthPadding || 16);
             const minTopMargin = Math.max(8, this.bounds.maxHeightPadding || 16);
-            const maxWidth = Math.max(this.bounds.minWidth, anchorX - iconGap - minLeftMargin);
+            const minWidth = this.minPanelWidth();
+            const maxWidth = Math.max(minWidth, anchorX - iconGap - minLeftMargin);
             const maxHeight = Math.max(this.bounds.minHeight, anchorY - iconGap - minTopMargin);
 
             return {
-                width: Math.min(Math.max(width, this.bounds.minWidth), maxWidth),
+                width: Math.min(Math.max(width, minWidth), maxWidth),
                 height: Math.min(Math.max(height, this.bounds.minHeight), maxHeight),
             };
         },
@@ -237,6 +259,9 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
                 return;
             }
             this.open = !this.open;
+            if (this.open) {
+                this.ensurePanelFitsViewport();
+            }
             if (this.open && this.refreshOnOpen && this.currentFormType && this.currentCampaign) {
                 this.syncFrameSrc(this.currentFormType, this.currentCampaign, { force: true });
                 this.refreshOnOpen = false;
@@ -268,7 +293,7 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
             const startY = this.y;
             const startWidth = this.width;
             const startHeight = this.height;
-            const minWidth = this.bounds.minWidth;
+            const minWidth = this.minPanelWidth();
             const minHeight = this.bounds.minHeight;
 
             const leftLimit = Math.max(8, this.bounds.maxWidthPadding || 16);
@@ -342,6 +367,7 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
             const size = this.clampSizeForCurrentAnchor(this.width, this.height);
             this.width = size.width;
             this.height = size.height;
+            this.ensurePanelFitsViewport();
         },
 
         async resolveDefaultSource() {
