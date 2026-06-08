@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Campaign;
 use App\Models\LeadHopper;
 use App\Services\Telephony\LeadHydrationService;
-use App\Services\Telephony\TelephonyCampaignResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -21,10 +20,7 @@ class NextLeadController extends Controller
 
     public function __invoke(Request $request): JsonResponse
     {
-        $campaign = TelephonyCampaignResolver::resolveSelected(
-            $request,
-            is_string($request->query('campaign')) ? (string) $request->query('campaign') : null,
-        );
+        $campaign = $request->query('campaign') ?: (string) $request->session()->get('campaign', 'mbsales');
         $user = $request->user();
 
         // Throttle: prevent rapid-fire requests from the same agent

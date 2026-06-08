@@ -106,7 +106,7 @@ class TransferController extends Controller
     {
         $explicit = $validated['campaign'] ?? $request->input('campaign');
 
-        return TelephonyCampaignResolver::resolveSelected(
+        return TelephonyCampaignResolver::resolve(
             $request,
             is_string($explicit) && $explicit !== '' ? $explicit : null,
         );

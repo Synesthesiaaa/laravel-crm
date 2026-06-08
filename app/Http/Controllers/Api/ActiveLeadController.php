@@ -20,7 +20,7 @@ class ActiveLeadController extends Controller
             'campaign' => ['nullable', 'string', 'max:50'],
         ]);
 
-        $campaign = TelephonyCampaignResolver::resolveSelected($request, $validated['campaign'] ?? null);
+        $campaign = TelephonyCampaignResolver::resolve($request, $validated['campaign'] ?? null);
         $result = $nonAgentApi->execute($request->user(), $campaign, 'agent_status', [
             'agent_user' => (string) $request->user()->vici_user,
             'stage' => 'pipe',

@@ -29,24 +29,6 @@ final class TelephonyCampaignResolver
     }
 
     /**
-     * Live VICIdial actions must follow the selected softphone campaign when one exists.
-     * Explicit request campaigns are accepted only before a softphone preference has been saved.
-     */
-    public static function resolveSelected(Request $request, ?string $explicit): string
-    {
-        $vic = $request->session()->get('vicidial_campaign');
-        if (is_string($vic) && $vic !== '') {
-            return $vic;
-        }
-
-        if (is_string($explicit) && $explicit !== '') {
-            return $explicit;
-        }
-
-        return self::forRequest($request);
-    }
-
-    /**
      * Prefer an explicit campaign from query/body when non-empty; otherwise session telephony default.
      */
     public static function resolve(Request $request, ?string $explicit): string

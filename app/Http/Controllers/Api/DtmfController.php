@@ -19,7 +19,7 @@ class DtmfController extends Controller
 
         $result = $service->send(
             $request->user(),
-            TelephonyCampaignResolver::resolveSelected($request, $validated['campaign'] ?? null),
+            TelephonyCampaignResolver::resolve($request, $validated['campaign'] ?? null),
             $validated['digits'],
         );
 
