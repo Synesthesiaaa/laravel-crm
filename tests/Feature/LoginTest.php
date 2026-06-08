@@ -30,6 +30,29 @@ class LoginTest extends TestCase
         $this->assertAuthenticatedAs($user);
     }
 
+    public function test_login_continues_when_vicidial_auto_bootstrap_is_staged(): void
+    {
+        config(['vicidial.auto_bootstrap_on_crm_login' => true]);
+
+        $user = User::factory()->create([
+            'username' => 'autoviciagent',
+            'vici_user' => 'agent1',
+            'vici_pass' => 'secret',
+            'extension' => '6001',
+            'auto_vici_login' => true,
+        ]);
+
+        $response = $this->post(route('login'), [
+            'username' => 'autoviciagent',
+            'password' => 'password',
+            'campaign' => 'mbsales',
+        ]);
+
+        $response->assertRedirect(route('dashboard'));
+        $response->assertSessionHas('telephony_bootstrap');
+        $this->assertAuthenticatedAs($user);
+    }
+
     public function test_login_fails_with_invalid_credentials(): void
     {
         User::factory()->create(['username' => 'testagent']);
@@ -55,7 +78,12 @@ class LoginTest extends TestCase
         ]);
 
         $response = $this->actingAs($user)
-            ->withSession(['campaign' => 'testcamp', 'campaign_name' => 'Test Campaign'])
+            ->withSession([
+                'campaign' => 'testcamp',
+                'campaign_name' => 'Test Campaign',
+                'vicidial_campaign' => 'testcamp',
+                'vicidial_campaign_name' => 'Test Campaign',
+            ])
             ->post(route('logout'));
 
         $response->assertRedirect(route('login'));

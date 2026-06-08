@@ -469,6 +469,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
                         blended: typeof bootstrap.blended === 'boolean' ? bootstrap.blended : true,
                         ingroups: Array.isArray(bootstrap.ingroups) ? bootstrap.ingroups : [],
                         ctx: this,
+                        nonBlocking: true,
                     });
                 }
             } catch (_) {}

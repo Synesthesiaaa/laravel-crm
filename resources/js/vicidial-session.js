@@ -65,8 +65,20 @@ async function syncStatus(campaign, ctx = null) {
     return data;
 }
 
-async function pollVerify(campaign, ctx = null, maxAttempts = DEFAULT_VERIFY_MAX) {
+function finishNonBlockingAttempt(ctx) {
+    cancelVerify(ctx);
+    phaseSet(ctx, 'idle');
+    loadingSet(ctx, false);
+    state.inflight = false;
+}
+
+async function pollVerify(campaign, ctx = null, maxAttempts = DEFAULT_VERIFY_MAX, options = {}) {
     if (state.verifyCount >= maxAttempts) {
+        if (options.nonBlocking) {
+            finishNonBlockingAttempt(ctx);
+            return false;
+        }
+
         cancelVerify(ctx);
         phaseSet(ctx, 'timeout');
         loadingSet(ctx, false);
@@ -86,6 +98,11 @@ async function pollVerify(campaign, ctx = null, maxAttempts = DEFAULT_VERIFY_MAX
         try {
             const res = await window.axios.post('/api/vicidial/session/verify', { campaign });
             if (res.data?.success === false && res.data?.data?.stop_verify_poll) {
+                if (options.nonBlocking) {
+                    finishNonBlockingAttempt(ctx);
+                    return;
+                }
+
                 cancelVerify(ctx);
                 phaseSet(ctx, 'failed');
                 loadingSet(ctx, false);
@@ -110,7 +127,7 @@ async function pollVerify(campaign, ctx = null, maxAttempts = DEFAULT_VERIFY_MAX
             // 202 pending and transient errors should continue polling.
         }
 
-        await pollVerify(campaign, ctx, maxAttempts);
+        await pollVerify(campaign, ctx, maxAttempts, options);
     }, DEFAULT_VERIFY_DELAY_MS);
 
     return true;
@@ -119,7 +136,7 @@ async function pollVerify(campaign, ctx = null, maxAttempts = DEFAULT_VERIFY_MAX
 /**
  * Single verify after iframe load (used when Non-Agent polling is disabled).
  */
-async function verifyOnceAfterIframeLoad(campaign, ctx = null) {
+async function verifyOnceAfterIframeLoad(campaign, ctx = null, options = {}) {
     const effectiveCampaign = getCampaign(campaign);
     phaseSet(ctx, 'syncing');
     state.verifyCount = 1;
@@ -132,6 +149,11 @@ async function verifyOnceAfterIframeLoad(campaign, ctx = null) {
         cancelVerify(ctx);
 
         if (res.data?.success === false && res.data?.data?.stop_verify_poll) {
+            if (options.nonBlocking) {
+                finishNonBlockingAttempt(ctx);
+                return;
+            }
+
             phaseSet(ctx, 'failed');
             loadingSet(ctx, false);
             state.inflight = false;
@@ -162,8 +184,13 @@ async function verifyOnceAfterIframeLoad(campaign, ctx = null) {
         if (ctx?.vici) {
             ctx.vici._verifyPollCount = 1;
         }
-        await pollVerify(effectiveCampaign, ctx, DEFAULT_VERIFY_MAX);
+        await pollVerify(effectiveCampaign, ctx, DEFAULT_VERIFY_MAX, options);
     } catch (e) {
+        if (options.nonBlocking) {
+            finishNonBlockingAttempt(ctx);
+            return;
+        }
+
         cancelVerify(ctx);
         phaseSet(ctx, 'failed');
         loadingSet(ctx, false);
@@ -284,6 +311,7 @@ async function login({
     ingroups = [],
     ctx = null,
     maxAttempts = DEFAULT_VERIFY_MAX,
+    nonBlocking = false,
 } = {}) {
     const effectiveCampaign = getCampaign(campaign);
     if (state.inflight) return false;
@@ -315,6 +343,11 @@ async function login({
             }
         }
         if (!iframeUrl) {
+            if (nonBlocking) {
+                finishNonBlockingAttempt(ctx);
+                return false;
+            }
+
             phaseSet(ctx, 'failed');
             loadingSet(ctx, false);
             state.inflight = false;
@@ -326,6 +359,11 @@ async function login({
 
         const frame = getFrame();
         if (!frame) {
+            if (nonBlocking) {
+                finishNonBlockingAttempt(ctx);
+                return false;
+            }
+
             phaseSet(ctx, 'failed');
             loadingSet(ctx, false);
             state.inflight = false;
@@ -339,17 +377,22 @@ async function login({
         }
         frame.onload = () => {
             if (isIframeAgentApiOnly()) {
-                verifyOnceAfterIframeLoad(effectiveCampaign, ctx).catch(() => {});
+                verifyOnceAfterIframeLoad(effectiveCampaign, ctx, { nonBlocking }).catch(() => {});
             } else {
                 phaseSet(ctx, 'syncing');
                 state.verifyCount = 0;
                 if (ctx?.vici) {
                     ctx.vici._verifyPollCount = 0;
                 }
-                pollVerify(effectiveCampaign, ctx, maxAttempts).catch(() => {});
+                pollVerify(effectiveCampaign, ctx, maxAttempts, { nonBlocking }).catch(() => {});
             }
         };
         frame.onerror = () => {
+            if (nonBlocking) {
+                finishNonBlockingAttempt(ctx);
+                return;
+            }
+
             cancelVerify(ctx);
             phaseSet(ctx, 'failed');
             loadingSet(ctx, false);
@@ -361,6 +404,11 @@ async function login({
         state.verifyTimeout = setTimeout(() => {
             const phase = ctx?.vici?.phase ?? '';
             if (phase === 'iframe_loading' || phase === 'syncing' || phase === 'requesting') {
+                if (nonBlocking) {
+                    finishNonBlockingAttempt(ctx);
+                    return;
+                }
+
                 cancelVerify(ctx);
                 phaseSet(ctx, 'timeout');
                 loadingSet(ctx, false);
@@ -372,6 +420,11 @@ async function login({
 
         return true;
     } catch (e) {
+        if (nonBlocking) {
+            finishNonBlockingAttempt(ctx);
+            return false;
+        }
+
         phaseSet(ctx, 'failed');
         loadingSet(ctx, false);
         state.inflight = false;
