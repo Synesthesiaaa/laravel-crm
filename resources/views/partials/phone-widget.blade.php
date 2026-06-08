@@ -2,8 +2,16 @@
     window.__VICIDIAL_SESSION_IFRAME_ONLY = @json((bool) config('vicidial.session_iframe_agent_api_only', false));
 </script>
 @php
+    $defaultVicidialCampaign = (string) (
+        session('vicidial_campaign')
+        ?? auth()->user()?->default_campaign
+        ?? 'mbsales'
+    );
+    $hasVicidialCampaignPreference = session()->has('vicidial_campaign')
+        || (auth()->user()?->default_campaign !== null && auth()->user()?->default_campaign !== '');
     $phoneWidgetBoot = [
-        'vici_campaign' => (string) (session('vicidial_campaign') ?? session('campaign', 'mbsales')),
+        'vici_campaign' => $defaultVicidialCampaign,
+        'has_vici_campaign_preference' => $hasVicidialCampaignPreference,
         'phone_login' => (string) (auth()->user()->extension ?? ''),
         'vd_login' => (string) (auth()->user()->vici_user ?? ''),
         'panelW' => (int) config('vicidial.session_iframe_panel_width_px', 440),

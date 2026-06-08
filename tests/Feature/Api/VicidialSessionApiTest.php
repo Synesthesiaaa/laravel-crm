@@ -193,6 +193,44 @@ class VicidialSessionApiTest extends TestCase
         $this->assertStringContainsString('VD_pass=typedpass', $iframeUrl);
     }
 
+    public function test_login_without_campaign_uses_saved_vicidial_campaign_not_crm_campaign(): void
+    {
+        $agentApi = Mockery::mock(VicidialProxyService::class);
+        $agentApi->shouldReceive('execute')
+            ->once()
+            ->with($this->agent, 'softcamp', 'login', Mockery::type('array'))
+            ->andReturn(['success' => true, 'raw_response' => 'SUCCESS', 'message' => null]);
+        $this->instance(VicidialProxyService::class, $agentApi);
+
+        $nonAgentApi = Mockery::mock(VicidialNonAgentApiService::class);
+        $nonAgentApi->shouldReceive('getServerForCampaign')
+            ->with('softcamp')
+            ->andReturn(null);
+        $this->instance(VicidialNonAgentApiService::class, $nonAgentApi);
+
+        $this->actingAs($this->agent)
+            ->withSession([
+                'campaign' => 'testcamp',
+                'campaign_name' => 'Test',
+                'vicidial_campaign' => 'softcamp',
+                'vicidial_campaign_name' => 'Softphone',
+            ])
+            ->postJson('/api/vicidial/session/login', [
+                'phone_login' => '6001',
+            ])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.iframe_alignment.vd_campaign', 'softcamp');
+
+        $this->assertDatabaseHas('vicidial_agent_sessions', [
+            'user_id' => $this->agent->id,
+            'campaign_code' => 'softcamp',
+            'session_status' => 'login_pending',
+        ]);
+        $this->assertSame('testcamp', session('campaign'));
+        $this->assertSame('softcamp', session('vicidial_campaign'));
+    }
+
     public function test_login_response_contract_contains_required_fields(): void
     {
         $this->mockAgentApi(true);

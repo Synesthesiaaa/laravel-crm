@@ -32,9 +32,8 @@ class TelephonyBootstrapService
         }
 
         $campaigns = $this->campaignService->getCampaigns();
-        $candidate = $request->session()->get('vicidial_campaign')
-            ?? $request->session()->get('campaign');
-        $sessionCampaign = is_string($candidate) && $candidate !== '' ? $candidate : null;
+        $sessionCampaign = $request->session()->get('vicidial_campaign');
+        $sessionCampaign = is_string($sessionCampaign) && $sessionCampaign !== '' ? $sessionCampaign : null;
 
         $campaign = null;
         if ($sessionCampaign !== null && isset($campaigns[$sessionCampaign])) {

@@ -18,9 +18,16 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @stack('styles')
 </head>
+@php
+    $layoutTelephonyCampaign = (string) (
+        session('vicidial_campaign')
+        ?? auth()->user()?->default_campaign
+        ?? 'mbsales'
+    );
+@endphp
 <body class="min-h-screen flex" style="margin: 0;" x-data
       data-campaign="{{ session('campaign', 'mbsales') }}"
-      data-telephony-campaign="{{ session('vicidial_campaign') ?? session('campaign', 'mbsales') }}">
+      data-telephony-campaign="{{ $layoutTelephonyCampaign }}">
 
     {{-- Mobile sidebar overlay --}}
     <div x-show="$store.sidebar.mobileOpen"

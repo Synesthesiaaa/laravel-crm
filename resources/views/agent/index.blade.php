@@ -457,7 +457,7 @@ window.agentScreen = function() {
             return (
                 document.body?.dataset?.telephonyCampaign ||
                 Alpine.store('vicidial').campaign ||
-                this.crmCampaign()
+                'mbsales'
             );
         },
 

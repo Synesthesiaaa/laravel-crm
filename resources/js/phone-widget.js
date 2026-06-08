@@ -89,6 +89,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             loading: false,
             phase: 'idle',
             vici_campaign: boot.vici_campaign || 'mbsales',
+            has_campaign_preference: boot.has_vici_campaign_preference === true,
             agent_campaigns: [],
             agent_campaigns_loading: false,
             agent_campaigns_error: null,
@@ -318,6 +319,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         },
 
         async onViciCampaignChange() {
+            this.vici.has_campaign_preference = true;
             await this.persistViciCampaignToSession();
         },
 
@@ -331,25 +333,31 @@ window.phoneWidget = function phoneWidget(boot = {}) {
                 });
                 if (res.data?.success && Array.isArray(res.data.campaigns)) {
                     this.vici.agent_campaigns = res.data.campaigns;
-                    const crmCode = this.vici.vici_campaign;
-                    const match = findCampaignInAgentList(this.vici.agent_campaigns, crmCode);
+                    if (!this.vici.has_campaign_preference && this.vici.agent_campaigns.length) {
+                        this.vici.vici_campaign = this.vici.agent_campaigns[0].id;
+                        this.vici.has_campaign_preference = true;
+                        await this.persistViciCampaignToSession();
+                    }
+
+                    const selectedCode = this.vici.vici_campaign;
+                    const match = findCampaignInAgentList(this.vici.agent_campaigns, selectedCode);
 
                     if (match) {
                         // Align softphone state + session vicidial_* to VICIdial canonical id (e.g. casing).
-                        if (match.id !== crmCode) {
+                        if (match.id !== selectedCode) {
                             this.vici.vici_campaign = match.id;
                             await this.persistViciCampaignToSession();
                         } else if (document.body?.dataset) {
                             document.body.dataset.telephonyCampaign = match.id;
                         }
-                    } else if (this.vici.agent_campaigns.length && crmCode) {
+                    } else if (this.vici.agent_campaigns.length && selectedCode) {
                         // Softphone campaign not in API list: keep selection, prepend for the dropdown.
                         this.vici.agent_campaigns = [
-                            { id: crmCode, name: crmCode },
+                            { id: selectedCode, name: selectedCode },
                             ...this.vici.agent_campaigns,
                         ];
                         if (document.body?.dataset) {
-                            document.body.dataset.telephonyCampaign = crmCode;
+                            document.body.dataset.telephonyCampaign = selectedCode;
                         }
                     } else if (document.body?.dataset) {
                         document.body.dataset.telephonyCampaign = this.vici.vici_campaign;

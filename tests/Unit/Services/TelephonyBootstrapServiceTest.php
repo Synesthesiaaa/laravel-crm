@@ -20,7 +20,7 @@ class TelephonyBootstrapServiceTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_store_bootstrap_payload_uses_user_defaults_when_global_flag_on(): void
+    public function test_store_bootstrap_payload_uses_saved_vicidial_campaign_when_global_flag_on(): void
     {
         config(['vicidial.auto_bootstrap_on_crm_login' => true]);
 
@@ -28,6 +28,7 @@ class TelephonyBootstrapServiceTest extends TestCase
         $campaignService->shouldReceive('getCampaigns')->andReturn([
             'mbsales' => ['name' => 'Main'],
             'other' => ['name' => 'Other'],
+            'dialer' => ['name' => 'Dialer'],
         ]);
 
         $service = new TelephonyBootstrapService($campaignService);
@@ -46,18 +47,19 @@ class TelephonyBootstrapServiceTest extends TestCase
         $request = Request::create('/login', 'POST');
         $request->setLaravelSession($this->app['session.store']);
         $request->session()->put('campaign', 'mbsales');
+        $request->session()->put('vicidial_campaign', 'dialer');
 
         $service->storeBootstrapPayload($request, $user);
 
         $this->assertSame([
-            'campaign' => 'mbsales',
+            'campaign' => 'dialer',
             'phone_login' => '6001',
             'blended' => false,
             'ingroups' => ['SALES', 'SUPPORT'],
         ], $request->session()->get('telephony_bootstrap'));
     }
 
-    public function test_store_bootstrap_uses_default_campaign_when_session_campaign_invalid(): void
+    public function test_store_bootstrap_uses_user_default_campaign_instead_of_crm_campaign(): void
     {
         config(['vicidial.auto_bootstrap_on_crm_login' => true]);
 
@@ -80,12 +82,43 @@ class TelephonyBootstrapServiceTest extends TestCase
 
         $request = Request::create('/login', 'POST');
         $request->setLaravelSession($this->app['session.store']);
-        $request->session()->put('campaign', 'unknown-code');
+        $request->session()->put('campaign', 'mbsales');
 
         $service->storeBootstrapPayload($request, $user);
 
         $payload = $request->session()->get('telephony_bootstrap');
         $this->assertSame('other', $payload['campaign']);
+    }
+
+    public function test_store_bootstrap_uses_first_configured_campaign_without_saved_or_valid_default(): void
+    {
+        config(['vicidial.auto_bootstrap_on_crm_login' => true]);
+
+        $campaignService = Mockery::mock(CampaignService::class);
+        $campaignService->shouldReceive('getCampaigns')->andReturn([
+            'firstdialer' => ['name' => 'First Dialer'],
+            'other' => ['name' => 'Other'],
+        ]);
+
+        $service = new TelephonyBootstrapService($campaignService);
+
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'vici_user' => 'agent1',
+            'vici_pass' => 'secret',
+            'extension' => '6001',
+            'auto_vici_login' => true,
+            'default_campaign' => 'missing',
+        ]);
+
+        $request = Request::create('/login', 'POST');
+        $request->setLaravelSession($this->app['session.store']);
+        $request->session()->put('campaign', 'mbsales');
+
+        $service->storeBootstrapPayload($request, $user);
+
+        $payload = $request->session()->get('telephony_bootstrap');
+        $this->assertSame('firstdialer', $payload['campaign']);
     }
 
     public function test_store_bootstrap_payload_applies_for_non_agent_roles_when_configured(): void
