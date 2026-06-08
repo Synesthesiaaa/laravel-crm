@@ -29,7 +29,10 @@ class CallController extends Controller
             'phone_code' => ['nullable', 'string', 'max:5'],
         ]);
 
-        $campaign = $request->query('campaign') ?: TelephonyCampaignResolver::forRequest($request);
+        $campaign = TelephonyCampaignResolver::resolveSelected(
+            $request,
+            is_string($request->query('campaign')) ? (string) $request->query('campaign') : null,
+        );
         $phoneNumber = $request->input('phone_number') ?: $request->query('phone_number') ?: $request->input('phone');
 
         if (empty($phoneNumber)) {
@@ -145,7 +148,10 @@ class CallController extends Controller
      */
     public function predictiveDial(Request $request): JsonResponse
     {
-        $campaign = $request->query('campaign') ?: TelephonyCampaignResolver::forRequest($request);
+        $campaign = TelephonyCampaignResolver::resolveSelected(
+            $request,
+            is_string($request->query('campaign')) ? (string) $request->query('campaign') : null,
+        );
         $result = $this->predictiveDialer->dialNext($request->user(), $campaign);
 
         if (! $result->success) {

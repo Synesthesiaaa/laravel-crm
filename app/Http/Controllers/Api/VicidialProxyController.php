@@ -18,7 +18,10 @@ class VicidialProxyController extends Controller
         if (empty($action)) {
             return response()->json(['success' => false, 'message' => 'Missing action']);
         }
-        $campaign = $request->query('campaign') ?: TelephonyCampaignResolver::forRequest($request);
+        $campaign = TelephonyCampaignResolver::resolveSelected(
+            $request,
+            is_string($request->query('campaign')) ? (string) $request->query('campaign') : null,
+        );
 
         // Dial actions: delegate to CallOrchestrationService (creates session, state machine)
         $dialActions = ['originate', 'external_dial'];

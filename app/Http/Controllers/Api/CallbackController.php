@@ -70,7 +70,7 @@ class CallbackController extends Controller
     {
         $explicit = $validated['campaign'] ?? $request->input('campaign');
 
-        return TelephonyCampaignResolver::resolve(
+        return TelephonyCampaignResolver::resolveSelected(
             $request,
             is_string($explicit) && $explicit !== '' ? $explicit : null,
         );

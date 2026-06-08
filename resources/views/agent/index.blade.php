@@ -419,7 +419,7 @@ window.agentScreen = function() {
             this._shortcutHandlers.forEach(([eventName, handler]) => window.addEventListener(eventName, handler));
         },
 
-        /** CRM login campaign — hopper, forms, dispositions, lead tools. */
+        /** CRM login campaign — retained only for page/session context. */
         destroy() {
             this._destroyed = true;
 
@@ -615,7 +615,7 @@ window.agentScreen = function() {
 
             try {
                 const params = {
-                    campaign: this.crmCampaign(),
+                    campaign: this.telephonyCampaign(),
                 };
                 if (leadId) {
                     params.lead_id = leadId;
@@ -1017,7 +1017,7 @@ window.agentScreen = function() {
             try {
                 const res = await window.axios.get('/api/leads/search', {
                     params: {
-                        campaign: this.crmCampaign(),
+                        campaign: this.telephonyCampaign(),
                         phone_number: this.leadTools.phone_search,
                     },
                 });
@@ -1030,7 +1030,7 @@ window.agentScreen = function() {
         async loadLeadInfo() {
             if (!this.featureEnabled('lead_tools')) return;
             try {
-                const params = { campaign: this.crmCampaign() };
+                const params = { campaign: this.telephonyCampaign() };
                 if (this.leadId) params.lead_id = this.leadId;
                 if (!this.leadId && this.leadTools.phone_search) params.phone_number = this.leadTools.phone_search;
                 const res = await window.axios.get('/api/leads/info', { params });
@@ -1045,7 +1045,7 @@ window.agentScreen = function() {
             if (!this.leadId) return;
             try {
                 const res = await window.axios.post('/api/leads/switch', {
-                    campaign: this.crmCampaign(),
+                    campaign: this.telephonyCampaign(),
                     lead_id: this.leadId,
                 });
                 this.leadTools.raw = res.data?.data?.raw_response || '';
@@ -1131,7 +1131,7 @@ window.agentScreen = function() {
             if (!this.dispositionCode) return;
             this.savingDisposition = true;
             this.dispositionError = null;
-            const campaign = this.crmCampaign();
+            const campaign = this.telephonyCampaign();
             try {
                 await window.axios.post('/api/disposition/save', {
                     campaign_code:    campaign,
@@ -1257,7 +1257,7 @@ window.agentScreen = function() {
             });
             try {
                 await window.axios.post('/api/agent/capture', {
-                    campaign_code: this.crmCampaign(),
+                    campaign_code: this.telephonyCampaign(),
                     call_session_id: this.sessionId,
                     lead_id: this.leadId,
                     phone_number: this.phoneNumber,
