@@ -175,7 +175,9 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
                 widget_embed: '1',
                 _wfs: String(frameKey || 0),
             });
-            return `/forms/${encodeURIComponent(String(formType || ''))}?${params.toString()}`;
+            const baseUrl = document.querySelector('meta[name="crm-base-url"]')?.getAttribute('content')?.trim() || '';
+
+            return `${baseUrl}/forms/${encodeURIComponent(String(formType || ''))}?${params.toString()}`;
         },
 
         syncFrameSrc(formType, campaign, options = {}) {

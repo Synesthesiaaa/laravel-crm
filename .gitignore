@@ -55,3 +55,5 @@ AGENTS.md
 .cursor/skills/laravel-best-practices/rules/advanced-queries.md
 .cursor/mcp.json
 composer.lock
+.playwright-mcp/page-2026-06-08T21-50-16-139Z.yml
+/.playwright-mcp

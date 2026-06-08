@@ -168,6 +168,8 @@ Route::middleware(['auth', 'campaign'])->group(function () {
             Route::post('forms', [\App\Http\Controllers\Admin\FormsController::class, 'store'])->name('forms.store');
             Route::put('forms/{form}', [\App\Http\Controllers\Admin\FormsController::class, 'update'])->name('forms.update');
             Route::post('forms/delete', [\App\Http\Controllers\Admin\FormsController::class, 'destroy'])->name('forms.destroy');
+            Route::get('lead-hopper', [\App\Http\Controllers\Admin\LeadHopperController::class, 'index'])->name('lead-hopper.index');
+            Route::post('lead-hopper/import', [\App\Http\Controllers\Admin\LeadHopperController::class, 'import'])->name('lead-hopper.import');
             Route::get('agent-screen', [\App\Http\Controllers\Admin\AgentScreenController::class, 'index'])->name('agent-screen.index');
             Route::post('agent-screen', [\App\Http\Controllers\Admin\AgentScreenController::class, 'store'])->name('agent-screen.store');
             Route::put('agent-screen/{field}', [\App\Http\Controllers\Admin\AgentScreenController::class, 'update'])->name('agent-screen.update');

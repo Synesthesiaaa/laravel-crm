@@ -17,6 +17,18 @@
     <x-page-header title="Supervisor Dashboard" description="Real-time agent monitoring."
         :breadcrumbs="['Admin' => route('admin.dashboard'), 'Supervisor' => null]" />
 
+    <div x-show="errorMessage"
+         x-transition.opacity
+         class="rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/5 px-4 py-3">
+        <div class="flex items-start justify-between gap-3">
+            <div>
+                <p class="text-sm font-semibold text-[var(--color-danger)]">Live supervisor data unavailable</p>
+                <p class="text-xs text-[var(--color-on-surface-muted)] mt-1" x-text="errorMessage"></p>
+            </div>
+            <button type="button" class="btn-secondary text-xs" @click="refresh()">Retry</button>
+        </div>
+    </div>
+
     {{-- Wallboard KPIs --}}
     <div class="wallboard animate-stagger">
         <div class="wallboard-metric">
@@ -98,12 +110,15 @@
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">
                 Agent Status — <span x-text="agents.length + ' agents'" class="text-[var(--color-primary)]"></span>
             </h3>
-            <button @click="refresh()" class="btn-secondary text-xs">
-                <span class="inline-flex" :class="loading ? 'animate-spin' : ''">
-                    <x-icon name="arrow-path" class="w-3.5 h-3.5" />
-                </span>
-                Refresh
-            </button>
+            <div class="flex items-center gap-3">
+                <span class="text-xs text-[var(--color-on-surface-dim)]" x-show="lastRefreshAt" x-text="'Updated ' + lastRefreshAt"></span>
+                <button @click="refresh()" class="btn-secondary text-xs">
+                    <span class="inline-flex" :class="loading ? 'animate-spin' : ''">
+                        <x-icon name="arrow-path" class="w-3.5 h-3.5" />
+                    </span>
+                    Refresh
+                </button>
+            </div>
         </div>
         <template x-if="loading && agents.length === 0">
             <div class="agent-status-grid">
@@ -276,6 +291,8 @@ window.supervisorDashboard = function() {
             text: '',
             confetti: false,
         },
+        errorMessage: '',
+        lastRefreshAt: '',
 
         async init() {
             await this.refresh();
@@ -297,39 +314,25 @@ window.supervisorDashboard = function() {
 
         async refresh() {
             this.loading = true;
+            this.errorMessage = '';
             try {
                 const res = await window.axios.get('/api/supervisor/agents');
-                this.agents = res.data.agents ?? this.mockAgents();
-                this.stats  = res.data.stats  ?? this.mockStats();
-            } catch {
-                // Use mock data in dev / when API not available
-                this.agents = this.mockAgents();
-                this.stats  = this.mockStats();
+                this.agents = res.data.agents ?? [];
+                this.stats  = res.data.stats  ?? {
+                    agentsOnline: 0, callsWaiting: 0, callsActive: 0,
+                    avgWaitTime: 0, todayTotal: 0, slaPercent: 0,
+                };
+                this.lastRefreshAt = new Date().toLocaleTimeString();
+            } catch (e) {
+                this.agents = [];
+                this.stats = {
+                    agentsOnline: 0, callsWaiting: 0, callsActive: 0,
+                    avgWaitTime: 0, todayTotal: 0, slaPercent: 0,
+                };
+                this.errorMessage = e.response?.data?.message || 'The supervisor API could not be reached. Check database, auth, and telephony services.';
             } finally {
                 this.loading = false;
             }
-        },
-
-        mockAgents() {
-            const statuses = [
-                { s: 'available', l: 'Available' },
-                { s: 'oncall',    l: 'On Call' },
-                { s: 'break',     l: 'On Break' },
-                { s: 'wrapup',    l: 'Wrap-up' },
-                { s: 'offline',   l: 'Offline' },
-            ];
-            return [
-                { id: 1, name: 'Maria Santos',  status: 'oncall',    status_label: 'On Call',   calls_today: 14, avg_handle: 185, dispositions: 12, since: '08:00', current_call: '+6391234' },
-                { id: 2, name: 'Juan Cruz',     status: 'available', status_label: 'Available', calls_today: 9,  avg_handle: 210, dispositions: 8,  since: '08:30', current_call: null },
-                { id: 3, name: 'Ana Reyes',     status: 'break',     status_label: 'Break',     calls_today: 11, avg_handle: 172, dispositions: 10, since: '09:00', current_call: null },
-                { id: 4, name: 'Pedro Bautista',status: 'wrapup',    status_label: 'Wrap-up',   calls_today: 7,  avg_handle: 195, dispositions: 6,  since: '09:15', current_call: null },
-                { id: 5, name: 'Rosa Mendoza',  status: 'oncall',    status_label: 'On Call',   calls_today: 16, avg_handle: 165, dispositions: 15, since: '08:00', current_call: '+6398765' },
-                { id: 6, name: 'Marco Garcia',  status: 'offline',   status_label: 'Offline',   calls_today: 0,  avg_handle: 0,   dispositions: 0,  since: '—',     current_call: null },
-            ];
-        },
-
-        mockStats() {
-            return { agentsOnline: 5, callsWaiting: 3, callsActive: 2, avgWaitTime: 22, todayTotal: 57, slaPercent: 88 };
         },
 
         async monitorAgent(agent) {
@@ -378,6 +381,9 @@ window.supervisorDashboard = function() {
 
             const names   = this.agents.filter(a => a.status !== 'offline').map(a => a.name.split(' ')[0]);
             const callsArr= this.agents.filter(a => a.status !== 'offline').map(a => a.calls_today);
+            const currentHour = new Date().getHours();
+            const hourlyLabels = Array.from({ length: 12 }, (_, i) => String((currentHour - 11 + i + 24) % 24).padStart(2, '0'));
+            const hourlyData = hourlyLabels.map((hour) => Number(hour) === currentHour ? Number(this.stats.todayTotal || 0) : 0);
 
             if (this.tab === 'performance' && document.getElementById('chart-agent-perf')) {
                 document.getElementById('chart-agent-perf').innerHTML = '';
@@ -394,15 +400,14 @@ window.supervisorDashboard = function() {
                     theme: { mode: isDark ? 'dark' : 'light' },
                 }).render();
 
-                // Hourly distribution (mock)
                 document.getElementById('chart-hourly').innerHTML = '';
                 new ApexCharts(document.getElementById('chart-hourly'), {
-                    series: [{ name: 'Calls', data: [3,5,8,12,15,18,14,11,9,7,4,2] }],
+                    series: [{ name: 'Calls', data: hourlyData }],
                     chart: { type: 'area', height: 260, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
                     colors: ['#3b82f6'],
                     fill: { type: 'gradient', gradient: { opacityFrom: .3, opacityTo: .03 } },
                     stroke: { curve: 'smooth', width: 2 },
-                    xaxis: { categories: ['08','09','10','11','12','13','14','15','16','17','18','19'], labels: { style: { colors: textColor, fontSize: '11px' } }, axisBorder: { show: false } },
+                    xaxis: { categories: hourlyLabels, labels: { style: { colors: textColor, fontSize: '11px' } }, axisBorder: { show: false } },
                     yaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
                     grid: { borderColor: gridColor, strokeDashArray: 3 },
                     tooltip: { theme: isDark ? 'dark' : 'light' },
@@ -413,8 +418,7 @@ window.supervisorDashboard = function() {
 
             if (this.tab === 'wallboard' && document.getElementById('chart-realtime')) {
                 document.getElementById('chart-realtime').innerHTML = '';
-                // Real-time sparkline (mock last 20 mins)
-                const sparkData = Array.from({length:20}, () => Math.floor(Math.random() * 8 + 2));
+                const sparkData = Array.from({length:20}, (_, i) => i === 19 ? Number(this.stats.callsActive || 0) : 0);
                 new ApexCharts(document.getElementById('chart-realtime'), {
                     series: [{ name: 'Calls/min', data: sparkData }],
                     chart: { type: 'line', height: 200, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif', animations: { enabled: true, dynamicAnimation: { speed: 350 } } },

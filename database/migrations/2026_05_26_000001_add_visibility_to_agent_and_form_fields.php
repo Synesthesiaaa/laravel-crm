@@ -9,23 +9,30 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('agent_screen_fields', function (Blueprint $table) {
-            $table->json('visibility')->nullable()->after('is_required');
+            if (! Schema::hasColumn('agent_screen_fields', 'visibility')) {
+                $table->json('visibility')->nullable()->after('is_required');
+            }
         });
 
         Schema::table('form_fields', function (Blueprint $table) {
-            $table->json('visibility')->nullable()->after('field_width');
+            if (! Schema::hasColumn('form_fields', 'visibility')) {
+                $table->json('visibility')->nullable()->after('field_width');
+            }
         });
     }
 
     public function down(): void
     {
         Schema::table('agent_screen_fields', function (Blueprint $table) {
-            $table->dropColumn('visibility');
+            if (Schema::hasColumn('agent_screen_fields', 'visibility')) {
+                $table->dropColumn('visibility');
+            }
         });
 
         Schema::table('form_fields', function (Blueprint $table) {
-            $table->dropColumn('visibility');
+            if (Schema::hasColumn('form_fields', 'visibility')) {
+                $table->dropColumn('visibility');
+            }
         });
     }
 };
-

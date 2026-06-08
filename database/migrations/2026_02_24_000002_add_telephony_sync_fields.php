@@ -15,17 +15,19 @@ return new class extends Migration
             }
         });
 
-        Schema::create('unmatched_ami_events', function (Blueprint $table) {
-            $table->id();
-            $table->string('event', 50);
-            $table->string('linkedid', 100)->nullable()->index();
-            $table->string('channel', 150)->nullable()->index();
-            $table->string('extracted_extension', 50)->nullable();
-            $table->json('payload');
-            $table->boolean('processed')->default(false)->index();
-            $table->timestamp('received_at');
-            $table->timestamps();
-        });
+        if (! Schema::hasTable('unmatched_ami_events')) {
+            Schema::create('unmatched_ami_events', function (Blueprint $table) {
+                $table->id();
+                $table->string('event', 50);
+                $table->string('linkedid', 100)->nullable()->index();
+                $table->string('channel', 150)->nullable()->index();
+                $table->string('extracted_extension', 50)->nullable();
+                $table->json('payload');
+                $table->boolean('processed')->default(false)->index();
+                $table->timestamp('received_at');
+                $table->timestamps();
+            });
+        }
     }
 
     public function down(): void

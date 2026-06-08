@@ -3,6 +3,12 @@ import axios from 'axios';
 window.axios = axios;
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 
+const baseUrlMeta = document.querySelector('meta[name="crm-base-url"]');
+const baseUrl = baseUrlMeta?.getAttribute('content')?.trim();
+if (baseUrl) {
+    window.axios.defaults.baseURL = baseUrl;
+}
+
 // Read CSRF token from meta tag
 const tokenMeta = document.querySelector('meta[name="csrf-token"]');
 if (tokenMeta) {

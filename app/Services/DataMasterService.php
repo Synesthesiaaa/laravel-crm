@@ -6,6 +6,7 @@ use App\Contracts\Repositories\FormFieldRepositoryInterface;
 use App\Support\PercentageValue;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class DataMasterService

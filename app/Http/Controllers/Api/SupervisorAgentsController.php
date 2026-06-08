@@ -88,7 +88,7 @@ class SupervisorAgentsController extends Controller
         });
 
         $stats = [
-            'agentsOnline' => $agents->whereIn('status', ['available', 'on_call'])->count(),
+            'agentsOnline' => $agents->whereIn('status', ['available', 'oncall'])->count(),
             'callsWaiting' => 0,
             'callsActive' => $activeCalls->count(),
             'avgWaitTime' => 0,
