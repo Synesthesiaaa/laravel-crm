@@ -45,7 +45,7 @@ class FormSubmissionService
                     'date' => $date,
                     'request_id' => (string) Str::ulid(),
                 ]);
-                $prepared = $this->prepareFormRow($fields, $merged, $agent);
+                $prepared = $this->prepareFormRow($fields, $merged, $agent, $tableName);
                 if ($prepared === null) {
                     throw new \RuntimeException('Invalid submission data.');
                 }
@@ -72,7 +72,7 @@ class FormSubmissionService
     }
 
     /** @return array<string, mixed>|null */
-    public function prepareFormRow(Collection $fields, array $data, string $agent): ?array
+    public function prepareFormRow(Collection $fields, array $data, string $agent, ?string $tableName = null): ?array
     {
         $date = $this->sanitizeDate($data['date'] ?? '');
         $requestId = trim((string) ($data['request_id'] ?? ''));
@@ -125,7 +125,9 @@ class FormSubmissionService
                 $value = preg_replace('/[^0-9.]/', '', (string) $value);
             }
             if ($field->field_type === 'percentage') {
-                $value = PercentageValue::normalize($value);
+                $value = $this->storesPercentageAsNumeric($tableName, $colName)
+                    ? PercentageValue::numeric($value)
+                    : PercentageValue::normalize($value);
             }
             if ($field->is_required && (string) $value === '') {
                 throw new \InvalidArgumentException("Field '{$colName}' is required.");
@@ -241,5 +243,27 @@ class FormSubmissionService
         }
 
         return '';
+    }
+
+    private function storesPercentageAsNumeric(?string $tableName, string $columnName): bool
+    {
+        if ($tableName === null || ! Schema::hasTable($tableName) || ! Schema::hasColumn($tableName, $columnName)) {
+            return false;
+        }
+
+        try {
+            return in_array(Schema::getColumnType($tableName, $columnName), [
+                'bigint',
+                'decimal',
+                'double',
+                'float',
+                'integer',
+                'numeric',
+                'smallint',
+                'tinyint',
+            ], true);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

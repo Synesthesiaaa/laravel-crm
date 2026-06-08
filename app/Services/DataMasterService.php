@@ -142,6 +142,28 @@ class DataMasterService
         return DB::table($tableName)->where('id', $id)->update($updates) >= 0;
     }
 
+    public function storesPercentageAsNumeric(string $tableName, string $columnName): bool
+    {
+        if (! Schema::hasTable($tableName) || ! Schema::hasColumn($tableName, $columnName)) {
+            return false;
+        }
+
+        try {
+            return in_array(Schema::getColumnType($tableName, $columnName), [
+                'bigint',
+                'decimal',
+                'double',
+                'float',
+                'integer',
+                'numeric',
+                'smallint',
+                'tinyint',
+            ], true);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     public function deleteRecord(string $tableName, int $id, array $allowedTables): bool
     {
         if (! $this->isTableAllowed($tableName, $allowedTables)) {

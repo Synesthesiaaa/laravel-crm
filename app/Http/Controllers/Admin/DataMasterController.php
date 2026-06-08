@@ -112,9 +112,13 @@ class DataMasterController extends Controller
                 continue;
             }
             if ($request->has($col)) {
-                $updates[$col] = in_array($col, $percentageColumns, true)
-                    ? PercentageValue::normalize($request->input($col))
-                    : $request->input($col);
+                if (in_array($col, $percentageColumns, true)) {
+                    $updates[$col] = $this->dataMasterService->storesPercentageAsNumeric($tableName, $col)
+                        ? PercentageValue::numeric($request->input($col))
+                        : PercentageValue::normalize($request->input($col));
+                } else {
+                    $updates[$col] = $request->input($col);
+                }
             }
         }
 
