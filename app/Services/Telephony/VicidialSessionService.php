@@ -154,6 +154,21 @@ class VicidialSessionService
         ?string $vdLoginOverride = null,
         ?string $vdPassOverride = null,
     ): OperationResult {
+        $session = $this->getOrCreateSession($user, $campaign);
+        if (in_array($session->session_status, self::USABLE_STATUSES, true)) {
+            return OperationResult::success([
+                'session' => $session->fresh(),
+                'iframe_url' => $session->last_iframe_url,
+                'login_state' => $session->session_status,
+                'already_active' => true,
+                'iframe_alignment' => [
+                    'vd_login' => (string) ($user->vici_user ?? ''),
+                    'vd_campaign' => $campaign,
+                    'phone_login' => (string) ($session->phone_login ?? $user->extension ?? ''),
+                ],
+            ], 'VICIdial session is already active.');
+        }
+
         // Validate VICIdial credentials are present.
         $vd = $this->resolveEffectiveVdCredentials($user, $vdLoginOverride, $vdPassOverride);
         if ($vd['vd_login'] === '' || $vd['vd_pass'] === '') {
@@ -173,7 +188,6 @@ class VicidialSessionService
         }
 
         // Mark session as pending while the iframe login runs.
-        $session = $this->getOrCreateSession($user, $campaign);
         $session->fill([
             'phone_login' => $effectivePhoneLogin,
             'session_status' => 'login_pending',

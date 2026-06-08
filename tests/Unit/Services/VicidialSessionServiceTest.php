@@ -144,6 +144,32 @@ class VicidialSessionServiceTest extends TestCase
         ]);
     }
 
+    public function test_login_does_not_reset_already_active_session_to_pending(): void
+    {
+        VicidialAgentSession::factory()->create([
+            'user_id' => $this->user->id,
+            'campaign_code' => 'testcamp',
+            'phone_login' => '6001',
+            'session_status' => 'ready',
+            'last_iframe_url' => 'https://vici.example.com/agc/vicidial.php',
+        ]);
+
+        $this->agentApiMock->shouldNotReceive('execute');
+        $this->nonAgentApiMock->shouldNotReceive('getServerForCampaign');
+
+        $result = $this->service->loginAgent($this->user, 'testcamp');
+
+        $this->assertTrue($result->success);
+        $this->assertSame('ready', $result->data['login_state'] ?? null);
+        $this->assertTrue($result->data['already_active'] ?? false);
+        $this->assertStringNotContainsString('Awaiting session confirmation', (string) $result->message);
+        $this->assertDatabaseHas('vicidial_agent_sessions', [
+            'user_id' => $this->user->id,
+            'campaign_code' => 'testcamp',
+            'session_status' => 'ready',
+        ]);
+    }
+
     public function test_login_uses_vd_overrides_for_agent_api_and_iframe_alignment(): void
     {
         $this->agentApiMock

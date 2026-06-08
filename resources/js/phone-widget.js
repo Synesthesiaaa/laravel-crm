@@ -7,6 +7,7 @@ const HEADER_CHROME_HEIGHT = 40;
 const SPLITTER_HEIGHT = 8;
 const MIN_CONTROLS_HEIGHT = 140;
 const MIN_IFRAME_HEIGHT = 200;
+const CONTINUING_SESSION_STATUSES = ['login_pending', 'ready', 'paused', 'in_call'];
 
 function getResizeMultipliers(corner) {
     switch (corner) {
@@ -444,6 +445,8 @@ window.phoneWidget = function phoneWidget(boot = {}) {
 
             try {
                 let reconnected = false;
+                const localSessionStatus = viciStatusData?.local_session?.session_status || '';
+                const hasContinuingLocalSession = CONTINUING_SESSION_STATUSES.includes(localSessionStatus);
                 if (window.VicidialSession?.maybeReconnectPending) {
                     reconnected = await window.VicidialSession.maybeReconnectPending(
                         viciStatusData?.local_session,
@@ -456,7 +459,8 @@ window.phoneWidget = function phoneWidget(boot = {}) {
                     !reconnected &&
                     bootstrap?.campaign &&
                     window.VicidialSession &&
-                    !Alpine.store('vicidial').loggedIn
+                    !Alpine.store('vicidial').loggedIn &&
+                    !hasContinuingLocalSession
                 ) {
                     await window.VicidialSession.login({
                         campaign: bootstrap.campaign,
