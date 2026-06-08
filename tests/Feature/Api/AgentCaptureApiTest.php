@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api;
 
+use App\Models\AgentCaptureRecord;
 use App\Models\AgentScreenField;
 use App\Models\CallSession;
 use App\Models\User;
@@ -104,6 +105,50 @@ class AgentCaptureApiTest extends TestCase
             'lead_id' => '123',
             'phone_number' => '15551234567',
         ]);
+    }
+
+    public function test_capture_store_normalizes_percentage_fields_for_storage_and_vicidial_push(): void
+    {
+        $user = User::factory()->create(['role' => 'Agent']);
+
+        AgentScreenField::create([
+            'campaign_code' => 'mbsales',
+            'field_key' => 'discount_rate',
+            'vici_field' => 'comments',
+            'direction' => 'post',
+            'field_label' => 'Discount Rate',
+            'field_type' => 'percentage',
+            'field_order' => 1,
+            'field_width' => 'full',
+        ]);
+
+        $leadService = Mockery::mock(LeadService::class);
+        $leadService->shouldReceive('updateFields')
+            ->once()
+            ->with(
+                Mockery::on(fn ($authUser) => (int) $authUser->id === (int) $user->id),
+                'mbsales',
+                Mockery::on(fn ($payload) => is_array($payload)
+                    && ($payload['lead_id'] ?? null) === '123'
+                    && ($payload['comments'] ?? null) === '12.5%'),
+            )
+            ->andReturn(OperationResult::success(['raw_response' => 'SUCCESS']));
+        $this->instance(LeadService::class, $leadService);
+
+        $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->postJson('/api/agent/capture', [
+                'campaign_code' => 'mbsales',
+                'lead_id' => '123',
+                'capture_data' => [
+                    'discount_rate' => '12.5',
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $record = AgentCaptureRecord::query()->where('campaign_code', 'mbsales')->firstOrFail();
+        $this->assertSame(['discount_rate' => '12.5%'], $record->capture_data);
     }
 
     public function test_capture_rejects_call_session_owned_by_another_agent(): void

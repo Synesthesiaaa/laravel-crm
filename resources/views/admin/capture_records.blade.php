@@ -89,7 +89,13 @@
                 <td class="font-mono text-sm">{{ $record->lead_id ?? '-' }}</td>
                 <td class="font-mono text-sm">{{ $record->phone_number ?? '-' }}</td>
                 @foreach($fields as $field)
-                    <td>{{ $captureData[$field->field_key] ?? '-' }}</td>
+                    <td>
+                        @if(($field->field_type ?? '') === 'percentage')
+                            {{ \App\Support\PercentageValue::display($captureData[$field->field_key] ?? null) ?: '-' }}
+                        @else
+                            {{ $captureData[$field->field_key] ?? '-' }}
+                        @endif
+                    </td>
                 @endforeach
                 <td>
                     <div class="table-actions" x-data="{ async del(form) {

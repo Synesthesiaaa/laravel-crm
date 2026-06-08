@@ -7,6 +7,7 @@ use App\Models\AgentCaptureRecord;
 use App\Models\AgentScreenField;
 use App\Services\Telephony\LeadService;
 use App\Services\Telephony\TelephonyLogger;
+use App\Support\PercentageValue;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -41,13 +42,15 @@ class AgentCaptureController extends Controller
         $campaign = $request->input('campaign_code');
         $fields = AgentScreenField::query()
             ->forCampaign($campaign)
-            ->get(['field_key', 'vici_field', 'direction', 'is_required']);
-        $allowedKeys = $fields->pluck('field_key')->toArray();
+            ->get(['field_key', 'vici_field', 'field_type', 'direction', 'is_required']);
+        $fieldsByKey = $fields->keyBy('field_key');
+        $allowedKeys = $fieldsByKey->keys()->toArray();
 
         $captureData = [];
         foreach ($request->input('capture_data', []) as $key => $value) {
             if (in_array($key, $allowedKeys, true)) {
-                $captureData[$key] = is_string($value) ? $value : (string) $value;
+                $field = $fieldsByKey->get($key);
+                $captureData[$key] = $this->normalizeCaptureValue($value, (string) ($field->field_type ?? 'text'));
             }
         }
 
@@ -156,5 +159,14 @@ class AgentCaptureController extends Controller
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function normalizeCaptureValue(mixed $value, string $fieldType): string
+    {
+        if ($fieldType === 'percentage') {
+            return PercentageValue::normalize($value) ?? '';
+        }
+
+        return is_string($value) ? $value : (string) $value;
     }
 }

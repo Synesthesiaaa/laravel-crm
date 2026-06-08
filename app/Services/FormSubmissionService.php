@@ -6,6 +6,7 @@ use App\Events\FormSubmitted;
 use App\Repositories\FormFieldRepository;
 use App\Repositories\FormSubmissionRepository;
 use App\Support\OperationResult;
+use App\Support\PercentageValue;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -123,6 +124,9 @@ class FormSubmissionService
             if ($field->field_type === 'number') {
                 $value = preg_replace('/[^0-9.]/', '', (string) $value);
             }
+            if ($field->field_type === 'percentage') {
+                $value = PercentageValue::normalize($value);
+            }
             if ($field->is_required && (string) $value === '') {
                 throw new \InvalidArgumentException("Field '{$colName}' is required.");
             }
@@ -213,6 +217,10 @@ class FormSubmissionService
                     case 'number':
                         // Most of your known numeric fields (amount/rate) use 2 decimals.
                         $table->decimal($colName, 10, 2)->nullable($nullable);
+
+                        break;
+                    case 'percentage':
+                        $table->string($colName, 50)->nullable($nullable);
 
                         break;
                     case 'text':

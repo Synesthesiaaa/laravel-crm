@@ -196,8 +196,16 @@ class CaptureRecordsAdminTest extends TestCase
             'field_order' => 2,
             'field_width' => 'full',
         ]);
+        AgentScreenField::create([
+            'campaign_code' => 'mbsales',
+            'field_key' => 'discount_rate',
+            'field_label' => 'Discount Rate',
+            'field_type' => 'percentage',
+            'field_order' => 3,
+            'field_width' => 'full',
+        ]);
 
-        AgentCaptureRecord::create([
+        $exportRecord = AgentCaptureRecord::create([
             'campaign_code' => 'mbsales',
             'lead_id' => 707,
             'phone_number' => '639144444444',
@@ -205,8 +213,10 @@ class CaptureRecordsAdminTest extends TestCase
             'capture_data' => [
                 'customer_email' => 'export@example.com',
                 'consent' => '1',
+                'discount_rate' => '12.5',
             ],
         ]);
+        $exportRecord->forceFill(['created_at' => '2026-05-18 09:00:00'])->save();
         AgentCaptureRecord::create([
             'campaign_code' => 'othercamp',
             'lead_id' => 808,
@@ -228,9 +238,10 @@ class CaptureRecordsAdminTest extends TestCase
         $response->assertOk()->assertStreamed();
 
         $content = $response->streamedContent();
-        $this->assertStringContainsString('id,campaign,created_at,agent,lead_id,phone_number,customer_email,consent', $content);
+        $this->assertStringContainsString('id,campaign,created_at,agent,lead_id,phone_number,customer_email,consent,discount_rate', $content);
         $this->assertStringContainsString('agent_export', $content);
         $this->assertStringContainsString('export@example.com', $content);
+        $this->assertStringContainsString('12.5%', $content);
         $this->assertStringNotContainsString('other@example.com', $content);
     }
 

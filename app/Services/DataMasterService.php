@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Contracts\Repositories\FormFieldRepositoryInterface;
+use App\Support\PercentageValue;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -63,6 +64,28 @@ class DataMasterService
             'columns' => $columns,
             'headers' => $headers,
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getPercentageColumns(string $campaignCode, string $formType): array
+    {
+        return $this->formFieldRepository
+            ->getFieldsForForm($campaignCode, $formType)
+            ->where('field_type', 'percentage')
+            ->pluck('field_name')
+            ->values()
+            ->all();
+    }
+
+    public function formatValue(string $column, mixed $value, array $percentageColumns): string
+    {
+        if (in_array($column, $percentageColumns, true)) {
+            return PercentageValue::display($value);
+        }
+
+        return (string) ($value ?? '');
     }
 
     /**

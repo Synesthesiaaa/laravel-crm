@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Services\CampaignService;
 use App\Services\DataMasterService;
+use App\Support\PercentageValue;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -34,6 +35,7 @@ class DataMasterController extends Controller
             $available = array_keys((array) $first);
         }
         $layout = $this->dataMasterService->getColumnLayout($campaign, $type, $available);
+        $percentageColumns = $this->dataMasterService->getPercentageColumns($campaign, $type);
 
         return view('admin.data_master', [
             'campaign' => $campaign,
@@ -44,6 +46,8 @@ class DataMasterController extends Controller
             'records' => $records,
             'columns' => $layout['columns'],
             'headers' => $layout['headers'],
+            'percentageColumns' => $percentageColumns,
+            'dataMasterService' => $this->dataMasterService,
         ]);
     }
 
@@ -66,6 +70,7 @@ class DataMasterController extends Controller
         }
 
         $layout = $this->dataMasterService->getColumnLayout($campaign, $type, array_keys((array) $record));
+        $percentageColumns = $this->dataMasterService->getPercentageColumns($campaign, $type);
 
         return view('admin.data_master_edit', [
             'campaign' => $campaign,
@@ -75,6 +80,8 @@ class DataMasterController extends Controller
             'record' => $record,
             'columns' => $layout['columns'],
             'headers' => $layout['headers'],
+            'percentageColumns' => $percentageColumns,
+            'dataMasterService' => $this->dataMasterService,
         ]);
     }
 
@@ -97,18 +104,21 @@ class DataMasterController extends Controller
 
         $skip = ['id', 'created_at', 'updated_at', '_table', '_id', '_token'];
         $columns = array_keys((array) $record);
+        $type = (string) $request->input('_type', '');
+        $percentageColumns = $this->dataMasterService->getPercentageColumns($campaign, $type);
         $updates = [];
         foreach ($columns as $col) {
             if (in_array($col, $skip, true)) {
                 continue;
             }
             if ($request->has($col)) {
-                $updates[$col] = $request->input($col);
+                $updates[$col] = in_array($col, $percentageColumns, true)
+                    ? PercentageValue::normalize($request->input($col))
+                    : $request->input($col);
             }
         }
 
         $this->dataMasterService->updateRecord($tableName, $id, $updates, $allowedTables);
-        $type = (string) $request->input('_type', '');
 
         return redirect()->route('admin.data-master.index', ['type' => $type])->with('success', 'Record updated.');
     }

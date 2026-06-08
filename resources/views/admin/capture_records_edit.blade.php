@@ -49,6 +49,9 @@
                         $fieldType = strtolower((string) ($field->field_type ?: 'text'));
                         $fieldName = 'capture_data['.$field->field_key.']';
                         $fieldValue = data_get(old('capture_data', []), $field->field_key, $captureData[$field->field_key] ?? null);
+                        if ($fieldType === 'percentage') {
+                            $fieldValue = \App\Support\PercentageValue::display($fieldValue);
+                        }
                         $isChecked = in_array(strtolower(trim((string) $fieldValue)), $checkedValues, true);
                         $options = is_array($field->options) ? $field->options : [];
                     @endphp

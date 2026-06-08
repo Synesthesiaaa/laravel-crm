@@ -65,6 +65,28 @@ class FormSubmissionServiceTest extends TestCase
         $this->assertEquals('639123456789', $result['phone']);
     }
 
+    public function test_prepare_form_row_normalizes_percentage_suffix_once(): void
+    {
+        $fields = collect([
+            (object) ['field_name' => 'discount_rate', 'field_type' => 'percentage', 'is_required' => false],
+            (object) ['field_name' => 'commission_rate', 'field_type' => 'percentage', 'is_required' => false],
+            (object) ['field_name' => 'empty_rate', 'field_type' => 'percentage', 'is_required' => false],
+        ]);
+
+        $result = $this->service->prepareFormRow($fields, [
+            'date' => '2026-01-15',
+            'request_id' => '260115001',
+            'discount_rate' => '12.5',
+            'commission_rate' => '8%',
+            'empty_rate' => '',
+        ], 'agent1');
+
+        $this->assertNotNull($result);
+        $this->assertSame('12.5%', $result['discount_rate']);
+        $this->assertSame('8%', $result['commission_rate']);
+        $this->assertNull($result['empty_rate']);
+    }
+
     public function test_prepare_form_row_encodes_multiselect_as_json(): void
     {
         $field = new FormField([

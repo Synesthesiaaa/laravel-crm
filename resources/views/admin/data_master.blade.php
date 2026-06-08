@@ -39,7 +39,7 @@
         @foreach($records as $row)
             <tr>
                 @foreach($columns as $col)
-                    <td>{{ is_object($row) ? ($row->$col ?? '') : ($row[$col] ?? '') }}</td>
+                    <td>{{ $dataMasterService->formatValue($col, is_object($row) ? ($row->$col ?? '') : ($row[$col] ?? ''), $percentageColumns ?? []) }}</td>
                 @endforeach
                 <td>
                     <div class="table-actions" x-data="{ async del(form) {

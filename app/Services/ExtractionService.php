@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\Form;
+use App\Models\FormField;
+use App\Support\PercentageValue;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -70,14 +73,60 @@ class ExtractionService
             // Stream rows to avoid loading the entire dataset into memory.
             // This prevents production 500 errors caused by timeouts/memory exhaustion.
             $headerWritten = false;
+            $percentageColumns = $this->percentageColumnsForTable($tableName);
             foreach ($query->cursor() as $row) {
                 if (! $headerWritten) {
                     fputcsv($handle, array_keys((array) $row));
                     $headerWritten = true;
                 }
-                fputcsv($handle, (array) $row);
+                fputcsv($handle, $this->formatCsvRow((array) $row, $percentageColumns));
                 fflush($handle);
             }
         }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function percentageColumnsForTable(string $tableName): array
+    {
+        $forms = Form::query()
+            ->where('table_name', $tableName)
+            ->get(['campaign_code', 'form_code']);
+
+        if ($forms->isEmpty()) {
+            return [];
+        }
+
+        return FormField::query()
+            ->where('field_type', 'percentage')
+            ->where(function ($query) use ($forms) {
+                foreach ($forms as $form) {
+                    $query->orWhere(function ($query) use ($form) {
+                        $query->where('campaign_code', $form->campaign_code)
+                            ->where('form_type', $form->form_code);
+                    });
+                }
+            })
+            ->pluck('field_name')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  list<string>  $percentageColumns
+     * @return array<string, mixed>
+     */
+    private function formatCsvRow(array $row, array $percentageColumns): array
+    {
+        foreach ($percentageColumns as $column) {
+            if (array_key_exists($column, $row)) {
+                $row[$column] = PercentageValue::display($row[$column]);
+            }
+        }
+
+        return $row;
     }
 }

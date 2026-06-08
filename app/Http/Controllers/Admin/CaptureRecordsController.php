@@ -6,11 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\AgentCaptureRecord;
 use App\Models\AgentScreenField;
 use App\Services\CampaignService;
+use App\Support\PercentageValue;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -83,7 +83,7 @@ class CaptureRecordsController extends Controller
         $fields = $this->fieldsForCampaign($campaign);
         $captureData = $this->sanitizeCaptureData(
             (array) ($validated['capture_data'] ?? []),
-            $fields
+            $fields,
         );
 
         $record->update([
@@ -131,10 +131,15 @@ class CaptureRecordsController extends Controller
 
         $fields = $this->fieldsForCampaign($campaign);
         $fieldKeys = $fields->pluck('field_key')->values()->all();
+        $percentageFieldKeys = $fields
+            ->where('field_type', 'percentage')
+            ->pluck('field_key')
+            ->values()
+            ->all();
         $filename = 'capture-records-'.$campaign.'-'.date('Y-m-d_His').'.csv';
         $query = $this->buildFilteredQuery($campaign, $request);
 
-        return response()->streamDownload(function () use ($query, $fieldKeys) {
+        return response()->streamDownload(function () use ($query, $fieldKeys, $percentageFieldKeys) {
             $out = fopen('php://output', 'w');
             $header = ['id', 'campaign', 'created_at', 'agent', 'lead_id', 'phone_number', ...$fieldKeys];
             fputcsv($out, $header);
@@ -151,7 +156,10 @@ class CaptureRecordsController extends Controller
                 ];
 
                 foreach ($fieldKeys as $fieldKey) {
-                    $row[] = isset($captureData[$fieldKey]) ? (string) $captureData[$fieldKey] : '';
+                    $value = $captureData[$fieldKey] ?? '';
+                    $row[] = in_array($fieldKey, $percentageFieldKeys, true)
+                        ? PercentageValue::display($value)
+                        : (string) $value;
                 }
 
                 fputcsv($out, $row);
@@ -162,7 +170,7 @@ class CaptureRecordsController extends Controller
     }
 
     /**
-     * @return array<string, string>  code => display name
+     * @return array<string, string> code => display name
      */
     private function campaignsList(): array
     {
@@ -251,7 +259,10 @@ class CaptureRecordsController extends Controller
                 continue;
             }
 
-            $filtered[(string) $key] = is_string($value) ? $value : (string) $value;
+            $field = $fields->firstWhere('field_key', (string) $key);
+            $filtered[(string) $key] = (string) ($field->field_type ?? 'text') === 'percentage'
+                ? (PercentageValue::normalize($value) ?? '')
+                : (is_string($value) ? $value : (string) $value);
         }
 
         return $filtered;
