@@ -5,6 +5,7 @@
 @section('header-title', 'Agent Screen')
 
 @section('content')
+<script type="application/json" id="agent-screen-telephony-features">@json($telephonyFeatures ?? [])</script>
 <div x-data="agentScreen()" x-init="init()" data-campaign="{{ session('campaign', 'mbsales') }}" data-user-id="{{ auth()->id() }}" class="flex flex-col lg:flex-row gap-6 h-full">
 
     {{-- WebSocket health banner --}}
@@ -334,7 +335,7 @@ window.agentScreen = function() {
         _lastDetectedLeadId: '',
         _shortcutHandlers: [],
         _destroyed: false,
-        features: @js($telephonyFeatures ?? []),
+        features: JSON.parse(document.getElementById('agent-screen-telephony-features')?.textContent || '[]'),
 
         init() {
             this._destroyed = false;
