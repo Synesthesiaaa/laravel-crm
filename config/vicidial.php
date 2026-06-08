@@ -50,6 +50,7 @@ return [
     'pause_codes' => ['BREAK', 'LUNCH', 'MEET', 'COACH', 'SYSTEM'],
     'session_status_poll_seconds' => (int) env('VICI_SESSION_STATUS_POLL_SECONDS', 15),
     'auto_bootstrap_on_crm_login' => env('VICI_AUTO_BOOTSTRAP', false),
+    'default_campaign' => env('VICI_DEFAULT_CAMPAIGN', 'mbsales'),
 
     /*
     |--------------------------------------------------------------------------
