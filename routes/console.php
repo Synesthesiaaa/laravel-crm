@@ -55,7 +55,13 @@ Schedule::job(new \App\Jobs\ReconcileCallStateJob)
     ->name('reconcile-call-state')
     ->withoutOverlapping(10);
 
-// Daily log rotation reminder (rotate logs older than configured days)
+// Surface recent failed application jobs as telephony alerts.
+Schedule::job(new \App\Jobs\ProcessTelephonyDeadLettersJob)
+    ->everyTenMinutes()
+    ->name('process-telephony-dead-letters')
+    ->withoutOverlapping(10);
+
+// Capture Horizon metrics for the dashboard.
 Schedule::command('horizon:snapshot')
     ->everyFiveMinutes()
     ->runInBackground()

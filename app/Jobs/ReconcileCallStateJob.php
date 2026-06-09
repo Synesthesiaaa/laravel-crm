@@ -10,6 +10,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
@@ -30,6 +31,18 @@ class ReconcileCallStateJob implements ShouldQueue
     {
         $this->forceStaleCallsToFailed($callStateService);
         $this->retryUnmatchedAmiEvents($callStateService, $mapping);
+    }
+
+    /**
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [
+            (new WithoutOverlapping('reconcile-call-state'))
+                ->releaseAfter(60)
+                ->expireAfter(600),
+        ];
     }
 
     protected function forceStaleCallsToFailed(CallStateService $callStateService): void

@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Services\Telephony\TelephonyAlertService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
@@ -17,6 +18,21 @@ use Illuminate\Support\Facades\DB;
 class ProcessTelephonyDeadLettersJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    /**
+     * @var array<int, string>
+     */
+    public const APPLICATION_QUEUES = ['imports', 'asterisk', 'telephony'];
+
+    /**
+     * @var array<int, class-string>
+     */
+    public const APPLICATION_JOB_CLASSES = [
+        ReconcileCallStateJob::class,
+        CallNoAnswerTimeoutJob::class,
+        AsteriskOriginateJob::class,
+        ImportLeadsCsvJob::class,
+    ];
 
     public int $tries = 1;
 
@@ -70,11 +86,7 @@ class ProcessTelephonyDeadLettersJob implements ShouldQueue
     {
         try {
             return DB::table('failed_jobs')
-                ->where(function ($q) {
-                    $q->where('queue', 'telephony')
-                        ->orWhere('payload', 'like', '%"displayName":"App\\\\Jobs\\\\ReconcileCallStateJob"%')
-                        ->orWhere('payload', 'like', '%Telephony%');
-                })
+                ->where(fn (Builder $query) => self::scopeApplicationFailedJobs($query))
                 ->where('failed_at', '>=', now()->subHours(24))
                 ->select('id', 'uuid', 'queue', 'exception', 'payload')
                 ->limit(50)
@@ -82,5 +94,16 @@ class ProcessTelephonyDeadLettersJob implements ShouldQueue
         } catch (\Throwable) {
             return collect();
         }
+    }
+
+    public static function scopeApplicationFailedJobs(Builder $query): Builder
+    {
+        return $query
+            ->whereIn('queue', self::APPLICATION_QUEUES)
+            ->orWhere(function (Builder $payloadQuery): void {
+                foreach (self::APPLICATION_JOB_CLASSES as $jobClass) {
+                    $payloadQuery->orWhere('payload', 'like', '%'.class_basename($jobClass).'%');
+                }
+            });
     }
 }

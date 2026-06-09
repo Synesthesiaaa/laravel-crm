@@ -2,6 +2,7 @@
 
 namespace App\Services\Telephony;
 
+use App\Jobs\ProcessTelephonyDeadLettersJob;
 use App\Models\CallSession;
 use App\Models\TelephonyAlert;
 use App\Models\UnmatchedAmiEvent;
@@ -82,7 +83,7 @@ class TelephonyHealthService
     {
         try {
             return DB::table('failed_jobs')
-                ->where('queue', 'telephony')
+                ->where(fn ($query) => ProcessTelephonyDeadLettersJob::scopeApplicationFailedJobs($query))
                 ->where('failed_at', '>=', now()->subHours(24))
                 ->count();
         } catch (\Throwable) {
