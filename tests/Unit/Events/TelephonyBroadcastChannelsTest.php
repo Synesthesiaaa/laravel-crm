@@ -4,6 +4,7 @@ namespace Tests\Unit\Events;
 
 use App\Events\InboundCallReceived;
 use App\Events\VicidialAgentEvent;
+use App\Models\User;
 use Tests\TestCase;
 
 class TelephonyBroadcastChannelsTest extends TestCase
@@ -33,6 +34,14 @@ class TelephonyBroadcastChannelsTest extends TestCase
         $this->assertContains('private-App.Models.User.42', $channels);
         $this->assertContains('private-agent.42', $channels);
         $this->assertContains('private-telephony.supervisor', $channels);
+    }
+
+    public function test_user_notifications_use_existing_frontend_private_channel(): void
+    {
+        $user = new User;
+        $user->id = 42;
+
+        $this->assertSame('App.Models.User.42', $user->receivesBroadcastNotificationsOn());
     }
 
     /**

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CrmCallHistory;
 use App\Models\User;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -34,6 +35,14 @@ class NotificationService
                 }
             })
             ->orderByDesc('created_at')
+            ->limit($limit)
+            ->get();
+    }
+
+    public function getDatabaseForUser(User $user, int $limit = 25): Collection
+    {
+        return $user->notifications()
+            ->latest()
             ->limit($limit)
             ->get();
     }
@@ -70,7 +79,7 @@ class NotificationService
 
     /**
      * @return array{
-     *     id: int,
+     *     id: int|string,
      *     source: string,
      *     title: string,
      *     message: string,
@@ -120,6 +129,45 @@ class NotificationService
             'campaign_code' => (string) $row->campaign_code,
             'form_type' => (string) $row->form_type,
             'status' => $status,
+        ];
+    }
+
+    /**
+     * @return array{
+     *     id: string,
+     *     source: string,
+     *     title: string,
+     *     message: string,
+     *     time: string,
+     *     created_at: string|null,
+     *     type: string,
+     *     read: bool,
+     *     recipient_type: string|null,
+     *     recipient: string|null,
+     *     sender_id: int|null,
+     *     sent_at: string|null,
+     *     show_confetti: bool,
+     * }
+     */
+    public function formatDatabaseNotification(DatabaseNotification $notification): array
+    {
+        $data = is_array($notification->data) ? $notification->data : [];
+        $createdAt = $notification->created_at;
+
+        return [
+            'id' => (string) $notification->id,
+            'source' => (string) ($data['source'] ?? 'Notification'),
+            'title' => (string) ($data['title'] ?? 'Update'),
+            'message' => (string) ($data['message'] ?? ''),
+            'time' => $createdAt?->diffForHumans() ?? '',
+            'created_at' => $createdAt?->toIso8601String(),
+            'type' => (string) ($data['type'] ?? 'info'),
+            'read' => $notification->read(),
+            'recipient_type' => isset($data['recipient_type']) ? (string) $data['recipient_type'] : null,
+            'recipient' => isset($data['recipient']) ? (string) $data['recipient'] : null,
+            'sender_id' => isset($data['sender_id']) ? (int) $data['sender_id'] : null,
+            'sent_at' => isset($data['sent_at']) ? (string) $data['sent_at'] : null,
+            'show_confetti' => (bool) ($data['show_confetti'] ?? false),
         ];
     }
 

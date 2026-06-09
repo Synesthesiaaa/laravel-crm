@@ -12,6 +12,8 @@ import TelephonyLogger from './telephony-logger';
 let _teardownAgentChannel = null;
 /** Skip redundant subscribe when userId + handler slots match the active subscription (duplicate inits). */
 let _agentChannelSig = null;
+let _teardownUserNotifications = null;
+let _userNotificationsSig = null;
 
 const key = import.meta.env.VITE_REVERB_APP_KEY || import.meta.env.VITE_PUSHER_APP_KEY;
 const broadcaster = import.meta.env.VITE_BROADCAST_DRIVER || 'reverb';
@@ -134,6 +136,47 @@ export function subscribeAgentChannel(userId, onCallStateChanged, onVicidialEven
     return teardown;
 }
 
+export function subscribeUserNotifications(userId, handler) {
+    if (!window.Echo || !userId || typeof handler !== 'function') {
+        TelephonyLogger.warn('TelephonyEcho', 'User notification subscription skipped', { has_echo: !!window.Echo, user_id: userId });
+        return () => {};
+    }
+
+    const sig = `${userId}`;
+    if (typeof _teardownUserNotifications === 'function' && _userNotificationsSig === sig) {
+        TelephonyLogger.debug('TelephonyEcho', 'User notification subscription unchanged (deduped)', { user_id: userId });
+        return _teardownUserNotifications;
+    }
+
+    if (typeof _teardownUserNotifications === 'function') {
+        try {
+            _teardownUserNotifications();
+        } catch (_) {}
+        _teardownUserNotifications = null;
+        _userNotificationsSig = null;
+    }
+
+    const channel = window.Echo.private(`App.Models.User.${userId}`);
+    channel.notification(handler);
+
+    TelephonyLogger.info('TelephonyEcho', 'Subscribed to user notifications', { user_id: userId });
+
+    _userNotificationsSig = sig;
+
+    const teardown = () => {
+        if (typeof channel.stopListeningForNotification === 'function') {
+            channel.stopListeningForNotification(handler);
+        }
+        if (_teardownUserNotifications === teardown) {
+            _teardownUserNotifications = null;
+            _userNotificationsSig = null;
+        }
+    };
+    _teardownUserNotifications = teardown;
+
+    return teardown;
+}
+
 /**
  * Subscribe to supervisor channel for telephony and disposition updates.
  */
@@ -180,6 +223,7 @@ export function joinAgentsPresence(handlers = {}) {
 window.TelephonyEcho = {
     initEcho,
     subscribeAgentChannel,
+    subscribeUserNotifications,
     subscribeSupervisorChannel,
     joinAgentsPresence,
     isBroadcastEnabled,

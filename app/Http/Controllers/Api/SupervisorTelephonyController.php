@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Notifications\SupervisorUserNotification;
 use App\Services\Telephony\TelephonyCampaignResolver;
 use App\Services\Telephony\VicidialProxyService;
 use Illuminate\Http\JsonResponse;
@@ -61,11 +62,50 @@ class SupervisorTelephonyController extends Controller
             'query' => $payload,
         ]);
 
+        $mirroredCount = 0;
+        if ($result['success']) {
+            $mirroredCount = $this->mirrorNotificationToLocalUsers(
+                sender: $request->user(),
+                recipientType: $validated['recipient_type'],
+                recipient: $validated['recipient'],
+                message: $payload['notification_text'],
+                showConfetti: $payload['show_confetti'] === 'Y',
+            );
+        }
+
         return response()->json([
             'success' => $result['success'],
             'message' => $result['message'],
             'raw_response' => $result['raw_response'],
+            'mirrored_count' => $mirroredCount,
         ], $result['success'] ? 200 : 422);
+    }
+
+    private function mirrorNotificationToLocalUsers(User $sender, string $recipientType, string $recipient, string $message, bool $showConfetti): int
+    {
+        $users = match ($recipientType) {
+            'USER' => User::query()
+                ->where('id', ctype_digit($recipient) ? (int) $recipient : 0)
+                ->orWhere('username', $recipient)
+                ->orWhere('vici_user', $recipient)
+                ->get(),
+            'CAMPAIGN' => User::query()
+                ->where('default_campaign', $recipient)
+                ->get(),
+            default => collect(),
+        };
+
+        $users->each(function (User $user) use ($sender, $recipientType, $recipient, $message, $showConfetti): void {
+            $user->notify(new SupervisorUserNotification(
+                message: $message,
+                recipientType: $recipientType,
+                recipient: $recipient,
+                senderId: (int) $sender->id,
+                showConfetti: $showConfetti,
+            ));
+        });
+
+        return $users->count();
     }
 
     protected function agentAction(Request $request, string $action, array $extra = []): JsonResponse

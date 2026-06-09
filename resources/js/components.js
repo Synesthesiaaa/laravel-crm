@@ -10,9 +10,11 @@ window.notificationDropdown = function() {
         items: [],
         unread: 0,
         loaded: false,
+        _unsubscribeNotifications: null,
         init() {
             // Badge count without opening the panel (runs again after soft-nav Alpine.initTree)
             this.refreshSummary();
+            this.subscribeRealtime();
         },
         toggle() {
             this.open = !this.open;
@@ -45,6 +47,54 @@ window.notificationDropdown = function() {
                 this.items = this.items.map(n => ({ ...n, read: true }));
                 this.unread = 0;
             } catch {}
+        },
+        subscribeRealtime() {
+            const userId = parseInt(document.body?.dataset.userId || '', 10);
+            const te = window.TelephonyEcho;
+            if (!userId || !te?.initEcho || !te.isBroadcastEnabled()) {
+                return;
+            }
+
+            te.initEcho();
+            this._unsubscribeNotifications = te.subscribeUserNotifications(userId, (notification) => {
+                this.receiveRealtime(notification);
+            });
+        },
+        receiveRealtime(notification) {
+            const item = this.formatRealtimeNotification(notification);
+            const isNew = !this.items.some(n => n.id === item.id);
+            this.items = [item, ...this.items.filter(n => n.id !== item.id)].slice(0, 25);
+            if (isNew) {
+                this.unread += 1;
+            }
+            this.loaded = true;
+
+            if (window.Alpine?.store?.('toast')) {
+                Alpine.store('toast').info(item.message || item.title || 'New notification', 5000, item.source || 'Notification');
+            }
+
+            if (item.show_confetti && typeof window.confetti === 'function') {
+                window.confetti({ particleCount: 80, spread: 60, origin: { y: 0.2 } });
+            }
+        },
+        formatRealtimeNotification(notification) {
+            const createdAt = notification.sent_at || notification.created_at || new Date().toISOString();
+
+            return {
+                id: notification.id || `${Date.now()}-${Math.random()}`,
+                source: notification.source || 'Notification',
+                title: notification.title || 'Update',
+                message: notification.message || '',
+                time: 'just now',
+                created_at: createdAt,
+                type: notification.type || 'info',
+                read: false,
+                recipient_type: notification.recipient_type || null,
+                recipient: notification.recipient || null,
+                sender_id: notification.sender_id || null,
+                sent_at: notification.sent_at || createdAt,
+                show_confetti: !!notification.show_confetti,
+            };
         },
     };
 };

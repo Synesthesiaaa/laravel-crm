@@ -28,7 +28,8 @@
 @endphp
 <body class="min-h-screen flex" style="margin: 0;" x-data
       data-campaign="{{ session('campaign', 'mbsales') }}"
-      data-telephony-campaign="{{ $layoutTelephonyCampaign }}">
+      data-telephony-campaign="{{ $layoutTelephonyCampaign }}"
+      data-user-id="{{ auth()->id() }}">
 
     {{-- Mobile sidebar overlay --}}
     <div x-show="$store.sidebar.mobileOpen"

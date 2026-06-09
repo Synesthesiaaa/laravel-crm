@@ -12,6 +12,8 @@ class MarkNotificationsReadController extends Controller
     public function __invoke(Request $request, NotificationService $notificationService): JsonResponse
     {
         $user = $request->user();
+        $user->unreadNotifications()->update(['read_at' => now()]);
+
         $ids = $notificationService->getForUser($user, 25)->pluck('id')->all();
         $notificationService->markIdsRead($user, $ids);
 
