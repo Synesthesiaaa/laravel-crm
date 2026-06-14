@@ -2,6 +2,11 @@ import axios from 'axios';
 
 window.axios = axios;
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+window.axios.defaults.timeout = 5000;
+window.axios.defaults.transitional = {
+    ...window.axios.defaults.transitional,
+    clarifyTimeoutError: true,
+};
 
 const baseUrlMeta = document.querySelector('meta[name="crm-base-url"]');
 const baseUrl = baseUrlMeta?.getAttribute('content')?.trim();

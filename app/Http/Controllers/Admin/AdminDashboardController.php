@@ -17,8 +17,9 @@ class AdminDashboardController extends Controller
 
     public function index(Request $request): View
     {
-        $campaign = $request->session()->get('campaign', 'mbsales');
-        $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['name' => $campaign, 'forms' => []];
+        $resolved = $this->campaignService->resolveCampaignForRequest($request);
+        $campaign = $resolved['code'];
+        $campaignConfig = $resolved['config'];
 
         return view('admin.dashboard', [
             'campaign' => $campaign,

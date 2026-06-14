@@ -119,6 +119,22 @@ class FieldLogicAdminTest extends TestCase
             ->assertDontSee('edit-field-logic', false);
     }
 
+    public function test_index_handles_campaign_with_no_forms(): void
+    {
+        Campaign::factory()->create([
+            'code' => 'emptycamp',
+            'name' => 'Empty Campaign',
+            'color' => '#111827',
+        ]);
+        app(CampaignService::class)->clearCampaignsCache();
+
+        $this->actingAs($this->superAdmin)
+            ->withSession(['campaign' => 'emptycamp', 'campaign_name' => 'Empty Campaign'])
+            ->get(route('admin.field-logic.index'))
+            ->assertOk()
+            ->assertSee('No active forms are configured for this campaign.');
+    }
+
     public function test_field_logic_update_from_edit_page_redirects_to_index(): void
     {
         Form::query()->create([

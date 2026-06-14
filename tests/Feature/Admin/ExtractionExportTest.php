@@ -107,6 +107,33 @@ class ExtractionExportTest extends TestCase
         $response->assertSessionHasErrors('end_date');
     }
 
+    public function test_stale_session_campaign_is_replaced_by_first_active_campaign(): void
+    {
+        $response = $this->actingAs($this->admin)
+            ->withSession(['campaign' => 'stale_campaign', 'campaign_name' => 'Stale Campaign'])
+            ->get(route('admin.extraction.index'));
+
+        $response->assertOk();
+        $response->assertSessionHas('campaign', 'mbsales');
+        $response->assertSee('EzyCash');
+    }
+
+    public function test_data_master_handles_campaign_with_no_forms(): void
+    {
+        Campaign::factory()->create([
+            'code' => 'emptycamp',
+            'name' => 'Empty Campaign',
+            'color' => '#111827',
+        ]);
+        app(\App\Services\CampaignService::class)->clearCampaignsCache();
+
+        $this->actingAs($this->admin)
+            ->withSession(['campaign' => 'emptycamp', 'campaign_name' => 'Empty Campaign'])
+            ->get(route('admin.data-master.index'))
+            ->assertOk()
+            ->assertSee('No active forms are configured for this campaign.');
+    }
+
     /**
      * @return array<string, string>
      */

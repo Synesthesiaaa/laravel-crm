@@ -161,6 +161,58 @@ class CaptureRecordsAdminTest extends TestCase
         $this->assertSame(['customer_email' => 'updated@example.com'], $record->capture_data);
     }
 
+    public function test_edit_returns_not_found_for_record_outside_selected_campaign(): void
+    {
+        Campaign::factory()->create([
+            'code' => 'othercamp',
+            'name' => 'Other Camp',
+            'color' => '#ef4444',
+        ]);
+
+        $record = AgentCaptureRecord::create([
+            'campaign_code' => 'othercamp',
+            'lead_id' => 404,
+            'phone_number' => '639144444444',
+            'agent' => 'agent_other',
+            'capture_data' => ['notes' => 'hidden record'],
+        ]);
+
+        $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->get(route('admin.capture-records.edit', ['record' => $record->id]))
+            ->assertNotFound();
+    }
+
+    public function test_update_returns_not_found_for_record_outside_selected_campaign(): void
+    {
+        Campaign::factory()->create([
+            'code' => 'othercamp',
+            'name' => 'Other Camp',
+            'color' => '#ef4444',
+        ]);
+
+        $record = AgentCaptureRecord::create([
+            'campaign_code' => 'othercamp',
+            'lead_id' => 505,
+            'phone_number' => '639155555555',
+            'agent' => 'agent_other',
+            'capture_data' => ['notes' => 'hidden record'],
+        ]);
+
+        $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->post(route('admin.capture-records.update', ['record' => $record->id]), [
+                'lead_id' => '999',
+                'phone_number' => '639199999999',
+                'capture_data' => ['notes' => 'changed'],
+            ])
+            ->assertNotFound();
+
+        $record->refresh();
+        $this->assertSame('505', (string) $record->lead_id);
+        $this->assertSame(['notes' => 'hidden record'], $record->capture_data);
+    }
+
     public function test_destroy_deletes_record(): void
     {
         $record = AgentCaptureRecord::create([
@@ -177,6 +229,63 @@ class CaptureRecordsAdminTest extends TestCase
             ->assertRedirect(route('admin.capture-records.index', ['campaign' => 'mbsales']));
 
         $this->assertDatabaseMissing('agent_capture_records', ['id' => $record->id]);
+    }
+
+    public function test_destroy_returns_not_found_for_record_outside_selected_campaign(): void
+    {
+        Campaign::factory()->create([
+            'code' => 'othercamp',
+            'name' => 'Other Camp',
+            'color' => '#ef4444',
+        ]);
+
+        $record = AgentCaptureRecord::create([
+            'campaign_code' => 'othercamp',
+            'lead_id' => 606,
+            'phone_number' => '639166666666',
+            'agent' => 'agent_other',
+            'capture_data' => ['notes' => 'hidden record'],
+        ]);
+
+        $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->post(route('admin.capture-records.destroy'), ['id' => $record->id])
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('agent_capture_records', ['id' => $record->id]);
+    }
+
+    public function test_agent_filter_treats_percent_as_literal_character(): void
+    {
+        AgentScreenField::create([
+            'campaign_code' => 'mbsales',
+            'field_key' => 'notes',
+            'field_label' => 'Notes',
+            'field_order' => 1,
+            'field_width' => 'full',
+        ]);
+
+        AgentCaptureRecord::create([
+            'campaign_code' => 'mbsales',
+            'lead_id' => 701,
+            'phone_number' => '639177777777',
+            'agent' => 'agent_percent_%',
+            'capture_data' => ['notes' => 'literal percent'],
+        ]);
+        AgentCaptureRecord::create([
+            'campaign_code' => 'mbsales',
+            'lead_id' => 702,
+            'phone_number' => '639188888888',
+            'agent' => 'agent_plain_text',
+            'capture_data' => ['notes' => 'wildcard should not match'],
+        ]);
+
+        $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->get(route('admin.capture-records.index', ['agent' => '%']))
+            ->assertOk()
+            ->assertSee('literal percent')
+            ->assertDontSee('wildcard should not match');
     }
 
     public function test_export_streams_csv_with_meta_and_capture_columns(): void

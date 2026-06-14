@@ -25,6 +25,7 @@ class TelephonyDiagnosticsTest extends TestCase
             'asterisk.secret' => '',
             'asterisk.webhook_secret' => 'ami-secret',
             'vicidial.events_webhook_secret' => 'vici-secret',
+            'vicidial.call_url_secret' => 'vici-secret',
             'broadcasting.default' => 'null',
         ]);
 

@@ -20,20 +20,22 @@ class ExtractionController extends Controller
 
     public function index(Request $request): View
     {
-        $campaign = $request->session()->get('campaign', 'mbsales');
-        $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['forms' => []];
+        $resolved = $this->campaignService->resolveCampaignForRequest($request);
+        $campaign = $resolved['code'];
+        $campaignConfig = $resolved['config'];
 
         return view('admin.extraction', [
             'campaign' => $campaign,
-            'campaignName' => $request->session()->get('campaign_name', 'CRM'),
+            'campaignName' => $campaignConfig['name'] ?? $campaign,
             'forms' => $campaignConfig['forms'] ?? [],
         ]);
     }
 
     public function export(ExtractionRequest $request): StreamedResponse|RedirectResponse
     {
-        $campaign = $request->session()->get('campaign', 'mbsales');
-        $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['forms' => []];
+        $resolved = $this->campaignService->resolveCampaignForRequest($request);
+        $campaign = $resolved['code'];
+        $campaignConfig = $resolved['config'];
         $dataType = $request->input('data_type', 'all');
         $tables = $this->extractionService->resolveTables($campaignConfig, $dataType);
 

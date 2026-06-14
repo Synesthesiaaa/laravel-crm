@@ -9,6 +9,10 @@
 
 <x-validation-errors />
 
+@if(empty($forms))
+    <x-alert type="warning" class="mb-4">No active forms are configured for this campaign.</x-alert>
+@endif
+
 <div class="md-card mb-4">
     <div class="p-4">
         <form method="GET" action="{{ route('admin.data-master.index') }}" class="flex flex-wrap items-end gap-4">
@@ -72,6 +76,13 @@
         <x-table.pagination :paginator="$records" />
     </x-slot:footer>
 </x-table.index>
+@elseif(empty($forms))
+<div class="md-card">
+    <div class="table-empty py-12">
+        <x-icon name="list-bullet" class="w-10 h-10 mx-auto mb-2" />
+        <p class="text-sm font-medium">No active forms are configured for this campaign.</p>
+    </div>
+</div>
 @else
 <div class="md-card">
     <div class="table-empty py-12">

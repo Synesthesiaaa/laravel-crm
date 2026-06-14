@@ -3,10 +3,13 @@
 namespace App\Providers;
 
 use App\Contracts\Repositories\DispositionRepositoryInterface;
+use App\Models\AgentScreenField;
 use App\Models\Campaign;
 use App\Models\DispositionCode;
 use App\Models\Form;
+use App\Models\FormField;
 use App\Models\VicidialServer;
+use App\Observers\CampaignConfigurationObserver;
 use App\Policies\CampaignPolicy;
 use App\Policies\DispositionCodePolicy;
 use App\Policies\FormPolicy;
@@ -37,11 +40,17 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(DispositionCode::class, DispositionCodePolicy::class);
         Gate::policy(VicidialServer::class, VicidialServerPolicy::class);
 
+        Campaign::observe(CampaignConfigurationObserver::class);
+        Form::observe(CampaignConfigurationObserver::class);
+        FormField::observe(CampaignConfigurationObserver::class);
+        AgentScreenField::observe(CampaignConfigurationObserver::class);
+        DispositionCode::observe(CampaignConfigurationObserver::class);
+
         View::composer(['layouts.app', 'layouts.sidebar'], function ($view) {
             $view->with('user', Auth::user());
-            $view->with('campaignConfig', app(CampaignService::class)->getCampaign(session('campaign', 'mbsales')) ?? ['forms' => []]);
+            $view->with('campaignConfig', app(CampaignService::class)->getCampaign((string) session('campaign', '')) ?? ['forms' => []]);
             $view->with('dispositionCodes', Auth::user()
-                ? app(DispositionRepositoryInterface::class)->getForCampaign(session('campaign', 'mbsales'))
+                ? app(DispositionRepositoryInterface::class)->getForCampaign((string) session('campaign', ''))
                 : collect());
         });
     }

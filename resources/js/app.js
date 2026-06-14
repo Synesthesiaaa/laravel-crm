@@ -9,6 +9,14 @@ import './form-visibility';
 import './telephony-media-path';
 import TelephonyCore from './telephony-core';
 
+function reportClientWarning(error, context) {
+    if (window.axios?.isCancel?.(error) || error?.__crmPollBackoff) {
+        return;
+    }
+
+    console.warn(`[CRM] ${context}`, error);
+}
+
 // Make ApexCharts available for dynamic import in views
 window.ApexChartsLoader = () => import('apexcharts').then(m => m.default);
 
@@ -298,7 +306,8 @@ Alpine.store('vicidial', {
             }
             this.lastSyncAt = new Date().toISOString();
             return data;
-        } catch (_) {
+        } catch (error) {
+            reportClientWarning(error, 'Unable to sync VICIdial session status.');
             // silent: UI falls back to local values
             return null;
         }
@@ -334,17 +343,23 @@ window.crmGracefulLogout = async function () {
         if (call.state !== 'idle' && call.sessionId) {
             try {
                 await withTimeout(
-                    window.axios.post('/api/call/hangup', { session_id: call.sessionId }),
+                    window.axios.post('/api/call/hangup', { session_id: call.sessionId }, { timeout: 750 }),
                     750,
                 );
-            } catch (_) {}
+            } catch (error) {
+                reportClientWarning(error, 'Unable to hang up active call during logout cleanup.');
+            }
         }
         call.state = 'idle';
         call.sessionId = null;
         call.stopTimer();
 
         if (window.TelephonyCore) {
-            try { await withTimeout(window.TelephonyCore.destroy(), 750); } catch (_) {}
+            try {
+                await withTimeout(window.TelephonyCore.destroy(), 750);
+            } catch (error) {
+                reportClientWarning(error, 'Unable to destroy telephony client during logout cleanup.');
+            }
         }
 
         const frame = document.getElementById('vici-session-frame');
@@ -403,6 +418,8 @@ window.addEventListener('error', (event) => {
             line:    event.lineno,
             col:     event.colno,
             url:     location.href,
-        }).catch(() => {});
+        }, { timeout: 5000 }).catch((error) => {
+            reportClientWarning(error, 'Unable to submit client error report.');
+        });
     }
 });

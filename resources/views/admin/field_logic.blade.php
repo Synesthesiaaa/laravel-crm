@@ -11,6 +11,9 @@
         <x-alert type="success" class="mb-4">{{ session('success') }}</x-alert>
     @endif
     <x-validation-errors />
+    @if(empty($forms))
+        <x-alert type="warning" class="mb-4">No active forms are configured for this campaign.</x-alert>
+    @endif
 
     @php
         $visibilityOperatorOptions = [
@@ -59,6 +62,12 @@
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Add field</h3>
         </div>
         <div class="p-6">
+            @if(empty($forms))
+                <div class="table-empty py-8">
+                    <x-icon name="cog-6-tooth" class="w-10 h-10 mx-auto mb-2" />
+                    <p class="text-sm font-medium">No active forms are configured for this campaign.</p>
+                </div>
+            @else
             <form method="POST" action="{{ route('admin.field-logic.store') }}" class="space-y-4" x-data="{ submitting: false, ft: @js(old('field_type', 'text')) }" @submit="submitting = true">
                 @csrf
                 <input type="hidden" name="campaign_code" value="{{ $campaign }}">
@@ -123,6 +132,7 @@
                     </div>
                 </div>
             </form>
+            @endif
         </div>
     </div>
 

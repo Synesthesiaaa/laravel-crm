@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Repositories\CampaignRepository;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
 class CampaignService
@@ -28,6 +29,36 @@ class CampaignService
         $campaigns = $this->getCampaigns();
 
         return $campaigns[$code] ?? null;
+    }
+
+    /**
+     * Resolve an active campaign for the current request and keep session state in sync.
+     *
+     * @return array{code: string, config: array<string, mixed>}
+     */
+    public function resolveCampaignForRequest(Request $request, ?string $requestedCode = null): array
+    {
+        $campaigns = $this->getCampaigns();
+        $code = trim((string) $requestedCode);
+
+        if ($code === '' || ! isset($campaigns[$code])) {
+            $code = (string) $request->session()->get('campaign', '');
+        }
+
+        if ($code === '' || ! isset($campaigns[$code])) {
+            $code = (string) array_key_first($campaigns);
+        }
+
+        abort_if($code === '' || ! isset($campaigns[$code]), 404, 'No active campaign configured.');
+
+        $config = $campaigns[$code];
+        $request->session()->put('campaign', $code);
+        $request->session()->put('campaign_name', $config['name'] ?? $code);
+
+        return [
+            'code' => $code,
+            'config' => $config,
+        ];
     }
 
     public function getFormConfig(string $campaignCode, string $formCode): ?array

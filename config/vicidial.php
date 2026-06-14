@@ -118,6 +118,15 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Vicidial Call URL shared secret
+    |--------------------------------------------------------------------------
+    | Optional shared secret to validate Vicidial campaign GET callbacks.
+    | Defaults to the agent push secret so one value can protect both paths.
+    */
+    'call_url_secret' => env('VICIDIAL_CALL_URL_SECRET', env('VICIDIAL_EVENTS_WEBHOOK_SECRET', '')),
+
+    /*
+    |--------------------------------------------------------------------------
     | Embedded agent iframe panel (phone widget, expanded)
     |--------------------------------------------------------------------------
     | Mirrors crm_settings.php agent_screen_width / height for the Laravel UI.

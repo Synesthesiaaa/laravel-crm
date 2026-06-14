@@ -19,10 +19,11 @@ class DataMasterController extends Controller
 
     public function index(Request $request): View
     {
-        $campaign = $request->session()->get('campaign', 'mbsales');
-        $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['forms' => []];
+        $resolved = $this->campaignService->resolveCampaignForRequest($request);
+        $campaign = $resolved['code'];
+        $campaignConfig = $resolved['config'];
         $forms = $campaignConfig['forms'] ?? [];
-        $type = $request->query('type', array_key_first($forms) ?: '');
+        $type = $forms === [] ? '' : (string) $request->query('type', array_key_first($forms) ?: '');
         if ($type !== '' && ! isset($forms[$type])) {
             $type = array_key_first($forms) ?: '';
         }
@@ -39,7 +40,7 @@ class DataMasterController extends Controller
 
         return view('admin.data_master', [
             'campaign' => $campaign,
-            'campaignName' => $request->session()->get('campaign_name', 'CRM'),
+            'campaignName' => $campaignConfig['name'] ?? $campaign,
             'forms' => $forms,
             'type' => $type,
             'tableName' => $tableName,
@@ -53,10 +54,11 @@ class DataMasterController extends Controller
 
     public function edit(Request $request, int $id): View|RedirectResponse
     {
-        $campaign = $request->session()->get('campaign', 'mbsales');
-        $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['forms' => []];
+        $resolved = $this->campaignService->resolveCampaignForRequest($request);
+        $campaign = $resolved['code'];
+        $campaignConfig = $resolved['config'];
         $forms = $campaignConfig['forms'] ?? [];
-        $type = $request->query('type', array_key_first($forms) ?: '');
+        $type = $forms === [] ? '' : (string) $request->query('type', array_key_first($forms) ?: '');
         $tableName = $forms[$type]['table_name'] ?? $forms[$type]['table'] ?? '';
         $allowedTables = $this->dataMasterService->getAllowedTables($campaignConfig);
 
@@ -74,7 +76,7 @@ class DataMasterController extends Controller
 
         return view('admin.data_master_edit', [
             'campaign' => $campaign,
-            'campaignName' => $request->session()->get('campaign_name', 'CRM'),
+            'campaignName' => $campaignConfig['name'] ?? $campaign,
             'type' => $type,
             'tableName' => $tableName,
             'record' => $record,
@@ -87,8 +89,9 @@ class DataMasterController extends Controller
 
     public function update(Request $request): RedirectResponse
     {
-        $campaign = $request->session()->get('campaign', 'mbsales');
-        $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['forms' => []];
+        $resolved = $this->campaignService->resolveCampaignForRequest($request);
+        $campaign = $resolved['code'];
+        $campaignConfig = $resolved['config'];
         $allowedTables = $this->dataMasterService->getAllowedTables($campaignConfig);
         $tableName = (string) $request->input('_table', '');
         $id = (int) $request->input('_id');
@@ -129,8 +132,8 @@ class DataMasterController extends Controller
 
     public function destroy(Request $request): RedirectResponse
     {
-        $campaign = $request->session()->get('campaign', 'mbsales');
-        $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['forms' => []];
+        $resolved = $this->campaignService->resolveCampaignForRequest($request);
+        $campaignConfig = $resolved['config'];
         $allowedTables = $this->dataMasterService->getAllowedTables($campaignConfig);
         $tableName = (string) $request->input('_table', '');
         $id = (int) $request->input('_id');

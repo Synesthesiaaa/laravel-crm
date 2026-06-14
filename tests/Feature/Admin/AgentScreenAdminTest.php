@@ -6,6 +6,7 @@ use App\Models\AgentScreenField;
 use App\Models\Campaign;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class AgentScreenAdminTest extends TestCase
@@ -134,6 +135,25 @@ class AgentScreenAdminTest extends TestCase
             'operator' => 'in',
             'values' => ['vip', 'premium'],
         ], $field->visibility);
+    }
+
+    public function test_campaign_cache_is_cleared_when_field_changes(): void
+    {
+        Cache::put('campaigns_with_forms', ['stale' => ['name' => 'Stale']], 300);
+
+        $this->actingAs($this->superAdmin)
+            ->withSession($this->campaignSession())
+            ->post(route('admin.agent-screen.store'), [
+                'campaign_code' => 'mbsales',
+                'field_key' => 'cache_probe',
+                'field_label' => 'Cache Probe',
+                'field_type' => 'text',
+                'direction' => 'none',
+                'field_width' => 'full',
+            ])
+            ->assertRedirect(route('admin.agent-screen.index', ['campaign' => 'mbsales']));
+
+        $this->assertFalse(Cache::has('campaigns_with_forms'));
     }
 
     public function test_store_rejects_invalid_visibility_operator(): void

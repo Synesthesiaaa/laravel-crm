@@ -15,15 +15,7 @@ class EnsureCampaignSelected
 
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->session()->has('campaign')) {
-            return $next($request);
-        }
-        $campaigns = $this->campaignService->getCampaigns();
-        $first = array_key_first($campaigns);
-        if ($first) {
-            $request->session()->put('campaign', $first);
-            $request->session()->put('campaign_name', $campaigns[$first]['name'] ?? $first);
-        }
+        $this->campaignService->resolveCampaignForRequest($request);
 
         return $next($request);
     }

@@ -23,6 +23,7 @@ class CallSessionFactory extends Factory
             'linkedid' => null,
             'channel' => null,
             'vicidial_lead_id' => null,
+            'vicidial_call_id' => null,
             'dialed_at' => $dialedAt,
             'ringing_at' => null,
             'answered_at' => null,

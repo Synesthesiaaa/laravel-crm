@@ -9,6 +9,7 @@ use App\Models\AgentScreenField;
 use App\Services\CampaignService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class AgentScreenController extends Controller
@@ -47,25 +48,31 @@ class AgentScreenController extends Controller
         if ($exists) {
             return back()->with('error', 'Field key already exists for this campaign.');
         }
-        $maxOrder = AgentScreenField::where('campaign_code', $validated['campaign_code'])->max('field_order');
         $fieldType = (string) ($validated['field_type'] ?? 'text');
-        $fieldOrder = isset($validated['field_order']) ? (int) $validated['field_order'] : (($maxOrder ?? 0) + 1);
         $visibility = $this->normalizeVisibility($validated['visibility'] ?? null);
 
-        AgentScreenField::create([
-            'campaign_code' => $validated['campaign_code'],
-            'field_key' => $validated['field_key'],
-            'vici_field' => $this->normalizeNullable($validated['vici_field'] ?? null),
-            'field_label' => $validated['field_label'],
-            'field_type' => $fieldType,
-            'direction' => (string) ($validated['direction'] ?? 'get'),
-            'options' => $fieldType === 'select' ? $this->parseOptions($validated['options'] ?? null) : [],
-            'placeholder' => $this->normalizeNullable($validated['placeholder'] ?? null),
-            'is_required' => (bool) ($validated['is_required'] ?? false),
-            'visibility' => $visibility,
-            'field_order' => $fieldOrder,
-            'field_width' => $validated['field_width'] ?? 'full',
-        ]);
+        DB::transaction(function () use ($validated, $fieldType, $visibility): void {
+            $maxOrder = AgentScreenField::query()
+                ->where('campaign_code', $validated['campaign_code'])
+                ->lockForUpdate()
+                ->max('field_order');
+            $fieldOrder = isset($validated['field_order']) ? (int) $validated['field_order'] : (($maxOrder ?? 0) + 1);
+
+            AgentScreenField::create([
+                'campaign_code' => $validated['campaign_code'],
+                'field_key' => $validated['field_key'],
+                'vici_field' => $this->normalizeNullable($validated['vici_field'] ?? null),
+                'field_label' => $validated['field_label'],
+                'field_type' => $fieldType,
+                'direction' => (string) ($validated['direction'] ?? 'get'),
+                'options' => $fieldType === 'select' ? $this->parseOptions($validated['options'] ?? null) : [],
+                'placeholder' => $this->normalizeNullable($validated['placeholder'] ?? null),
+                'is_required' => (bool) ($validated['is_required'] ?? false),
+                'visibility' => $visibility,
+                'field_order' => $fieldOrder,
+                'field_width' => $validated['field_width'] ?? 'full',
+            ]);
+        });
         $this->campaignService->clearCampaignsCache();
 
         return redirect()->route('admin.agent-screen.index', ['campaign' => $validated['campaign_code']])
@@ -120,7 +127,7 @@ class AgentScreenController extends Controller
 
         return array_values(array_filter(array_map(
             static fn ($line) => trim((string) $line),
-            preg_split('/\r\n|\r|\n/', $options) ?: []
+            preg_split('/\r\n|\r|\n/', $options) ?: [],
         ), static fn ($line) => $line !== ''));
     }
 

@@ -368,9 +368,12 @@ class TelephonyDiagnosticsController extends Controller
         if ((string) config('vicidial.events_webhook_secret', '') === '') {
             $missing[] = 'VICIDIAL_EVENTS_WEBHOOK_SECRET';
         }
+        if ((string) config('vicidial.call_url_secret', '') === '') {
+            $missing[] = 'VICIDIAL_CALL_URL_SECRET';
+        }
 
         if ($missing === []) {
-            return ['label' => 'Webhook Secrets', 'status' => 'ok', 'message' => 'AMI and ViciDial webhook shared secrets are configured.'];
+            return ['label' => 'Webhook Secrets', 'status' => 'ok', 'message' => 'AMI, ViciDial push, and Vicidial call-url shared secrets are configured.'];
         }
 
         $status = app()->environment('production') ? 'fail' : 'warn';

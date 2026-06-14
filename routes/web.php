@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AgentController;
+use App\Http\Controllers\Api\VicidialCallUrlController;
 use App\Http\Controllers\Api\VicidialProxyController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\Auth\LoginController;
@@ -30,6 +31,17 @@ Route::post('api/webhooks/ami', \App\Http\Controllers\Api\AmiWebhookController::
 // ViciDial Agent Events Push webhook (CSRF exempt, no auth) - configured via ViciDial System Settings
 Route::post('api/webhooks/vicidial-events', \App\Http\Controllers\Api\VicidialEventsWebhookController::class)->name('api.webhooks.vicidial-events');
 Route::get('api/webhooks/vicidial-events', fn () => response()->json(['status' => 'ok', 'method' => 'POST only']));
+
+Route::prefix('api/webhooks/vicidial')
+    ->middleware('throttle:vicidial')
+    ->name('api.webhooks.vicidial.')
+    ->group(function (): void {
+        Route::get('start-call', [VicidialCallUrlController::class, 'startCall'])->name('start-call');
+        Route::get('dispo-call', [VicidialCallUrlController::class, 'dispoCall'])->name('dispo-call');
+        Route::get('no-agent-call', [VicidialCallUrlController::class, 'noAgentCall'])->name('no-agent-call');
+        Route::get('dead-call-trigger', [VicidialCallUrlController::class, 'deadCallTrigger'])->name('dead-call-trigger');
+        Route::get('pause-max', [VicidialCallUrlController::class, 'pauseMax'])->name('pause-max');
+    });
 
 // Telephony health (for monitoring; optionally restrict by IP in production)
 Route::get('api/telephony/health', \App\Http\Controllers\Api\TelephonyHealthController::class)->name('api.telephony.health');
