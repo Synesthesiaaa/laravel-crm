@@ -28,6 +28,7 @@
         "laravel/sail": "^1.41",
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.6",
+        "php-code-archeology/php-code-archeology": "^2.11",
         "phpunit/phpunit": "^11.5.3"
     },
     "autoload": {
@@ -95,6 +96,7 @@
         "allow-plugins": {
             "cweagans/composer-patches": true,
             "pestphp/pest-plugin": true,
+            "php-code-archeology/php-code-archeology": true,
             "php-http/discovery": true
         },
         "platform": {

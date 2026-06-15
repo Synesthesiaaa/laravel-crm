@@ -54,3 +54,9 @@ AGENTS.md
 .cursor/mcp.json
 .playwright-mcp/page-2026-06-08T21-50-16-139Z.yml
 /.playwright-mcp
+tmp/report/history.jsonl
+php-codearch-config.yaml
+composer.lock
+composer.json
+composer.lock
+composer.json

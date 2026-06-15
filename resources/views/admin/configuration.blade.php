@@ -86,14 +86,45 @@
                     </button>
                 </div>
 
-                <x-alert type="info" class="mb-4">
-                    Checks live connectivity to ViciDial APIs, AMI, and validates per-campaign and per-agent credential completeness.
-                    No data is modified.
+        <x-alert type="info" class="mb-4">
+            Checks live connectivity to ViciDial APIs, AMI, and validates per-campaign and per-agent credential completeness.
+            No data is modified.
+        </x-alert>
+
+        <template x-if="callUrlLinks.length > 0">
+            <div class="mb-4 space-y-3">
+                <x-alert type="info" title="Vicidial Call URL Links">
+                    Paste these absolute URLs into the matching Vicidial campaign or in-group call URL fields.
+                    The <code class="font-mono text-xs">VAR</code> prefix keeps Vicidial macro substitution enabled.
                 </x-alert>
 
-                <template x-if="checks.length === 0 && !loading">
-                    <p class="text-sm text-[var(--color-on-surface-dim)]">Click "Run Diagnostics" to test your ViciDial connection.</p>
-                </template>
+                <div class="space-y-3">
+                    <template x-for="link in callUrlLinks" :key="link.key">
+                        <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div class="min-w-0">
+                                    <p class="text-sm font-semibold text-[var(--color-on-surface)]" x-text="link.label"></p>
+                                    <p class="text-xs text-[var(--color-on-surface-dim)] mt-1" x-text="link.vicidial_field"></p>
+                                </div>
+                                <button type="button"
+                                        class="btn-secondary text-sm shrink-0"
+                                        @click="copyLink(link)">
+                                    <span x-text="copiedLinkKey === link.key ? 'Copied' : 'Copy URL'">Copy URL</span>
+                                </button>
+                            </div>
+
+                            <div class="mt-3 rounded-md border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                                <pre class="whitespace-pre-wrap break-all text-xs font-mono text-[var(--color-on-surface)]" x-text="link.url"></pre>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+        <template x-if="checks.length === 0 && !loading">
+            <p class="text-sm text-[var(--color-on-surface-dim)]">Click "Run Diagnostics" to test your ViciDial connection.</p>
+        </template>
 
                 <template x-if="loading && checks.length === 0">
                     <div class="flex items-center gap-2 text-sm text-[var(--color-on-surface-dim)]">
@@ -157,8 +188,40 @@ window.telephonyDiagnostics = function () {
     return {
         loading: false,
         checks: [],
+        callUrlLinks: [],
+        copiedLinkKey: null,
         async init() {
             await this.run();
+        },
+        async copyLink(link) {
+            const text = link?.url || '';
+
+            try {
+                if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.setAttribute('readonly', '');
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.focus();
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                }
+
+                this.copiedLinkKey = link.key;
+                window.setTimeout(() => {
+                    if (this.copiedLinkKey === link.key) {
+                        this.copiedLinkKey = null;
+                    }
+                }, 1200);
+                Alpine.store('toast').success(`${link.label} copied to clipboard.`);
+            } catch (e) {
+                Alpine.store('toast').error('Could not copy the Vicidial URL.');
+            }
         },
         async run() {
             this.loading = true;
@@ -166,6 +229,7 @@ window.telephonyDiagnostics = function () {
             try {
                 const res = await window.axios.post('/admin/configuration/telephony-diagnostics');
                 this.checks = res.data?.checks ?? [];
+                this.callUrlLinks = res.data?.call_url_links ?? [];
                 if (res.data?.ok) {
                     Alpine.store('toast').success('All telephony checks passed.');
                 } else {

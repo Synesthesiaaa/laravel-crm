@@ -51,12 +51,137 @@ class TelephonyDiagnosticsController extends Controller
         $checks[] = $this->checkWebhookSecrets();
         $checks[] = $this->checkBroadcastingConfig();
 
+        $callUrlLinks = $this->buildCallUrlLinks();
         $overallOk = collect($checks)->every(fn ($c) => $c['status'] === 'ok');
 
         return response()->json([
             'ok' => $overallOk,
             'checks' => $checks,
+            'call_url_links' => $callUrlLinks,
         ]);
+    }
+
+    /**
+     * Build paste-ready Vicidial callback URLs for the diagnostics panel.
+     *
+     * @return array<int, array{key: string, label: string, vicidial_field: string, url: string}>
+     */
+    private function buildCallUrlLinks(): array
+    {
+        return [
+            $this->buildVicidialCallUrlLink(
+                key: 'start_call',
+                label: 'Start Call URL',
+                vicidialField: 'Start Call URL',
+                routeName: 'api.webhooks.vicidial.start-call',
+                parameters: [
+                    'campaign' => $this->vicidialMacro('campaign'),
+                    'lead_id' => $this->vicidialMacro('lead_id'),
+                    'phone_number' => $this->vicidialMacro('phone_number'),
+                    'call_id' => $this->vicidialMacro('call_id'),
+                    'user' => $this->vicidialMacro('user'),
+                    'phone_login' => $this->vicidialMacro('phone_login'),
+                ],
+            ),
+            $this->buildVicidialCallUrlLink(
+                key: 'dispo_call',
+                label: 'Dispo Call URL',
+                vicidialField: 'Dispo Call URL',
+                routeName: 'api.webhooks.vicidial.dispo-call',
+                parameters: [
+                    'campaign' => $this->vicidialMacro('campaign'),
+                    'lead_id' => $this->vicidialMacro('lead_id'),
+                    'phone_number' => $this->vicidialMacro('phone_number'),
+                    'call_id' => $this->vicidialMacro('call_id'),
+                    'user' => $this->vicidialMacro('user'),
+                    'phone_login' => $this->vicidialMacro('phone_login'),
+                    'dispo' => $this->vicidialMacro('dispo'),
+                    'talk_time' => $this->vicidialMacro('talk_time'),
+                    'call_notes' => $this->vicidialMacro('call_notes'),
+                    'callback_lead_status' => $this->vicidialMacro('callback_lead_status'),
+                    'callback_datetime' => $this->vicidialMacro('callback_datetime'),
+                    'term_reason' => $this->vicidialMacro('term_reason'),
+                ],
+            ),
+            $this->buildVicidialCallUrlLink(
+                key: 'no_agent_call',
+                label: 'No Agent Call URL',
+                vicidialField: 'No Agent Call URL',
+                routeName: 'api.webhooks.vicidial.no-agent-call',
+                parameters: [
+                    'campaign' => $this->vicidialMacro('campaign'),
+                    'lead_id' => $this->vicidialMacro('lead_id'),
+                    'phone_number' => $this->vicidialMacro('phone_number'),
+                    'call_id' => $this->vicidialMacro('call_id'),
+                    'user' => $this->vicidialMacro('user'),
+                    'phone_login' => $this->vicidialMacro('phone_login'),
+                    'status' => $this->vicidialMacro('status'),
+                ],
+            ),
+            $this->buildVicidialCallUrlLink(
+                key: 'dead_call_trigger',
+                label: 'Dead Call Trigger URL',
+                vicidialField: 'Dead Call Trigger URL',
+                routeName: 'api.webhooks.vicidial.dead-call-trigger',
+                parameters: [
+                    'campaign' => $this->vicidialMacro('campaign'),
+                    'lead_id' => $this->vicidialMacro('lead_id'),
+                    'phone_number' => $this->vicidialMacro('phone_number'),
+                    'call_id' => $this->vicidialMacro('call_id'),
+                    'user' => $this->vicidialMacro('user'),
+                    'phone_login' => $this->vicidialMacro('phone_login'),
+                    'dispo' => 'DEAD',
+                ],
+            ),
+            $this->buildVicidialCallUrlLink(
+                key: 'pause_max',
+                label: 'Pause Max URL',
+                vicidialField: 'Pause Max URL',
+                routeName: 'api.webhooks.vicidial.pause-max',
+                parameters: [
+                    'campaign' => $this->vicidialMacro('campaign'),
+                    'user' => $this->vicidialMacro('user'),
+                    'fullname' => $this->vicidialMacro('fullname'),
+                    'agent_email' => $this->vicidialMacro('agent_email'),
+                    'user_group' => $this->vicidialMacro('user_group'),
+                    'user_custom_one' => $this->vicidialMacro('user_custom_one'),
+                    'user_custom_two' => $this->vicidialMacro('user_custom_two'),
+                    'user_custom_three' => $this->vicidialMacro('user_custom_three'),
+                    'user_custom_four' => $this->vicidialMacro('user_custom_four'),
+                    'user_custom_five' => $this->vicidialMacro('user_custom_five'),
+                ],
+            ),
+        ];
+    }
+
+    /**
+     * Build a single paste-ready Vicidial callback URL definition.
+     *
+     * @param  array<string, string>  $parameters
+     * @return array{key: string, label: string, vicidial_field: string, url: string}
+     */
+    private function buildVicidialCallUrlLink(
+        string $key,
+        string $label,
+        string $vicidialField,
+        string $routeName,
+        array $parameters,
+    ): array {
+        $url = route($routeName, array_merge([
+            'sig' => (string) config('vicidial.call_url_secret', ''),
+        ], $parameters));
+
+        return [
+            'key' => $key,
+            'label' => $label,
+            'vicidial_field' => $vicidialField,
+            'url' => 'VAR'.$url,
+        ];
+    }
+
+    private function vicidialMacro(string $field): string
+    {
+        return '--A--'.$field.'--B--';
     }
 
     private function checkAgentApi(): array
