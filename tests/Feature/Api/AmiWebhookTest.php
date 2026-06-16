@@ -11,6 +11,12 @@ class AmiWebhookTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function setEnvironment(string $environment): void
+    {
+        app()->detectEnvironment(fn () => $environment);
+        config(['app.env' => $environment]);
+    }
+
     public function test_webhook_returns_received_when_event_missing(): void
     {
         $response = $this->postJson(route('api.webhooks.ami'), []);
@@ -102,5 +108,24 @@ class AmiWebhookTest extends TestCase
         ], ['X-Webhook-Secret' => 'correct-secret']);
         $response->assertOk();
         config(['asterisk.webhook_secret' => '']);
+    }
+
+    public function test_webhook_returns_503_when_secret_missing_in_production(): void
+    {
+        $this->setEnvironment('production');
+        config(['asterisk.webhook_secret' => '']);
+
+        try {
+            $response = $this->postJson(route('api.webhooks.ami'), [
+                'event' => 'Hangup',
+                'linkedid' => 'xyz',
+            ]);
+
+            $response->assertStatus(503);
+            $response->assertJsonPath('error', 'Webhook secret is not configured');
+        } finally {
+            $this->setEnvironment('testing');
+            config(['asterisk.webhook_secret' => '']);
+        }
     }
 }

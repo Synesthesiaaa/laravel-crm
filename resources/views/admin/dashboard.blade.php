@@ -126,59 +126,84 @@
 @if(!empty($activityTrend['labels']))
 <script>
 (async () => {
-    if (document.readyState === 'loading') {
-        await new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+    const scope = window.crmSoftNav?.currentScope?.() || window.location.pathname;
+    const chartGroup = 'admin-dashboard';
+
+    function destroyCharts() {
+        window.crmCharts?.destroyGroup?.(chartGroup);
     }
 
-    const ApexCharts = await window.ApexChartsLoader?.() ?? null;
-    if (!ApexCharts) return;
+    async function renderCharts() {
+        destroyCharts();
 
-    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-    const textColor = isDark ? '#a1a1aa' : '#52525b';
-    const gridColor = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
+        if (document.readyState === 'loading') {
+            await new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+        }
 
-    // Soft-nav safety: destroy previous instances before re-creating.
-    window.__crmAdminDashboardCharts = window.__crmAdminDashboardCharts || {};
-    Object.values(window.__crmAdminDashboardCharts).forEach((c) => { try { c.destroy(); } catch (_) {} });
-    window.__crmAdminDashboardCharts = {};
+        const ApexCharts = await window.ApexChartsLoader?.() ?? null;
+        if (!ApexCharts) {
+            return;
+        }
 
-    const activityEl = document.getElementById('admin-chart-activity');
-    if (activityEl) {
-        const activity = new ApexCharts(activityEl, {
-            series: [{ name: 'Submissions', data: @json($activityTrend['values'] ?? []) }],
-            chart: { type: 'area', height: 240, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
-            colors: ['#e91e8c'],
-            fill: { type: 'gradient', gradient: { opacityFrom: .35, opacityTo: .03 } },
-            stroke: { curve: 'smooth', width: 2 },
-            xaxis: { categories: @json($activityTrend['labels'] ?? []), labels: { style: { colors: textColor, fontSize: '11px' }, rotate: -30 }, axisBorder: { show: false }, axisTicks: { show: false } },
-            yaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
-            grid: { borderColor: gridColor, strokeDashArray: 3 },
-            tooltip: { theme: isDark ? 'dark' : 'light' },
-            dataLabels: { enabled: false },
-            theme: { mode: isDark ? 'dark' : 'light' },
-        });
-        window.__crmAdminDashboardCharts.activity = activity;
-        activity.render();
+        const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+        const textColor = isDark ? '#a1a1aa' : '#52525b';
+        const gridColor = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
+
+        const activityEl = document.getElementById('admin-chart-activity');
+        if (activityEl) {
+            const activity = new ApexCharts(activityEl, {
+                series: [{ name: 'Submissions', data: @json($activityTrend['values'] ?? []) }],
+                chart: { type: 'area', height: 240, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
+                colors: ['#e91e8c'],
+                fill: { type: 'gradient', gradient: { opacityFrom: .35, opacityTo: .03 } },
+                stroke: { curve: 'smooth', width: 2 },
+                xaxis: { categories: @json($activityTrend['labels'] ?? []), labels: { style: { colors: textColor, fontSize: '11px' }, rotate: -30 }, axisBorder: { show: false }, axisTicks: { show: false } },
+                yaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
+                grid: { borderColor: gridColor, strokeDashArray: 3 },
+                tooltip: { theme: isDark ? 'dark' : 'light' },
+                dataLabels: { enabled: false },
+                theme: { mode: isDark ? 'dark' : 'light' },
+            });
+            window.crmCharts?.register?.(chartGroup, 'activity', activity);
+            await activity.render();
+        }
+
+        const agentLabels = @json($topAgents['labels'] ?? []);
+        const agentsEl = document.getElementById('admin-chart-agents');
+        if (agentLabels.length && agentsEl) {
+            const agents = new ApexCharts(agentsEl, {
+                series: [{ name: 'Submissions', data: @json($topAgents['values'] ?? []) }],
+                chart: { type: 'bar', height: 240, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
+                colors: ['#e91e8c'],
+                plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '55%' } },
+                xaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, axisBorder: { show: false } },
+                yaxis: { labels: { style: { colors: textColor, fontSize: '11px' }, maxWidth: 120 } },
+                grid: { borderColor: gridColor, xaxis: { lines: { show: true } }, yaxis: { lines: { show: false } } },
+                tooltip: { theme: isDark ? 'dark' : 'light' },
+                dataLabels: { enabled: false },
+                theme: { mode: isDark ? 'dark' : 'light' },
+                categories: agentLabels,
+            });
+            window.crmCharts?.register?.(chartGroup, 'agents', agents);
+            await agents.render();
+        }
+
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        window.crmCharts?.resizeGroup?.(chartGroup);
+        requestAnimationFrame(() => window.crmCharts?.resizeGroup?.(chartGroup));
+        setTimeout(() => window.crmCharts?.resizeGroup?.(chartGroup), 120);
+        setTimeout(() => window.crmCharts?.resizeGroup?.(chartGroup), 360);
     }
 
-    const agentLabels = @json($topAgents['labels'] ?? []);
-    const agentsEl = document.getElementById('admin-chart-agents');
-    if (agentLabels.length && agentsEl) {
-        const agents = new ApexCharts(agentsEl, {
-            series: [{ name: 'Submissions', data: @json($topAgents['values'] ?? []) }],
-            chart: { type: 'bar', height: 240, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
-            colors: ['#e91e8c'],
-            plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '55%' } },
-            xaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, axisBorder: { show: false } },
-            yaxis: { labels: { style: { colors: textColor, fontSize: '11px' }, maxWidth: 120 } },
-            grid: { borderColor: gridColor, xaxis: { lines: { show: true } }, yaxis: { lines: { show: false } } },
-            tooltip: { theme: isDark ? 'dark' : 'light' },
-            dataLabels: { enabled: false },
-            theme: { mode: isDark ? 'dark' : 'light' },
-            categories: agentLabels,
-        });
-        window.__crmAdminDashboardCharts.agents = agents;
-        agents.render();
+    window.crmSoftNav?.register?.(scope, {
+        beforeSwap: destroyCharts,
+        afterSwap: () => {
+            void renderCharts();
+        },
+    });
+
+    if (!window.crmSoftNav?.isRehydrating?.()) {
+        await renderCharts();
     }
 })();
 </script>

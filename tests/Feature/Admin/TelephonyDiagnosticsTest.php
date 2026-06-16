@@ -4,7 +4,10 @@ namespace Tests\Feature\Admin;
 
 use App\Models\Campaign;
 use App\Models\User;
+use App\Models\VicidialServer;
+use App\Services\Telephony\TelephonyDiagnosticsCampaignMappingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -101,5 +104,36 @@ class TelephonyDiagnosticsTest extends TestCase
         $this->assertStringStartsWith('VAR'.route('api.webhooks.vicidial.pause-max', ['sig' => 'vicidial-secret']), $links['pause_max']['url']);
         $this->assertStringContainsString('user=--A--user--B--', $links['pause_max']['url']);
         $this->assertStringContainsString('campaign=--A--campaign--B--', $links['pause_max']['url']);
+    }
+
+    public function test_campaign_server_mapping_check_uses_batched_reads(): void
+    {
+        Campaign::factory()->create(['code' => 'camp-a', 'name' => 'Campaign A']);
+        Campaign::factory()->create(['code' => 'camp-b', 'name' => 'Campaign B']);
+        Campaign::factory()->create(['code' => 'camp-c', 'name' => 'Campaign C']);
+
+        VicidialServer::factory()->create([
+            'campaign_code' => 'camp-a',
+            'api_user' => 'api-user-a',
+            'api_pass' => 'api-pass-a',
+            'is_active' => true,
+        ]);
+        VicidialServer::factory()->create([
+            'campaign_code' => 'camp-b',
+            'api_user' => '',
+            'api_pass' => 'api-pass-b',
+            'is_active' => true,
+        ]);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $result = $this->app->make(TelephonyDiagnosticsCampaignMappingService::class)
+            ->checkCampaignServerMappings();
+
+        $this->assertSame('warn', $result['status']);
+        $this->assertStringContainsString('No active server for: camp-c', $result['message']);
+        $this->assertStringContainsString('Missing Non-Agent API user/pass for: camp-b', $result['message']);
+        $this->assertCount(2, DB::getQueryLog());
     }
 }

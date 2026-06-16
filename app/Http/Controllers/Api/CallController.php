@@ -3,12 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\CallApiRequest;
 use App\Services\Telephony\CallOrchestrationService;
 use App\Services\Telephony\LeadHydrationService;
 use App\Services\Telephony\PredictiveDialerService;
 use App\Services\Telephony\TelephonyCampaignResolver;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class CallController extends Controller
 {
@@ -21,27 +21,19 @@ class CallController extends Controller
     /**
      * Start outbound call. Creates call session and originates via VICIdial.
      */
-    public function dial(Request $request): JsonResponse
+    public function dial(CallApiRequest $request): JsonResponse
     {
-        $request->validate([
-            'phone_number' => ['required', 'string', 'max:50'],
-            'lead_id' => ['nullable', 'integer'],
-            'phone_code' => ['nullable', 'string', 'max:5'],
-        ]);
+        $validated = $request->validated();
 
-        $campaign = $request->query('campaign') ?: TelephonyCampaignResolver::forRequest($request);
-        $phoneNumber = $request->input('phone_number') ?: $request->query('phone_number') ?: $request->input('phone');
-
-        if (empty($phoneNumber)) {
-            return response()->json(['success' => false, 'message' => 'Phone number is required'], 422);
-        }
+        $campaign = TelephonyCampaignResolver::resolve($request, $validated['campaign'] ?? null);
+        $phoneNumber = (string) $validated['phone_number'];
 
         $result = $this->orchestration->startOutboundCall(
             $request->user(),
             $campaign,
             $phoneNumber,
-            $request->input('lead_id') ? (int) $request->input('lead_id') : null,
-            $request->input('phone_code', '1'),
+            isset($validated['lead_id']) ? (int) $validated['lead_id'] : null,
+            $validated['phone_code'] ?? '1',
         );
 
         if (! $result->success) {
@@ -56,7 +48,7 @@ class CallController extends Controller
         $hydrated = $this->leadHydrationService->hydrate(
             $request->user(),
             $campaign,
-            $request->input('lead_id') ? (int) $request->input('lead_id') : null,
+            isset($validated['lead_id']) ? (int) $validated['lead_id'] : null,
             (string) $phoneNumber,
         );
 
@@ -73,12 +65,9 @@ class CallController extends Controller
     /**
      * Hang up the agent's active call.
      */
-    public function hangup(Request $request): JsonResponse
+    public function hangup(CallApiRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'session_id' => ['nullable', 'integer'],
-            'campaign' => ['nullable', 'string', 'max:50'],
-        ]);
+        $validated = $request->validated();
 
         $sessionId = isset($validated['session_id']) ? (int) $validated['session_id'] : null;
         $campaign = TelephonyCampaignResolver::resolve($request, $validated['campaign'] ?? null);
@@ -94,7 +83,7 @@ class CallController extends Controller
     /**
      * Get agent's current active call state and disposition status (for UI sync).
      */
-    public function status(Request $request): JsonResponse
+    public function status(CallApiRequest $request): JsonResponse
     {
         $user = $request->user();
         $session = $this->orchestration->getActiveSession($user);
@@ -143,9 +132,10 @@ class CallController extends Controller
     /**
      * Predictive dial: claim next hopper lead and originate immediately.
      */
-    public function predictiveDial(Request $request): JsonResponse
+    public function predictiveDial(CallApiRequest $request): JsonResponse
     {
-        $campaign = $request->query('campaign') ?: TelephonyCampaignResolver::forRequest($request);
+        $validated = $request->validated();
+        $campaign = TelephonyCampaignResolver::resolve($request, $validated['campaign'] ?? null);
         $result = $this->predictiveDialer->dialNext($request->user(), $campaign);
 
         if (! $result->success) {

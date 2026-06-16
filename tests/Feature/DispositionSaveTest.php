@@ -46,6 +46,31 @@ class DispositionSaveTest extends TestCase
         ]);
     }
 
+    public function test_disposition_save_uses_lookup_label_when_payload_omits_label(): void
+    {
+        DispositionCode::create([
+            'campaign_code' => '',
+            'code' => 'SALE',
+            'label' => 'Sale',
+            'is_active' => true,
+        ]);
+
+        $user = User::factory()->create(['username' => 'agent1']);
+
+        $response = $this->actingAs($user)->withSession(['campaign' => 'mbsales'])->postJson(route('api.disposition.save'), [
+            'campaign_code' => 'mbsales',
+            'disposition_code' => 'SALE',
+        ]);
+
+        $response->assertOk();
+        $response->assertJson(['success' => true]);
+        $this->assertDatabaseHas('campaign_disposition_records', [
+            'campaign_code' => 'mbsales',
+            'disposition_code' => 'SALE',
+            'disposition_label' => 'Sale',
+        ]);
+    }
+
     public function test_disposition_save_with_call_session_id_updates_session(): void
     {
         DispositionCode::create([

@@ -101,6 +101,14 @@ window.telephonyMonitor = function () {
                 }
             );
         },
+        destroy() {
+            if (typeof this._unsubscribe === 'function') {
+                try {
+                    this._unsubscribe();
+                } catch (_) {}
+            }
+            this._unsubscribe = null;
+        },
         filteredEvents() {
             if (this.severityFilter === 'all') return this.events;
             return this.events.filter(e => e.severity === this.severityFilter);

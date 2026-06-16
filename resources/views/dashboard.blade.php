@@ -134,63 +134,105 @@
 @push('scripts')
 <script>
 (async () => {
-    // Page scripts in the layout stack run during HTML parse; Vite app.js is deferred and runs after parse.
-    // DOMContentLoaded fires only after deferred modules, so ApexChartsLoader exists then.
-    if (document.readyState === 'loading') {
-        await new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+    const scope = window.crmSoftNav?.currentScope?.() || window.location.pathname;
+    const chartGroup = 'dashboard';
+
+    function destroyCharts() {
+        window.crmCharts?.destroyGroup?.(chartGroup);
     }
 
-    const ApexCharts = await window.ApexChartsLoader?.() ?? null;
-    if (!ApexCharts) return;
-
-    const main = document.getElementById('main-layout');
-    if (!main) return;
-
-    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-    const textColor = isDark ? '#a1a1aa' : '#52525b';
-    const gridColor = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
-
-    window.__crmDashboardCharts = window.__crmDashboardCharts || {};
-    Object.values(window.__crmDashboardCharts).forEach((c) => { try { c.destroy(); } catch (_) {} });
-    window.__crmDashboardCharts = {};
-
-    function mountAreaChart(elId, categories, values) {
+    async function mountAreaChart(ApexCharts, elId, categories, values, config) {
         const el = document.getElementById(elId);
-        if (!el || !main.contains(el)) return Promise.resolve();
-        el.innerHTML = '';
-        if (!categories?.length) return Promise.resolve();
+        if (!el || !document.getElementById('main-layout')?.contains(el)) {
+            return;
+        }
+        if (!Array.isArray(categories) || categories.length === 0) {
+            return;
+        }
 
+        el.innerHTML = '';
         const chart = new ApexCharts(el, {
             series: [{ name: 'Submissions', data: values }],
-            chart: { type: 'area', height: 240, width: '100%', toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif', animations: { enabled: true, easing: 'easeinout', speed: 600 } },
+            chart: {
+                type: 'area',
+                height: 240,
+                width: '100%',
+                toolbar: { show: false },
+                background: 'transparent',
+                fontFamily: 'DM Sans, ui-sans-serif',
+                animations: { enabled: true, easing: 'easeinout', speed: 600 },
+            },
             colors: ['#e91e8c'],
             fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: .35, opacityTo: .03 } },
             stroke: { curve: 'smooth', width: 2 },
-            xaxis: { categories, labels: { style: { colors: textColor, fontSize: '11px' }, rotate: -30 }, axisBorder: { show: false }, axisTicks: { show: false } },
-            yaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
-            grid: { borderColor: gridColor, strokeDashArray: 3 },
-            tooltip: { theme: isDark ? 'dark' : 'light' },
+            xaxis: {
+                categories,
+                labels: { style: { colors: config.textColor, fontSize: '11px' }, rotate: -30 },
+                axisBorder: { show: false },
+                axisTicks: { show: false },
+            },
+            yaxis: { labels: { style: { colors: config.textColor, fontSize: '11px' } }, min: 0 },
+            grid: { borderColor: config.gridColor, strokeDashArray: 3 },
+            tooltip: { theme: config.isDark ? 'dark' : 'light' },
             dataLabels: { enabled: false },
-            theme: { mode: isDark ? 'dark' : 'light' },
+            theme: { mode: config.isDark ? 'dark' : 'light' },
         });
-        window.__crmDashboardCharts[elId] = chart;
-        return chart.render().then(() => { try { chart.resize(); } catch (_) {} });
+
+        window.crmCharts?.register?.(chartGroup, elId, chart);
+        await chart.render();
+
+        try {
+            chart.resize();
+        } catch (_) {}
     }
 
-    if (!main.querySelector('#chart-monthly-activity')) return;
+    async function renderCharts() {
+        destroyCharts();
 
-    await Promise.all([
-        mountAreaChart('chart-daily-activity', @json($dailyActivity['labels'] ?? []), @json($dailyActivity['values'] ?? [])),
-        mountAreaChart('chart-weekly-activity', @json($weeklyActivity['labels'] ?? []), @json($weeklyActivity['values'] ?? [])),
-        mountAreaChart('chart-monthly-activity', @json($monthlyActivity['labels'] ?? []), @json($monthlyActivity['values'] ?? [])),
-    ]);
+        if (document.readyState === 'loading') {
+            await new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+        }
 
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    window.resizeCrmDashboardCharts?.();
-    requestAnimationFrame(() => window.resizeCrmDashboardCharts?.());
-    // Sidebar / main-layout flex width often settles after ~280ms transition on first paint
-    setTimeout(() => window.resizeCrmDashboardCharts?.(), 120);
-    setTimeout(() => window.resizeCrmDashboardCharts?.(), 360);
+        const ApexCharts = await window.ApexChartsLoader?.() ?? null;
+        if (!ApexCharts) {
+            return;
+        }
+
+        const main = document.getElementById('main-layout');
+        if (!main || !main.querySelector('#chart-monthly-activity')) {
+            return;
+        }
+
+        const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+        const config = {
+            isDark,
+            textColor: isDark ? '#a1a1aa' : '#52525b',
+            gridColor: isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)',
+        };
+
+        await Promise.all([
+            mountAreaChart(ApexCharts, 'chart-daily-activity', @json($dailyActivity['labels'] ?? []), @json($dailyActivity['values'] ?? []), config),
+            mountAreaChart(ApexCharts, 'chart-weekly-activity', @json($weeklyActivity['labels'] ?? []), @json($weeklyActivity['values'] ?? []), config),
+            mountAreaChart(ApexCharts, 'chart-monthly-activity', @json($monthlyActivity['labels'] ?? []), @json($monthlyActivity['values'] ?? []), config),
+        ]);
+
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        window.resizeCrmDashboardCharts?.();
+        requestAnimationFrame(() => window.resizeCrmDashboardCharts?.());
+        setTimeout(() => window.resizeCrmDashboardCharts?.(), 120);
+        setTimeout(() => window.resizeCrmDashboardCharts?.(), 360);
+    }
+
+    window.crmSoftNav?.register?.(scope, {
+        beforeSwap: destroyCharts,
+        afterSwap: () => {
+            void renderCharts();
+        },
+    });
+
+    if (!window.crmSoftNav?.isRehydrating?.()) {
+        await renderCharts();
+    }
 })();
 </script>
 @endpush

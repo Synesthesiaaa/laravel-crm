@@ -544,13 +544,12 @@
             //    extension (documented: config/webrtc.php `media_path`).
             //    TelephonyCore is a singleton – calling register() when already
             //    registered is a no-op, so page navigation is safe.
-            const mediaPath = window.TelephonyMediaPath?.current?.() || window.__telephonyMediaPath || 'sipjs';
-            if (window.TelephonyCore && (window.TelephonyMediaPath?.shouldRegisterSip?.() ?? ['sipjs', 'both'].includes(mediaPath))) {
+            if (window.TelephonyCore && window.TelephonyMediaPath?.shouldUseSipMedia?.() === true) {
                 window.TelephonyCore.register().catch(err => {
                     console.warn('[TelephonyInit] SIP register error:', err);
                 });
             }
-            if (window.TelephonyMediaPath?.isDual?.() ?? (mediaPath === 'both')) {
+            if (window.TelephonyMediaPath?.isDual?.() === true) {
                 console.warn('[TelephonyInit] media_path=both: both SIP.js and ViciPhone are active. Use only while migrating.');
             }
         })();

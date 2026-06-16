@@ -3,9 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Campaign;
 use App\Models\User;
-use App\Models\VicidialServer;
+use App\Services\Telephony\TelephonyDiagnosticsCampaignMappingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +13,10 @@ use Illuminate\Support\Facades\Schema;
 
 class TelephonyDiagnosticsController extends Controller
 {
+    public function __construct(
+        protected TelephonyDiagnosticsCampaignMappingService $campaignMappingService,
+    ) {}
+
     /**
      * Run all telephony readiness checks and return a structured JSON result.
      * Each check has: label, status (ok|warn|fail), message.
@@ -300,41 +303,7 @@ class TelephonyDiagnosticsController extends Controller
 
     private function checkCampaignServerMappings(): array
     {
-        $campaigns = Campaign::pluck('code')->all();
-        if (empty($campaigns)) {
-            return ['label' => 'Campaign → ViciDial Server Mapping', 'status' => 'warn', 'message' => 'No campaigns found.'];
-        }
-
-        // Eager-load active servers keyed by campaign_code so we avoid N+1 queries.
-        $servers = VicidialServer::where('is_active', true)
-            ->whereIn('campaign_code', $campaigns)
-            ->get(['campaign_code', 'api_user', 'api_pass'])
-            ->keyBy('campaign_code');
-
-        $missing = [];
-        $noApiUser = [];
-        foreach ($campaigns as $code) {
-            $server = $servers->get($code);
-            if (! $server) {
-                $missing[] = $code;
-            } elseif (empty($server->api_user) || empty($server->api_pass)) {
-                $noApiUser[] = $code;
-            }
-        }
-
-        $issues = [];
-        if (! empty($missing)) {
-            $issues[] = 'No active server for: '.implode(', ', $missing);
-        }
-        if (! empty($noApiUser)) {
-            $issues[] = 'Missing Non-Agent API user/pass for: '.implode(', ', $noApiUser);
-        }
-
-        if (empty($issues)) {
-            return ['label' => 'Campaign → ViciDial Server Mapping', 'status' => 'ok', 'message' => count($campaigns).' campaign(s) all have active server mappings with Non-Agent API credentials.'];
-        }
-
-        return ['label' => 'Campaign → ViciDial Server Mapping', 'status' => 'warn', 'message' => implode('; ', $issues)];
+        return $this->campaignMappingService->checkCampaignServerMappings();
     }
 
     private function checkAgentCredentials(): array

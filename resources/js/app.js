@@ -20,15 +20,80 @@ function reportClientWarning(error, context) {
 // Make ApexCharts available for dynamic import in views
 window.ApexChartsLoader = () => import('apexcharts').then(m => m.default);
 
+const crmChartGroups = new Map();
+
+function destroyChart(chart) {
+    if (!chart) {
+        return;
+    }
+
+    try {
+        chart.destroy();
+    } catch (_) {
+        /* noop */
+    }
+}
+
+function getChartGroup(name) {
+    const key = String(name || 'default');
+    if (!crmChartGroups.has(key)) {
+        crmChartGroups.set(key, new Map());
+    }
+
+    return crmChartGroups.get(key);
+}
+
+window.crmCharts = {
+    register(group, key, chart) {
+        const groupKey = String(group || 'default');
+        const itemKey = String(key || '');
+        if (!itemKey || !chart) {
+            return chart;
+        }
+
+        const chartGroup = getChartGroup(groupKey);
+        const existing = chartGroup.get(itemKey);
+        if (existing && existing !== chart) {
+            destroyChart(existing);
+        }
+        chartGroup.set(itemKey, chart);
+
+        return chart;
+    },
+    destroyGroup(group) {
+        const chartGroup = crmChartGroups.get(String(group || 'default'));
+        if (!chartGroup) {
+            return;
+        }
+
+        chartGroup.forEach((chart) => destroyChart(chart));
+        chartGroup.clear();
+    },
+    destroyAll() {
+        crmChartGroups.forEach((chartGroup) => {
+            chartGroup.forEach((chart) => destroyChart(chart));
+            chartGroup.clear();
+        });
+    },
+    resizeGroup(group) {
+        const chartGroup = crmChartGroups.get(String(group || 'default'));
+        if (!chartGroup) {
+            return;
+        }
+
+        chartGroup.forEach((chart) => {
+            try {
+                chart.resize();
+            } catch (_) {
+                /* noop */
+            }
+        });
+    },
+};
+
 /** ApexCharts need a resize after layout is stable (full page load, sidebar transition, soft-nav). */
 window.resizeCrmDashboardCharts = function resizeCrmDashboardCharts() {
-    Object.values(window.__crmDashboardCharts || {}).forEach((c) => {
-        try {
-            c.resize();
-        } catch (_) {
-            /* noop */
-        }
-    });
+    window.crmCharts?.resizeGroup?.('dashboard');
 };
 
 function scheduleDashboardChartResize() {
@@ -354,7 +419,7 @@ window.crmGracefulLogout = async function () {
         call.sessionId = null;
         call.stopTimer();
 
-        if (window.TelephonyCore) {
+        if (window.TelephonyCore && window.TelephonyMediaPath?.shouldDestroySip?.() === true) {
             try {
                 await withTimeout(window.TelephonyCore.destroy(), 750);
             } catch (error) {

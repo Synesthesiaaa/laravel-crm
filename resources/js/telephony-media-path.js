@@ -11,8 +11,16 @@ export function currentMediaPath() {
     return normalizeMediaPath(window.__telephonyMediaPath);
 }
 
-export function shouldRegisterSip() {
+export function shouldUseSipMedia() {
     return SIP_MEDIA_PATHS.includes(currentMediaPath());
+}
+
+export function shouldRegisterSip() {
+    return shouldUseSipMedia();
+}
+
+export function shouldDestroySip() {
+    return shouldUseSipMedia();
 }
 
 export function isDualMediaPath() {
@@ -21,6 +29,8 @@ export function isDualMediaPath() {
 
 window.TelephonyMediaPath = {
     current: currentMediaPath,
+    shouldUseSipMedia,
     shouldRegisterSip,
+    shouldDestroySip,
     isDual: isDualMediaPath,
 };

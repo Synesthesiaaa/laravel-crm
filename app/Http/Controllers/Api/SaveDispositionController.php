@@ -3,29 +3,22 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\SaveDispositionRequest;
 use App\Models\DispositionCode;
 use App\Services\DispositionService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class SaveDispositionController extends Controller
 {
-    public function __invoke(Request $request, DispositionService $dispositionService): JsonResponse
+    public function __invoke(SaveDispositionRequest $request, DispositionService $dispositionService): JsonResponse
     {
-        $request->validate([
-            'campaign_code' => ['required', 'string'],
-            'disposition_code' => ['required', 'string'],
-            'disposition_label' => ['nullable', 'string'],
-            'call_session_id' => ['nullable', 'integer'],
-            'remarks' => ['nullable', 'string'],
-            'notes' => ['nullable', 'string'],
-        ]);
+        $validated = $request->validated();
         $user = $request->user();
         $agent = $user->full_name ?? $user->name ?? $user->username ?? '';
-        $campaign = $request->input('campaign_code');
-        $code = $request->input('disposition_code');
-        $label = $request->input('disposition_label');
-        $sessionId = $request->input('call_session_id') ? (int) $request->input('call_session_id') : null;
+        $campaign = (string) $validated['campaign_code'];
+        $code = (string) $validated['disposition_code'];
+        $label = $validated['disposition_label'] ?? null;
+        $sessionId = isset($validated['call_session_id']) ? (int) $validated['call_session_id'] : null;
 
         if (empty($label)) {
             $d = DispositionCode::where(function ($q) use ($campaign) {
@@ -41,11 +34,11 @@ class SaveDispositionController extends Controller
             $label,
             $user->id,
             $sessionId,
-            $request->input('lead_id') ? (int) $request->input('lead_id') : null,
-            $request->input('phone_number'),
-            $request->input('remarks') ?: $request->input('notes'),
-            $request->input('call_duration_seconds') ? (int) $request->input('call_duration_seconds') : null,
-            $request->input('lead_data_json'),
+            isset($validated['lead_id']) ? (int) $validated['lead_id'] : null,
+            $validated['phone_number'] ?? null,
+            ($validated['remarks'] ?? null) ?: ($validated['notes'] ?? null),
+            isset($validated['call_duration_seconds']) ? (int) $validated['call_duration_seconds'] : null,
+            $validated['lead_data_json'] ?? null,
         );
         if (! $result->success) {
             return response()->json(['success' => false, 'message' => $result->message], 422);

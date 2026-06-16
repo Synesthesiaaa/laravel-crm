@@ -504,7 +504,7 @@ window.agentScreen = function() {
                 store.loggedIn = true;
                 store.status = 'ready';
                 window.dispatchEvent(new CustomEvent('vicidial-ws-phase', { detail: { phase: 'ready' } }));
-                if ((window.TelephonyMediaPath?.shouldRegisterSip?.() ?? true) && window.TelephonyCore?.register) {
+                if (window.TelephonyMediaPath?.shouldUseSipMedia?.() === true && window.TelephonyCore?.register) {
                     window.TelephonyCore.register().catch(() => {});
                 }
             } else if (p.event === 'state_paused') {
@@ -514,7 +514,7 @@ window.agentScreen = function() {
                 store.loggedIn = false;
                 store.status = 'logged_out';
                 window.dispatchEvent(new CustomEvent('vicidial-ws-phase', { detail: { phase: 'idle' } }));
-                if (window.TelephonyCore?.destroy) {
+                if (window.TelephonyMediaPath?.shouldDestroySip?.() === true && window.TelephonyCore?.destroy) {
                     window.TelephonyCore.destroy().catch(() => {});
                 }
             } else if (p.event === 'dispo_set') {

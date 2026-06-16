@@ -275,6 +275,12 @@
 
 @push('scripts')
 <script>
+const SUPERVISOR_CHART_GROUP = 'supervisor';
+
+function destroySupervisorCharts() {
+    window.crmCharts?.destroyGroup?.(SUPERVISOR_CHART_GROUP);
+}
+
 window.supervisorDashboard = function() {
     return {
         tab: 'agents',
@@ -285,6 +291,7 @@ window.supervisorDashboard = function() {
             avgWaitTime: 0, todayTotal: 0, slaPercent: 0,
         },
         pollInterval: null,
+        _echoUnsubscribe: null,
         notification: {
             recipient_type: 'USER_GROUP',
             recipient: 'AGENTS',
@@ -299,7 +306,7 @@ window.supervisorDashboard = function() {
             const te = window.TelephonyEcho;
             if (te && te.initEcho && te.isBroadcastEnabled()) {
                 te.initEcho();
-                te.subscribeSupervisorChannel(
+                this._echoUnsubscribe = te.subscribeSupervisorChannel(
                     () => this.refresh(),
                     () => this.refresh()
                 );
@@ -310,6 +317,21 @@ window.supervisorDashboard = function() {
             this.$watch('tab', (t) => {
                 if (t === 'performance' || t === 'wallboard') this.renderCharts();
             });
+        },
+
+        destroy() {
+            if (typeof this._echoUnsubscribe === 'function') {
+                try {
+                    this._echoUnsubscribe();
+                } catch (_) {}
+            }
+            this._echoUnsubscribe = null;
+
+            if (this.pollInterval) {
+                clearInterval(this.pollInterval);
+                this.pollInterval = null;
+            }
+            destroySupervisorCharts();
         },
 
         async refresh() {
@@ -372,6 +394,8 @@ window.supervisorDashboard = function() {
         },
 
         async renderCharts() {
+            destroySupervisorCharts();
+
             const ApexCharts = await window.ApexChartsLoader?.() ?? null;
             if (!ApexCharts) return;
 
@@ -387,7 +411,7 @@ window.supervisorDashboard = function() {
 
             if (this.tab === 'performance' && document.getElementById('chart-agent-perf')) {
                 document.getElementById('chart-agent-perf').innerHTML = '';
-                new ApexCharts(document.getElementById('chart-agent-perf'), {
+                const perfChart = new ApexCharts(document.getElementById('chart-agent-perf'), {
                     series: [{ name: 'Calls Today', data: callsArr }],
                     chart: { type: 'bar', height: 260, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
                     colors: ['#e91e8c'],
@@ -398,10 +422,12 @@ window.supervisorDashboard = function() {
                     tooltip: { theme: isDark ? 'dark' : 'light' },
                     dataLabels: { enabled: false },
                     theme: { mode: isDark ? 'dark' : 'light' },
-                }).render();
+                });
+                window.crmCharts?.register?.(SUPERVISOR_CHART_GROUP, 'agent-perf', perfChart);
+                await perfChart.render();
 
                 document.getElementById('chart-hourly').innerHTML = '';
-                new ApexCharts(document.getElementById('chart-hourly'), {
+                const hourlyChart = new ApexCharts(document.getElementById('chart-hourly'), {
                     series: [{ name: 'Calls', data: hourlyData }],
                     chart: { type: 'area', height: 260, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
                     colors: ['#3b82f6'],
@@ -413,13 +439,15 @@ window.supervisorDashboard = function() {
                     tooltip: { theme: isDark ? 'dark' : 'light' },
                     dataLabels: { enabled: false },
                     theme: { mode: isDark ? 'dark' : 'light' },
-                }).render();
+                });
+                window.crmCharts?.register?.(SUPERVISOR_CHART_GROUP, 'hourly', hourlyChart);
+                await hourlyChart.render();
             }
 
             if (this.tab === 'wallboard' && document.getElementById('chart-realtime')) {
                 document.getElementById('chart-realtime').innerHTML = '';
                 const sparkData = Array.from({length:20}, (_, i) => i === 19 ? Number(this.stats.callsActive || 0) : 0);
-                new ApexCharts(document.getElementById('chart-realtime'), {
+                const realtimeChart = new ApexCharts(document.getElementById('chart-realtime'), {
                     series: [{ name: 'Calls/min', data: sparkData }],
                     chart: { type: 'line', height: 200, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif', animations: { enabled: true, dynamicAnimation: { speed: 350 } } },
                     colors: ['#22c55e'],
@@ -430,8 +458,13 @@ window.supervisorDashboard = function() {
                     tooltip: { theme: isDark ? 'dark' : 'light' },
                     dataLabels: { enabled: false },
                     theme: { mode: isDark ? 'dark' : 'light' },
-                }).render();
+                });
+                window.crmCharts?.register?.(SUPERVISOR_CHART_GROUP, 'realtime', realtimeChart);
+                await realtimeChart.render();
             }
+
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            window.crmCharts?.resizeGroup?.(SUPERVISOR_CHART_GROUP);
         },
     };
 };

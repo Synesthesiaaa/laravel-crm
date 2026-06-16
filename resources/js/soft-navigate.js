@@ -6,6 +6,65 @@ function getCsrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 }
 
+const softNavScopes = new Map();
+let currentSoftNavScope = '';
+let currentSoftNavPhase = 'initial';
+
+function normalizeSoftNavScope(value) {
+    return String(value || '').trim() || 'default';
+}
+
+function getSoftNavScopeFromUrl(url) {
+    try {
+        return normalizeSoftNavScope(new URL(url, window.location.origin).pathname);
+    } catch {
+        return normalizeSoftNavScope(window.location.pathname);
+    }
+}
+
+function runSoftNavHandler(scope, phase, detail) {
+    const handlers = softNavScopes.get(scope);
+    const handler = handlers?.[phase];
+    if (typeof handler !== 'function') {
+        return;
+    }
+
+    try {
+        handler(detail);
+    } catch (error) {
+        console.warn(`[soft-navigate] ${phase} handler failed for ${scope}`, error);
+    }
+}
+
+window.crmSoftNav = {
+    register(scope, handlers = {}) {
+        const key = normalizeSoftNavScope(scope);
+        softNavScopes.set(key, {
+            beforeSwap: typeof handlers.beforeSwap === 'function' ? handlers.beforeSwap : null,
+            afterSwap: typeof handlers.afterSwap === 'function' ? handlers.afterSwap : null,
+        });
+
+        return () => {
+            softNavScopes.delete(key);
+        };
+    },
+    unregister(scope) {
+        softNavScopes.delete(normalizeSoftNavScope(scope));
+    },
+    currentScope() {
+        return currentSoftNavScope || normalizeSoftNavScope(window.location.pathname);
+    },
+    currentPhase() {
+        return currentSoftNavPhase;
+    },
+    isRehydrating() {
+        return currentSoftNavPhase === 'rehydrating';
+    },
+    run(scope, phase, detail = {}) {
+        runSoftNavHandler(normalizeSoftNavScope(scope), phase, detail);
+    },
+};
+
 function removeInjectedPageScripts() {
     document.querySelectorAll('script[data-soft-nav-injected]').forEach((el) => el.remove());
 }
@@ -135,17 +194,30 @@ async function softNavigate(url, { push = true } = {}) {
         return;
     }
 
+    const previousScope = currentSoftNavScope || normalizeSoftNavScope(window.location.pathname);
+    const nextScope = getSoftNavScopeFromUrl(url);
+
     try {
+        window.dispatchEvent(new CustomEvent('soft-navigate:before', {
+            detail: { url, scope: previousScope },
+        }));
+        runSoftNavHandler(previousScope, 'beforeSwap', { url, scope: previousScope, nextScope });
+
         if (typeof Alpine.destroyTree === 'function') {
             Alpine.destroyTree(mainLayout);
         }
     } catch (_) {}
+
+    window.crmSoftNav?.unregister?.(previousScope);
 
     removeInjectedPageScripts();
 
     mainLayout.innerHTML = nextMain.innerHTML;
 
     syncSidebarActiveFromFetchedDocument(doc);
+
+    currentSoftNavScope = nextScope;
+    currentSoftNavPhase = 'rehydrating';
 
     const titleEl = doc.querySelector('title');
     if (titleEl?.textContent) {
@@ -163,6 +235,14 @@ async function softNavigate(url, { push = true } = {}) {
     } catch (e) {
         console.warn('[soft-navigate] Alpine.initTree failed', e);
     }
+
+    runSoftNavHandler(nextScope, 'afterSwap', { url, scope: nextScope, previousScope });
+
+    window.dispatchEvent(new CustomEvent('soft-navigate:after', {
+        detail: { url, scope: nextScope, previousScope },
+    }));
+
+    currentSoftNavPhase = 'idle';
 
     if (push) {
         try {
@@ -214,6 +294,9 @@ function shouldInterceptAnchor(anchor, event) {
 }
 
 function initSoftNavigate() {
+    currentSoftNavScope = normalizeSoftNavScope(window.location.pathname);
+    currentSoftNavPhase = 'idle';
+
     document.addEventListener(
         'click',
         (event) => {

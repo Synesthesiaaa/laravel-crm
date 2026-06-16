@@ -99,6 +99,13 @@ window.telephonyReports = function () {
             this.refreshAll();
         },
 
+        destroy() {
+            if (this._onPopState) {
+                window.removeEventListener('popstate', this._onPopState);
+                this._onPopState = null;
+            }
+        },
+
         syncTabFromUrl() {
             const params = new URLSearchParams(window.location.search);
             const t = params.get('tab');

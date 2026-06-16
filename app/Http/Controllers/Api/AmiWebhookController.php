@@ -30,7 +30,13 @@ class AmiWebhookController extends Controller
     public function __invoke(Request $request): JsonResponse
     {
         $secret = config('asterisk.webhook_secret');
-        if ($secret !== '' && $request->header('X-Webhook-Secret') !== $secret) {
+        if ($secret === '') {
+            if (app()->environment('production')) {
+                $this->telephonyLogger->warning('AmiWebhookController', 'AMI webhook rejected: secret missing in production');
+
+                return response()->json(['received' => false, 'error' => 'Webhook secret is not configured'], 503);
+            }
+        } elseif ($request->header('X-Webhook-Secret') !== $secret) {
             $this->telephonyLogger->warning('AmiWebhookController', 'AMI webhook rejected: invalid or missing secret');
 
             return response()->json(['received' => false, 'error' => 'Unauthorized'], 401);

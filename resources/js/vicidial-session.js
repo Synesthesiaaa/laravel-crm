@@ -1,4 +1,4 @@
-import { shouldRegisterSip } from './telephony-media-path';
+import { shouldUseSipMedia } from './telephony-media-path';
 
 const DEFAULT_VERIFY_MAX = 15;
 const DEFAULT_VERIFY_DELAY_MS = 1500;
@@ -118,7 +118,7 @@ async function pollVerify(campaign, ctx = null, maxAttempts = DEFAULT_VERIFY_MAX
                 state.inflight = false;
                 window.Alpine.store('toast').success('VICIdial session is live and ready.');
                 await syncStatus(campaign, ctx);
-                if (shouldRegisterSip() && window.TelephonyCore?.register) {
+                if (shouldUseSipMedia() && window.TelephonyCore?.register) {
                     window.TelephonyCore.register().catch(() => {});
                 }
                 return;
@@ -172,7 +172,7 @@ async function verifyOnceAfterIframeLoad(campaign, ctx = null, options = {}) {
                     : 'VICIdial session is live and ready.'
             );
             await syncStatus(effectiveCampaign, ctx);
-            if (shouldRegisterSip() && window.TelephonyCore?.register) {
+            if (shouldUseSipMedia() && window.TelephonyCore?.register) {
                 window.TelephonyCore.register().catch(() => {});
             }
             return;
@@ -479,7 +479,7 @@ async function logout(campaign = null, ctx = null) {
         await window.axios.post('/api/vicidial/session/logout', { campaign: effectiveCampaign });
         phaseSet(ctx, 'idle');
         clearFrame();
-        if (window.TelephonyCore?.destroy) {
+        if (shouldUseSipMedia() && window.TelephonyCore?.destroy) {
             window.TelephonyCore.destroy().catch(() => {});
         }
         window.Alpine.store('toast').info('VICIdial session logged out.');

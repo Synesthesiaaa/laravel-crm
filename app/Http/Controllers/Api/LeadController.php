@@ -3,30 +3,23 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\LeadApiRequest;
 use App\Services\Telephony\LeadHydrationService;
 use App\Services\Telephony\LeadService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class LeadController extends Controller
 {
-    public function search(Request $request, LeadService $service): JsonResponse
+    public function search(LeadApiRequest $request, LeadService $service): JsonResponse
     {
-        $validated = $request->validate([
-            'campaign' => ['nullable', 'string', 'max:50'],
-            'phone_number' => ['required', 'string', 'max:32'],
-        ]);
+        $validated = $request->validated();
 
         return $this->respond($service->search($request->user(), $this->campaign($request, $validated), $validated['phone_number']));
     }
 
-    public function info(Request $request, LeadService $service): JsonResponse
+    public function info(LeadApiRequest $request, LeadService $service): JsonResponse
     {
-        $validated = $request->validate([
-            'campaign' => ['nullable', 'string', 'max:50'],
-            'lead_id' => ['nullable', 'integer'],
-            'phone_number' => ['nullable', 'string', 'max:32'],
-        ]);
+        $validated = $request->validated();
 
         return $this->respond($service->allInfo(
             $request->user(),
@@ -36,13 +29,9 @@ class LeadController extends Controller
         ));
     }
 
-    public function field(Request $request, LeadService $service): JsonResponse
+    public function field(LeadApiRequest $request, LeadService $service): JsonResponse
     {
-        $validated = $request->validate([
-            'campaign' => ['nullable', 'string', 'max:50'],
-            'lead_id' => ['required', 'integer'],
-            'field_name' => ['required', 'string', 'max:100'],
-        ]);
+        $validated = $request->validated();
 
         return $this->respond($service->fieldInfo(
             $request->user(),
@@ -52,13 +41,9 @@ class LeadController extends Controller
         ));
     }
 
-    public function hydrate(Request $request, LeadHydrationService $hydrationService): JsonResponse
+    public function hydrate(LeadApiRequest $request, LeadHydrationService $hydrationService): JsonResponse
     {
-        $validated = $request->validate([
-            'campaign' => ['nullable', 'string', 'max:50'],
-            'lead_id' => ['nullable', 'integer'],
-            'phone_number' => ['nullable', 'string', 'max:32'],
-        ]);
+        $validated = $request->validated();
 
         if (! isset($validated['lead_id']) && empty($validated['phone_number'])) {
             return response()->json([
@@ -82,36 +67,23 @@ class LeadController extends Controller
         ]);
     }
 
-    public function add(Request $request, LeadService $service): JsonResponse
+    public function add(LeadApiRequest $request, LeadService $service): JsonResponse
     {
-        $validated = $request->validate([
-            'campaign' => ['nullable', 'string', 'max:50'],
-            'phone_number' => ['required', 'string', 'max:32'],
-            'phone_code' => ['nullable', 'string', 'max:4'],
-            'list_id' => ['nullable', 'string', 'max:12'],
-        ]);
+        $validated = $request->validated();
 
         return $this->respond($service->add($request->user(), $this->campaign($request, $validated), $request->all()));
     }
 
-    public function update(Request $request, LeadService $service): JsonResponse
+    public function update(LeadApiRequest $request, LeadService $service): JsonResponse
     {
-        $validated = $request->validate([
-            'campaign' => ['nullable', 'string', 'max:50'],
-            'lead_id' => ['nullable', 'integer'],
-            'vendor_lead_code' => ['nullable', 'string', 'max:50'],
-            'phone_number' => ['nullable', 'string', 'max:32'],
-        ]);
+        $validated = $request->validated();
 
         return $this->respond($service->update($request->user(), $this->campaign($request, $validated), $request->all()));
     }
 
-    public function switch(Request $request, LeadService $service): JsonResponse
+    public function switch(LeadApiRequest $request, LeadService $service): JsonResponse
     {
-        $validated = $request->validate([
-            'campaign' => ['nullable', 'string', 'max:50'],
-            'lead_id' => ['required', 'integer'],
-        ]);
+        $validated = $request->validated();
 
         return $this->respond($service->switchLead(
             $request->user(),
@@ -120,12 +92,9 @@ class LeadController extends Controller
         ));
     }
 
-    public function updateFields(Request $request, LeadService $service): JsonResponse
+    public function updateFields(LeadApiRequest $request, LeadService $service): JsonResponse
     {
-        $validated = $request->validate([
-            'campaign' => ['nullable', 'string', 'max:50'],
-            'fields' => ['required', 'array'],
-        ]);
+        $validated = $request->validated();
 
         return $this->respond($service->updateFields(
             $request->user(),
@@ -134,7 +103,7 @@ class LeadController extends Controller
         ));
     }
 
-    protected function campaign(Request $request, array $validated = []): string
+    protected function campaign(LeadApiRequest $request, array $validated = []): string
     {
         return (string) ($validated['campaign'] ?? $request->input('campaign', $request->session()->get('campaign', 'mbsales')));
     }

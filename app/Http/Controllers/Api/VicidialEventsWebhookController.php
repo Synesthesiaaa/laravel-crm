@@ -34,7 +34,19 @@ class VicidialEventsWebhookController extends Controller
     public function __invoke(Request $request): JsonResponse
     {
         $secret = config('vicidial.events_webhook_secret', '');
-        if ($secret !== '' && $request->header('X-Webhook-Secret') !== $secret) {
+        if ($secret === '') {
+            if (app()->environment('production')) {
+                $this->logger->warning('VicidialEventsWebhookController', 'ViciDial webhook rejected: secret missing in production');
+
+                return response()->json([
+                    'received' => false,
+                    'processed' => false,
+                    'error' => 'Webhook secret is not configured',
+                ], 503);
+            }
+        } elseif ($request->header('X-Webhook-Secret') !== $secret) {
+            $this->logger->warning('VicidialEventsWebhookController', 'ViciDial webhook rejected: invalid or missing secret');
+
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 

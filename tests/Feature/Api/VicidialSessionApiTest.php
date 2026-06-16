@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api;
 
+use App\Models\Campaign;
 use App\Models\User;
 use App\Models\VicidialAgentSession;
 use App\Models\VicidialServer;
@@ -9,6 +10,7 @@ use App\Services\Telephony\VicidialNonAgentApiService;
 use App\Services\Telephony\VicidialProxyService;
 use App\Support\OperationResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Mockery;
 use Tests\TestCase;
@@ -30,6 +32,13 @@ class VicidialSessionApiTest extends TestCase
             'extension' => '6001',
             'sip_password' => 'sippass',
         ]);
+
+        Campaign::factory()->create([
+            'code' => 'testcamp',
+            'name' => 'Test Camp',
+        ]);
+
+        Cache::forget('campaigns_with_forms');
     }
 
     protected function tearDown(): void
@@ -702,6 +711,6 @@ class VicidialSessionApiTest extends TestCase
         $this->assertSame('newcamp', session('vicidial_campaign'));
         $this->assertSame('New Camp', session('vicidial_campaign_name'));
         $this->assertSame('testcamp', session('campaign'));
-        $this->assertSame('Test', session('campaign_name'));
+        $this->assertSame('Test Camp', session('campaign_name'));
     }
 }
