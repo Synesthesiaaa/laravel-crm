@@ -11,7 +11,6 @@ use App\Services\Telephony\VicidialProxyService;
 use App\Support\OperationResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Mockery;
 use Tests\TestCase;
 
@@ -657,60 +656,5 @@ class VicidialSessionApiTest extends TestCase
             ->getJson('/api/reports/agent-status?campaign=testcamp&agent_user=testagent');
 
         $this->assertContains($response->status(), [200, 422]);
-    }
-
-    // ── GET /api/vicidial/session/agent-campaigns ─────────────────────────────
-
-    public function test_agent_campaigns_requires_auth(): void
-    {
-        $this->getJson('/api/vicidial/session/agent-campaigns')->assertUnauthorized();
-    }
-
-    public function test_agent_campaigns_returns_list_from_non_agent_api(): void
-    {
-        VicidialServer::factory()->create([
-            'campaign_code' => 'testcamp',
-            'api_url' => 'https://vici.example.com/agc/api.php',
-            'api_user' => 'apiuser',
-            'api_pass' => 'apipass',
-            'db_host' => '',
-            'db_username' => '',
-            'db_password' => '',
-            'is_active' => true,
-            'is_default' => true,
-        ]);
-
-        Http::fake([
-            '*' => Http::response(
-                "user|allowed_campaigns_list|allowed_ingroups_list\ntestagent|CAMP1-CAMP2|ING1-ING2",
-                200,
-            ),
-        ]);
-
-        $this->actingAs($this->agent)
-            ->withSession($this->campaignSession())
-            ->getJson('/api/vicidial/session/agent-campaigns?context_campaign=testcamp')
-            ->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('source', 'non_agent_api')
-            ->assertJsonPath('campaigns.0.id', 'CAMP1')
-            ->assertJsonPath('campaigns.1.id', 'CAMP2');
-    }
-
-    public function test_select_campaign_updates_session(): void
-    {
-        $this->actingAs($this->agent)
-            ->withSession($this->campaignSession())
-            ->postJson('/api/vicidial/session/select-campaign', [
-                'campaign' => 'newcamp',
-                'campaign_name' => 'New Camp',
-            ])
-            ->assertOk()
-            ->assertJsonPath('success', true);
-
-        $this->assertSame('newcamp', session('vicidial_campaign'));
-        $this->assertSame('New Camp', session('vicidial_campaign_name'));
-        $this->assertSame('testcamp', session('campaign'));
-        $this->assertSame('Test Camp', session('campaign_name'));
     }
 }

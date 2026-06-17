@@ -7,11 +7,8 @@
         ?? auth()->user()?->default_campaign
         ?? 'mbsales'
     );
-    $hasVicidialCampaignPreference = session()->has('vicidial_campaign')
-        || (auth()->user()?->default_campaign !== null && auth()->user()?->default_campaign !== '');
     $phoneWidgetBoot = [
         'vici_campaign' => $defaultVicidialCampaign,
-        'has_vici_campaign_preference' => $hasVicidialCampaignPreference,
         'phone_login' => (string) (auth()->user()->extension ?? ''),
         'vd_login' => (string) (auth()->user()->vici_user ?? ''),
         'panelW' => (int) config('vicidial.session_iframe_panel_width_px', 440),
@@ -110,26 +107,6 @@
                         Non-Agent verify: VD_login must match <span class="font-mono">vici_user</span>.
                     </p>
                 @endif
-
-                <div class="form-field">
-                    <label class="form-label">Login campaign</label>
-                    <select class="form-select w-full"
-                            x-show="vici.agent_campaigns?.length"
-                            x-model="vici.vici_campaign"
-                            @change="onViciCampaignChange()"
-                            :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase) || vici.agent_campaigns_loading">
-                        <template x-for="c in (vici.agent_campaigns || [])" :key="c.id">
-                            <option :value="c.id" x-text="c.name && c.name !== c.id ? (c.id + ' — ' + c.name) : c.id"></option>
-                        </template>
-                    </select>
-                    <input type="text" class="form-input w-full" readonly
-                           x-show="!vici.agent_campaigns?.length && !vici.agent_campaigns_loading"
-                           :value="vici.vici_campaign"
-                           :disabled="$store.vicidial.loggedIn"
-                           title="CRM session campaign" />
-                    <p x-show="vici.agent_campaigns_loading" class="text-[11px] text-amber-600 mt-1">Loading campaigns…</p>
-                    <p class="text-[11px] text-red-600 mt-1" x-show="vici.agent_campaigns_error" x-text="vici.agent_campaigns_error"></p>
-                </div>
 
                 <div class="grid grid-cols-2 gap-2">
                     <div class="form-field col-span-2">

@@ -100,16 +100,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Agent allowed campaigns (Non-Agent API agent_campaigns + DB fallback)
-    |--------------------------------------------------------------------------
-    | When true, GET /api/vicidial/session/agent-campaigns resolves campaigns the
-    | VICIdial user may log into (requires api_user/api_pass with permission, or
-    | MySQL access to vicidial_users / vicidial_campaigns).
-    */
-    'agent_campaigns_lookup_enabled' => env('VICI_AGENT_CAMPAIGNS_LOOKUP', true),
-
-    /*
-    |--------------------------------------------------------------------------
     | Agent Events Push webhook secret
     |--------------------------------------------------------------------------
     | Optional shared secret to validate ViciDial push event POSTs.

@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\VicidialSessionApiRequest;
 use App\Services\Telephony\TelephonyCampaignResolver;
-use App\Services\Telephony\VicidialAgentCampaignsService;
 use App\Services\Telephony\VicidialSessionService;
 use Illuminate\Http\JsonResponse;
 
@@ -198,50 +197,5 @@ class VicidialSessionController extends Controller
             'message' => $result->message,
             'data' => $result->data,
         ], $result->success ? 200 : 422);
-    }
-
-    /**
-     * Campaigns the VICIdial agent user is allowed to log into (from Non-Agent API or DB).
-     */
-    public function agentCampaigns(VicidialSessionApiRequest $request, VicidialAgentCampaignsService $campaigns): JsonResponse
-    {
-        $validated = $request->validated();
-
-        $context = $validated['context_campaign'] ?? null;
-        $result = $campaigns->getAllowedCampaignsForUser(
-            $request->user(),
-            is_string($context) && $context !== '' ? $context : null,
-        );
-
-        if (! $result->success) {
-            return response()->json([
-                'success' => false,
-                'message' => $result->message,
-                'data' => $result->data,
-            ], 422);
-        }
-
-        return response()->json([
-            'success' => true,
-            'campaigns' => $result->data['campaigns'] ?? [],
-            'source' => $result->data['source'] ?? null,
-            'server_campaign_code' => $result->data['server_campaign_code'] ?? null,
-        ]);
-    }
-
-    /**
-     * Persist softphone (VICIdial) campaign only — does not change CRM session('campaign').
-     */
-    public function selectCampaign(VicidialSessionApiRequest $request): JsonResponse
-    {
-        $validated = $request->validated();
-
-        $request->session()->put('vicidial_campaign', $validated['campaign']);
-        $request->session()->put(
-            'vicidial_campaign_name',
-            $validated['campaign_name'] ?? $validated['campaign'],
-        );
-
-        return response()->json(['success' => true]);
     }
 }

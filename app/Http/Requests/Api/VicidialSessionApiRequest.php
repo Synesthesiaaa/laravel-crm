@@ -39,18 +39,11 @@ class VicidialSessionApiRequest extends FormRequest
                 'ingroups.*' => ['string', 'max:32'],
                 'blended' => ['nullable', 'boolean'],
             ],
-            'api.vicidial.session.select-campaign' => [
-                'campaign' => ['required', 'string', 'max:50'],
-                'campaign_name' => ['nullable', 'string', 'max:255'],
-            ],
             'api.vicidial.session.verify',
             'api.vicidial.session.iframe-url',
             'api.vicidial.session.logout',
             'api.vicidial.session.status' => [
                 'campaign' => ['nullable', 'string', 'max:50'],
-            ],
-            'api.vicidial.session.agent-campaigns' => [
-                'context_campaign' => ['nullable', 'string', 'max:50'],
             ],
             default => [],
         };

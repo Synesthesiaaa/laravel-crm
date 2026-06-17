@@ -12,7 +12,7 @@ interface VicidialServerRepositoryInterface
     public function getAllForCampaign(string $campaignCode): Collection;
 
     /**
-     * First active server with Non-Agent API credentials (for agent_campaigns, etc.).
+     * First active server with Non-Agent API credentials for telephony lookups.
      */
     public function getFirstActiveWithNonAgentCredentials(): ?VicidialServer;
 
