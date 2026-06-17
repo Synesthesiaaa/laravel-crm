@@ -10,22 +10,22 @@ class PhoneWidgetTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_phone_widget_boots_with_session_campaign_without_selector(): void
+    public function test_phone_widget_boots_with_synced_campaign_without_selector(): void
     {
         $user = User::factory()->create([
-            'default_campaign' => 'fallbackcamp',
+            'default_campaign' => 'crmdefault',
             'extension' => '6001',
             'vici_user' => 'testagent',
         ]);
 
         $this->actingAs($user)
             ->withSession([
-                'vicidial_campaign' => 'sessioncamp',
+                'vicidial_campaign' => 'softcamp',
             ]);
 
         $html = view('partials.phone-widget')->render();
 
-        $this->assertStringContainsString('sessioncamp', $html);
+        $this->assertStringContainsString('softcamp', $html);
         $this->assertStringNotContainsString('Login campaign', $html);
         $this->assertStringNotContainsString('/api/vicidial/session/agent-campaigns', $html);
         $this->assertStringNotContainsString('/api/vicidial/session/select-campaign', $html);

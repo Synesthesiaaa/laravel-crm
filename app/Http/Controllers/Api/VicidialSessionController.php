@@ -152,6 +152,12 @@ class VicidialSessionController extends Controller
             $validated['campaign'] ?? null,
         );
         $status = $service->getAgentStatus($request->user(), $campaign);
+        if ($status->success) {
+            $syncedCampaign = $request->session()->get('vicidial_campaign');
+            if (is_string($syncedCampaign) && $syncedCampaign !== '') {
+                $campaign = $syncedCampaign;
+            }
+        }
         $queue = $service->getCallsInQueue($request->user(), $campaign);
         $ingroups = $service->getAgentInGroupInfo($request->user(), $campaign);
         $session = $service->getLocalSession($request->user(), $campaign);

@@ -51,9 +51,25 @@ function cancelVerify(ctx) {
     }
 }
 
+function syncWidgetCampaign(ctx, campaign) {
+    if (ctx?.vici && typeof campaign === 'string' && campaign.trim() !== '') {
+        ctx.vici.vici_campaign = campaign.trim();
+    }
+}
+
+function syncWidgetCampaignFromResponse(data, ctx) {
+    const campaign = data?.iframe_alignment?.vd_campaign
+        || data?.session?.campaign_code
+        || data?.local_session?.campaign_code
+        || null;
+
+    syncWidgetCampaign(ctx, campaign);
+}
+
 async function syncStatus(campaign, ctx = null) {
     const effectiveCampaign = getCampaign(campaign);
     const data = await window.Alpine.store('vicidial').sync(effectiveCampaign);
+    syncWidgetCampaignFromResponse(data, ctx);
     const localStatus = data?.local_session?.session_status || '';
 
     if (['ready', 'paused', 'in_call'].includes(localStatus)) {
@@ -117,6 +133,7 @@ async function pollVerify(campaign, ctx = null, maxAttempts = DEFAULT_VERIFY_MAX
                 loadingSet(ctx, false);
                 state.inflight = false;
                 window.Alpine.store('toast').success('VICIdial session is live and ready.');
+                syncWidgetCampaignFromResponse(res.data?.data ?? {}, ctx);
                 await syncStatus(campaign, ctx);
                 if (shouldUseSipMedia() && window.TelephonyCore?.register) {
                     window.TelephonyCore.register().catch(() => {});
@@ -171,6 +188,7 @@ async function verifyOnceAfterIframeLoad(campaign, ctx = null, options = {}) {
                     ? 'VICIdial session ready (iframe load; Non-Agent status disabled).'
                     : 'VICIdial session is live and ready.'
             );
+            syncWidgetCampaignFromResponse(res.data?.data ?? {}, ctx);
             await syncStatus(effectiveCampaign, ctx);
             if (shouldUseSipMedia() && window.TelephonyCore?.register) {
                 window.TelephonyCore.register().catch(() => {});
@@ -342,6 +360,7 @@ async function login({
                 ctx.vici.vd_login = alignment.vd_login;
             }
         }
+        syncWidgetCampaignFromResponse(res.data?.data ?? {}, ctx);
         if (!iframeUrl) {
             if (nonBlocking) {
                 finishNonBlockingAttempt(ctx);

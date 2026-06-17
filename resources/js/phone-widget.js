@@ -284,6 +284,13 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             return this.vici.vici_campaign || fromBody || 'mbsales';
         },
 
+        syncCampaignFromStatus(data) {
+            const campaign = data?.local_session?.campaign_code;
+            if (typeof campaign === 'string' && campaign.trim() !== '') {
+                this.vici.vici_campaign = campaign.trim();
+            }
+        },
+
         async viciLogin() {
             if (!this.sessionControls || !window.VicidialSession) {
                 Alpine.store('toast').error('VICIdial session module is not loaded.');
@@ -351,6 +358,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             let viciStatusData = null;
             try {
                 viciStatusData = await Alpine.store('vicidial').sync(this.telephonyCampaign());
+                this.syncCampaignFromStatus(viciStatusData);
             } catch (_) {}
 
             try {
@@ -393,6 +401,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             if (!this.sessionControls) return;
             try {
                 const data = await Alpine.store('vicidial').sync(this.telephonyCampaign());
+                this.syncCampaignFromStatus(data);
                 const localStatus = data?.local_session?.session_status || '';
                 if (['ready', 'paused', 'in_call'].includes(localStatus)) {
                     if (!['syncing', 'iframe_loading', 'requesting'].includes(this.vici.phase)) {

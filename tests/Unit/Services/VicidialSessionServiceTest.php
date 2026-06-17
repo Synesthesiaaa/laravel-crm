@@ -322,6 +322,52 @@ class VicidialSessionServiceTest extends TestCase
         ]);
     }
 
+    public function test_verify_login_marks_session_ready_and_syncs_campaign_when_agent_live_on_different_vicidial_campaign(): void
+    {
+        config(['vicidial.session_iframe_agent_api_only' => false]);
+
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'vici_user' => 'testagent',
+            'vici_pass' => 'testpass',
+            'extension' => '6001',
+            'sip_password' => 'sippass',
+            'default_campaign' => 'crmdefault',
+        ]);
+
+        VicidialAgentSession::factory()->create([
+            'user_id' => $user->id,
+            'campaign_code' => 'crmdefault',
+            'session_status' => 'login_pending',
+        ]);
+
+        $this->nonAgentApiMock
+            ->shouldReceive('execute')
+            ->andReturn(OperationResult::success([
+                'raw_response' => "status|agent_user|campaign_id\nINCALL|testagent|softcamp",
+                'rows' => [
+                    ['status', 'agent_user', 'campaign_id'],
+                    ['INCALL', 'testagent', 'softcamp'],
+                ],
+            ]));
+
+        $result = $this->service->verifyLogin($user, 'crmdefault');
+
+        $this->assertTrue($result->success);
+        $this->assertSame('ready', $result->data['login_state'] ?? null);
+        $this->assertSame('softcamp', $result->data['iframe_alignment']['vd_campaign'] ?? null);
+        $this->assertSame('softcamp', session('vicidial_campaign'));
+        $this->assertDatabaseHas('vicidial_agent_sessions', [
+            'user_id' => $user->id,
+            'campaign_code' => 'softcamp',
+            'session_status' => 'ready',
+        ]);
+        $this->assertDatabaseMissing('vicidial_agent_sessions', [
+            'user_id' => $user->id,
+            'campaign_code' => 'crmdefault',
+        ]);
+    }
+
     public function test_verify_login_iframe_non_agent_mismatch_keeps_pending_without_hard_fail(): void
     {
         config(['vicidial.session_iframe_agent_api_only' => true]);
