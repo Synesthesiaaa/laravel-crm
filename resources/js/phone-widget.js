@@ -407,7 +407,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
                     if (!['syncing', 'iframe_loading', 'requesting'].includes(this.vici.phase)) {
                         this.vici.phase = 'ready';
                     }
-                } else if (localStatus === 'logged_out' && this.vici.phase === 'idle') {
+                } else if (localStatus === 'logged_out') {
                     this.vici.phase = 'idle';
                 }
             } catch (_) {}

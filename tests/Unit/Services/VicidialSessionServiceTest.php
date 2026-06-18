@@ -497,6 +497,34 @@ class VicidialSessionServiceTest extends TestCase
         $this->assertSame($fromBuild, $fromHelper);
     }
 
+    public function test_get_aligned_iframe_url_rebuilds_ready_session_without_last_iframe_url(): void
+    {
+        VicidialAgentSession::factory()->create([
+            'user_id' => $this->user->id,
+            'campaign_code' => 'testcamp',
+            'phone_login' => '6001',
+            'session_status' => 'ready',
+            'last_iframe_url' => null,
+        ]);
+
+        $server = VicidialServer::factory()->create([
+            'campaign_code' => 'testcamp',
+            'api_url' => 'https://vici.example.com/agc/api.php',
+            'is_active' => true,
+        ]);
+
+        $this->nonAgentApiMock
+            ->shouldReceive('getServerForCampaign')
+            ->with('testcamp')
+            ->andReturn($server);
+
+        $url = $this->service->getAlignedIframeUrlForCampaign($this->user, 'testcamp');
+
+        $this->assertNotNull($url);
+        $this->assertStringContainsString('phone_login=6001', $url);
+        $this->assertStringContainsString('VD_campaign=testcamp', $url);
+    }
+
     public function test_get_aligned_iframe_url_returns_null_without_phone_login(): void
     {
         $userNoExt = User::factory()->create([

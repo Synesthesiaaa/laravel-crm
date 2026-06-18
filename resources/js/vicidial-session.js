@@ -230,18 +230,21 @@ function clearFrame() {
 }
 
 /**
- * Reload the session iframe from a stored URL when the server session is still login_pending
- * (e.g. after full page refresh mid-login). Avoids a second POST /session/login.
+ * Reload the session iframe from a stored URL when the server session is still active.
+ *
+ * Covers both mid-login recovery (`login_pending`) and page reloads after Vicidial has
+ * already confirmed a usable session (`ready`, `paused`, `in_call`).
  */
 async function maybeReconnectPending(localSession, campaign, ctx = null) {
     const effectiveCampaign = getCampaign(campaign);
+    const sessionStatus = localSession?.session_status || '';
+    const needsVerify = sessionStatus === 'login_pending';
+    const canRestore = ['login_pending', 'ready', 'paused', 'in_call'].includes(sessionStatus);
+
     if (state.inflight) {
         return false;
     }
-    if (window.Alpine.store('vicidial').loggedIn) {
-        return false;
-    }
-    if (!localSession || localSession.session_status !== 'login_pending') {
+    if (!localSession || !canRestore) {
         return false;
     }
 
@@ -279,16 +282,25 @@ async function maybeReconnectPending(localSession, campaign, ctx = null) {
     }
 
     frame.onload = () => {
-        if (isIframeAgentApiOnly()) {
-            verifyOnceAfterIframeLoad(effectiveCampaign, ctx).catch(() => {});
-        } else {
-            phaseSet(ctx, 'syncing');
-            state.verifyCount = 0;
-            if (ctx?.vici) {
-                ctx.vici._verifyPollCount = 0;
+        if (needsVerify) {
+            if (isIframeAgentApiOnly()) {
+                verifyOnceAfterIframeLoad(effectiveCampaign, ctx).catch(() => {});
+            } else {
+                phaseSet(ctx, 'syncing');
+                state.verifyCount = 0;
+                if (ctx?.vici) {
+                    ctx.vici._verifyPollCount = 0;
+                }
+                pollVerify(effectiveCampaign, ctx, DEFAULT_VERIFY_MAX).catch(() => {});
             }
-            pollVerify(effectiveCampaign, ctx, DEFAULT_VERIFY_MAX).catch(() => {});
+            return;
         }
+
+        cancelVerify(ctx);
+        phaseSet(ctx, 'ready');
+        loadingSet(ctx, false);
+        state.inflight = false;
+        syncStatus(effectiveCampaign, ctx).catch(() => {});
     };
     frame.onerror = () => {
         cancelVerify(ctx);
