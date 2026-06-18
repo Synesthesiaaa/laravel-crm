@@ -325,6 +325,8 @@ class VicidialSessionServiceTest extends TestCase
     public function test_verify_login_marks_session_ready_and_syncs_campaign_when_agent_live_on_different_vicidial_campaign(): void
     {
         config(['vicidial.session_iframe_agent_api_only' => false]);
+        session()->put('campaign', 'crmdefault');
+        session()->put('campaign_name', 'CRM Default');
 
         $user = User::factory()->create([
             'role' => 'Agent',
@@ -357,6 +359,8 @@ class VicidialSessionServiceTest extends TestCase
         $this->assertSame('ready', $result->data['login_state'] ?? null);
         $this->assertSame('softcamp', $result->data['iframe_alignment']['vd_campaign'] ?? null);
         $this->assertSame('softcamp', session('vicidial_campaign'));
+        $this->assertSame('crmdefault', session('campaign'));
+        $this->assertSame('CRM Default', session('campaign_name'));
         $this->assertDatabaseHas('vicidial_agent_sessions', [
             'user_id' => $user->id,
             'campaign_code' => 'softcamp',

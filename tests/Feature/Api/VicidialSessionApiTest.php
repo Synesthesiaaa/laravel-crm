@@ -239,6 +239,51 @@ class VicidialSessionApiTest extends TestCase
         $this->assertSame('softcamp', session('vicidial_campaign'));
     }
 
+    public function test_login_uses_fallback_vicidial_server_for_unregistered_campaign_without_touching_crm_session(): void
+    {
+        $agentApi = Mockery::mock(VicidialProxyService::class);
+        $agentApi->shouldReceive('execute')
+            ->once()
+            ->withArgs(function (User $user, string $campaign, string $endpoint, array $params): bool {
+                return $user->id === $this->agent->id
+                    && $campaign === 'softcamp'
+                    && $endpoint === 'login'
+                    && isset($params['credentials']['vici_user'], $params['credentials']['vici_pass']);
+            })
+            ->andReturn([
+                'success' => true,
+                'raw_response' => 'SUCCESS: agent logged in',
+                'message' => null,
+            ]);
+        $this->instance(VicidialProxyService::class, $agentApi);
+
+        VicidialServer::factory()->create([
+            'campaign_code' => 'vicidial-main',
+            'api_url' => 'https://vici.example.com/agc/api.php',
+            'api_user' => 'apiu',
+            'api_pass' => 'apip',
+            'is_active' => true,
+            'is_default' => true,
+        ]);
+
+        $response = $this->actingAs($this->agent)
+            ->withSession([])
+            ->postJson('/api/vicidial/session/login', [
+                'campaign' => 'softcamp',
+                'phone_login' => '6001',
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.iframe_alignment.vd_campaign', 'softcamp');
+
+        $this->assertNotNull($response->json('iframe_url'));
+        $this->assertStringContainsString('VD_campaign=softcamp', (string) $response->json('iframe_url'));
+        $this->assertFalse(session()->has('campaign'));
+        $this->assertFalse(session()->has('campaign_name'));
+        $this->assertSame('softcamp', session('vicidial_campaign'));
+    }
+
     public function test_login_response_contract_contains_required_fields(): void
     {
         $this->mockAgentApi(true);

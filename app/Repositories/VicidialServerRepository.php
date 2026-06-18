@@ -10,6 +10,8 @@ class VicidialServerRepository implements VicidialServerRepositoryInterface
 {
     public function getForCampaign(string $campaignCode): ?VicidialServer
     {
+        $campaignCode = trim($campaignCode);
+
         $default = VicidialServer::where('campaign_code', $campaignCode)
             ->where('is_active', true)
             ->where('is_default', true)
@@ -19,11 +21,16 @@ class VicidialServerRepository implements VicidialServerRepositoryInterface
             return $default;
         }
 
-        return VicidialServer::where('campaign_code', $campaignCode)
+        $campaignServer = VicidialServer::where('campaign_code', $campaignCode)
             ->where('is_active', true)
             ->orderBy('priority')
             ->orderBy('id')
             ->first();
+        if ($campaignServer) {
+            return $campaignServer;
+        }
+
+        return $this->getFallbackActiveServer();
     }
 
     public function getAllForCampaign(string $campaignCode): Collection
@@ -57,6 +64,22 @@ class VicidialServerRepository implements VicidialServerRepositoryInterface
             ->whereNotNull('db_username')
             ->where('db_username', '!=', '')
             ->orderByDesc('priority')
+            ->orderBy('id')
+            ->first();
+    }
+
+    private function getFallbackActiveServer(): ?VicidialServer
+    {
+        return VicidialServer::query()
+            ->where('is_active', true)
+            ->whereNotNull('api_url')
+            ->where('api_url', '!=', '')
+            ->whereNotNull('api_user')
+            ->where('api_user', '!=', '')
+            ->whereNotNull('api_pass')
+            ->where('api_pass', '!=', '')
+            ->orderByDesc('is_default')
+            ->orderBy('priority')
             ->orderBy('id')
             ->first();
     }

@@ -20,12 +20,15 @@ class PhoneWidgetTest extends TestCase
 
         $this->actingAs($user)
             ->withSession([
+                'campaign' => 'crmdefault',
+                'campaign_name' => 'CRM Default',
                 'vicidial_campaign' => 'softcamp',
             ]);
 
         $html = view('partials.phone-widget')->render();
 
         $this->assertStringContainsString('softcamp', $html);
+        $this->assertStringNotContainsString('crmdefault', $html);
         $this->assertStringNotContainsString('Login campaign', $html);
         $this->assertStringNotContainsString('/api/vicidial/session/agent-campaigns', $html);
         $this->assertStringNotContainsString('/api/vicidial/session/select-campaign', $html);

@@ -49,6 +49,17 @@ Route::get('api/telephony/health', \App\Http\Controllers\Api\TelephonyHealthCont
 // WebSocket config for frontend (public, returns connection params)
 Route::get('api/websocket/health', \App\Http\Controllers\Api\WebsocketHealthController::class)->name('api.websocket.health');
 
+Route::middleware('auth')->group(function () {
+    Route::post('api/vicidial/session/login', [\App\Http\Controllers\Api\VicidialSessionController::class, 'login'])->name('api.vicidial.session.login')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
+    Route::post('api/vicidial/session/verify', [\App\Http\Controllers\Api\VicidialSessionController::class, 'verify'])->name('api.vicidial.session.verify')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
+    Route::post('api/vicidial/session/pause', [\App\Http\Controllers\Api\VicidialSessionController::class, 'pause'])->name('api.vicidial.session.pause')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
+    Route::post('api/vicidial/session/pause-code', [\App\Http\Controllers\Api\VicidialSessionController::class, 'pauseCode'])->name('api.vicidial.session.pause-code')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
+    Route::post('api/vicidial/session/logout', [\App\Http\Controllers\Api\VicidialSessionController::class, 'logout'])->name('api.vicidial.session.logout')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
+    Route::post('api/vicidial/session/ingroups', [\App\Http\Controllers\Api\VicidialSessionController::class, 'ingroups'])->name('api.vicidial.session.ingroups')->middleware(['throttle:vicidial', 'telephony_feature:ingroup_management']);
+    Route::get('api/vicidial/session/status', [\App\Http\Controllers\Api\VicidialSessionController::class, 'status'])->name('api.vicidial.session.status')->middleware(['throttle:telephony-poll', 'telephony_feature:session_controls', 'log_throttle']);
+    Route::get('api/vicidial/session/iframe-url', [\App\Http\Controllers\Api\VicidialSessionController::class, 'iframeUrl'])->name('api.vicidial.session.iframe-url')->middleware(['throttle:api', 'telephony_feature:session_controls']);
+});
+
 Route::middleware(['auth', 'campaign'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('records', [RecordsController::class, 'index'])->name('records.index');
@@ -77,14 +88,6 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::post('api/callbacks/schedule', [\App\Http\Controllers\Api\CallbackController::class, 'schedule'])->name('api.callbacks.schedule')->middleware(['throttle:api', 'telephony_feature:callback_controls']);
     Route::post('api/callbacks/remove', [\App\Http\Controllers\Api\CallbackController::class, 'remove'])->name('api.callbacks.remove')->middleware(['throttle:api', 'telephony_feature:callback_controls']);
     Route::get('api/callbacks/info', [\App\Http\Controllers\Api\CallbackController::class, 'info'])->name('api.callbacks.info')->middleware(['throttle:api', 'telephony_feature:callback_controls']);
-    Route::post('api/vicidial/session/login', [\App\Http\Controllers\Api\VicidialSessionController::class, 'login'])->name('api.vicidial.session.login')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
-    Route::post('api/vicidial/session/verify', [\App\Http\Controllers\Api\VicidialSessionController::class, 'verify'])->name('api.vicidial.session.verify')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
-    Route::post('api/vicidial/session/pause', [\App\Http\Controllers\Api\VicidialSessionController::class, 'pause'])->name('api.vicidial.session.pause')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
-    Route::post('api/vicidial/session/pause-code', [\App\Http\Controllers\Api\VicidialSessionController::class, 'pauseCode'])->name('api.vicidial.session.pause-code')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
-    Route::post('api/vicidial/session/logout', [\App\Http\Controllers\Api\VicidialSessionController::class, 'logout'])->name('api.vicidial.session.logout')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
-    Route::post('api/vicidial/session/ingroups', [\App\Http\Controllers\Api\VicidialSessionController::class, 'ingroups'])->name('api.vicidial.session.ingroups')->middleware(['throttle:vicidial', 'telephony_feature:ingroup_management']);
-    Route::get('api/vicidial/session/status', [\App\Http\Controllers\Api\VicidialSessionController::class, 'status'])->name('api.vicidial.session.status')->middleware(['throttle:telephony-poll', 'telephony_feature:session_controls', 'log_throttle']);
-    Route::get('api/vicidial/session/iframe-url', [\App\Http\Controllers\Api\VicidialSessionController::class, 'iframeUrl'])->name('api.vicidial.session.iframe-url')->middleware(['throttle:api', 'telephony_feature:session_controls']);
     Route::get('api/leads/search', [\App\Http\Controllers\Api\LeadController::class, 'search'])->name('api.leads.search')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
     Route::get('api/leads/info', [\App\Http\Controllers\Api\LeadController::class, 'info'])->name('api.leads.info')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
     Route::get('api/leads/hydrate', [\App\Http\Controllers\Api\LeadController::class, 'hydrate'])->name('api.leads.hydrate')->middleware('throttle:api');

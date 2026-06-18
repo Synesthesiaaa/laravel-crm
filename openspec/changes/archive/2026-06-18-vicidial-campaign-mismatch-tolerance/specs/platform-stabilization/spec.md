@@ -1,24 +1,4 @@
-# Platform Stabilization
-
-## Purpose
-
-Keep the CRM shell, telephony runtime, backend hotspots, and verification paths stable under soft navigation and production use.
-
-## Requirements
-
-### Requirement: Soft-navigation rehydration
-The system SHALL restore page-local interactive behavior after a soft-navigation swap without requiring a hard refresh.
-
-#### Scenario: Returning to a page after navigation
-- **WHEN** an authenticated user leaves a page and returns to it through the app sidebar or another soft-navigation link
-- **THEN** the page's buttons, dropdowns, and page-specific scripts SHALL work on the first click
-
-### Requirement: Widget lifecycle cleanup
-The system SHALL destroy and recreate page-scoped chart and widget instances when a soft-navigation swap re-renders a page.
-
-#### Scenario: Revisiting a dashboard page
-- **WHEN** a user opens a dashboard page, navigates away, and opens it again
-- **THEN** the page SHALL render one live instance per chart or widget container and SHALL NOT duplicate listeners or overlays
+## MODIFIED Requirements
 
 ### Requirement: Softphone campaign selection is resolved outside the widget
 The system SHALL resolve the Vicidial campaign used by the floating softphone widget from the existing campaign source chain and SHALL NOT expose a widget-side campaign selector, allowed-campaign list, or widget-specific campaign preference. The system SHALL keep the CRM campaign value separate and SHALL NOT require CRM campaign equality as a condition for softphone connection.
@@ -35,6 +15,10 @@ The system SHALL resolve the Vicidial campaign used by the floating softphone wi
 - **WHEN** the user interacts with the softphone widget
 - **THEN** the system SHALL NOT create or update a separate widget-only campaign preference
 
+#### Scenario: CRM campaign mismatch does not block startup
+- **WHEN** the CRM campaign value differs from the Vicidial campaign used by the softphone
+- **THEN** the widget SHALL continue connecting on the Vicidial campaign and SHALL NOT fail solely because the campaigns differ
+
 ### Requirement: Confirmed Vicidial campaign becomes the active telephony campaign
 The system SHALL persist the campaign confirmed by Vicidial as the active telephony campaign for the current session after login or verification confirms a live agent, and SHALL use that campaign for subsequent iframe recovery, status sync, pause, logout, and reconnect flows. The system SHALL NOT rewrite the CRM campaign session value when the telephony campaign changes.
 
@@ -49,6 +33,10 @@ The system SHALL persist the campaign confirmed by Vicidial as the active teleph
 #### Scenario: Follow-up telephony actions stay on the synced campaign
 - **WHEN** the user pauses, resumes, requests status, opens the iframe, or logs out after the campaign has been synced
 - **THEN** the backend SHALL target the synced telephony campaign for those requests
+
+#### Scenario: CRM campaign remains unchanged
+- **WHEN** Vicidial confirms a live agent session under a different telephony campaign
+- **THEN** the CRM session campaign SHALL remain unchanged for CRM pages and SHALL NOT be overwritten by the softphone flow
 
 ### Requirement: Live Vicidial readiness does not depend on CRM campaign equality
 The system SHALL mark the softphone session ready when Vicidial confirms a live agent session for the current user, even if the Vicidial campaign differs from the CRM campaign value, and SHALL NOT surface timeout, connecting, or failure states solely because the campaigns are not equal. The system SHALL only show a campaign-mismatch failure when Vicidial does not report a live agent session or the connection itself fails.
@@ -65,6 +53,10 @@ The system SHALL mark the softphone session ready when Vicidial confirms a live 
 - **WHEN** verification fails because Vicidial does not report a live agent session
 - **THEN** the response SHALL focus on agent login alignment and live-agent state and SHALL NOT require CRM and Vicidial campaign equality as a readiness condition
 
+#### Scenario: Transport failures still timeout
+- **WHEN** the iframe or Vicidial request cannot complete because of a real transport, authentication, or load failure
+- **THEN** the widget SHALL continue to use its normal timeout or failure handling
+
 ### Requirement: Vicidial session requests fall back to an active server
 The system SHALL resolve Vicidial session login and recovery requests against the campaign-specific Vicidial server when a matching server exists and SHALL fall back to the active default Vicidial server when the requested campaign is not registered in CRM. The system SHALL only fail when no active Vicidial server is available or when the active server itself rejects the request.
 
@@ -75,43 +67,3 @@ The system SHALL resolve Vicidial session login and recovery requests against th
 #### Scenario: No active server still fails
 - **WHEN** there is no active Vicidial server available for the request
 - **THEN** the softphone SHALL fail with an actionable configuration error rather than timing out as if the campaign mismatch were the problem
-
-### Requirement: Single telephony media owner
-The system SHALL allow only one active browser media path per authenticated session and SHALL honor the configured media path without double-registering the same extension.
-
-#### Scenario: SIP.js owns audio
-- **WHEN** the configured media path is `sipjs`
-- **THEN** the browser SHALL register SIP.js for the session and the Vicidial iframe audio path SHALL remain inactive
-
-#### Scenario: Vicidial owns audio
-- **WHEN** the configured media path is `viciphone`
-- **THEN** SIP.js registration SHALL be skipped and the Vicidial iframe SHALL own audio for the session
-
-#### Scenario: Dual mode is temporary only
-- **WHEN** the configured media path is `both`
-- **THEN** the system SHALL surface a warning that the session is in migration mode and SHALL treat dual registration as non-standard
-
-### Requirement: Portable test-critical migrations
-The system SHALL keep test-critical database migrations compatible with SQLite and production database engines.
-
-#### Scenario: PHPUnit on SQLite
-- **WHEN** the test suite runs against SQLite
-- **THEN** migrations SHALL complete without vendor-specific SQL errors
-
-### Requirement: Bounded admin diagnostics
-The system SHALL avoid N+1 query patterns in admin diagnostics and other high-frequency reporting checks.
-
-#### Scenario: Campaign mapping diagnostics
-- **WHEN** the telephony diagnostics validate campaign-to-server mappings
-- **THEN** the check SHALL complete with a bounded query set and SHALL NOT perform one database lookup per campaign
-
-### Requirement: Safe logout and webhook hardening
-The system SHALL complete logout cleanup without double-submit behavior and SHALL reject misconfigured public webhook traffic in production.
-
-#### Scenario: Logout during active telephony use
-- **WHEN** a signed-in user logs out while a telephony session is active
-- **THEN** the client SHALL hang up or destroy the telephony runtime once, clear any embedded session frame, and submit the logout form once
-
-#### Scenario: Missing or invalid webhook secret in production
-- **WHEN** production receives a webhook request with a missing or invalid shared secret
-- **THEN** the request SHALL be rejected instead of being accepted silently
