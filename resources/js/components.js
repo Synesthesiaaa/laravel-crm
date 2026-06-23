@@ -308,18 +308,35 @@ window.dispositionModal = function() {
             }
             this.submitting = true;
             const campaign = document.body.dataset.campaign || 'mbsales';
+            const callStore = Alpine.store('call');
+            const leadId = this.leadId ?? callStore.leadId ?? null;
+            const phoneNumber = this.phoneNumber || callStore.number;
             try {
                 await window.axios.post('/api/disposition/save', {
                     campaign_code:    campaign,
-                    call_session_id:  Alpine.store('call').sessionId,
-                    lead_id:          this.leadId,
-                    phone_number:     this.phoneNumber || Alpine.store('call').number,
+                    call_session_id:  callStore.sessionId,
+                    lead_id:          leadId,
+                    phone_number:     phoneNumber,
                     disposition_code: this.selectedCode,
                     notes:            this.notes,
                 });
                 Alpine.store('toast').success('Disposition saved.');
-                Alpine.store('call').state = 'idle';
-                Alpine.store('call').setSessionId(null);
+                callStore.stopTimer();
+                callStore.state = 'idle';
+                callStore.setSessionId(null);
+                callStore.setLeadId(null);
+                window.dispatchEvent(new CustomEvent('disposition-saved', {
+                    detail: {
+                        campaign,
+                        lead_id: leadId,
+                        phone_number: phoneNumber,
+                        disposition_code: this.selectedCode,
+                    },
+                }));
+                this.leadId = null;
+                this.phoneNumber = '';
+                this.selectedCode = '';
+                this.notes = '';
                 this.open = false;
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Failed to save disposition.');

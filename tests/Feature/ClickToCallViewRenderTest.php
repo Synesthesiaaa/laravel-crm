@@ -36,7 +36,7 @@ class ClickToCallViewRenderTest extends TestCase
         $response->assertSee('Quick Dial', false);
     }
 
-    public function test_agent_screen_uses_inline_disposition_not_global_modal(): void
+    public function test_agent_screen_renders_global_disposition_modal_instead_of_inline_panel(): void
     {
         $agent = User::factory()->create(['role' => User::ROLE_AGENT]);
 
@@ -45,7 +45,10 @@ class ClickToCallViewRenderTest extends TestCase
             ->get(route('agent.index'));
 
         $response->assertOk();
-        $response->assertSee('Save Disposition', false);
-        $response->assertDontSee('Call Wrap-up — Disposition Required', false);
+        $response->assertSee('Call Wrap-up', false);
+        $response->assertSee('Select a disposition code before taking the next call.', false);
+        $response->assertSee('Save & Ready', false);
+        $response->assertDontSee('Save Disposition', false);
+        $response->assertDontSee('Select a code and retry, or click Dismiss to return to idle.', false);
     }
 }

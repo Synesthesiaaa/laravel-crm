@@ -385,8 +385,7 @@
     <x-click-to-call />
     @endauth
 
-    {{-- Disposition modal (post-call wrap-up; agent screen uses inline card) --}}
-    @unless(request()->routeIs('agent.index'))
+    {{-- Disposition modal (post-call wrap-up) --}}
     <div x-show="$store.call.state === 'wrapup'"
          class="modal-backdrop"
          style="display: none;"
@@ -423,7 +422,6 @@
             </div>
         </div>
     </div>
-    @endunless
 
     {{-- Session flash → Alpine toast (all roles; Laravel uses several flash keys) --}}
     @if (session('success'))

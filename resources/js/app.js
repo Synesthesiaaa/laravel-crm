@@ -281,6 +281,7 @@ Alpine.store('sidebar', {
 Alpine.store('call', {
     state: 'idle', // idle | ringing | connected | hold | wrapup
     sessionId: null,
+    leadId: null,
     number: '',
     duration: 0,
     timer: null,
@@ -296,6 +297,7 @@ Alpine.store('call', {
     },
     stopTimer() { clearInterval(this.timer); this.timer = null; this.duration = 0; },
     setSessionId(id) { this.sessionId = id; },
+    setLeadId(id) { this.leadId = id; },
     formattedDuration() {
         const m = String(Math.floor(this.duration / 60)).padStart(2, '0');
         const s = String(this.duration % 60).padStart(2, '0');
@@ -417,6 +419,7 @@ window.crmGracefulLogout = async function () {
         }
         call.state = 'idle';
         call.sessionId = null;
+        call.leadId = null;
         call.stopTimer();
 
         if (window.TelephonyCore && window.TelephonyMediaPath?.shouldDestroySip?.() === true) {

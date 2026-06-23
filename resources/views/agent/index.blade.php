@@ -209,50 +209,6 @@
             </div>
         </div>
 
-        {{-- Disposition --}}
-        <div class="md-card md-card--static p-5" x-show="callState === 'wrapup'">
-            <div class="flex items-center justify-between mb-3">
-                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Disposition</h3>
-                {{-- Show dismiss only when there is an error so agent is never stuck --}}
-                <button type="button"
-                        class="btn-ghost text-xs text-[var(--color-danger)]"
-                        x-show="dispositionError"
-                        @click="dismissDisposition()"
-                        title="Dismiss and return to idle">
-                    <x-icon name="x-mark" class="w-3.5 h-3.5" />
-                    Dismiss
-                </button>
-            </div>
-
-            {{-- Error banner with retry hint --}}
-            <div x-show="dispositionError" class="mb-3 rounded-md border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/5 px-3 py-2">
-                <p class="text-xs text-[var(--color-danger)]" x-text="dispositionError"></p>
-                <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">Select a code and retry, or click Dismiss to return to idle.</p>
-            </div>
-
-            <div class="form-field mb-3">
-                <label class="form-label">Code</label>
-                <select x-model="dispositionCode" class="form-select">
-                    <option value="">-- Select disposition --</option>
-                    @foreach($dispositionCodes ?? [] as $dc)
-                        @php
-                            $code = is_array($dc) ? ($dc['code'] ?? '') : ($dc->code ?? '');
-                            $label = is_array($dc) ? ($dc['label'] ?? $code) : ($dc->label ?? $code);
-                        @endphp
-                        <option value="{{ $code }}">{{ $label }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="form-field mb-3">
-                <label class="form-label">Notes</label>
-                <textarea x-model="dispositionNotes" class="form-textarea" rows="3" placeholder="Optional call notes..."></textarea>
-            </div>
-            <button class="btn-primary w-full" @click="saveDisposition()" :disabled="!dispositionCode || savingDisposition">
-                <x-icon name="check" class="w-4 h-4" />
-                <span x-text="savingDisposition ? 'Saving...' : (dispositionError ? 'Retry Save' : 'Save Disposition')">Save Disposition</span>
-            </button>
-        </div>
-
         @if(($telephonyFeatures['ingroup_management'] ?? true) === true)
             @include('agent.partials.ingroup-panel')
         @endif
@@ -334,6 +290,7 @@ window.agentScreen = function() {
         _activeLeadMaxBackoffMs: 60000,
         _lastDetectedLeadId: '',
         _shortcutHandlers: [],
+        _dispositionSavedHandler: null,
         _destroyed: false,
         features: JSON.parse(document.getElementById('agent-screen-telephony-features')?.textContent || '[]'),
 
@@ -345,13 +302,15 @@ window.agentScreen = function() {
             this.$watch('$store.call.number', (v) => { if (v) this.phoneNumber = v; });
             this.$watch('$store.call.sessionId', (v) => { if (v) this.sessionId = v; });
             this.$watch('leadId', (value) => {
+                const trimmedLeadId = String(value || '').trim();
+                Alpine.store('call').setLeadId(trimmedLeadId || null);
                 if (this._suppressLeadWatcher) {
                     return;
                 }
                 if (this._leadHydrateTimer) {
                     clearTimeout(this._leadHydrateTimer);
                 }
-                const leadId = String(value || '').trim();
+                const leadId = trimmedLeadId;
                 if (!leadId || leadId === this._lastHydratedLeadId) {
                     return;
                 }
@@ -417,6 +376,11 @@ window.agentScreen = function() {
                 }],
             ];
             this._shortcutHandlers.forEach(([eventName, handler]) => window.addEventListener(eventName, handler));
+
+            this._dispositionSavedHandler = () => {
+                this.resetAfterDisposition();
+            };
+            window.addEventListener('disposition-saved', this._dispositionSavedHandler);
         },
 
         /** CRM login campaign — hopper, forms, dispositions, lead tools. */
@@ -443,6 +407,11 @@ window.agentScreen = function() {
             this._activeLeadTimer = null;
             this._leadHydrateTimer = null;
             this._predictiveTimer = null;
+
+            if (typeof this._dispositionSavedHandler === 'function') {
+                window.removeEventListener('disposition-saved', this._dispositionSavedHandler);
+            }
+            this._dispositionSavedHandler = null;
 
             this._shortcutHandlers.forEach(([eventName, handler]) => window.removeEventListener(eventName, handler));
             this._shortcutHandlers = [];
