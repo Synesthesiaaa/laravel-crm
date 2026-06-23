@@ -7,6 +7,7 @@ use App\Models\Campaign;
 use App\Models\CrmCallHistory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class RecordsTest extends TestCase
@@ -27,6 +28,13 @@ class RecordsTest extends TestCase
             'name' => 'MB Sales',
             'color' => '#3b82f6',
         ]);
+    }
+
+    protected function tearDown(): void
+    {
+        config(['vicidial.events_webhook_secret' => '']);
+
+        parent::tearDown();
     }
 
     public function test_call_history_lists_only_authenticated_agents_call_sessions(): void
@@ -112,5 +120,63 @@ class RecordsTest extends TestCase
             ->assertSee('No call sessions found.')
             ->assertDontSee('loan_application')
             ->assertDontSee('639133333333');
+    }
+
+    public function test_call_history_renders_completed_status_and_duration_after_out_of_order_vicidial_events(): void
+    {
+        config(['vicidial.events_webhook_secret' => 'vicidial-secret']);
+
+        $this->travelTo(Carbon::parse('2026-06-23 12:00:00'), function () {
+            $agent = User::factory()->create([
+                'username' => 'agent_vici',
+                'vici_user' => 'agent_vici',
+                'full_name' => 'Agent Vici',
+            ]);
+
+            $session = CallSession::factory()
+                ->for($agent)
+                ->ringing()
+                ->create([
+                    'campaign_code' => 'mbsales',
+                    'lead_id' => 3030,
+                    'phone_number' => '639155500000',
+                    'vicidial_call_id' => 'VICI-RACE-1',
+                    'dialed_at' => now()->subMinutes(2),
+                    'ringing_at' => now()->subMinutes(2),
+                ]);
+
+            $this->postJson(route('api.webhooks.vicidial-events'), [
+                'user' => 'agent_vici',
+                'event' => 'agent_hangup',
+            ], [
+                'X-Webhook-Secret' => 'vicidial-secret',
+            ])
+                ->assertOk()
+                ->assertJsonPath('received', true)
+                ->assertJsonPath('processed', true);
+
+            $this->postJson(route('api.webhooks.vicidial-events'), [
+                'user' => 'agent_vici',
+                'event' => 'call_answered',
+            ], [
+                'X-Webhook-Secret' => 'vicidial-secret',
+            ])
+                ->assertOk()
+                ->assertJsonPath('received', true)
+                ->assertJsonPath('processed', true);
+
+            $session->refresh();
+            $this->assertSame(CallSession::STATUS_COMPLETED, $session->status);
+            $this->assertSame(120, $session->call_duration_seconds);
+
+            $response = $this->actingAs($agent)
+                ->withSession($this->campaignSession())
+                ->get(route('records.index'));
+
+            $response->assertOk()
+                ->assertSee('Agent Vici')
+                ->assertSee('Completed')
+                ->assertSee('02:00', false);
+        });
     }
 }

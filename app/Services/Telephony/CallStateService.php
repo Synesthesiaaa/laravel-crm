@@ -125,6 +125,10 @@ class CallStateService
                     default => null,
                 };
 
+                if (($context['assume_connected'] ?? false) && $toStatus === CallSession::STATUS_COMPLETED && $session->answered_at === null) {
+                    $session->answered_at = $session->ringing_at ?? $session->dialed_at ?? now();
+                }
+
                 if ($session->ended_at && $session->answered_at) {
                     $session->call_duration_seconds = (int) $session->answered_at->diffInSeconds($session->ended_at);
                 }

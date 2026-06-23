@@ -66,6 +66,7 @@ class DispositionService
                 ]);
                 $this->callStateService->transition($session, CallSession::STATUS_COMPLETED, [
                     'end_reason' => 'force_ended_on_disposition',
+                    'assume_connected' => true,
                 ], true);
                 $session->refresh();
 

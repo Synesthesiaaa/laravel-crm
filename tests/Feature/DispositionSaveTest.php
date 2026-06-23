@@ -6,6 +6,7 @@ use App\Models\CallSession;
 use App\Models\DispositionCode;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class DispositionSaveTest extends TestCase
@@ -120,26 +121,34 @@ class DispositionSaveTest extends TestCase
             'is_active' => true,
         ]);
         $user = User::factory()->create();
-        $session = CallSession::factory()
-            ->for($user)
-            ->inCall()
-            ->create(['campaign_code' => 'mbsales']);
+        $this->travelTo(Carbon::parse('2026-06-23 12:00:00'), function () use ($user): void {
+            $session = CallSession::factory()
+                ->for($user)
+                ->ringing()
+                ->create([
+                    'campaign_code' => 'mbsales',
+                    'dialed_at' => now()->subMinutes(2),
+                    'ringing_at' => now()->subMinutes(2),
+                ]);
 
-        $response = $this->actingAs($user)->withSession(['campaign' => 'mbsales'])->postJson(route('api.disposition.save'), [
-            'campaign_code' => 'mbsales',
-            'disposition_code' => 'SALE',
-            'disposition_label' => 'Sale',
-            'call_session_id' => $session->id,
-        ]);
+            $response = $this->actingAs($user)->withSession(['campaign' => 'mbsales'])->postJson(route('api.disposition.save'), [
+                'campaign_code' => 'mbsales',
+                'disposition_code' => 'SALE',
+                'disposition_label' => 'Sale',
+                'call_session_id' => $session->id,
+            ]);
 
-        $response->assertOk();
-        $response->assertJson(['success' => true]);
-        $this->assertDatabaseHas('campaign_disposition_records', [
-            'call_session_id' => $session->id,
-            'disposition_code' => 'SALE',
-        ]);
-        $session->refresh();
-        $this->assertTrue($session->isTerminal(), 'Session should be force-completed.');
+            $response->assertOk();
+            $response->assertJson(['success' => true]);
+            $this->assertDatabaseHas('campaign_disposition_records', [
+                'call_session_id' => $session->id,
+                'disposition_code' => 'SALE',
+            ]);
+            $session->refresh();
+            $this->assertTrue($session->isTerminal(), 'Session should be force-completed.');
+            $this->assertSame(CallSession::STATUS_COMPLETED, $session->status);
+            $this->assertSame(120, $session->call_duration_seconds);
+        });
     }
 
     public function test_disposition_duplicate_rejected(): void

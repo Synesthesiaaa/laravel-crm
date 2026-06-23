@@ -134,7 +134,13 @@ class VicidialEventsWebhookController extends Controller
         $session = CallSession::where('user_id', $user->id)->active()->orderByDesc('dialed_at')->first();
         if ($session && ! $session->isTerminal()) {
             $endReason = $event === 'call_dead' ? 'customer_hangup' : 'agent_hangup_vici';
-            $this->callStateService->recordHangup($session, ['end_reason' => $endReason]);
+            // VICIdial push events can arrive out of order, so a hangup event
+            // should still close the call as connected even if call_answered
+            // has not been processed yet.
+            $this->callStateService->transition($session, CallSession::STATUS_COMPLETED, [
+                'end_reason' => $endReason,
+                'assume_connected' => true,
+            ]);
         }
 
         return true;
