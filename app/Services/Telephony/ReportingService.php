@@ -36,10 +36,10 @@ class ReportingService
     public function agentStats(User $user, string $campaign, array $params): OperationResult
     {
         return $this->nonAgentApi->execute($user, $campaign, 'agent_stats_export', array_filter([
-            'datetime_start' => $params['datetime_start'] ?? now()->startOfDay()->format('Y-m-d+H:i:s'),
-            'datetime_end' => $params['datetime_end'] ?? now()->endOfDay()->format('Y-m-d+H:i:s'),
+            'datetime_start' => $this->resolveDateTimeStart($params),
+            'datetime_end' => $this->resolveDateTimeEnd($params),
             'agent_user' => $params['agent_user'] ?? null,
-            'campaign_id' => $params['campaign_id'] ?? null,
+            'campaign_id' => $this->resolveCampaignId($params),
             'group_by_campaign' => $params['group_by_campaign'] ?? 'YES',
             'stage' => $params['stage'] ?? 'pipe',
             'header' => $params['header'] ?? 'YES',
@@ -93,5 +93,55 @@ class ReportingService
             'header' => 'YES',
             'include_ip' => 'YES',
         ], true);
+    }
+
+    protected function resolveCampaignId(array $params): ?string
+    {
+        $campaignId = trim((string) ($params['campaign_id'] ?? ''));
+        if ($campaignId !== '') {
+            return $campaignId;
+        }
+
+        $campaigns = trim((string) ($params['campaigns'] ?? $params['campaign'] ?? ''));
+        if ($campaigns === '') {
+            return null;
+        }
+
+        $normalized = strtoupper($campaigns);
+        if (in_array($normalized, ['---ALL---', 'ALL', 'ALLCAMPAIGNS'], true)) {
+            return null;
+        }
+
+        return $campaigns;
+    }
+
+    protected function resolveDateTimeStart(array $params): string
+    {
+        return $this->normalizeDateTime(
+            (string) ($params['datetime_start'] ?? $params['query_date'] ?? now()->startOfDay()->format('Y-m-d')),
+            '+00:00:00',
+        );
+    }
+
+    protected function resolveDateTimeEnd(array $params): string
+    {
+        return $this->normalizeDateTime(
+            (string) ($params['datetime_end'] ?? $params['end_date'] ?? $params['query_date'] ?? now()->endOfDay()->format('Y-m-d')),
+            '+23:59:59',
+        );
+    }
+
+    protected function normalizeDateTime(string $value, string $defaultTime): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return now()->format('Y-m-d').$defaultTime;
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1) {
+            return $value.$defaultTime;
+        }
+
+        return $value;
     }
 }
