@@ -18,6 +18,7 @@ class DashboardStatsServiceTest extends TestCase
     protected function tearDown(): void
     {
         Carbon::setTestNow();
+        config(['vicidial.report_system_disposition_codes' => []]);
         parent::tearDown();
     }
 
@@ -38,7 +39,10 @@ class DashboardStatsServiceTest extends TestCase
     {
         Carbon::setTestNow('2026-05-07 15:00:00');
         Cache::flush();
-        config(['dashboard.kpi_window_hours' => 9]);
+        config([
+            'dashboard.kpi_window_hours' => 9,
+            'vicidial.report_system_disposition_codes' => ['SYSTEM'],
+        ]);
 
         CampaignDispositionRecord::create([
             'campaign_code' => 'mbsales',
@@ -57,6 +61,12 @@ class DashboardStatsServiceTest extends TestCase
             'agent' => 'Alex',
             'disposition_code' => 'OTHER',
             'called_at' => Carbon::parse('2026-05-07 05:30:00'),
+        ]);
+        CampaignDispositionRecord::create([
+            'campaign_code' => 'mbsales',
+            'agent' => 'Alex',
+            'disposition_code' => 'SYSTEM',
+            'called_at' => Carbon::parse('2026-05-07 12:30:00'),
         ]);
 
         /** @var DashboardStatsService $service */
@@ -225,6 +235,7 @@ class DashboardStatsServiceTest extends TestCase
         Carbon::setTestNow('2026-05-15 10:00:00');
         Cache::flush();
         $this->seed(CampaignSeeder::class);
+        config(['vicidial.report_system_disposition_codes' => ['SYSTEM']]);
 
         $this->insertEzycashRowWithAgent('2026-05-10', 'Carl', 1);
         $this->insertEzycashRowWithAgent('2026-05-10', 'Carl', 2);
@@ -252,6 +263,13 @@ class DashboardStatsServiceTest extends TestCase
             'disposition_code' => 'SALE',
             'called_at' => Carbon::parse('2026-05-12 14:00:00'),
             'lead_data_json' => ['ezycash_amount' => 200],
+        ]);
+        CampaignDispositionRecord::create([
+            'campaign_code' => 'mbsales',
+            'agent' => 'Bob',
+            'disposition_code' => 'SYSTEM',
+            'called_at' => Carbon::parse('2026-05-12 15:00:00'),
+            'lead_data_json' => ['ezycash_amount' => 999],
         ]);
 
         $board = app(DashboardStatsService::class)->getAgentLeaderboard('mbsales', 10);

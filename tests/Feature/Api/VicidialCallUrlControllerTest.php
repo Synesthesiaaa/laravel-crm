@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api;
 
+use App\Events\DispositionSaved;
 use App\Events\InboundCallReceived;
 use App\Models\CallSession;
 use App\Models\DispositionCode;
@@ -30,6 +31,7 @@ class VicidialCallUrlControllerTest extends TestCase
     {
         config([
             'vicidial.call_url_secret' => '',
+            'vicidial.report_system_disposition_codes' => [],
         ]);
 
         Mockery::close();
@@ -285,6 +287,54 @@ class VicidialCallUrlControllerTest extends TestCase
             ->assertJsonPath('data.call_session_id', $session->id);
 
         $this->assertDatabaseCount('campaign_disposition_records', 1);
+    }
+
+    public function test_dispo_call_skips_report_persistence_for_system_dispositions(): void
+    {
+        Event::fake();
+        config(['vicidial.report_system_disposition_codes' => ['SYS_AUTO']]);
+
+        $user = User::factory()->create([
+            'username' => 'agent007',
+            'vici_user' => 'agent007',
+        ]);
+
+        $session = CallSession::factory()
+            ->for($user)
+            ->inCall()
+            ->create([
+                'campaign_code' => 'mbsales',
+                'lead_id' => 777,
+                'phone_number' => '15550007777',
+                'vicidial_lead_id' => '777',
+                'vicidial_call_id' => 'VICI-SYS-1',
+            ]);
+
+        $payload = [
+            'sig' => 'vicidial-secret',
+            'campaign' => 'mbsales',
+            'call_id' => 'VICI-SYS-1',
+            'dispo' => 'SYS_AUTO',
+            'call_notes' => 'System-generated disposition.',
+            'user' => 'agent007',
+            'lead_id' => 777,
+            'phone_number' => '15550007777',
+        ];
+
+        $response = $this->getJson(route('api.webhooks.vicidial.dispo-call', $payload));
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('data.excluded_from_reports', true)
+            ->assertJsonPath('data.disposition_code', 'SYS_AUTO')
+            ->assertJsonPath('data.call_session_id', $session->id);
+
+        $session->refresh();
+        $this->assertSame(CallSession::STATUS_COMPLETED, $session->status);
+        $this->assertSame('SYS_AUTO', $session->disposition_code);
+        $this->assertSame('SYS_AUTO', $session->disposition_label);
+        $this->assertDatabaseCount('campaign_disposition_records', 0);
+        Event::assertNotDispatched(DispositionSaved::class);
     }
 
     public function test_no_agent_call_logs_alert_without_mutating_session_state(): void

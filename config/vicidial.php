@@ -44,6 +44,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Report system disposition codes
+    |--------------------------------------------------------------------------
+    | Vicidial disposition codes that should be treated as system-generated.
+    | They can be hidden in the dashboard and excluded from CRM report rows.
+    */
+    'report_system_disposition_codes' => array_values(array_filter(array_map(
+        static fn ($code) => trim((string) $code),
+        explode(',', (string) env('VICI_REPORT_SYSTEM_DISPOSITION_CODES', '')),
+    ))),
+
+    /*
+    |--------------------------------------------------------------------------
     | Agent session defaults
     |--------------------------------------------------------------------------
     */

@@ -113,6 +113,11 @@ class VicidialCallUrlService
         $leadId = $this->intValue($payload, 'lead_id');
         $phoneNumber = $this->stringValue($payload, 'phone_number');
         $dispositionCode = $this->stringValue($payload, 'dispo');
+
+        if ($dispositionCode === null) {
+            return OperationResult::failure('Disposition code is required.');
+        }
+
         $session = $this->findDispositionSession($campaign, $leadId, $phoneNumber, $callId);
 
         if ($session === null) {
@@ -144,6 +149,7 @@ class VicidialCallUrlService
         $remarks = $this->stringValue($payload, 'call_notes');
         $talkTime = $this->intValue($payload, 'talk_time');
         $agentLabel = $this->resolveAgentLabel($payload, $session->user);
+        $isSystemDisposition = $this->isSystemDisposition($dispositionCode);
 
         $result = $this->dispositionService->saveDisposition(
             $campaign,
@@ -157,6 +163,8 @@ class VicidialCallUrlService
             $remarks,
             $talkTime ?? $session->call_duration_seconds,
             $this->callbackLeadDataJson($payload),
+            ! $isSystemDisposition,
+            $isSystemDisposition,
         );
 
         if (! $result->success) {
@@ -170,6 +178,7 @@ class VicidialCallUrlService
             'disposition_label' => $dispositionLabel,
             'lead_id' => $session->lead_id ? (int) $session->lead_id : $leadId,
             'phone_number' => $session->phone_number ?: $phoneNumber,
+            'excluded_from_reports' => $isSystemDisposition,
         ]);
     }
 
@@ -591,6 +600,23 @@ class VicidialCallUrlService
         ]);
 
         return $leadData === [] ? null : json_encode($leadData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * Determine whether a Vicidial disposition should be excluded from CRM reports.
+     */
+    protected function isSystemDisposition(string $dispositionCode): bool
+    {
+        $systemCodes = array_values(array_filter(array_map(
+            static fn ($code) => strtoupper(trim((string) $code)),
+            config('vicidial.report_system_disposition_codes', []),
+        )));
+
+        if ($systemCodes === []) {
+            return false;
+        }
+
+        return in_array(strtoupper(trim($dispositionCode)), $systemCodes, true);
     }
 
     /**

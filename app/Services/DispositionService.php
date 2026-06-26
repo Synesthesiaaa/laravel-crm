@@ -45,8 +45,12 @@ class DispositionService
         ?string $remarks = null,
         ?int $callDurationSeconds = null,
         ?string $leadDataJson = null,
+        bool $persistRecord = true,
+        bool $skipValidation = false,
     ): OperationResult {
-        $code = $this->resolveAndValidateCode($campaignCode, $dispositionCode, $dispositionLabel);
+        $code = $skipValidation
+            ? ['code' => $dispositionCode, 'label' => $dispositionLabel ?: $dispositionCode]
+            : $this->resolveAndValidateCode($campaignCode, $dispositionCode, $dispositionLabel);
         if (! $code) {
             return OperationResult::failure('Invalid or inactive disposition code for this campaign.');
         }
@@ -95,21 +99,24 @@ class DispositionService
                 $phoneNumber,
                 $remarks,
                 $callDurationSeconds,
-                $leadDataJson
+                $leadDataJson,
+                $persistRecord
             ) {
-                $record = CampaignDispositionRecord::create([
-                    'call_session_id' => $callSessionId,
-                    'campaign_code' => $campaignCode,
-                    'agent' => $agent,
-                    'disposition_code' => $dispositionCode,
-                    'disposition_label' => $dispositionLabel,
-                    'lead_id' => $leadId,
-                    'phone_number' => $phoneNumber,
-                    'remarks' => $remarks,
-                    'call_duration_seconds' => $callDurationSeconds,
-                    'lead_data_json' => $leadDataJson ? (is_string($leadDataJson) ? json_decode($leadDataJson, true) : $leadDataJson) : null,
-                    'called_at' => now(),
-                ]);
+                if ($persistRecord) {
+                    CampaignDispositionRecord::create([
+                        'call_session_id' => $callSessionId,
+                        'campaign_code' => $campaignCode,
+                        'agent' => $agent,
+                        'disposition_code' => $dispositionCode,
+                        'disposition_label' => $dispositionLabel,
+                        'lead_id' => $leadId,
+                        'phone_number' => $phoneNumber,
+                        'remarks' => $remarks,
+                        'call_duration_seconds' => $callDurationSeconds,
+                        'lead_data_json' => $leadDataJson ? (is_string($leadDataJson) ? json_decode($leadDataJson, true) : $leadDataJson) : null,
+                        'called_at' => now(),
+                    ]);
+                }
 
                 if ($callSessionId !== null) {
                     $session = CallSession::lockForUpdate()->find($callSessionId);
@@ -125,7 +132,9 @@ class DispositionService
                     }
                 }
 
-                event(new DispositionSaved($campaignCode, $agent, $dispositionCode, $leadId));
+                if ($persistRecord) {
+                    event(new DispositionSaved($campaignCode, $agent, $dispositionCode, $leadId));
+                }
             });
 
             return OperationResult::success();

@@ -155,18 +155,23 @@ class DashboardStatsService
 
             $salesCounts = [];
             $salesAmounts = [];
+            $systemCodes = $this->reportSystemDispositionCodes();
 
             if (Schema::hasTable('campaign_disposition_records') && $saleCodes !== []) {
-                $rows = DB::table('campaign_disposition_records')
+                $query = DB::table('campaign_disposition_records')
                     ->where('campaign_code', $campaignCode)
                     ->whereIn('disposition_code', $saleCodes)
                     ->whereNotNull('called_at')
                     ->whereDate('called_at', '>=', $monthStart)
                     ->whereDate('called_at', '<=', $today)
                     ->whereNotNull('agent')
-                    ->where('agent', '!=', '')
-                    ->select(['agent', 'lead_data_json'])
-                    ->get();
+                    ->where('agent', '!=', '');
+
+                if ($systemCodes !== []) {
+                    $query->whereNotIn('disposition_code', $systemCodes);
+                }
+
+                $rows = $query->select(['agent', 'lead_data_json'])->get();
 
                 foreach ($rows as $row) {
                     $agent = (string) $row->agent;
@@ -228,12 +233,18 @@ class DashboardStatsService
             }
 
             $since = now()->subHours($hours);
+            $systemCodes = $this->reportSystemDispositionCodes();
 
-            $calls = (int) DB::table('campaign_disposition_records')
+            $callsQuery = DB::table('campaign_disposition_records')
                 ->where('campaign_code', $campaignCode)
                 ->whereNotNull('called_at')
-                ->where('called_at', '>=', $since)
-                ->count();
+                ->where('called_at', '>=', $since);
+
+            if ($systemCodes !== []) {
+                $callsQuery->whereNotIn('disposition_code', $systemCodes);
+            }
+
+            $calls = (int) $callsQuery->count();
 
             /** @var list<string> $saleCodes */
             $saleCodes = config('dashboard.sale_disposition_codes', ['SALE']);
@@ -241,20 +252,31 @@ class DashboardStatsService
 
             $sales = 0;
             if ($saleCodes !== []) {
-                $sales = (int) DB::table('campaign_disposition_records')
+                $salesQuery = DB::table('campaign_disposition_records')
                     ->where('campaign_code', $campaignCode)
                     ->whereNotNull('called_at')
                     ->where('called_at', '>=', $since)
-                    ->whereIn('disposition_code', $saleCodes)
-                    ->count();
+                    ->whereIn('disposition_code', $saleCodes);
+
+                if ($systemCodes !== []) {
+                    $salesQuery->whereNotIn('disposition_code', $systemCodes);
+                }
+
+                $sales = (int) $salesQuery->count();
             }
 
-            $top = DB::table('campaign_disposition_records')
+            $topQuery = DB::table('campaign_disposition_records')
                 ->where('campaign_code', $campaignCode)
                 ->whereNotNull('called_at')
                 ->where('called_at', '>=', $since)
                 ->whereNotNull('agent')
-                ->where('agent', '!=', '')
+                ->where('agent', '!=', '');
+
+            if ($systemCodes !== []) {
+                $topQuery->whereNotIn('disposition_code', $systemCodes);
+            }
+
+            $top = $topQuery
                 ->select('agent', DB::raw('COUNT(*) as total'))
                 ->groupBy('agent')
                 ->orderByDesc('total')
@@ -430,5 +452,21 @@ class DashboardStatsService
         $tables = $this->resolveAllowedTables($campaignCode);
 
         return array_values(array_filter($tables, fn (string $t) => Schema::hasColumn($t, 'created_at')));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function reportSystemDispositionCodes(): array
+    {
+        $codes = config('vicidial.report_system_disposition_codes', []);
+        if (! is_array($codes) || $codes === []) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(
+            static fn ($code) => strtoupper(trim((string) $code)),
+            $codes,
+        )));
     }
 }

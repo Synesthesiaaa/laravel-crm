@@ -50,7 +50,7 @@
     </div>
 
     <div class="md-card p-4">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
             <div class="form-field">
                 <label class="form-label">Campaigns</label>
                 <input class="form-input" x-model="filters.campaigns" placeholder="---ALL--- or TESTCAMP" />
@@ -62,6 +62,18 @@
             <div class="form-field">
                 <label class="form-label">Date End</label>
                 <input class="form-input" type="date" x-model="filters.end_date" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Disposition Scope</label>
+                <select class="form-input" x-model="filters.disposition_scope">
+                    <template x-for="option in dispositionScopeOptions" :key="option.value">
+                        <option :value="option.value" x-text="option.label"></option>
+                    </template>
+                </select>
+                <p class="mt-1 text-[11px] text-[var(--color-on-surface-dim)]">
+                    System codes:
+                    <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="systemDispositionCodes.length ? systemDispositionCodes.join(', ') : 'None configured'"></span>
+                </p>
             </div>
             <div class="form-field flex items-end">
                 <button class="btn-primary w-full" @click="refreshAll()" x-bind:disabled="loading">
@@ -299,10 +311,13 @@
 
     <section class="space-y-4">
         <div class="flex flex-wrap items-end justify-between gap-3">
-            <div>
-                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Disposition Breakdown</h3>
-                <p class="text-xs text-[var(--color-on-surface-dim)]">Disposition totals and percentages for the selected report window.</p>
-            </div>
+                <div>
+                    <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Disposition Breakdown</h3>
+                    <p class="text-xs text-[var(--color-on-surface-dim)]">
+                        Disposition totals and percentages for the selected report window.
+                        <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="'Scope: ' + dashboard.scopeLabel"></span>
+                    </p>
+                </div>
             <p class="text-xs text-[var(--color-on-surface-dim)]" x-text="'Disposition rows: ' + dashboard.dispo.rows.length"></p>
         </div>
 
@@ -427,7 +442,14 @@ window.telephonyReports = function () {
             campaigns: '---ALL---',
             query_date: new Date().toISOString().slice(0, 10),
             end_date: new Date().toISOString().slice(0, 10),
+            disposition_scope: 'all',
         },
+        dispositionScopeOptions: [
+            { value: 'all', label: 'All dispositions' },
+            { value: 'exclude_system', label: 'Hide system dispositions' },
+            { value: 'system_only', label: 'System dispositions only' },
+        ],
+        systemDispositionCodes: @json(config('vicidial.report_system_disposition_codes', [])),
         recordingFilters: {
             agent_user: '',
             lead_id: '',
@@ -440,6 +462,7 @@ window.telephonyReports = function () {
             recording: null,
         },
         dashboard: {
+            scopeLabel: 'All dispositions',
             overview: {
                 campaign: @json($campaignName),
                 totalCalls: 0,
@@ -517,7 +540,8 @@ window.telephonyReports = function () {
 
                 this.dashboard.status = this.normalizeCallStatus(status.data);
                 this.dashboard.agents = this.normalizeAgentStats(agents.data);
-                this.dashboard.dispo = this.normalizeDispositionReport(dispo.data);
+                this.dashboard.dispo = this.normalizeDispositionReport(dispo.data, this.filters.disposition_scope);
+                this.dashboard.scopeLabel = this.dashboard.dispo.summary.scopeLabel;
 
                 this.dashboard.overview.totalCalls = this.dashboard.status.summary.totalCalls;
                 this.dashboard.overview.answeredCalls = this.dashboard.status.summary.answeredCalls;
@@ -673,7 +697,7 @@ window.telephonyReports = function () {
             };
         },
 
-        normalizeDispositionReport(response) {
+        normalizeDispositionReport(response, scope = 'all') {
             const rows = Array.isArray(response?.data?.rows) ? response.data.rows : [];
             if (!rows.length) {
                 return {
@@ -684,11 +708,15 @@ window.telephonyReports = function () {
                         totalCalls: 0,
                         topDisposition: '—',
                         topDispositionCount: 0,
+                        scopeLabel: this.dispositionScopeLabel(scope),
                     },
                 };
             }
 
-            const labels = rows[0].slice(2).map((header) => String(header || '').trim());
+            let labels = rows[0].slice(2).map((header) => String(header || '').trim());
+            const systemDispositionCodes = new Set(this.systemDispositionCodes
+                .map((code) => this.normalizeDispositionCode(code))
+                .filter(Boolean));
             const campaignRows = [];
             let totalRow = null;
 
@@ -707,12 +735,18 @@ window.telephonyReports = function () {
                         label,
                         value: parsed.value,
                         percent: parsed.percent,
+                        system: systemDispositionCodes.has(this.normalizeDispositionCode(label)),
                     };
                 });
 
-                const totalCalls = this.toNumber(values[1]);
-                const topMetric = [...metrics].sort((a, b) => b.value - a.value)[0] || null;
-                const breakdownSummary = metrics
+                const scopedMetrics = metrics.filter((metric) => this.matchesDispositionScope(metric.system, scope));
+                if (scope !== 'all' && scopedMetrics.length === 0) {
+                    return;
+                }
+
+                const totalCalls = scopedMetrics.reduce((sum, metric) => sum + metric.value, 0);
+                const topMetric = [...scopedMetrics].sort((a, b) => b.value - a.value)[0] || null;
+                const breakdownSummary = scopedMetrics
                     .filter((metric) => metric.value > 0)
                     .slice(0, 3)
                     .map((metric) => `${metric.label}: ${this.formatNumber(metric.value)}`)
@@ -725,6 +759,7 @@ window.telephonyReports = function () {
                     topDisposition: topMetric?.label || '—',
                     topDispositionCount: topMetric?.value || 0,
                     breakdownSummary: breakdownSummary || 'No breakdown data',
+                    metrics: scopedMetrics,
                     raw: values,
                 };
 
@@ -735,26 +770,60 @@ window.telephonyReports = function () {
                 }
             });
 
-            const sourceRow = totalRow || campaignRows[0] || null;
-            const values = labels.map((_, index) => this.parseNumericDisplay(sourceRow?.raw?.[index + 2]).value);
-            const topIndex = values.reduce((bestIndex, value, currentIndex, array) => {
-                if (value > array[bestIndex]) {
-                    return currentIndex;
-                }
+            const sourceRows = campaignRows.length > 0 ? campaignRows : totalRow ? [totalRow] : [];
+            const labelTotals = new Map();
+            sourceRows.forEach((row) => {
+                row.metrics?.forEach((metric) => {
+                    const current = labelTotals.get(metric.label) || 0;
+                    labelTotals.set(metric.label, current + metric.value);
+                });
+            });
 
-                return bestIndex;
-            }, 0);
+            labels = [...labelTotals.keys()];
+            const values = [...labelTotals.values()];
+            const topIndex = values.length > 0
+                ? values.reduce((bestIndex, value, currentIndex, array) => {
+                    if (value > array[bestIndex]) {
+                        return currentIndex;
+                    }
+
+                    return bestIndex;
+                }, 0)
+                : -1;
+            const totalCalls = values.reduce((sum, value) => sum + value, 0);
 
             return {
-                rows: campaignRows,
+                rows: campaignRows.sort((a, b) => b.totalCalls - a.totalCalls),
                 labels,
                 values,
                 summary: {
-                    totalCalls: totalRow ? totalRow.totalCalls : campaignRows.reduce((sum, row) => sum + row.totalCalls, 0),
+                    totalCalls,
                     topDisposition: labels[topIndex] || '—',
                     topDispositionCount: values[topIndex] || 0,
+                    scopeLabel: this.dispositionScopeLabel(scope),
                 },
             };
+        },
+
+        matchesDispositionScope(isSystemDisposition, scope) {
+            if (scope === 'system_only') {
+                return isSystemDisposition;
+            }
+
+            if (scope === 'exclude_system') {
+                return ! isSystemDisposition;
+            }
+
+            return true;
+        },
+
+        normalizeDispositionCode(value) {
+            return String(value ?? '').trim().toUpperCase();
+        },
+
+        dispositionScopeLabel(scope) {
+            const option = this.dispositionScopeOptions.find((entry) => entry.value === scope);
+            return option?.label || 'All dispositions';
         },
 
         async renderCharts() {

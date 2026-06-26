@@ -25,6 +25,8 @@ class ReportsDashboardTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Operational Snapshot');
+        $response->assertSee('Disposition Scope');
+        $response->assertSee('Hide system dispositions');
         $response->assertSee('Call Status Dashboard');
         $response->assertSee('Agent Performance');
         $response->assertSee('Disposition Breakdown');

@@ -51,6 +51,12 @@ The app already uses Alpine, ApexCharts, and a reusable chart lifecycle pattern 
      - Remove the recording lookup from the page. Rejected because it would drop a working tool.
      - Keep it as a top-level tab. Rejected because that continues the tabbed/raw-output pattern this change is meant to replace.
 
+6. Treat configured Vicidial system dispositions as report-excluded data and expose a panel-wide scope filter.
+   - Rationale: higher roles need one control that applies across the full reports panel, and the CRM should not count system-generated dispositions the same way it counts agent dispositions.
+   - Alternatives considered:
+     - Hard-code a fixed list of excluded codes in the view. Rejected because each Vicidial deployment can label system dispositions differently.
+     - Hide the system filter inside the disposition section only. Rejected because the request is for a panel-level control.
+
 ## Risks / Trade-offs
 
 - [Risk] VICIdial report rows may vary by campaign or version, which can make parsing brittle. → Mitigation: build defensive normalizers that fall back to table-only rendering and keep the raw debug section available.
