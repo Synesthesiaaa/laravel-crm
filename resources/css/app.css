@@ -475,7 +475,12 @@ html[data-theme="light"] {
     overflow: hidden;
     box-shadow: var(--shadow-1);
   }
-  .md-table-wrap table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  .md-table-wrap table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: collapse;
+    font-size: .875rem;
+  }
   .md-table-wrap thead { background: var(--color-surface-2); border-bottom: 1px solid var(--color-border); }
   .md-table-wrap th {
     padding: .75rem 1rem;
@@ -500,9 +505,11 @@ html[data-theme="light"] {
 
   .table-scroll-wrap {
     overflow-x: auto;
+    overflow-y: hidden;
     position: relative;
-    -webkit-mask-image: linear-gradient(to right, #000 96%, transparent);
-    mask-image: linear-gradient(to right, #000 96%, transparent);
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-gutter: stable both-edges;
   }
 
   /* Empty state */
