@@ -112,21 +112,27 @@
                     <div class="form-field col-span-2">
                         <label class="form-label">VD Login <span class="text-[var(--color-danger)]">*</span></label>
                         <input class="form-input" x-model="vici.vd_login" placeholder="VICIdial user login"
+                               autocomplete="off" autocapitalize="none" spellcheck="false"
                                :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase)" />
                     </div>
                     <div class="form-field col-span-2">
                         <label class="form-label">VD Pass</label>
                         <input type="password" class="form-input" x-model="vici.vd_pass" placeholder="VICIdial password"
+                               autocomplete="new-password" autocapitalize="none" spellcheck="false"
+                               data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
                                :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase)" />
                     </div>
                     <div class="form-field col-span-2">
                         <label class="form-label">Phone Login <span class="text-[var(--color-danger)]">*</span></label>
                         <input class="form-input" x-model="vici.phone_login" placeholder="Extension e.g. 6001"
+                               autocomplete="off" autocapitalize="none" spellcheck="false"
                                :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase)" />
                     </div>
                     <div class="form-field col-span-2">
                         <label class="form-label">Phone Pass</label>
                         <input type="password" class="form-input" x-model="vici.phone_pass" placeholder="SIP password"
+                               autocomplete="new-password" autocapitalize="none" spellcheck="false"
+                               data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
                                :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase)" />
                     </div>
                 </div>

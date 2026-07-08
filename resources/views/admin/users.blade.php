@@ -22,8 +22,8 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 <x-form.input name="username"  label="Username"  :value="old('username')"  required />
                 <x-form.input name="full_name" label="Full Name" :value="old('full_name')" required />
-                <x-form.input name="password" type="password" label="Password" required />
-                <x-form.input name="password_confirmation" type="password" label="Confirm Password" required />
+                <x-form.input name="password" type="password" label="Password" autocomplete="new-password" required />
+                <x-form.input name="password_confirmation" type="password" label="Confirm Password" autocomplete="new-password" required />
                 <x-form.select name="role" label="Role"
                     :options="['Agent' => 'Agent', 'Team Leader' => 'Team Leader', 'Admin' => 'Admin', 'Super Admin' => 'Super Admin']"
                     :selected="old('role', 'Agent')" :empty="false" />
@@ -35,6 +35,7 @@
                 <x-form.input name="vici_user" label="ViciDial Username" :value="old('vici_user')"
                     help="Must match ViciDial agent username" />
                 <x-form.input name="vici_pass" type="password" label="ViciDial Password"
+                    autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
                     help="Must match ViciDial agent password" />
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
@@ -44,6 +45,7 @@
                 <x-form.input name="extension" label="SIP Extension" :value="old('extension')"
                     help="e.g. 6001 – must match sip.conf endpoint" />
                 <x-form.input name="sip_password" type="password" label="SIP Password"
+                    autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
                     help="Min 4 chars – must match pjsip.conf auth password" />
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
@@ -155,8 +157,8 @@
                             <x-form.select name="role" label="Role"
                                 :options="['Agent' => 'Agent', 'Team Leader' => 'Team Leader', 'Admin' => 'Admin', 'Super Admin' => 'Super Admin']"
                                 :selected="old('role', $usr->role)" :empty="false" />
-                            <x-form.input name="password" type="password" label="New Password" help="Leave blank to keep" />
-                            <x-form.input name="password_confirmation" type="password" label="Confirm" />
+                            <x-form.input name="password" type="password" label="New Password" autocomplete="new-password" help="Leave blank to keep" />
+                            <x-form.input name="password_confirmation" type="password" label="Confirm" autocomplete="new-password" />
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
                             <div class="col-span-full">
@@ -166,6 +168,7 @@
                                 :value="old('vici_user', $usr->vici_user)"
                                 help="Must match ViciDial agent username" />
                             <x-form.input name="vici_pass" type="password" label="ViciDial Password"
+                                autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
                                 help="Leave blank to keep current" />
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
@@ -176,6 +179,7 @@
                                 :value="old('extension', $usr->extension)"
                                 help="e.g. 6001 – must match sip.conf" />
                             <x-form.input name="sip_password" type="password" label="SIP Password"
+                                autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
                                 help="Leave blank to keep current" />
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">

@@ -51,4 +51,26 @@ class PhoneWidgetTest extends TestCase
         $this->assertStringNotContainsString('/api/vicidial/session/agent-campaigns', $html);
         $this->assertStringNotContainsString('/api/vicidial/session/select-campaign', $html);
     }
+
+    public function test_phone_widget_password_overrides_discourage_browser_autofill(): void
+    {
+        $user = User::factory()->create([
+            'default_campaign' => 'defaultcamp',
+            'extension' => '6001',
+            'vici_user' => 'testagent',
+        ]);
+
+        $this->actingAs($user);
+
+        $html = view('partials.phone-widget')->render();
+
+        $this->assertMatchesRegularExpression(
+            '/<input[^>]*type="password"[^>]*x-model="vici\.vd_pass"[^>]*autocomplete="new-password"[^>]*data-lpignore="true"/s',
+            $html,
+        );
+        $this->assertMatchesRegularExpression(
+            '/<input[^>]*type="password"[^>]*x-model="vici\.phone_pass"[^>]*autocomplete="new-password"[^>]*data-lpignore="true"/s',
+            $html,
+        );
+    }
 }

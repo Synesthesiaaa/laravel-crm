@@ -26,7 +26,7 @@
         type="{{ $type }}"
         name="{{ $name }}"
         id="{{ $inputId }}"
-        value="{{ old($name, $value) }}"
+        @if($type !== 'password') value="{{ old($name, $value) }}" @endif
         @if($placeholder) placeholder="{{ $placeholder }}" @endif
         @if($required)  required @endif
         @if($readonly)  readonly @endif
