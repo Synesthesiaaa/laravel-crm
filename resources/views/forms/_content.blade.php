@@ -2,9 +2,14 @@
     <x-breadcrumbs :items="[$formName => null]" />
 
     <form action="{{ route('forms.store') }}" method="POST"
-          x-data="formVisibility({ submitting: false })"
+          x-data="formVisibility({ submitting: false, autosave: true })"
           x-init="init(@js($prefill ?? []))"
-          @submit="submitting = true">
+          @submit.prevent="submitForm()"
+          data-user-id="{{ auth()->id() }}"
+          data-campaign="{{ $campaign }}"
+          data-form-type="{{ $formType }}"
+          data-lead-id="{{ $leadId ?? '' }}"
+          data-phone-number="{{ $phoneNumber ?? '' }}">
         @csrf
         <input type="hidden" name="campaign"     value="{{ $campaign }}">
         <input type="hidden" name="form_type"    value="{{ $formType }}">
@@ -17,6 +22,36 @@
         </div>
 
         <x-validation-errors />
+
+        <div x-cloak
+             x-show="saveMessage || saveErrors.length > 0"
+             x-transition.opacity
+             class="alert mb-4"
+             :class="saveStatus === 'success' ? 'alert-success' : 'alert-error'"
+             role="alert"
+             aria-live="polite">
+            <template x-if="saveStatus === 'success'">
+                <x-icon name="check-circle" class="w-4 h-4 shrink-0 mt-0.5" />
+            </template>
+            <template x-if="saveStatus !== 'success'">
+                <x-icon name="x-circle" class="w-4 h-4 shrink-0 mt-0.5" />
+            </template>
+            <div class="flex-1 min-w-0">
+                <p class="font-semibold mb-0.5" x-text="saveStatus === 'success' ? 'Saved' : 'Save failed'"></p>
+                <p class="text-sm" x-text="saveMessage"></p>
+                <ul class="list-disc list-inside space-y-0.5 text-sm mt-2" x-show="saveErrors.length > 0">
+                    <template x-for="(error, index) in saveErrors" :key="index">
+                        <li x-text="error"></li>
+                    </template>
+                </ul>
+            </div>
+            <button type="button"
+                    @click="clearFeedback()"
+                    class="shrink-0 opacity-60 hover:opacity-100"
+                    aria-label="Dismiss">
+                <x-icon name="x-mark" class="w-4 h-4" />
+            </button>
+        </div>
 
         {{-- System fields --}}
         <x-form.group title="Reference" cols="2">

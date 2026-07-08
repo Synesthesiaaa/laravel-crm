@@ -79,6 +79,67 @@ class FormSubmissionTest extends TestCase
         $this->assertTrue(Str::isUlid($requestId));
     }
 
+    public function test_form_submit_returns_json_for_ajax_requests(): void
+    {
+        $user = User::factory()->create(['username' => 'agent1']);
+
+        $response = $this->actingAs($user)->postJson(route('forms.store'), [
+            'campaign' => 'mbsales',
+            'form_type' => 'ezycash',
+            'date' => now()->format('Y-m-d'),
+            'request_id' => 'client-should-be-ignored',
+            'cardholder_name' => 'Jane Doe',
+            'mpi_credit_card_no' => '4111111111111111',
+            'bank' => 'Test Bank',
+            'account_type' => 'Savings',
+            'account_number' => '123456',
+            'surname' => 'Doe',
+            'first_name' => 'Jane',
+            'ezycash_amount' => '100.00',
+            'term' => '12',
+            'rate' => '5.00',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('success', true);
+        $response->assertJsonPath('message', 'Record saved successfully.');
+        $response->assertJsonStructure([
+            'success',
+            'message',
+            'data' => [
+                'record_id',
+            ],
+        ]);
+
+        $this->assertDatabaseHas('ezycash', [
+            'agent' => $user->full_name ?? $user->username,
+            'cardholder_name' => 'Jane Doe',
+        ]);
+    }
+
+    public function test_form_submit_returns_validation_errors_for_ajax_requests(): void
+    {
+        $user = User::factory()->create(['username' => 'agent1']);
+
+        $response = $this->actingAs($user)->postJson(route('forms.store'), [
+            'campaign' => 'mbsales',
+            'form_type' => 'ezycash',
+            'date' => now()->format('Y-m-d'),
+            'mpi_credit_card_no' => '4111111111111111',
+            'bank' => 'Test Bank',
+            'account_type' => 'Savings',
+            'account_number' => '123456',
+            'surname' => 'Doe',
+            'first_name' => 'Jane',
+            'ezycash_amount' => '100.00',
+            'term' => '12',
+            'rate' => '5.00',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['cardholder_name']);
+    }
+
     public function test_percentage_field_backed_by_decimal_column_stores_numeric_value(): void
     {
         Form::create([
