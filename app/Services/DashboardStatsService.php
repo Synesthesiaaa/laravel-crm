@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\FormField;
 use App\Repositories\CampaignRepository;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
@@ -156,8 +157,17 @@ class DashboardStatsService
             $salesCounts = [];
             $salesAmounts = [];
             $systemCodes = $this->reportSystemDispositionCodes();
+            $markedSaleFields = $this->resolveMarkedSaleFields($campaignCode);
 
-            if (Schema::hasTable('campaign_disposition_records') && $saleCodes !== []) {
+            if ($markedSaleFields['configured']) {
+                $fieldDrivenSales = $this->getFieldDrivenSalesByAgentInDateRange(
+                    $markedSaleFields['fields'],
+                    $monthStart,
+                    $today,
+                );
+                $salesCounts = $fieldDrivenSales['counts'];
+                $salesAmounts = $fieldDrivenSales['amounts'];
+            } elseif (Schema::hasTable('campaign_disposition_records') && $saleCodes !== []) {
                 $query = DB::table('campaign_disposition_records')
                     ->where('campaign_code', $campaignCode)
                     ->whereIn('disposition_code', $saleCodes)
@@ -250,8 +260,11 @@ class DashboardStatsService
             $saleCodes = config('dashboard.sale_disposition_codes', ['SALE']);
             $saleCodes = array_values(array_filter($saleCodes, static fn ($c) => is_string($c) && $c !== ''));
 
+            $markedSaleFields = $this->resolveMarkedSaleFields($campaignCode);
             $sales = 0;
-            if ($saleCodes !== []) {
+            if ($markedSaleFields['configured']) {
+                $sales = $this->countFieldDrivenSalesSince($markedSaleFields['fields'], $since);
+            } elseif ($saleCodes !== []) {
                 $salesQuery = DB::table('campaign_disposition_records')
                     ->where('campaign_code', $campaignCode)
                     ->whereNotNull('called_at')
@@ -390,6 +403,137 @@ class DashboardStatsService
         }
 
         return 0.0;
+    }
+
+    /**
+     * @return array{configured: bool, fields: array<string, list<string>>}
+     */
+    private function resolveMarkedSaleFields(string $campaignCode): array
+    {
+        $campaigns = $this->campaignRepository->getCampaignsWithForms();
+        $forms = $campaigns[$campaignCode]['forms'] ?? [];
+        $markedFields = FormField::query()
+            ->where('campaign_code', $campaignCode)
+            ->where('field_type', 'number')
+            ->where('is_sale_amount', true)
+            ->get(['form_type', 'field_name']);
+        $allowedTables = $this->campaignRepository->getAllFormTableNames();
+
+        $fieldsByTable = [];
+        foreach ($markedFields as $field) {
+            $tableName = (string) ($forms[$field->form_type]['table'] ?? '');
+            $fieldName = (string) $field->field_name;
+
+            if ($tableName === '' || $fieldName === '') {
+                continue;
+            }
+            if (! in_array($tableName, $allowedTables, true)) {
+                continue;
+            }
+            if (! Schema::hasTable($tableName) || ! Schema::hasColumn($tableName, $fieldName)) {
+                continue;
+            }
+
+            $fieldsByTable[$tableName] ??= [];
+            $fieldsByTable[$tableName][] = $fieldName;
+        }
+
+        foreach ($fieldsByTable as $tableName => $fieldNames) {
+            $fieldsByTable[$tableName] = array_values(array_unique($fieldNames));
+        }
+
+        return [
+            'configured' => $markedFields->isNotEmpty(),
+            'fields' => $fieldsByTable,
+        ];
+    }
+
+    /**
+     * @param  array<string, list<string>>  $fieldsByTable
+     */
+    private function countFieldDrivenSalesSince(array $fieldsByTable, Carbon $since): int
+    {
+        $sales = 0;
+        foreach ($fieldsByTable as $tableName => $fieldNames) {
+            if (! Schema::hasColumn($tableName, 'created_at')) {
+                continue;
+            }
+
+            DB::table($tableName)
+                ->where('created_at', '>=', $since)
+                ->select(array_merge(['id'], $fieldNames))
+                ->orderBy('id')
+                ->chunk(1000, function ($rows) use (&$sales, $fieldNames): void {
+                    foreach ($rows as $row) {
+                        if ($this->sumMarkedSaleValues($row, $fieldNames) !== null) {
+                            $sales++;
+                        }
+                    }
+                });
+        }
+
+        return $sales;
+    }
+
+    /**
+     * @param  array<string, list<string>>  $fieldsByTable
+     * @return array{counts: array<string, int>, amounts: array<string, float>}
+     */
+    private function getFieldDrivenSalesByAgentInDateRange(
+        array $fieldsByTable,
+        string $fromYmd,
+        string $toYmd,
+    ): array {
+        $counts = [];
+        $amounts = [];
+
+        foreach ($fieldsByTable as $tableName => $fieldNames) {
+            if (! Schema::hasColumn($tableName, 'date') || ! Schema::hasColumn($tableName, 'agent')) {
+                continue;
+            }
+
+            DB::table($tableName)
+                ->select(array_merge(['id', 'agent'], $fieldNames))
+                ->whereBetween('date', [$fromYmd, $toYmd])
+                ->whereNotNull('agent')
+                ->where('agent', '!=', '')
+                ->orderBy('id')
+                ->chunk(1000, function ($rows) use (&$counts, &$amounts, $fieldNames): void {
+                    foreach ($rows as $row) {
+                        $amount = $this->sumMarkedSaleValues($row, $fieldNames);
+                        if ($amount === null) {
+                            continue;
+                        }
+
+                        $agent = (string) $row->agent;
+                        $counts[$agent] = ($counts[$agent] ?? 0) + 1;
+                        $amounts[$agent] = ($amounts[$agent] ?? 0.0) + $amount;
+                    }
+                });
+        }
+
+        return [
+            'counts' => $counts,
+            'amounts' => $amounts,
+        ];
+    }
+
+    /**
+     * @param  list<string>  $fieldNames
+     */
+    private function sumMarkedSaleValues(object $row, array $fieldNames): ?float
+    {
+        $amount = null;
+        foreach ($fieldNames as $fieldName) {
+            $value = $row->{$fieldName} ?? null;
+            if ($value === null || (is_string($value) && trim($value) === '') || ! is_numeric($value)) {
+                continue;
+            }
+
+            $amount = ($amount ?? 0.0) + (float) $value;
+        }
+
+        return $amount;
     }
 
     /**

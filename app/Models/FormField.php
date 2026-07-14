@@ -18,6 +18,7 @@ class FormField extends Model
         'field_label',
         'field_type',
         'is_required',
+        'is_sale_amount',
         'field_order',
         'options',
         'vici_params',
@@ -29,6 +30,7 @@ class FormField extends Model
     {
         return [
             'is_required' => 'boolean',
+            'is_sale_amount' => 'boolean',
             'visibility' => 'array',
         ];
     }

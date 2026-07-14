@@ -53,7 +53,7 @@
     <div class="md-card overflow-hidden">
         <div class="px-5 py-4 border-b border-[var(--color-border)]">
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Top agents — {{ $monthTitle }}</h3>
-            <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">Ranked by submissions, then sales count, then sale amount (from disposition data).</p>
+            <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">Ranked by submissions, then sales count, then sale amount (from marked form fields when configured).</p>
         </div>
         <div class="md-table-wrap">
             @if(!empty($agentLeaderboard))

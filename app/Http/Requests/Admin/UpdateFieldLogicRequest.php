@@ -22,6 +22,7 @@ class UpdateFieldLogicRequest extends FormRequest
             'field_type' => ['sometimes', 'in:text,textarea,number,date,select,multiselect,percentage'],
             'options' => ['nullable', 'string', 'max:65535'],
             'is_required' => ['nullable', 'boolean'],
+            'is_sale_amount' => ['nullable', 'boolean'],
             'field_order' => ['nullable', 'integer'],
             'field_width' => ['nullable', 'in:full,half,third'],
             'visibility' => ['nullable', 'array'],

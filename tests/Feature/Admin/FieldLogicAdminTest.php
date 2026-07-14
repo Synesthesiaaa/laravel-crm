@@ -61,6 +61,54 @@ class FieldLogicAdminTest extends TestCase
         ], $field->visibility);
     }
 
+    public function test_store_marks_numeric_field_as_sale_amount(): void
+    {
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.field-logic.store'), [
+                'campaign_code' => 'mbsales',
+                'form_type' => 'lead_capture',
+                'field_name' => 'sale_amount',
+                'field_label' => 'Sale Amount',
+                'field_type' => 'number',
+                'field_width' => 'full',
+                'is_sale_amount' => '1',
+            ])
+            ->assertRedirect(route('admin.field-logic.index', ['form' => 'lead_capture']))
+            ->assertSessionHasNoErrors();
+
+        $field = FormField::query()
+            ->where('campaign_code', 'mbsales')
+            ->where('form_type', 'lead_capture')
+            ->where('field_name', 'sale_amount')
+            ->firstOrFail();
+
+        $this->assertTrue($field->is_sale_amount);
+    }
+
+    public function test_non_numeric_field_cannot_be_marked_as_sale_amount(): void
+    {
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.field-logic.store'), [
+                'campaign_code' => 'mbsales',
+                'form_type' => 'lead_capture',
+                'field_name' => 'sale_notes',
+                'field_label' => 'Sale Notes',
+                'field_type' => 'textarea',
+                'field_width' => 'full',
+                'is_sale_amount' => '1',
+            ])
+            ->assertRedirect(route('admin.field-logic.index', ['form' => 'lead_capture']))
+            ->assertSessionHasNoErrors();
+
+        $field = FormField::query()
+            ->where('campaign_code', 'mbsales')
+            ->where('form_type', 'lead_capture')
+            ->where('field_name', 'sale_notes')
+            ->firstOrFail();
+
+        $this->assertFalse($field->is_sale_amount);
+    }
+
     public function test_store_rejects_invalid_visibility_operator(): void
     {
         $this->actingAs($this->superAdmin)
@@ -117,6 +165,64 @@ class FieldLogicAdminTest extends TestCase
             ->assertOk()
             ->assertSee('field-logic/'.$field->id.'/edit', false)
             ->assertDontSee('edit-field-logic', false);
+    }
+
+    public function test_update_persists_sale_amount_for_numeric_fields_and_clears_it_for_text_fields(): void
+    {
+        Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'lead_capture',
+            'name' => 'Lead Capture',
+            'table_name' => 'lead_capture',
+            'display_order' => 1,
+            'is_active' => true,
+        ]);
+        app(CampaignService::class)->clearCampaignsCache();
+
+        $field = FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'lead_capture',
+            'field_name' => 'sale_amount',
+            'field_label' => 'Sale Amount',
+            'field_type' => 'number',
+            'field_order' => 1,
+            'field_width' => 'full',
+            'is_required' => false,
+            'is_sale_amount' => false,
+        ]);
+
+        $this->actingAs($this->superAdmin)
+            ->get(route('admin.field-logic.edit', $field))
+            ->assertOk()
+            ->assertSee('Is sale amount', false);
+
+        $this->actingAs($this->superAdmin)
+            ->put(route('admin.field-logic.update', $field->id), [
+                'field_name' => 'sale_amount',
+                'field_label' => 'Sale Amount',
+                'field_type' => 'number',
+                'field_width' => 'full',
+                'field_order' => 1,
+                'is_sale_amount' => '1',
+            ])
+            ->assertRedirect(route('admin.field-logic.index', ['form' => 'lead_capture']))
+            ->assertSessionHasNoErrors();
+
+        $this->assertTrue($field->fresh()->is_sale_amount);
+
+        $this->actingAs($this->superAdmin)
+            ->put(route('admin.field-logic.update', $field->id), [
+                'field_name' => 'sale_amount',
+                'field_label' => 'Sale Amount',
+                'field_type' => 'text',
+                'field_width' => 'full',
+                'field_order' => 1,
+                'is_sale_amount' => '1',
+            ])
+            ->assertRedirect(route('admin.field-logic.index', ['form' => 'lead_capture']))
+            ->assertSessionHasNoErrors();
+
+        $this->assertFalse($field->fresh()->is_sale_amount);
     }
 
     public function test_index_handles_campaign_with_no_forms(): void

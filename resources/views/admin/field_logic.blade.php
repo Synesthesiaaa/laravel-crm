@@ -110,6 +110,10 @@
                             <input type="checkbox" name="is_required" value="1" id="add_req" @checked(old('is_required'))>
                             <span>Required</span>
                         </label>
+                        <label class="checkbox-row" x-show="ft === 'number'" x-cloak>
+                            <input type="checkbox" name="is_sale_amount" value="1" id="add_sale_amount" @checked(old('is_sale_amount'))>
+                            <span>Is sale amount</span>
+                        </label>
                         <button type="submit" class="btn-primary" :disabled="submitting">
                             <x-icon name="plus" class="w-4 h-4" />
                             Add
@@ -144,6 +148,7 @@
             ['label' => 'Type'],
             ['label' => 'Width'],
             ['label' => 'Required'],
+            ['label' => 'Sale amount'],
             ['label' => 'Actions', 'align' => 'right'],
         ]" />
         <tbody>
@@ -157,6 +162,11 @@
                     <td>
                         <x-badge :type="$f->is_required ? 'info' : 'inactive'">
                             {{ $f->is_required ? 'Yes' : 'No' }}
+                        </x-badge>
+                    </td>
+                    <td>
+                        <x-badge :type="$f->is_sale_amount ? 'active' : 'inactive'">
+                            {{ $f->is_sale_amount ? 'Yes' : 'No' }}
                         </x-badge>
                     </td>
                     <td>
@@ -187,7 +197,7 @@
                     </td>
                 </tr>
             @empty
-                <x-table.empty :colspan="7" message="No fields yet." description="Add a field above for this form." />
+                <x-table.empty :colspan="8" message="No fields yet." description="Add a field above for this form." />
             @endforelse
         </tbody>
     </x-table.index>

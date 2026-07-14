@@ -85,6 +85,12 @@
                                @checked(old('is_required', $field->is_required))>
                         <label for="edit_req" class="text-sm text-[var(--color-on-surface)]">Required</label>
                     </div>
+                    <div class="form-field flex items-center gap-2 pt-6" x-show="ft === 'number'" x-cloak>
+                        <input type="checkbox" name="is_sale_amount" value="1" id="edit_sale_amount"
+                               class="rounded border-[var(--color-border-strong)] accent-[var(--color-primary)]"
+                               @checked(old('is_sale_amount', $field->is_sale_amount))>
+                        <label for="edit_sale_amount" class="text-sm text-[var(--color-on-surface)]">Is sale amount</label>
+                    </div>
                 </div>
 
                 <div class="form-field max-w-xl" x-show="ft === 'select' || ft === 'multiselect'" x-cloak>
