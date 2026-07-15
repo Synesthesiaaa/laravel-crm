@@ -242,24 +242,24 @@ class DashboardStatsService
                 'top_agent_sales_amount' => 0.0,
             ];
 
-            if (! Schema::hasTable('campaign_disposition_records')) {
-                return $empty;
-            }
-
             $callSince = now()->subHours($callHours);
             $salesSince = now()->subHours($salesHours);
             $systemCodes = $this->reportSystemDispositionCodes();
+            $hasDispositionRecords = Schema::hasTable('campaign_disposition_records');
 
-            $callsQuery = DB::table('campaign_disposition_records')
-                ->where('campaign_code', $campaignCode)
-                ->whereNotNull('called_at')
-                ->where('called_at', '>=', $callSince);
+            $calls = 0;
+            if ($hasDispositionRecords) {
+                $callsQuery = DB::table('campaign_disposition_records')
+                    ->where('campaign_code', $campaignCode)
+                    ->whereNotNull('called_at')
+                    ->where('called_at', '>=', $callSince);
 
-            if ($systemCodes !== []) {
-                $callsQuery->whereNotIn('disposition_code', $systemCodes);
+                if ($systemCodes !== []) {
+                    $callsQuery->whereNotIn('disposition_code', $systemCodes);
+                }
+
+                $calls = (int) $callsQuery->count();
             }
-
-            $calls = (int) $callsQuery->count();
 
             /** @var list<string> $saleCodes */
             $saleCodes = config('dashboard.sale_disposition_codes', ['SALE']);
@@ -292,7 +292,7 @@ class DashboardStatsService
                 $topAgent = $agents[0] ?? null;
                 $topAgentSales = $topAgent === null ? 0 : $fieldDrivenSales['counts'][$topAgent];
                 $topAgentSalesAmount = $topAgent === null ? 0.0 : $fieldDrivenSales['amounts'][$topAgent];
-            } elseif ($saleCodes !== []) {
+            } elseif ($hasDispositionRecords && $saleCodes !== []) {
                 $salesQuery = DB::table('campaign_disposition_records')
                     ->where('campaign_code', $campaignCode)
                     ->whereNotNull('called_at')
@@ -314,11 +314,11 @@ class DashboardStatsService
                     });
             }
 
-            if (! $markedSaleFields['configured']) {
+            if (! $markedSaleFields['configured'] && $hasDispositionRecords) {
                 $topQuery = DB::table('campaign_disposition_records')
                     ->where('campaign_code', $campaignCode)
                     ->whereNotNull('called_at')
-                    ->where('called_at', '>=', $callSince)
+                    ->where('called_at', '>=', $salesSince)
                     ->whereNotNull('agent')
                     ->where('agent', '!=', '');
 

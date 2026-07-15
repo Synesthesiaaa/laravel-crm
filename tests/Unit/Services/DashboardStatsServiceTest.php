@@ -81,7 +81,7 @@ class DashboardStatsServiceTest extends TestCase
         $this->assertSame(1, $kpis['sales']);
         $this->assertSame(125.5, $kpis['sales_amount']);
         $this->assertSame('Alex', $kpis['top_agent']);
-        $this->assertSame(2, $kpis['top_agent_calls']);
+        $this->assertSame(3, $kpis['top_agent_calls']);
     }
 
     public function test_get_kpis_excludes_rows_outside_window(): void
@@ -203,6 +203,31 @@ class DashboardStatsServiceTest extends TestCase
         $this->assertSame('Alice', $kpis['top_agent']);
         $this->assertSame(1, $kpis['top_agent_sales']);
         $this->assertSame(200.0, $kpis['top_agent_sales_amount']);
+    }
+
+    public function test_get_kpis_uses_the_sales_window_for_fallback_top_agent(): void
+    {
+        Carbon::setTestNow('2026-05-07 15:00:00');
+        Cache::flush();
+        config([
+            'dashboard.kpi_window_hours' => 9,
+            'dashboard.sales_kpi_window_hours' => 24,
+        ]);
+
+        CampaignDispositionRecord::create([
+            'campaign_code' => 'mbsales',
+            'agent' => 'Alice',
+            'disposition_code' => 'SALE',
+            'called_at' => Carbon::parse('2026-05-07 05:00:00'),
+            'lead_data_json' => ['ezycash_amount' => 200.00],
+        ]);
+
+        $kpis = app(DashboardStatsService::class)->getKpisForCampaign('mbsales');
+
+        $this->assertSame(0, $kpis['calls']);
+        $this->assertSame(1, $kpis['sales']);
+        $this->assertSame(200.0, $kpis['sales_amount']);
+        $this->assertSame('Alice', $kpis['top_agent']);
     }
 
     public function test_get_kpis_respects_additional_sale_codes_from_config(): void
@@ -508,6 +533,33 @@ class DashboardStatsServiceTest extends TestCase
         $this->assertNotNull($alice);
         $this->assertSame(2, $alice['sales_count']);
         $this->assertSame(125.5, $alice['sales_amount']);
+    }
+
+    public function test_get_kpis_counts_marked_sales_without_disposition_storage(): void
+    {
+        Carbon::setTestNow('2026-05-15 10:00:00');
+        Cache::flush();
+        $this->seed(CampaignSeeder::class);
+
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount',
+            'field_label' => 'EzyCash Amount',
+            'field_type' => 'number',
+            'is_required' => false,
+            'is_sale_amount' => true,
+            'field_order' => 1,
+        ]);
+
+        $this->insertEzycashSaleRow('2026-05-15', 'Alice', 100.00, 10.00, '2026-05-15 09:00:00', 1);
+        Schema::drop('campaign_disposition_records');
+
+        $kpis = app(DashboardStatsService::class)->getKpisForCampaign('mbsales');
+
+        $this->assertSame(1, $kpis['sales']);
+        $this->assertSame(100.0, $kpis['sales_amount']);
+        $this->assertSame('Alice', $kpis['top_agent']);
     }
 
     private function insertEzycashRow(string $dateYmd): void

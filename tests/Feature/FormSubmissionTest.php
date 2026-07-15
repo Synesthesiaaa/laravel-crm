@@ -117,6 +117,38 @@ class FormSubmissionTest extends TestCase
         ]);
     }
 
+    public function test_form_submission_stores_capture_timestamps(): void
+    {
+        $user = User::factory()->create(['username' => 'agent1']);
+
+        $response = $this->actingAs($user)->post(route('forms.store'), [
+            '_token' => csrf_token(),
+            'campaign' => 'mbsales',
+            'form_type' => 'ezycash',
+            'date' => now()->format('Y-m-d'),
+            'cardholder_name' => 'Timestamped Submission',
+            'mpi_credit_card_no' => '4111111111111111',
+            'bank' => 'Test Bank',
+            'account_type' => 'Savings',
+            'account_number' => '123456',
+            'surname' => 'Doe',
+            'first_name' => 'John',
+            'ezycash_amount' => '100.00',
+            'term' => '12',
+            'rate' => '5.00',
+        ]);
+
+        $response->assertRedirect();
+
+        $submission = DB::table('ezycash')
+            ->where('cardholder_name', 'Timestamped Submission')
+            ->first(['created_at', 'updated_at']);
+
+        $this->assertNotNull($submission);
+        $this->assertNotNull($submission->created_at);
+        $this->assertNotNull($submission->updated_at);
+    }
+
     public function test_form_submit_returns_validation_errors_for_ajax_requests(): void
     {
         $user = User::factory()->create(['username' => 'agent1']);

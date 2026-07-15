@@ -83,6 +83,8 @@ class FormSubmissionService
             'date' => $date,
             'request_id' => $requestId,
             'agent' => $agent,
+            'created_at' => now(),
+            'updated_at' => now(),
         ];
         foreach ($fields as $field) {
             $colName = $field->field_name;

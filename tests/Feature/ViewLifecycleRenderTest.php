@@ -49,9 +49,9 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertSee('window.crmCharts?.register?.(chartGroup, elId, chart);', false);
         $response->assertSee('window.resizeCrmDashboardCharts?.()', false);
         $response->assertSee('Total value:', false);
-        $response->assertSee('Calls (9h)', false);
         $response->assertSee('Sales (24h)', false);
         $response->assertSee('Top agent (24h)', false);
+        $response->assertDontSee('Calls (9h)', false);
     }
 
     public function test_top_agent_stat_card_renders_sales_summary(): void
