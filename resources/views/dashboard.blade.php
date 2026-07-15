@@ -27,7 +27,7 @@
     {{-- KPI + context stat cards --}}
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 animate-stagger">
         <x-stat-card label="Calls ({{ $kpiHours }}h)"      :value="number_format($kpis['calls'] ?? 0)"          icon="phone" color="primary" />
-        <x-stat-card label="Sales ({{ $kpiHours }}h)"     :value="number_format($kpis['sales'] ?? 0)"          icon="check-circle" color="success" />
+        <x-stat-card label="Sales ({{ $kpiHours }}h)"     :value="number_format($kpis['sales'] ?? 0)"          :secondary="'Total value: '.number_format($kpis['sales_amount'] ?? 0, 2)" icon="check-circle" color="success" />
         <x-stat-card label="Top agent ({{ $kpiHours }}h)" :value="$kpis['top_agent'] ?? '—'"                  icon="user" color="warning" />
         <x-stat-card label="Active Forms"                 :value="count($forms ?? [])"                        icon="document-text" color="info" />
         <x-stat-card label="Campaign"                     :value="strtoupper($campaign ?? '—')"               icon="building-office" color="info" />

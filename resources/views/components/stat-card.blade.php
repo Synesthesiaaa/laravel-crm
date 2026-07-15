@@ -7,6 +7,7 @@
     'href'     => null,
     'color'    => 'primary',
     'loading'  => false,
+    'secondary' => null,
 ])
 @php
 $colorMap = [
@@ -30,6 +31,9 @@ $c = $colorMap[$color] ?? $colorMap['primary'];
         <div class="skeleton skeleton-title mt-1"></div>
     @else
         <div class="stat-card-value">{{ $value }}</div>
+        @if($secondary !== null)
+            <div class="stat-card-secondary">{{ $secondary }}</div>
+        @endif
     @endif
     @if($trend !== null)
         <div class="stat-card-trend {{ $trendUp ? 'up' : 'down' }}">

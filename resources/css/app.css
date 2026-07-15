@@ -380,6 +380,7 @@ html[data-theme="light"] {
   }
   .stat-card-label { font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--color-on-surface-dim); }
   .stat-card-value { font-size: 1.75rem; font-weight: 700; color: var(--color-on-surface); line-height: 1; }
+  .stat-card-secondary { margin-top: .5rem; font-size: .75rem; color: var(--color-on-surface-dim); }
   .stat-card-trend { display: flex; align-items: center; gap: .25rem; font-size: .75rem; font-weight: 600; }
   .stat-card-trend.up   { color: var(--color-success); }
   .stat-card-trend.down { color: var(--color-danger); }

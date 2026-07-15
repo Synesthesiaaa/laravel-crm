@@ -58,6 +58,7 @@ class DashboardStatsServiceTest extends TestCase
             'agent' => 'Alex',
             'disposition_code' => 'SALE',
             'called_at' => Carbon::parse('2026-05-07 13:00:00'),
+            'lead_data_json' => ['ezycash_amount' => 125.50],
         ]);
         CampaignDispositionRecord::create([
             'campaign_code' => 'mbsales',
@@ -78,6 +79,7 @@ class DashboardStatsServiceTest extends TestCase
 
         $this->assertSame(2, $kpis['calls']);
         $this->assertSame(1, $kpis['sales']);
+        $this->assertSame(125.5, $kpis['sales_amount']);
         $this->assertSame('Alex', $kpis['top_agent']);
         $this->assertSame(2, $kpis['top_agent_calls']);
     }
@@ -132,6 +134,7 @@ class DashboardStatsServiceTest extends TestCase
         $kpis = app(DashboardStatsService::class)->getKpisForCampaign('mbsales');
 
         $this->assertSame(2, $kpis['sales']);
+        $this->assertSame(125.5, $kpis['sales_amount']);
     }
 
     public function test_get_kpis_respects_additional_sale_codes_from_config(): void

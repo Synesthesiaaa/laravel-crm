@@ -48,6 +48,7 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertSee('window.crmSoftNav?.isRehydrating?.()', false);
         $response->assertSee('window.crmCharts?.register?.(chartGroup, elId, chart);', false);
         $response->assertSee('window.resizeCrmDashboardCharts?.()', false);
+        $response->assertSee('Total value:', false);
     }
 
     public function test_admin_dashboard_renders_soft_nav_chart_lifecycle_hooks(): void
