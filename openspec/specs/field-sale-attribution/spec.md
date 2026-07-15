@@ -35,7 +35,7 @@ The system SHALL count a form submission as one sale when at least one active nu
 - **THEN** that submission is excluded from the dashboard sales count
 
 ### Requirement: Marked values contribute to dashboard sale amounts
-The system SHALL persist capture timestamps for new form submissions and calculate dashboard Sales, Top Agent, and per-form breakdown metrics exclusively from non-empty numeric values in active fields marked as sale amounts. The dashboard SHALL accept a selected date, start time, and end time, defaulting to the current date from `06:00` inclusive through `18:00` exclusive, and SHALL apply that same range to every dashboard sales metric. The dashboard SHALL show the Sales and Top Agent cards, SHALL NOT render a Calls KPI card, and SHALL NOT use campaign disposition records or lead-data amounts as a fallback. If no valid marked sale field exists for the campaign, the dashboard SHALL return zero sales, zero amount, no Top Agent, and an empty form breakdown.
+The system SHALL persist capture timestamps for new form submissions and calculate dashboard Sales, Top Agent, per-form breakdown, and campaign leaderboard metrics exclusively from non-empty numeric values in active fields marked as sale amounts. The dashboard SHALL accept a selected date, start time, and end time, defaulting to the current date from `06:00` inclusive through `18:00` exclusive, and SHALL apply that same range to every dashboard sales metric. The dashboard SHALL show the Sales and Top Agent cards, SHALL NOT render a Calls KPI card, and SHALL NOT use campaign disposition records or lead-data amounts as a fallback. If no valid marked sale field exists for the campaign, the dashboard SHALL return zero sales, zero amount, no Top Agent, an empty form breakdown, and an empty leaderboard.
 
 #### Scenario: Sum multiple sale amounts on one submission
 - **WHEN** a submission contains `100.00` and `25.50` in two marked fields within the selected range
@@ -72,6 +72,14 @@ The system SHALL persist capture timestamps for new form submissions and calcula
 #### Scenario: Top Agent reflects qualifying marked sales
 - **WHEN** agents have different numbers of qualifying marked sales within the selected range
 - **THEN** the Top Agent card identifies the agent with the highest qualifying sale count and shows that agent's qualifying sale count and total value
+
+#### Scenario: Daily campaign leaderboard reflects the selected range
+- **WHEN** multiple campaign agents have qualifying marked sales inside and outside the selected date/time range
+- **THEN** the leaderboard includes the qualifying agents from the selected range, ranks by sales count descending then total amount descending then agent name, and excludes sales outside the range
+
+#### Scenario: Top Agent leaderboard modal shows all sales amounts
+- **WHEN** the user hovers, clicks, or focuses the Top Agent card
+- **THEN** the dashboard opens a modal listing the campaign leaderboard from rank 1 through the last qualifying agent with each agent's sales count and total marked-form sale amount
 
 #### Scenario: Sales breakdown modal
 - **WHEN** the user hovers, clicks, or focuses the Sales card

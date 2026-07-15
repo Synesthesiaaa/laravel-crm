@@ -18,8 +18,9 @@ $colorMap = [
     'info'    => ['bg' => 'var(--color-info-muted)',     'text' => 'var(--color-info)'],
 ];
 $c = $colorMap[$color] ?? $colorMap['primary'];
+$statCardClass = 'stat-card'.($href ? ' cursor-pointer hover:-translate-y-0.5 transition-transform' : '');
 @endphp
-<div class="stat-card {{ $href ? 'cursor-pointer hover:-translate-y-0.5 transition-transform' : '' }}"
+<div {{ $attributes->merge(['class' => $statCardClass]) }}
      @if($href) onclick="window.location='{{ $href }}'" @endif>
     <div class="flex items-start justify-between">
         <span class="stat-card-label">{{ $label }}</span>

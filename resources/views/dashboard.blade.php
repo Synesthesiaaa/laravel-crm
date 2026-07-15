@@ -26,6 +26,7 @@
 
     <div x-data="{
         salesModalCloseTimer: null,
+        leaderboardModalCloseTimer: null,
         openSalesModal() {
             this.cancelSalesModalClose();
             $store.modal.show('sales-summary');
@@ -33,7 +34,9 @@
         scheduleSalesModalClose() {
             this.cancelSalesModalClose();
             this.salesModalCloseTimer = window.setTimeout(() => {
-                $store.modal.hide();
+                if ($store.modal.is('sales-summary')) {
+                    $store.modal.hide();
+                }
                 this.salesModalCloseTimer = null;
             }, 300);
         },
@@ -41,6 +44,25 @@
             if (this.salesModalCloseTimer !== null) {
                 window.clearTimeout(this.salesModalCloseTimer);
                 this.salesModalCloseTimer = null;
+            }
+        },
+        openLeaderboardModal() {
+            this.cancelLeaderboardModalClose();
+            $store.modal.show('agent-leaderboard');
+        },
+        scheduleLeaderboardModalClose() {
+            this.cancelLeaderboardModalClose();
+            this.leaderboardModalCloseTimer = window.setTimeout(() => {
+                if ($store.modal.is('agent-leaderboard')) {
+                    $store.modal.hide();
+                }
+                this.leaderboardModalCloseTimer = null;
+            }, 300);
+        },
+        cancelLeaderboardModalClose() {
+            if (this.leaderboardModalCloseTimer !== null) {
+                window.clearTimeout(this.leaderboardModalCloseTimer);
+                this.leaderboardModalCloseTimer = null;
             }
         },
     }">
@@ -54,7 +76,14 @@
                  x-on:focusin="openSalesModal()">
                 <x-stat-card label="Sales" :value="number_format($kpis['sales'] ?? 0)" :secondary="$salesRangeLabel.' · Total value: '.number_format($kpis['sales_amount'] ?? 0, 2)" icon="check-circle" color="success" />
             </div>
-            <x-stat-card label="Top agent" :value="$kpis['top_agent'] ?? '—'" :secondary="($kpis['top_agent_sales'] ?? 0) > 0 ? number_format($kpis['top_agent_sales']).' sales · Total value: '.number_format($kpis['top_agent_sales_amount'] ?? 0, 2) : null" icon="user" color="warning" />
+            <div tabindex="0"
+                 class="rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                 x-on:mouseenter="openLeaderboardModal()"
+                 x-on:mouseleave="scheduleLeaderboardModalClose()"
+                 x-on:click="openLeaderboardModal()"
+                 x-on:focusin="openLeaderboardModal()">
+                <x-stat-card class="h-full" label="Top agent" :value="$kpis['top_agent'] ?? '—'" :secondary="($kpis['top_agent_sales'] ?? 0) > 0 ? number_format($kpis['top_agent_sales']).' sales · Total value: '.number_format($kpis['top_agent_sales_amount'] ?? 0, 2) : null" icon="user" color="warning" />
+            </div>
             <x-stat-card label="Active Forms" :value="count($forms ?? [])" icon="document-text" color="info" />
             <x-stat-card label="Campaign" :value="strtoupper($campaign ?? '—')" icon="building-office" color="info" />
         </div>
@@ -110,6 +139,60 @@
                 @endif
             </div>
         </x-modal>
+
+        <x-modal name="agent-leaderboard"
+                 title="Daily agent leaderboard"
+                 maxWidth="lg"
+                 :pointer-through-backdrop="true"
+                 x-on:mouseenter="cancelLeaderboardModalClose()"
+                 x-on:mouseleave="scheduleLeaderboardModalClose()">
+            <form method="GET" action="{{ route('dashboard') }}" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <label class="text-sm font-medium text-[var(--color-on-surface)]">
+                    Date
+                    <input type="date" name="sales_date" value="{{ $salesFilter['date'] }}" class="form-input mt-1 w-full">
+                </label>
+                <label class="text-sm font-medium text-[var(--color-on-surface)]">
+                    Start time
+                    <input type="time" name="sales_start" value="{{ $salesFilter['start'] }}" class="form-input mt-1 w-full">
+                </label>
+                <label class="text-sm font-medium text-[var(--color-on-surface)]">
+                    End time
+                    <input type="time" name="sales_end" value="{{ $salesFilter['end'] }}" class="form-input mt-1 w-full">
+                </label>
+                <div class="sm:col-span-3 flex justify-end">
+                    <button type="submit" class="btn-primary">Apply range</button>
+                </div>
+            </form>
+
+            <p class="mt-5 text-sm text-[var(--color-on-surface-muted)]">{{ $salesRangeLabel }}. Ranked by qualifying form sales, then total marked-form sale amount.</p>
+
+            <div class="md-table-wrap mt-4">
+                @if(!empty($agentLeaderboard))
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="w-12">#</th>
+                                <th>Agent</th>
+                                <th class="text-right">Sales</th>
+                                <th class="text-right">Sale amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($agentLeaderboard as $idx => $row)
+                                <tr>
+                                    <td class="text-[var(--color-on-surface-dim)]">{{ $idx + 1 }}</td>
+                                    <td class="font-medium text-[var(--color-on-surface)]">{{ $row['agent'] }}</td>
+                                    <td class="text-right tabular-nums">{{ number_format($row['sales_count']) }}</td>
+                                    <td class="text-right tabular-nums">{{ number_format($row['sales_amount'], 2) }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                @else
+                    <p class="table-empty py-8 text-center text-sm text-[var(--color-on-surface-dim)]">No qualifying form sales are available for this range.</p>
+                @endif
+            </div>
+        </x-modal>
     </div>
 
     {{-- Activity charts: daily / weekly / monthly --}}
@@ -128,11 +211,11 @@
         </div>
     </div>
 
-    {{-- Top agents (month-to-date) --}}
+    {{-- Daily campaign leaderboard --}}
     <div class="md-card overflow-hidden">
         <div class="px-5 py-4 border-b border-[var(--color-border)]">
-            <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Top agents — {{ $monthTitle }}</h3>
-            <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">Ranked by submissions, then sales count, then sale amount (from marked form fields when configured).</p>
+            <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Agent leaderboard — {{ $salesRangeLabel }}</h3>
+            <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">Ranked by qualifying form sales, then total marked-form sale amount.</p>
         </div>
         <div class="md-table-wrap">
             @if(!empty($agentLeaderboard))
@@ -141,7 +224,6 @@
                         <tr>
                             <th class="w-12">#</th>
                             <th>Agent</th>
-                            <th class="text-right">Submissions</th>
                             <th class="text-right">Sales</th>
                             <th class="text-right">Sale amount</th>
                         </tr>
@@ -151,7 +233,6 @@
                             <tr>
                                 <td class="text-[var(--color-on-surface-dim)]">{{ $idx + 1 }}</td>
                                 <td class="font-medium text-[var(--color-on-surface)]">{{ $row['agent'] }}</td>
-                                <td class="text-right tabular-nums">{{ number_format($row['submissions']) }}</td>
                                 <td class="text-right tabular-nums">{{ number_format($row['sales_count']) }}</td>
                                 <td class="text-right tabular-nums">{{ number_format($row['sales_amount'], 2) }}</td>
                             </tr>
@@ -159,7 +240,7 @@
                     </tbody>
                 </table>
             @else
-                <p class="table-empty py-8 text-center text-sm text-[var(--color-on-surface-dim)]">No submission or sale activity this month yet.</p>
+                <p class="table-empty py-8 text-center text-sm text-[var(--color-on-surface-dim)]">No qualifying form sales are available for this range.</p>
             @endif
         </div>
     </div>

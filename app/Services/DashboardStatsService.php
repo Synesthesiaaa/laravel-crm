@@ -355,7 +355,7 @@ class DashboardStatsService
      * Disposition records and lead JSON are intentionally excluded. A sale is a
      * submission with at least one numeric value in a form field marked as a sale amount.
      *
-     * @return array{sales: int, sales_amount: float, top_agent: string|null, top_agent_sales: int, top_agent_sales_amount: float, sales_by_form: list<array{form_code: string, form_name: string, sales: int, sales_amount: float}>}
+     * @return array{sales: int, sales_amount: float, top_agent: string|null, top_agent_sales: int, top_agent_sales_amount: float, sales_by_form: list<array{form_code: string, form_name: string, sales: int, sales_amount: float}>, agent_leaderboard: list<array{agent: string, sales_count: int, sales_amount: float}>}
      */
     public function getSalesKpisForCampaign(string $campaignCode, Carbon $from, Carbon $until): array
     {
@@ -366,6 +366,7 @@ class DashboardStatsService
             'top_agent_sales' => 0,
             'top_agent_sales_amount' => 0.0,
             'sales_by_form' => [],
+            'agent_leaderboard' => [],
         ];
 
         if ($until->lte($from)) {
@@ -384,19 +385,11 @@ class DashboardStatsService
             $until,
         );
 
-        $agents = array_keys($fieldDrivenSales['counts']);
-        usort($agents, static function (string $a, string $b) use ($fieldDrivenSales): int {
-            if ($fieldDrivenSales['counts'][$a] !== $fieldDrivenSales['counts'][$b]) {
-                return $fieldDrivenSales['counts'][$b] <=> $fieldDrivenSales['counts'][$a];
-            }
-            if ($fieldDrivenSales['amounts'][$a] != $fieldDrivenSales['amounts'][$b]) {
-                return $fieldDrivenSales['amounts'][$b] <=> $fieldDrivenSales['amounts'][$a];
-            }
-
-            return strcmp($a, $b);
-        });
-
-        $topAgent = $agents[0] ?? null;
+        $agentLeaderboard = $this->buildSalesLeaderboard(
+            $fieldDrivenSales['counts'],
+            $fieldDrivenSales['amounts'],
+        );
+        $topAgent = $agentLeaderboard[0]['agent'] ?? null;
 
         return [
             'sales' => $fieldDrivenSales['count'],
@@ -405,6 +398,7 @@ class DashboardStatsService
             'top_agent_sales' => $topAgent === null ? 0 : $fieldDrivenSales['counts'][$topAgent],
             'top_agent_sales_amount' => $topAgent === null ? 0.0 : round($fieldDrivenSales['amounts'][$topAgent], 2),
             'sales_by_form' => $fieldDrivenSales['sales_by_form'],
+            'agent_leaderboard' => $agentLeaderboard,
         ];
     }
 
@@ -699,6 +693,38 @@ class DashboardStatsService
             'amounts' => $amounts,
             'sales_by_form' => array_values($salesByForm),
         ];
+    }
+
+    /**
+     * @param  array<string, int>  $counts
+     * @param  array<string, float>  $amounts
+     * @return list<array{agent: string, sales_count: int, sales_amount: float}>
+     */
+    private function buildSalesLeaderboard(array $counts, array $amounts): array
+    {
+        $agents = array_unique(array_merge(array_keys($counts), array_keys($amounts)));
+        $leaderboard = [];
+
+        foreach ($agents as $agent) {
+            $leaderboard[] = [
+                'agent' => (string) $agent,
+                'sales_count' => $counts[$agent] ?? 0,
+                'sales_amount' => round($amounts[$agent] ?? 0.0, 2),
+            ];
+        }
+
+        usort($leaderboard, static function (array $a, array $b): int {
+            if ($a['sales_count'] !== $b['sales_count']) {
+                return $b['sales_count'] <=> $a['sales_count'];
+            }
+            if ($a['sales_amount'] != $b['sales_amount']) {
+                return $b['sales_amount'] <=> $a['sales_amount'];
+            }
+
+            return strcmp($a['agent'], $b['agent']);
+        });
+
+        return $leaderboard;
     }
 
     /**

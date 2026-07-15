@@ -67,6 +67,29 @@ class DashboardSalesRangeTest extends TestCase
         $this->assertSame(500.0, $breakdown['transfer']['sales_amount']);
     }
 
+    public function test_sales_kpis_return_a_selected_range_leaderboard_sorted_by_sales_then_amount_then_name(): void
+    {
+        $this->registerSalesForm('cash', 'Cash Sale', 'cash_sales');
+
+        $this->insertSale('cash_sales', 'Alice', 100.00, '2026-05-15 07:00:00');
+        $this->insertSale('cash_sales', 'Alice', 25.00, '2026-05-15 08:00:00');
+        $this->insertSale('cash_sales', 'Bob', 200.00, '2026-05-15 09:00:00');
+        $this->insertSale('cash_sales', 'Carl', 200.00, '2026-05-15 10:00:00');
+        $this->insertSale('cash_sales', 'Zed', 999.00, '2026-05-15 19:00:00');
+
+        $kpis = app(DashboardStatsService::class)->getSalesKpisForCampaign(
+            'mbsales',
+            Carbon::parse('2026-05-15 06:00:00'),
+            Carbon::parse('2026-05-15 18:00:00'),
+        );
+
+        $this->assertSame([
+            ['agent' => 'Alice', 'sales_count' => 2, 'sales_amount' => 125.0],
+            ['agent' => 'Bob', 'sales_count' => 1, 'sales_amount' => 200.0],
+            ['agent' => 'Carl', 'sales_count' => 1, 'sales_amount' => 200.0],
+        ], $kpis['agent_leaderboard']);
+    }
+
     public function test_sales_kpis_ignore_dispositions_when_no_marked_form_sale_field_exists(): void
     {
         CampaignDispositionRecord::create([
@@ -131,6 +154,36 @@ class DashboardSalesRangeTest extends TestCase
         $response->assertSee('x-transition:leave="transition ease-in duration-150"', false);
         $response->assertSee('pointer-events: none;', false);
         $response->assertSee('pointer-events: auto;', false);
+        $response->assertSee('x-on:mouseenter="openLeaderboardModal()"', false);
+        $response->assertSee('x-on:click="openLeaderboardModal()"', false);
+        $response->assertSee('Daily agent leaderboard', false);
+        $response->assertSee('Agent leaderboard', false);
+        $response->assertSee('class="stat-card h-full"', false);
+    }
+
+    public function test_dashboard_renders_selected_range_agent_leaderboard_amounts(): void
+    {
+        $this->registerSalesForm('cash', 'Cash Sale', 'cash_sales');
+
+        $this->insertSale('cash_sales', 'Alice', 100.00, '2026-05-12 07:00:00');
+        $this->insertSale('cash_sales', 'Bob', 250.00, '2026-05-12 08:00:00');
+        $this->insertSale('cash_sales', 'Outside', 999.00, '2026-05-12 19:00:00');
+
+        $response = $this->actingAs(User::factory()->create())
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('dashboard', [
+                'sales_date' => '2026-05-12',
+                'sales_start' => '06:00',
+                'sales_end' => '18:00',
+            ]));
+
+        $response->assertOk();
+        $response->assertSee('Daily agent leaderboard', false);
+        $response->assertSee('Alice', false);
+        $response->assertSee('Bob', false);
+        $response->assertSee('100.00', false);
+        $response->assertSee('250.00', false);
+        $response->assertDontSee('999.00', false);
     }
 
     public function test_dashboard_reverts_invalid_sales_filters_to_the_default_business_hours(): void

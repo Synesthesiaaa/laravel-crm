@@ -30,7 +30,6 @@ class DashboardController extends Controller
         $dailyActivity = $this->dashboardStats->getLast24HourActivityTrend($campaign);
         $weeklyActivity = $this->dashboardStats->getWeeklyActivityTrend($campaign);
         $monthlyActivity = $this->dashboardStats->getMonthlyActivityTrend($campaign);
-        $agentLeaderboard = $this->dashboardStats->getAgentLeaderboard($campaign);
 
         return view('dashboard', [
             'campaign' => $campaign,
@@ -42,7 +41,7 @@ class DashboardController extends Controller
             'dailyActivity' => $dailyActivity,
             'weeklyActivity' => $weeklyActivity,
             'monthlyActivity' => $monthlyActivity,
-            'agentLeaderboard' => $agentLeaderboard,
+            'agentLeaderboard' => $kpis['agent_leaderboard'] ?? [],
         ]);
     }
 

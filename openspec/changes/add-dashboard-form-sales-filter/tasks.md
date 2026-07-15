@@ -19,3 +19,10 @@
 
 - [x] 4.1 Run focused PHPUnit tests and Laravel Pint.
 - [x] 4.2 Verify the default and filtered hover-modal flow in the browser at desktop and mobile viewports.
+
+## 5. Daily campaign leaderboard
+
+- [x] 5.1 Add failing service and feature tests proving the selected-range leaderboard ranks all qualifying agents by sales count, amount, and name tie-breaker.
+- [x] 5.2 Return the selected-range leaderboard from the existing form-only KPI aggregation and pass it to the dashboard instead of the month-to-date source.
+- [x] 5.3 Add a Top Agent hover/click/focus modal and align the visible campaign leaderboard with the selected daily range, including each agent's sales count and amount.
+- [x] 5.4 Run focused PHPUnit/Pint checks and verify both Sales and Top Agent modal interactions in the browser.

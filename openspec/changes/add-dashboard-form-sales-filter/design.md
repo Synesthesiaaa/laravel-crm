@@ -10,19 +10,21 @@ The dashboard currently uses a fixed rolling window and retains a disposition-ba
 - Let users choose a date, start time, and end time with server-side query parameters.
 - Aggregate only numeric fields enabled as sale amounts in Field Logic and show a per-form sales count and total in a hover-accessible modal.
 - Keep the card, Top Agent, and modal on one filtered source of truth.
+- Replace the dashboard's month-to-date leaderboard source with the selected daily form-sales range so the visible list and Top Agent card cannot disagree.
 
 **Non-Goals:**
 
 - Do not use campaign disposition records or lead JSON amounts for these dashboard sales metrics.
 - Do not add an AJAX endpoint, persist individual users' filter preferences, or alter form-field configuration.
-- Do not change the month-to-date leaderboard in this change.
 
 ## Decisions
 
 - The dashboard controller will resolve `sales_date`, `sales_start`, and `sales_end` from the GET request. Missing values use the current date, `06:00`, and `18:00`; malformed or non-positive ranges fall back to those defaults. Server-side filtering keeps each visible amount identical after refresh and needs no API.
 - `DashboardStatsService` will receive a concrete start/end range and calculate Sales, Top Agent, and a form-keyed breakdown from marked fields only. Disposition queries are removed from this dashboard KPI path. A campaign with no valid marked sale fields returns zero totals and an empty breakdown.
+- The same selected-range aggregation will return a deterministic full agent leaderboard sorted by qualifying sales count descending, sale amount descending, and agent name ascending. The dashboard will pass that list to both the visible campaign leaderboard and the Top Agent modal; no disposition fallback will be used.
 - Form metadata will travel with resolved marked fields so the aggregation can produce one stable breakdown row per configured form. The range uses `created_at >= start` and `created_at < end`, avoiding overlap at adjacent time boundaries.
 - The Sales card wrapper opens the existing shared modal on pointer hover, click, and keyboard focus. The modal contains the range form, overall total, and per-form table; submitting the form reloads the dashboard with the selected GET parameters. The card and modal box share a short hover-leave delay, so the modal remains available while the user moves to its controls and closes smoothly after the pointer leaves both.
+- The Top Agent card uses the same hover/click/focus interaction and opens a second shared modal with the selected range and all campaign agents' qualifying sales counts and amounts.
 
 ## Risks / Trade-offs
 
