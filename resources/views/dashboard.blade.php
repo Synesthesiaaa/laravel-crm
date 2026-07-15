@@ -6,8 +6,8 @@
 
 @section('content')
 @php
-    $salesKpiHours = (int) config('dashboard.sales_kpi_window_hours', 24);
     $monthTitle = now()->format('F Y');
+    $salesRangeLabel = $salesFilter['from']->format('M j, Y').' · '.$salesFilter['from']->format('g:i A').'–'.$salesFilter['until']->format('g:i A');
 @endphp
 <div class="space-y-8">
 
@@ -24,12 +24,92 @@
         </div>
     </div>
 
-    {{-- KPI + context stat cards --}}
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 animate-stagger">
-        <x-stat-card label="Sales ({{ $salesKpiHours }}h)"     :value="number_format($kpis['sales'] ?? 0)"          :secondary="'Total value: '.number_format($kpis['sales_amount'] ?? 0, 2)" icon="check-circle" color="success" />
-        <x-stat-card label="Top agent ({{ $salesKpiHours }}h)" :value="$kpis['top_agent'] ?? '—'"                  :secondary="($kpis['top_agent_sales'] ?? 0) > 0 ? number_format($kpis['top_agent_sales']).' sales · Total value: '.number_format($kpis['top_agent_sales_amount'] ?? 0, 2) : null" icon="user" color="warning" />
-        <x-stat-card label="Active Forms"                 :value="count($forms ?? [])"                        icon="document-text" color="info" />
-        <x-stat-card label="Campaign"                     :value="strtoupper($campaign ?? '—')"               icon="building-office" color="info" />
+    <div x-data="{
+        salesModalCloseTimer: null,
+        openSalesModal() {
+            this.cancelSalesModalClose();
+            $store.modal.show('sales-summary');
+        },
+        scheduleSalesModalClose() {
+            this.cancelSalesModalClose();
+            this.salesModalCloseTimer = window.setTimeout(() => {
+                $store.modal.hide();
+                this.salesModalCloseTimer = null;
+            }, 300);
+        },
+        cancelSalesModalClose() {
+            if (this.salesModalCloseTimer !== null) {
+                window.clearTimeout(this.salesModalCloseTimer);
+                this.salesModalCloseTimer = null;
+            }
+        },
+    }">
+        {{-- KPI + context stat cards --}}
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 animate-stagger">
+            <div tabindex="0"
+                 class="rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                 x-on:mouseenter="openSalesModal()"
+                 x-on:mouseleave="scheduleSalesModalClose()"
+                 x-on:click="openSalesModal()"
+                 x-on:focusin="openSalesModal()">
+                <x-stat-card label="Sales" :value="number_format($kpis['sales'] ?? 0)" :secondary="$salesRangeLabel.' · Total value: '.number_format($kpis['sales_amount'] ?? 0, 2)" icon="check-circle" color="success" />
+            </div>
+            <x-stat-card label="Top agent" :value="$kpis['top_agent'] ?? '—'" :secondary="($kpis['top_agent_sales'] ?? 0) > 0 ? number_format($kpis['top_agent_sales']).' sales · Total value: '.number_format($kpis['top_agent_sales_amount'] ?? 0, 2) : null" icon="user" color="warning" />
+            <x-stat-card label="Active Forms" :value="count($forms ?? [])" icon="document-text" color="info" />
+            <x-stat-card label="Campaign" :value="strtoupper($campaign ?? '—')" icon="building-office" color="info" />
+        </div>
+
+        <x-modal name="sales-summary"
+                 title="Sales by form"
+                 maxWidth="lg"
+                 :pointer-through-backdrop="true"
+                 x-on:mouseenter="cancelSalesModalClose()"
+                 x-on:mouseleave="scheduleSalesModalClose()">
+            <form method="GET" action="{{ route('dashboard') }}" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <label class="text-sm font-medium text-[var(--color-on-surface)]">
+                    Date
+                    <input type="date" name="sales_date" value="{{ $salesFilter['date'] }}" class="form-input mt-1 w-full">
+                </label>
+                <label class="text-sm font-medium text-[var(--color-on-surface)]">
+                    Start time
+                    <input type="time" name="sales_start" value="{{ $salesFilter['start'] }}" class="form-input mt-1 w-full">
+                </label>
+                <label class="text-sm font-medium text-[var(--color-on-surface)]">
+                    End time
+                    <input type="time" name="sales_end" value="{{ $salesFilter['end'] }}" class="form-input mt-1 w-full">
+                </label>
+                <div class="sm:col-span-3 flex justify-end">
+                    <button type="submit" class="btn-primary">Apply range</button>
+                </div>
+            </form>
+
+            <p class="mt-5 text-sm text-[var(--color-on-surface-muted)]">{{ $salesRangeLabel }}. Amounts come only from numeric form fields marked as sale amounts.</p>
+
+            <div class="md-table-wrap mt-4">
+                @if(!empty($kpis['sales_by_form']))
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Form</th>
+                                <th class="text-right">Sales</th>
+                                <th class="text-right">Total amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($kpis['sales_by_form'] as $formSale)
+                                <tr>
+                                    <td class="font-medium text-[var(--color-on-surface)]">{{ $formSale['form_name'] }}</td>
+                                    <td class="text-right tabular-nums">{{ number_format($formSale['sales']) }}</td>
+                                    <td class="text-right tabular-nums">{{ number_format($formSale['sales_amount'], 2) }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                @else
+                    <p class="table-empty py-8 text-center text-sm text-[var(--color-on-surface-dim)]">No marked form sale fields are available for this campaign.</p>
+                @endif
+            </div>
+        </x-modal>
     </div>
 
     {{-- Activity charts: daily / weekly / monthly --}}

@@ -1,13 +1,24 @@
-@props(['name', 'title' => null, 'maxWidth' => 'md'])
+@props(['name', 'title' => null, 'maxWidth' => 'md', 'pointerThroughBackdrop' => false])
 @php $widths = ['sm' => 'max-w-sm', 'md' => 'max-w-lg', 'lg' => 'max-w-2xl', 'xl' => 'max-w-4xl']; $w = $widths[$maxWidth] ?? $widths['md']; @endphp
 <div x-show="$store.modal.is('{{ $name }}')"
      x-trap.noscroll="$store.modal.is('{{ $name }}')"
+     x-transition:enter="transition-opacity ease-out duration-200"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100"
+     x-transition:leave="transition-opacity ease-in duration-150"
+     x-transition:leave-start="opacity-100"
+     x-transition:leave-end="opacity-0"
      class="modal-backdrop"
-     style="display: none;">
+     style="display: none;{{ $pointerThroughBackdrop ? ' pointer-events: none;' : '' }}">
     <div class="modal-box {{ $w }}"
          x-transition:enter="transition ease-out duration-200"
          x-transition:enter-start="opacity-0 scale-95"
          x-transition:enter-end="opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 scale-100"
+         x-transition:leave-end="opacity-0 scale-95"
+         {{ $attributes }}
+         style="{{ $pointerThroughBackdrop ? 'pointer-events: auto;' : '' }}"
          @click.stop>
         @if($title)
         <div class="modal-header">

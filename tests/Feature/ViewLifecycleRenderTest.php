@@ -49,8 +49,12 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertSee('window.crmCharts?.register?.(chartGroup, elId, chart);', false);
         $response->assertSee('window.resizeCrmDashboardCharts?.()', false);
         $response->assertSee('Total value:', false);
-        $response->assertSee('Sales (24h)', false);
-        $response->assertSee('Top agent (24h)', false);
+        $response->assertSee('Sales by form', false);
+        $response->assertSee('x-on:mouseenter="openSalesModal()"', false);
+        $response->assertSee('x-on:mouseleave="scheduleSalesModalClose()"', false);
+        $response->assertSee('x-transition:leave="transition ease-in duration-150"', false);
+        $response->assertDontSee('Sales (24h)', false);
+        $response->assertDontSee('Top agent (24h)', false);
         $response->assertDontSee('Calls (9h)', false);
     }
 

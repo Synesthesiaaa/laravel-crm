@@ -349,6 +349,65 @@ class DashboardStatsService
         });
     }
 
+    /**
+     * Form-field sales for an explicit date and time interval.
+     *
+     * Disposition records and lead JSON are intentionally excluded. A sale is a
+     * submission with at least one numeric value in a form field marked as a sale amount.
+     *
+     * @return array{sales: int, sales_amount: float, top_agent: string|null, top_agent_sales: int, top_agent_sales_amount: float, sales_by_form: list<array{form_code: string, form_name: string, sales: int, sales_amount: float}>}
+     */
+    public function getSalesKpisForCampaign(string $campaignCode, Carbon $from, Carbon $until): array
+    {
+        $empty = [
+            'sales' => 0,
+            'sales_amount' => 0.0,
+            'top_agent' => null,
+            'top_agent_sales' => 0,
+            'top_agent_sales_amount' => 0.0,
+            'sales_by_form' => [],
+        ];
+
+        if ($until->lte($from)) {
+            return $empty;
+        }
+
+        $markedSaleFields = $this->resolveMarkedSaleFields($campaignCode);
+        if (! $markedSaleFields['configured']) {
+            return $empty;
+        }
+
+        $fieldDrivenSales = $this->getFieldDrivenSalesByAgentInRange(
+            $markedSaleFields['fields'],
+            $markedSaleFields['forms'],
+            $from,
+            $until,
+        );
+
+        $agents = array_keys($fieldDrivenSales['counts']);
+        usort($agents, static function (string $a, string $b) use ($fieldDrivenSales): int {
+            if ($fieldDrivenSales['counts'][$a] !== $fieldDrivenSales['counts'][$b]) {
+                return $fieldDrivenSales['counts'][$b] <=> $fieldDrivenSales['counts'][$a];
+            }
+            if ($fieldDrivenSales['amounts'][$a] != $fieldDrivenSales['amounts'][$b]) {
+                return $fieldDrivenSales['amounts'][$b] <=> $fieldDrivenSales['amounts'][$a];
+            }
+
+            return strcmp($a, $b);
+        });
+
+        $topAgent = $agents[0] ?? null;
+
+        return [
+            'sales' => $fieldDrivenSales['count'],
+            'sales_amount' => round($fieldDrivenSales['amount'], 2),
+            'top_agent' => $topAgent,
+            'top_agent_sales' => $topAgent === null ? 0 : $fieldDrivenSales['counts'][$topAgent],
+            'top_agent_sales_amount' => $topAgent === null ? 0.0 : round($fieldDrivenSales['amounts'][$topAgent], 2),
+            'sales_by_form' => $fieldDrivenSales['sales_by_form'],
+        ];
+    }
+
     public function getTopAgents(string $campaignCode, int $limit = 10): array
     {
         return Cache::remember("top_agents_{$campaignCode}_{$limit}", 300, function () use ($campaignCode, $limit) {
@@ -451,7 +510,7 @@ class DashboardStatsService
     }
 
     /**
-     * @return array{configured: bool, fields: array<string, list<string>>}
+     * @return array{configured: bool, fields: array<string, list<string>>, forms: array<string, array{form_code: string, form_name: string}>}
      */
     private function resolveMarkedSaleFields(string $campaignCode): array
     {
@@ -465,8 +524,11 @@ class DashboardStatsService
         $allowedTables = $this->campaignRepository->getAllFormTableNames();
 
         $fieldsByTable = [];
+        $formsByTable = [];
         foreach ($markedFields as $field) {
-            $tableName = (string) ($forms[$field->form_type]['table'] ?? '');
+            $formCode = (string) $field->form_type;
+            $formConfig = $forms[$formCode] ?? [];
+            $tableName = (string) ($formConfig['table'] ?? '');
             $fieldName = (string) $field->field_name;
 
             if ($tableName === '' || $fieldName === '') {
@@ -481,6 +543,10 @@ class DashboardStatsService
 
             $fieldsByTable[$tableName] ??= [];
             $fieldsByTable[$tableName][] = $fieldName;
+            $formsByTable[$tableName] = [
+                'form_code' => $formCode,
+                'form_name' => (string) ($formConfig['name'] ?? $formCode),
+            ];
         }
 
         foreach ($fieldsByTable as $tableName => $fieldNames) {
@@ -488,8 +554,9 @@ class DashboardStatsService
         }
 
         return [
-            'configured' => $markedFields->isNotEmpty(),
+            'configured' => $fieldsByTable !== [],
             'fields' => $fieldsByTable,
+            'forms' => $formsByTable,
         ];
     }
 
@@ -546,6 +613,91 @@ class DashboardStatsService
             'amount' => $amount,
             'counts' => $counts,
             'amounts' => $amounts,
+        ];
+    }
+
+    /**
+     * @param  array<string, list<string>>  $fieldsByTable
+     * @param  array<string, array{form_code: string, form_name: string}>  $formsByTable
+     * @return array{count: int, amount: float, counts: array<string, int>, amounts: array<string, float>, sales_by_form: list<array{form_code: string, form_name: string, sales: int, sales_amount: float}>}
+     */
+    private function getFieldDrivenSalesByAgentInRange(
+        array $fieldsByTable,
+        array $formsByTable,
+        Carbon $from,
+        Carbon $until,
+    ): array {
+        $sales = 0;
+        $amount = 0.0;
+        $counts = [];
+        $amounts = [];
+        $salesByForm = [];
+
+        foreach ($fieldsByTable as $tableName => $fieldNames) {
+            $form = $formsByTable[$tableName] ?? [
+                'form_code' => $tableName,
+                'form_name' => $tableName,
+            ];
+            $salesByForm[$tableName] = [
+                'form_code' => $form['form_code'],
+                'form_name' => $form['form_name'],
+                'sales' => 0,
+                'sales_amount' => 0.0,
+            ];
+
+            if (! Schema::hasColumn($tableName, 'created_at')) {
+                continue;
+            }
+
+            $hasAgent = Schema::hasColumn($tableName, 'agent');
+            $select = array_merge(['id'], $fieldNames);
+            if ($hasAgent) {
+                $select[] = 'agent';
+            }
+
+            DB::table($tableName)
+                ->where('created_at', '>=', $from)
+                ->where('created_at', '<', $until)
+                ->select($select)
+                ->orderBy('id')
+                ->chunk(1000, function ($rows) use (&$sales, &$amount, &$counts, &$amounts, &$salesByForm, $tableName, $fieldNames, $hasAgent): void {
+                    foreach ($rows as $row) {
+                        $saleAmount = $this->sumMarkedSaleValues($row, $fieldNames);
+                        if ($saleAmount === null) {
+                            continue;
+                        }
+
+                        $sales++;
+                        $amount += $saleAmount;
+                        $salesByForm[$tableName]['sales']++;
+                        $salesByForm[$tableName]['sales_amount'] += $saleAmount;
+
+                        if (! $hasAgent) {
+                            continue;
+                        }
+
+                        $agent = trim((string) ($row->agent ?? ''));
+                        if ($agent === '') {
+                            continue;
+                        }
+
+                        $counts[$agent] = ($counts[$agent] ?? 0) + 1;
+                        $amounts[$agent] = ($amounts[$agent] ?? 0.0) + $saleAmount;
+                    }
+                });
+        }
+
+        foreach ($salesByForm as &$form) {
+            $form['sales_amount'] = round($form['sales_amount'], 2);
+        }
+        unset($form);
+
+        return [
+            'count' => $sales,
+            'amount' => $amount,
+            'counts' => $counts,
+            'amounts' => $amounts,
+            'sales_by_form' => array_values($salesByForm),
         ];
     }
 
