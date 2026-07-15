@@ -224,7 +224,7 @@ class DashboardStatsService
     }
 
     /**
-     * @return array{calls: int, sales: int, sales_amount: float, top_agent: string|null, top_agent_calls: int}
+     * @return array{calls: int, sales: int, sales_amount: float, top_agent: string|null, top_agent_calls: int, top_agent_sales: int, top_agent_sales_amount: float}
      */
     public function getKpisForCampaign(string $campaignCode): array
     {
@@ -237,6 +237,8 @@ class DashboardStatsService
                 'sales_amount' => 0.0,
                 'top_agent' => null,
                 'top_agent_calls' => 0,
+                'top_agent_sales' => 0,
+                'top_agent_sales_amount' => 0.0,
             ];
 
             if (! Schema::hasTable('campaign_disposition_records')) {
@@ -264,10 +266,30 @@ class DashboardStatsService
             $markedSaleFields = $this->resolveMarkedSaleFields($campaignCode);
             $sales = 0;
             $salesAmount = 0.0;
+            $topAgent = null;
+            $topAgentCalls = 0;
+            $topAgentSales = 0;
+            $topAgentSalesAmount = 0.0;
             if ($markedSaleFields['configured']) {
-                $fieldDrivenSales = $this->getFieldDrivenSalesSince($markedSaleFields['fields'], $since);
+                $fieldDrivenSales = $this->getFieldDrivenSalesByAgentSince($markedSaleFields['fields'], $since);
                 $sales = $fieldDrivenSales['count'];
                 $salesAmount = $fieldDrivenSales['amount'];
+
+                $agents = array_keys($fieldDrivenSales['counts']);
+                usort($agents, static function (string $a, string $b) use ($fieldDrivenSales): int {
+                    if ($fieldDrivenSales['counts'][$a] !== $fieldDrivenSales['counts'][$b]) {
+                        return $fieldDrivenSales['counts'][$b] <=> $fieldDrivenSales['counts'][$a];
+                    }
+                    if ($fieldDrivenSales['amounts'][$a] != $fieldDrivenSales['amounts'][$b]) {
+                        return $fieldDrivenSales['amounts'][$b] <=> $fieldDrivenSales['amounts'][$a];
+                    }
+
+                    return strcmp($a, $b);
+                });
+
+                $topAgent = $agents[0] ?? null;
+                $topAgentSales = $topAgent === null ? 0 : $fieldDrivenSales['counts'][$topAgent];
+                $topAgentSalesAmount = $topAgent === null ? 0.0 : $fieldDrivenSales['amounts'][$topAgent];
             } elseif ($saleCodes !== []) {
                 $salesQuery = DB::table('campaign_disposition_records')
                     ->where('campaign_code', $campaignCode)
@@ -290,30 +312,37 @@ class DashboardStatsService
                     });
             }
 
-            $topQuery = DB::table('campaign_disposition_records')
-                ->where('campaign_code', $campaignCode)
-                ->whereNotNull('called_at')
-                ->where('called_at', '>=', $since)
-                ->whereNotNull('agent')
-                ->where('agent', '!=', '');
+            if (! $markedSaleFields['configured']) {
+                $topQuery = DB::table('campaign_disposition_records')
+                    ->where('campaign_code', $campaignCode)
+                    ->whereNotNull('called_at')
+                    ->where('called_at', '>=', $since)
+                    ->whereNotNull('agent')
+                    ->where('agent', '!=', '');
 
-            if ($systemCodes !== []) {
-                $topQuery->whereNotIn('disposition_code', $systemCodes);
+                if ($systemCodes !== []) {
+                    $topQuery->whereNotIn('disposition_code', $systemCodes);
+                }
+
+                $top = $topQuery
+                    ->select('agent', DB::raw('COUNT(*) as total'))
+                    ->groupBy('agent')
+                    ->orderByDesc('total')
+                    ->orderBy('agent')
+                    ->first();
+
+                $topAgent = $top->agent ?? null;
+                $topAgentCalls = isset($top->total) ? (int) $top->total : 0;
             }
-
-            $top = $topQuery
-                ->select('agent', DB::raw('COUNT(*) as total'))
-                ->groupBy('agent')
-                ->orderByDesc('total')
-                ->orderBy('agent')
-                ->first();
 
             return [
                 'calls' => $calls,
                 'sales' => $sales,
                 'sales_amount' => round($salesAmount, 2),
-                'top_agent' => $top->agent ?? null,
-                'top_agent_calls' => isset($top->total) ? (int) $top->total : 0,
+                'top_agent' => $topAgent,
+                'top_agent_calls' => $topAgentCalls,
+                'top_agent_sales' => $topAgentSales,
+                'top_agent_sales_amount' => round($topAgentSalesAmount, 2),
             ];
         });
     }
@@ -463,27 +492,47 @@ class DashboardStatsService
 
     /**
      * @param  array<string, list<string>>  $fieldsByTable
-     * @return array{count: int, amount: float}
+     * @return array{count: int, amount: float, counts: array<string, int>, amounts: array<string, float>}
      */
-    private function getFieldDrivenSalesSince(array $fieldsByTable, Carbon $since): array
+    private function getFieldDrivenSalesByAgentSince(array $fieldsByTable, Carbon $since): array
     {
         $sales = 0;
         $amount = 0.0;
+        $counts = [];
+        $amounts = [];
         foreach ($fieldsByTable as $tableName => $fieldNames) {
             if (! Schema::hasColumn($tableName, 'created_at')) {
                 continue;
             }
 
+            $hasAgent = Schema::hasColumn($tableName, 'agent');
+            $select = array_merge(['id'], $fieldNames);
+            if ($hasAgent) {
+                $select[] = 'agent';
+            }
+
             DB::table($tableName)
                 ->where('created_at', '>=', $since)
-                ->select(array_merge(['id'], $fieldNames))
+                ->select($select)
                 ->orderBy('id')
-                ->chunk(1000, function ($rows) use (&$sales, &$amount, $fieldNames): void {
+                ->chunk(1000, function ($rows) use (&$sales, &$amount, &$counts, &$amounts, $fieldNames, $hasAgent): void {
                     foreach ($rows as $row) {
                         $saleAmount = $this->sumMarkedSaleValues($row, $fieldNames);
                         if ($saleAmount !== null) {
                             $sales++;
                             $amount += $saleAmount;
+
+                            if (! $hasAgent) {
+                                continue;
+                            }
+
+                            $agent = trim((string) ($row->agent ?? ''));
+                            if ($agent === '') {
+                                continue;
+                            }
+
+                            $counts[$agent] = ($counts[$agent] ?? 0) + 1;
+                            $amounts[$agent] = ($amounts[$agent] ?? 0.0) + $saleAmount;
                         }
                     }
                 });
@@ -492,6 +541,8 @@ class DashboardStatsService
         return [
             'count' => $sales,
             'amount' => $amount,
+            'counts' => $counts,
+            'amounts' => $amounts,
         ];
     }
 

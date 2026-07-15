@@ -137,6 +137,35 @@ class DashboardStatsServiceTest extends TestCase
         $this->assertSame(125.5, $kpis['sales_amount']);
     }
 
+    public function test_get_kpis_top_agent_uses_marked_sales_and_amount(): void
+    {
+        Carbon::setTestNow('2026-05-07 15:00:00');
+        Cache::flush();
+        config(['dashboard.kpi_window_hours' => 9]);
+        $this->seed(CampaignSeeder::class);
+
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount',
+            'field_label' => 'EzyCash Amount',
+            'field_type' => 'number',
+            'is_required' => false,
+            'is_sale_amount' => true,
+            'field_order' => 1,
+        ]);
+
+        $this->insertEzycashSaleRow('2026-05-07', 'Alice', 100.00, 10.00, '2026-05-07 14:00:00', 1);
+        $this->insertEzycashSaleRow('2026-05-07', 'Alice', 25.50, 10.00, '2026-05-07 13:00:00', 2);
+        $this->insertEzycashSaleRow('2026-05-07', 'Bob', 500.00, 10.00, '2026-05-07 12:00:00', 3);
+
+        $kpis = app(DashboardStatsService::class)->getKpisForCampaign('mbsales');
+
+        $this->assertSame('Alice', $kpis['top_agent']);
+        $this->assertSame(2, $kpis['top_agent_sales']);
+        $this->assertSame(125.5, $kpis['top_agent_sales_amount']);
+    }
+
     public function test_get_kpis_respects_additional_sale_codes_from_config(): void
     {
         Carbon::setTestNow('2026-05-07 15:00:00');

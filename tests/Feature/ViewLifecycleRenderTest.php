@@ -51,6 +51,19 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertSee('Total value:', false);
     }
 
+    public function test_top_agent_stat_card_renders_sales_summary(): void
+    {
+        $html = view('components.stat-card', [
+            'label' => 'Top agent (9h)',
+            'value' => 'Alice',
+            'secondary' => '2 sales · Total value: 125.50',
+            'icon' => 'user',
+            'color' => 'warning',
+        ])->render();
+
+        $this->assertStringContainsString('2 sales · Total value: 125.50', $html);
+    }
+
     public function test_admin_dashboard_renders_soft_nav_chart_lifecycle_hooks(): void
     {
         $user = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);

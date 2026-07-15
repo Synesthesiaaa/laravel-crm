@@ -35,7 +35,7 @@ The system SHALL count a form submission as one sale when at least one active nu
 - **THEN** that submission is excluded from the dashboard sales count
 
 ### Requirement: Marked values contribute to dashboard sale amounts
-The system SHALL sum all non-empty numeric marked-field values on each qualifying submission and include the sum in dashboard sale amounts for its agent and in the rolling sales KPI. The rolling KPI SHALL use the configured hour window, and the agent leaderboard SHALL use its month-to-date date range. The dashboard SHALL expose both the qualifying sales count and the rolling total amount.
+The system SHALL sum all non-empty numeric marked-field values on each qualifying submission and include the sum in dashboard sale amounts for its agent and in the rolling sales KPI. The rolling KPI SHALL use the configured hour window, and the agent leaderboard SHALL use its month-to-date date range. The dashboard SHALL expose both the qualifying sales count and the rolling total amount. When marked fields are configured, the rolling Top Agent KPI SHALL rank by qualifying marked sales and expose that agent's qualifying sale count and total value.
 
 #### Scenario: Sum multiple sale amounts on one submission
 - **WHEN** a submission contains `100.00` and `25.50` in two marked fields
@@ -52,6 +52,10 @@ The system SHALL sum all non-empty numeric marked-field values on each qualifyin
 #### Scenario: Rolling KPI exposes count and total amount
 - **WHEN** qualifying sales occur within the configured rolling KPI window
 - **THEN** the dashboard Sales card shows the number of sales and the summed sale amount for that same window
+
+#### Scenario: Top Agent reflects qualifying marked sales
+- **WHEN** agents have different numbers of qualifying marked sales within the rolling KPI window
+- **THEN** the Top Agent card identifies the agent with the highest qualifying sale count and shows that agent's count and summed sale value
 
 ### Requirement: Dashboard data remains safe across dynamic form schemas
 The system SHALL only query marked field columns that exist on the registered form table and SHALL ignore null, empty, or non-numeric values without failing the dashboard request.
