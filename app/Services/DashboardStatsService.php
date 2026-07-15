@@ -228,9 +228,10 @@ class DashboardStatsService
      */
     public function getKpisForCampaign(string $campaignCode): array
     {
-        $hours = (int) config('dashboard.kpi_window_hours', 9);
+        $callHours = (int) config('dashboard.kpi_window_hours', 9);
+        $salesHours = (int) config('dashboard.sales_kpi_window_hours', 24);
 
-        return Cache::remember("dashboard_kpis_{$campaignCode}_{$hours}", 60, function () use ($campaignCode, $hours) {
+        return Cache::remember("dashboard_kpis_{$campaignCode}_{$callHours}_{$salesHours}", 60, function () use ($campaignCode, $callHours, $salesHours) {
             $empty = [
                 'calls' => 0,
                 'sales' => 0,
@@ -245,13 +246,14 @@ class DashboardStatsService
                 return $empty;
             }
 
-            $since = now()->subHours($hours);
+            $callSince = now()->subHours($callHours);
+            $salesSince = now()->subHours($salesHours);
             $systemCodes = $this->reportSystemDispositionCodes();
 
             $callsQuery = DB::table('campaign_disposition_records')
                 ->where('campaign_code', $campaignCode)
                 ->whereNotNull('called_at')
-                ->where('called_at', '>=', $since);
+                ->where('called_at', '>=', $callSince);
 
             if ($systemCodes !== []) {
                 $callsQuery->whereNotIn('disposition_code', $systemCodes);
@@ -271,7 +273,7 @@ class DashboardStatsService
             $topAgentSales = 0;
             $topAgentSalesAmount = 0.0;
             if ($markedSaleFields['configured']) {
-                $fieldDrivenSales = $this->getFieldDrivenSalesByAgentSince($markedSaleFields['fields'], $since);
+                $fieldDrivenSales = $this->getFieldDrivenSalesByAgentSince($markedSaleFields['fields'], $salesSince);
                 $sales = $fieldDrivenSales['count'];
                 $salesAmount = $fieldDrivenSales['amount'];
 
@@ -294,7 +296,7 @@ class DashboardStatsService
                 $salesQuery = DB::table('campaign_disposition_records')
                     ->where('campaign_code', $campaignCode)
                     ->whereNotNull('called_at')
-                    ->where('called_at', '>=', $since)
+                    ->where('called_at', '>=', $salesSince)
                     ->whereIn('disposition_code', $saleCodes);
 
                 if ($systemCodes !== []) {
@@ -316,7 +318,7 @@ class DashboardStatsService
                 $topQuery = DB::table('campaign_disposition_records')
                     ->where('campaign_code', $campaignCode)
                     ->whereNotNull('called_at')
-                    ->where('called_at', '>=', $since)
+                    ->where('called_at', '>=', $callSince)
                     ->whereNotNull('agent')
                     ->where('agent', '!=', '');
 
@@ -393,8 +395,9 @@ class DashboardStatsService
         $wk = now()->format('o-\WW');
         Cache::forget("activity_trend_weekly_{$campaignCode}_{$wk}");
 
-        $hours = (int) config('dashboard.kpi_window_hours', 9);
-        Cache::forget("dashboard_kpis_{$campaignCode}_{$hours}");
+        $callHours = (int) config('dashboard.kpi_window_hours', 9);
+        $salesHours = (int) config('dashboard.sales_kpi_window_hours', 24);
+        Cache::forget("dashboard_kpis_{$campaignCode}_{$callHours}_{$salesHours}");
 
         $limit = (int) config('dashboard.agent_leaderboard_limit', 25);
         Cache::forget('agent_leaderboard_'.$campaignCode.'_'.now()->format('Y-m').'_'.$limit);

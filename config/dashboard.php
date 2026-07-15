@@ -18,15 +18,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Dashboard KPI rolling window (hours)
+    | Dashboard Calls KPI rolling window (hours)
     |--------------------------------------------------------------------------
     |
-    | Used for total calls, total sales, and top agent metrics on the main
-    | agent dashboard.
+    | Used for total calls on the main agent dashboard.
     |
     */
 
     'kpi_window_hours' => 9,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Dashboard Sales KPI rolling window (hours)
+    |--------------------------------------------------------------------------
+    |
+    | Used for total sales and top-agent sales metrics on the main dashboard.
+    |
+    */
+
+    'sales_kpi_window_hours' => 24,
 
     /*
     |--------------------------------------------------------------------------
