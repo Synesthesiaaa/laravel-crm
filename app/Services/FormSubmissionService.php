@@ -177,6 +177,16 @@ class FormSubmissionService
                     $table->string('agent', 255)->index();
                 });
             }
+            if (! Schema::hasColumn($tableName, 'created_at')) {
+                Schema::table($tableName, function ($table) {
+                    $table->timestamp('created_at')->nullable();
+                });
+            }
+            if (! Schema::hasColumn($tableName, 'updated_at')) {
+                Schema::table($tableName, function ($table) {
+                    $table->timestamp('updated_at')->nullable();
+                });
+            }
         }
 
         $missingFieldCols = [];

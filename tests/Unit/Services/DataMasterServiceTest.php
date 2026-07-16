@@ -3,6 +3,7 @@
 namespace Tests\Unit\Services;
 
 use App\Contracts\Repositories\FormFieldRepositoryInterface;
+use App\Models\Form;
 use App\Services\CampaignService;
 use App\Services\DataMasterService;
 use Carbon\Carbon;
@@ -100,5 +101,34 @@ class DataMasterServiceTest extends TestCase
 
         $this->assertSame('2026-07-06 00:00:00', $record->created_at);
         $this->assertSame('2026-07-06 00:00:00', $record->updated_at);
+    }
+
+    public function test_timestamp_backfill_discovers_registered_dynamic_form_tables(): void
+    {
+        Form::create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'dynamic_form',
+            'name' => 'Dynamic Form',
+            'table_name' => 'dynamic_legacy_records',
+            'display_order' => 99,
+        ]);
+        Schema::create('dynamic_legacy_records', function ($table) {
+            $table->id();
+            $table->date('date');
+            $table->timestamps();
+        });
+        DB::table('dynamic_legacy_records')->insert([
+            'date' => '2026-07-10',
+            'created_at' => null,
+            'updated_at' => null,
+        ]);
+
+        $migration = require base_path('database/migrations/2026_07_16_110000_backfill_registered_form_timestamps.php');
+        $migration->up();
+
+        $record = DB::table('dynamic_legacy_records')->first();
+
+        $this->assertSame('2026-07-10 00:00:00', $record->created_at);
+        $this->assertSame('2026-07-10 00:00:00', $record->updated_at);
     }
 }

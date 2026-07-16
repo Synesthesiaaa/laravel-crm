@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\CampaignService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -147,6 +148,51 @@ class FormSubmissionTest extends TestCase
         $this->assertNotNull($submission);
         $this->assertNotNull($submission->created_at);
         $this->assertNotNull($submission->updated_at);
+    }
+
+    public function test_dynamic_form_table_gets_timestamp_columns_before_submission(): void
+    {
+        Form::create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'dynamic_form',
+            'name' => 'Dynamic Form',
+            'table_name' => 'dynamic_form_records',
+            'display_order' => 99,
+        ]);
+        FormField::create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'dynamic_form',
+            'field_name' => 'customer_name',
+            'field_label' => 'Customer Name',
+            'field_type' => 'text',
+            'is_required' => true,
+            'field_order' => 1,
+        ]);
+        Schema::create('dynamic_form_records', function ($table) {
+            $table->id();
+            $table->date('date');
+            $table->string('request_id');
+            $table->string('agent');
+            $table->string('customer_name');
+        });
+
+        $user = User::factory()->create(['username' => 'dynamic_agent']);
+
+        $response = $this->actingAs($user)->post(route('forms.store'), [
+            '_token' => csrf_token(),
+            'campaign' => 'mbsales',
+            'form_type' => 'dynamic_form',
+            'date' => '2026-07-16',
+            'customer_name' => 'Dynamic Customer',
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $record = DB::table('dynamic_form_records')->first();
+
+        $this->assertNotNull($record->created_at);
+        $this->assertNotNull($record->updated_at);
     }
 
     public function test_form_submit_returns_validation_errors_for_ajax_requests(): void
