@@ -140,6 +140,10 @@ class DataMasterService
             return true;
         }
 
+        if (Schema::hasColumn($tableName, 'updated_at')) {
+            $updates['updated_at'] = now();
+        }
+
         return DB::table($tableName)->where('id', $id)->update($updates) >= 0;
     }
 
