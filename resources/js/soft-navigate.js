@@ -60,6 +60,9 @@ window.crmSoftNav = {
     isRehydrating() {
         return currentSoftNavPhase === 'rehydrating';
     },
+    refresh() {
+        return softNavigate(window.location.href, { push: false });
+    },
     run(scope, phase, detail = {}) {
         runSoftNavHandler(normalizeSoftNavScope(scope), phase, detail);
     },

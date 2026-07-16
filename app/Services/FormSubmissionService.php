@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Events\DashboardDataUpdated;
 use App\Events\FormSubmitted;
 use App\Repositories\FormFieldRepository;
 use App\Repositories\FormSubmissionRepository;
@@ -64,6 +65,7 @@ class FormSubmissionService
             });
 
             event(new FormSubmitted($campaign, $formType, $recordId, $agent));
+            event(new DashboardDataUpdated($campaign, $formType, $recordId, 'submitted'));
 
             return OperationResult::success($recordId);
         } catch (\Throwable $e) {

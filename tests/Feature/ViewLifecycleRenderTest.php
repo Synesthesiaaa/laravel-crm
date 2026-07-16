@@ -46,6 +46,9 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertOk();
         $response->assertSee('window.crmSoftNav?.register?.(scope', false);
         $response->assertSee('window.crmSoftNav?.isRehydrating?.()', false);
+        $response->assertSee('window.crmSoftNav.refresh()', false);
+        $response->assertSee('echo.subscribeDashboardChannel?.(campaignCode, scheduleRefresh)', false);
+        $response->assertSee('const fallbackIntervalMs = 30_000;', false);
         $response->assertSee('window.crmCharts?.register?.(chartGroup, elId, chart);', false);
         $response->assertSee('window.resizeCrmDashboardCharts?.()', false);
         $response->assertSee('Total value:', false);

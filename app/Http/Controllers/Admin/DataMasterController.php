@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Events\DashboardDataUpdated;
 use App\Http\Controllers\Controller;
 use App\Services\CampaignService;
 use App\Services\DataMasterService;
@@ -125,7 +126,9 @@ class DataMasterController extends Controller
             }
         }
 
-        $this->dataMasterService->updateRecord($tableName, $id, $updates, $allowedTables);
+        if ($this->dataMasterService->updateRecord($tableName, $id, $updates, $allowedTables)) {
+            event(new DashboardDataUpdated($campaign, $type, $id, 'updated'));
+        }
 
         return redirect()->route('admin.data-master.index', ['type' => $type])->with('success', 'Record updated.');
     }

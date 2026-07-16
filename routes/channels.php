@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\User;
+use App\Services\CampaignService;
 use Illuminate\Support\Facades\Broadcast;
 
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
@@ -18,6 +20,13 @@ Broadcast::channel('agent.{agent_id}', function ($user, $agentId) {
  */
 Broadcast::channel('telephony.supervisor', function ($user) {
     return in_array($user->role ?? '', ['Super Admin', 'Admin', 'Team Leader'], true);
+});
+
+/**
+ * Dashboard data invalidation channel, scoped to active campaigns.
+ */
+Broadcast::channel('dashboard.{campaign}', function (User $user, string $campaign) {
+    return app(CampaignService::class)->getCampaign($campaign) !== null;
 });
 
 /**

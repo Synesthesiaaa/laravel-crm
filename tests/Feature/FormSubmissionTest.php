@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Events\DashboardDataUpdated;
 use App\Models\Campaign;
 use App\Models\Form;
 use App\Models\FormField;
@@ -9,6 +10,7 @@ use App\Models\User;
 use App\Services\CampaignService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -78,6 +80,36 @@ class FormSubmissionTest extends TestCase
         $this->assertIsString($requestId);
         $this->assertNotSame('client-should-be-ignored', $requestId);
         $this->assertTrue(Str::isUlid($requestId));
+    }
+
+    public function test_form_submit_broadcasts_dashboard_update_after_successful_commit(): void
+    {
+        Event::fake([DashboardDataUpdated::class]);
+        $user = User::factory()->create(['username' => 'agent1']);
+
+        $response = $this->actingAs($user)->post(route('forms.store'), [
+            'campaign' => 'mbsales',
+            'form_type' => 'ezycash',
+            'date' => now()->format('Y-m-d'),
+            'cardholder_name' => 'Broadcasted Submission',
+            'mpi_credit_card_no' => '4111111111111111',
+            'bank' => 'Test Bank',
+            'account_type' => 'Savings',
+            'account_number' => '123456',
+            'surname' => 'Doe',
+            'first_name' => 'John',
+            'ezycash_amount' => '100.00',
+            'term' => '12',
+            'rate' => '5.00',
+        ]);
+
+        $response->assertRedirect();
+        Event::assertDispatched(DashboardDataUpdated::class, function (DashboardDataUpdated $event): bool {
+            return $event->campaignCode === 'mbsales'
+                && $event->formType === 'ezycash'
+                && $event->action === 'submitted'
+                && $event->recordId > 0;
+        });
     }
 
     public function test_form_submit_returns_json_for_ajax_requests(): void
@@ -152,6 +184,7 @@ class FormSubmissionTest extends TestCase
 
     public function test_dynamic_form_table_gets_timestamp_columns_before_submission(): void
     {
+        Event::fake([DashboardDataUpdated::class]);
         Form::create([
             'campaign_code' => 'mbsales',
             'form_code' => 'dynamic_form',
@@ -193,10 +226,16 @@ class FormSubmissionTest extends TestCase
 
         $this->assertNotNull($record->created_at);
         $this->assertNotNull($record->updated_at);
+        Event::assertDispatched(DashboardDataUpdated::class, function (DashboardDataUpdated $event): bool {
+            return $event->campaignCode === 'mbsales'
+                && $event->formType === 'dynamic_form'
+                && $event->action === 'submitted';
+        });
     }
 
     public function test_form_submit_returns_validation_errors_for_ajax_requests(): void
     {
+        Event::fake([DashboardDataUpdated::class]);
         $user = User::factory()->create(['username' => 'agent1']);
 
         $response = $this->actingAs($user)->postJson(route('forms.store'), [
@@ -216,6 +255,7 @@ class FormSubmissionTest extends TestCase
 
         $response->assertStatus(422);
         $response->assertJsonValidationErrors(['cardholder_name']);
+        Event::assertNotDispatched(DashboardDataUpdated::class);
     }
 
     public function test_percentage_field_backed_by_decimal_column_stores_numeric_value(): void

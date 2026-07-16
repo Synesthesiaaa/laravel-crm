@@ -296,9 +296,69 @@
 (async () => {
     const scope = window.crmSoftNav?.currentScope?.() || window.location.pathname;
     const chartGroup = 'dashboard';
+    const campaignCode = @json($campaign ?? '');
+    const fallbackIntervalMs = 30_000;
+    let dashboardTeardown = null;
+    let fallbackTimer = null;
+    let refreshTimer = null;
+    let refreshInFlight = false;
+    let echo = null;
+    let echoReadyHandler = null;
 
     function destroyCharts() {
         window.crmCharts?.destroyGroup?.(chartGroup);
+    }
+
+    function scheduleRefresh() {
+        window.clearTimeout(refreshTimer);
+        refreshTimer = window.setTimeout(() => {
+            if (refreshInFlight || typeof window.crmSoftNav?.refresh !== 'function') {
+                return;
+            }
+
+            refreshInFlight = true;
+            Promise.resolve(window.crmSoftNav.refresh()).finally(() => {
+                refreshInFlight = false;
+            });
+        }, 350);
+    }
+
+    function teardownLiveUpdates() {
+        window.clearTimeout(refreshTimer);
+        window.clearInterval(fallbackTimer);
+        refreshTimer = null;
+        fallbackTimer = null;
+        if (echoReadyHandler) {
+            window.removeEventListener('telephony-echo:ready', echoReadyHandler);
+            echoReadyHandler = null;
+        }
+        dashboardTeardown?.();
+        dashboardTeardown = null;
+    }
+
+    function startLiveUpdates() {
+        const initializeEcho = () => {
+            echo = window.TelephonyEcho;
+            if (!echo?.isBroadcastEnabled?.()) {
+                return;
+            }
+
+            echo.initEcho?.();
+            dashboardTeardown = echo.subscribeDashboardChannel?.(campaignCode, scheduleRefresh) || null;
+        };
+
+        if (window.TelephonyEcho) {
+            initializeEcho();
+        } else {
+            echoReadyHandler = initializeEcho;
+            window.addEventListener('telephony-echo:ready', echoReadyHandler, { once: true });
+        }
+
+        fallbackTimer = window.setInterval(() => {
+            if (!(echo || window.TelephonyEcho)?.isEchoConnected?.()) {
+                scheduleRefresh();
+            }
+        }, fallbackIntervalMs);
     }
 
     async function mountAreaChart(ApexCharts, elId, categories, values, config) {
@@ -384,11 +444,16 @@
     }
 
     window.crmSoftNav?.register?.(scope, {
-        beforeSwap: destroyCharts,
+        beforeSwap: () => {
+            teardownLiveUpdates();
+            destroyCharts();
+        },
         afterSwap: () => {
             void renderCharts();
         },
     });
+
+    startLiveUpdates();
 
     if (!window.crmSoftNav?.isRehydrating?.()) {
         await renderCharts();

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Events\DashboardDataUpdated;
 use App\Models\Campaign;
 use App\Models\Form;
 use App\Models\FormField;
@@ -9,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -90,6 +92,30 @@ class ExtractionExportTest extends TestCase
             ->assertOk()
             ->assertSee('Discount Rate')
             ->assertSee('7%');
+    }
+
+    public function test_data_master_update_broadcasts_dashboard_update(): void
+    {
+        Event::fake([DashboardDataUpdated::class]);
+        $this->preparePercentageFormRecord('7');
+        $recordId = (int) DB::table('ezycash')->value('id');
+
+        $response = $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->post(route('admin.data-master.update'), [
+                '_table' => 'ezycash',
+                '_id' => $recordId,
+                '_type' => 'ezycash',
+                'discount_rate' => '8',
+            ]);
+
+        $response->assertRedirect();
+        Event::assertDispatched(DashboardDataUpdated::class, function (DashboardDataUpdated $event) use ($recordId): bool {
+            return $event->campaignCode === 'mbsales'
+                && $event->formType === 'ezycash'
+                && $event->recordId === $recordId
+                && $event->action === 'updated';
+        });
     }
 
     public function test_export_requires_end_date_after_or_equal_to_start_date(): void
