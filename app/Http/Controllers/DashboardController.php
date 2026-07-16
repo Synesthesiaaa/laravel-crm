@@ -27,6 +27,10 @@ class DashboardController extends Controller
             $salesFilter['from'],
             $salesFilter['until'],
         );
+        $dailyCampaignReport = $this->dashboardStats->getDailyCampaignReport(
+            $campaign,
+            now(config('app.timezone')),
+        );
         $dailyActivity = $this->dashboardStats->getLast24HourActivityTrend($campaign);
         $weeklyActivity = $this->dashboardStats->getWeeklyActivityTrend($campaign);
         $monthlyActivity = $this->dashboardStats->getMonthlyActivityTrend($campaign);
@@ -37,6 +41,7 @@ class DashboardController extends Controller
             'user' => $request->user(),
             'forms' => $forms,
             'kpis' => $kpis,
+            'dailyCampaignReport' => $dailyCampaignReport,
             'salesFilter' => $salesFilter,
             'dailyActivity' => $dailyActivity,
             'weeklyActivity' => $weeklyActivity,

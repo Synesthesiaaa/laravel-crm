@@ -245,6 +245,130 @@
         </div>
     </div>
 
+    {{-- Daily and month-to-date campaign report --}}
+    @php
+        $report = $dailyCampaignReport ?? [];
+        $reportForms = $report['forms'] ?? [];
+        $reportTables = [
+            [
+                'title' => 'Daily amounts',
+                'subtitle' => 'Submitted amounts by form for '.($report['date'] ?? now()->toDateString()),
+                'rows' => $report['daily'] ?? [],
+                'totals' => $report['totals']['daily'] ?? ['counts' => [], 'amounts' => [], 'total_count' => 0, 'total_amount' => 0],
+                'mode' => 'amounts',
+            ],
+            [
+                'title' => 'Daily counts',
+                'subtitle' => 'Accounts submitted by form for '.($report['date'] ?? now()->toDateString()),
+                'rows' => $report['daily'] ?? [],
+                'totals' => $report['totals']['daily'] ?? ['counts' => [], 'amounts' => [], 'total_count' => 0, 'total_amount' => 0],
+                'mode' => 'counts',
+            ],
+            [
+                'title' => 'Month to date accounts',
+                'subtitle' => 'Accounts submitted since '.now()->startOfMonth()->format('M j, Y'),
+                'rows' => $report['month_to_date'] ?? [],
+                'totals' => $report['totals']['month_to_date'] ?? ['counts' => [], 'amounts' => [], 'total_count' => 0, 'total_amount' => 0],
+                'mode' => 'account-summary',
+            ],
+            [
+                'title' => 'Month to date submitted amounts',
+                'subtitle' => 'Submitted amounts by form since '.now()->startOfMonth()->format('M j, Y'),
+                'rows' => $report['month_to_date'] ?? [],
+                'totals' => $report['totals']['month_to_date'] ?? ['counts' => [], 'amounts' => [], 'total_count' => 0, 'total_amount' => 0],
+                'mode' => 'amounts',
+            ],
+        ];
+    @endphp
+    <div class="space-y-4" aria-label="Campaign daily and month-to-date report">
+        <div class="flex items-end justify-between gap-3 flex-wrap">
+            <div>
+                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Campaign report</h3>
+                <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">{{ $campaignName }} · live totals for the selected campaign</p>
+            </div>
+            @if($reportForms !== [])
+                <span class="text-xs text-[var(--color-on-surface-dim)]">{{ count($reportForms) }} form{{ count($reportForms) === 1 ? '' : 's' }}</span>
+            @endif
+        </div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-5 animate-stagger">
+            @foreach($reportTables as $reportTable)
+                <section class="md-card md-card--static overflow-hidden" data-report-table="{{ Illuminate\Support\Str::slug($reportTable['title']) }}">
+                    <div class="px-5 py-4 border-b border-[var(--color-border)]">
+                        <h4 class="text-sm font-semibold text-[var(--color-on-surface)]">{{ $reportTable['title'] }}</h4>
+                        <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">{{ $reportTable['subtitle'] }}</p>
+                    </div>
+                    <div class="table-scroll-wrap">
+                        @if($reportTable['rows'] !== [])
+                            <div class="md-table-wrap border-0 rounded-none shadow-none">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Agent name</th>
+                                            @if($reportTable['mode'] === 'account-summary')
+                                                <th class="text-right">Total accounts</th>
+                                                <th class="text-right">Submitted amount</th>
+                                            @else
+                                                @foreach($reportForms as $form)
+                                                    <th class="text-right">{{ $form['name'] }}</th>
+                                                @endforeach
+                                                <th class="text-right">{{ $reportTable['mode'] === 'counts' ? 'Total accounts' : 'Total' }}</th>
+                                            @endif
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($reportTable['rows'] as $row)
+                                            <tr>
+                                                <td class="font-medium text-[var(--color-on-surface)] whitespace-nowrap">{{ $row['agent'] }}</td>
+                                                @if($reportTable['mode'] === 'account-summary')
+                                                    <td class="text-right tabular-nums">{{ number_format($row['total_count']) }}</td>
+                                                    <td class="text-right tabular-nums">{{ $row['total_amount'] > 0 ? number_format($row['total_amount'], 2) : '—' }}</td>
+                                                @else
+                                                    @foreach($reportForms as $form)
+                                                        @if($reportTable['mode'] === 'counts')
+                                                            <td class="text-right tabular-nums">{{ number_format($row['counts'][$form['code']] ?? 0) }}</td>
+                                                        @else
+                                                            <td class="text-right tabular-nums">{{ ($row['amounts'][$form['code']] ?? 0) > 0 ? number_format($row['amounts'][$form['code']], 2) : '—' }}</td>
+                                                        @endif
+                                                    @endforeach
+                                                    @if($reportTable['mode'] === 'counts')
+                                                        <td class="text-right font-semibold tabular-nums">{{ number_format($row['total_count']) }}</td>
+                                                    @else
+                                                        <td class="text-right font-semibold tabular-nums">{{ $row['total_amount'] > 0 ? number_format($row['total_amount'], 2) : '—' }}</td>
+                                                    @endif
+                                                @endif
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                    <tfoot>
+                                        <tr class="bg-[var(--color-primary-muted)] font-semibold">
+                                            <td>Total</td>
+                                            @if($reportTable['mode'] === 'account-summary')
+                                                <td class="text-right tabular-nums">{{ number_format($reportTable['totals']['total_count']) }}</td>
+                                                <td class="text-right tabular-nums">{{ $reportTable['totals']['total_amount'] > 0 ? number_format($reportTable['totals']['total_amount'], 2) : '—' }}</td>
+                                            @else
+                                                @foreach($reportForms as $form)
+                                                    @if($reportTable['mode'] === 'counts')
+                                                        <td class="text-right tabular-nums">{{ number_format($reportTable['totals']['counts'][$form['code']] ?? 0) }}</td>
+                                                    @else
+                                                        <td class="text-right tabular-nums">{{ ($reportTable['totals']['amounts'][$form['code']] ?? 0) > 0 ? number_format($reportTable['totals']['amounts'][$form['code']], 2) : '—' }}</td>
+                                                    @endif
+                                                @endforeach
+                                                <td class="text-right tabular-nums">{{ $reportTable['mode'] === 'counts' ? number_format($reportTable['totals']['total_count']) : ($reportTable['totals']['total_amount'] > 0 ? number_format($reportTable['totals']['total_amount'], 2) : '—') }}</td>
+                                            @endif
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        @else
+                            <p class="table-empty py-10 text-center text-sm">No submissions for this period.</p>
+                        @endif
+                    </div>
+                </section>
+            @endforeach
+        </div>
+    </div>
+
     {{-- Campaign forms --}}
     @if(!empty($forms))
     <div>

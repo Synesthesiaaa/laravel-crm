@@ -402,6 +402,103 @@ class DashboardStatsService
         ];
     }
 
+    /**
+     * Daily and month-to-date submission counts and marked sale amounts grouped by agent.
+     *
+     * @return array{
+     *     date: string,
+     *     forms: list<array{code: string, name: string}>,
+     *     daily: list<array{agent: string, counts: array<string, int>, amounts: array<string, float>, total_count: int, total_amount: float}>,
+     *     month_to_date: list<array{agent: string, counts: array<string, int>, amounts: array<string, float>, total_count: int, total_amount: float}>,
+     *     totals: array{daily: array{counts: array<string, int>, amounts: array<string, float>, total_count: int, total_amount: float}, month_to_date: array{counts: array<string, int>, amounts: array<string, float>, total_count: int, total_amount: float}}
+     * }
+     */
+    public function getDailyCampaignReport(string $campaignCode, Carbon $businessDate): array
+    {
+        $date = $businessDate->toDateString();
+        $cacheKey = 'daily_campaign_report_'.$campaignCode.'_'.$date;
+
+        return Cache::remember($cacheKey, 60, function () use ($campaignCode, $businessDate, $date): array {
+            $forms = $this->resolveReportForms($campaignCode);
+            $formColumns = array_map(static fn (array $form): array => [
+                'code' => $form['code'],
+                'name' => $form['name'],
+            ], $forms);
+            $emptyTotals = $this->emptyCampaignReportTotals($formColumns);
+
+            if ($forms === []) {
+                return [
+                    'date' => $date,
+                    'forms' => $formColumns,
+                    'daily' => [],
+                    'month_to_date' => [],
+                    'totals' => [
+                        'daily' => $emptyTotals,
+                        'month_to_date' => $emptyTotals,
+                    ],
+                ];
+            }
+
+            $monthStart = $businessDate->copy()->startOfMonth()->toDateString();
+            $dailyRows = [];
+            $monthToDateRows = [];
+            $dailyTotals = $this->emptyCampaignReportTotals($formColumns);
+            $monthToDateTotals = $this->emptyCampaignReportTotals($formColumns);
+
+            foreach ($forms as $form) {
+                if (! Schema::hasColumn($form['table'], 'date') || ! Schema::hasColumn($form['table'], 'agent')) {
+                    continue;
+                }
+
+                $select = array_merge(['id', 'date', 'agent'], $form['amount_fields']);
+                DB::table($form['table'])
+                    ->whereBetween('date', [$monthStart, $date])
+                    ->select(array_values(array_unique($select)))
+                    ->orderBy('id')
+                    ->chunk(1000, function ($rows) use (
+                        &$dailyRows,
+                        &$monthToDateRows,
+                        &$dailyTotals,
+                        &$monthToDateTotals,
+                        $form,
+                        $formColumns,
+                        $date,
+                    ): void {
+                        foreach ($rows as $row) {
+                            $isDaily = (string) $row->date === $date;
+                            $this->addCampaignReportEntry(
+                                $monthToDateRows,
+                                $monthToDateTotals,
+                                $form,
+                                $formColumns,
+                                $row,
+                            );
+                            if ($isDaily) {
+                                $this->addCampaignReportEntry(
+                                    $dailyRows,
+                                    $dailyTotals,
+                                    $form,
+                                    $formColumns,
+                                    $row,
+                                );
+                            }
+                        }
+                    });
+            }
+
+            return [
+                'date' => $date,
+                'forms' => $formColumns,
+                'daily' => $this->normalizeCampaignReportRows($dailyRows),
+                'month_to_date' => $this->normalizeCampaignReportRows($monthToDateRows),
+                'totals' => [
+                    'daily' => $this->normalizeCampaignReportTotals($dailyTotals),
+                    'month_to_date' => $this->normalizeCampaignReportTotals($monthToDateTotals),
+                ],
+            ];
+        });
+    }
+
     public function getTopAgents(string $campaignCode, int $limit = 10): array
     {
         return Cache::remember("top_agents_{$campaignCode}_{$limit}", 300, function () use ($campaignCode, $limit) {
@@ -454,6 +551,149 @@ class DashboardStatsService
 
         $limit = (int) config('dashboard.agent_leaderboard_limit', 25);
         Cache::forget('agent_leaderboard_'.$campaignCode.'_'.now()->format('Y-m').'_'.$limit);
+
+        Cache::forget('daily_campaign_report_'.$campaignCode.'_'.now()->toDateString());
+    }
+
+    /**
+     * @return list<array{code: string, name: string, table: string, amount_fields: list<string>}>
+     */
+    private function resolveReportForms(string $campaignCode): array
+    {
+        $campaigns = $this->campaignRepository->getCampaignsWithForms();
+        $campaignForms = $campaigns[$campaignCode]['forms'] ?? [];
+        $allowedTables = $this->campaignRepository->getAllFormTableNames();
+        $markedFields = FormField::query()
+            ->where('campaign_code', $campaignCode)
+            ->where('field_type', 'number')
+            ->where('is_sale_amount', true)
+            ->get(['form_type', 'field_name']);
+        $fieldsByForm = [];
+
+        foreach ($markedFields as $field) {
+            $fieldsByForm[(string) $field->form_type][] = (string) $field->field_name;
+        }
+
+        $forms = [];
+        foreach ($campaignForms as $formCode => $formConfig) {
+            $table = (string) ($formConfig['table'] ?? $formConfig['table_name'] ?? '');
+            if ($table === ''
+                || ! in_array($table, $allowedTables, true)
+                || ! Schema::hasTable($table)
+                || ! Schema::hasColumn($table, 'date')
+                || ! Schema::hasColumn($table, 'agent')) {
+                continue;
+            }
+
+            $amountFields = array_values(array_unique(array_filter(
+                $fieldsByForm[(string) $formCode] ?? [],
+                static fn (string $fieldName): bool => Schema::hasColumn($table, $fieldName),
+            )));
+            $forms[] = [
+                'code' => (string) $formCode,
+                'name' => (string) ($formConfig['name'] ?? $formCode),
+                'table' => $table,
+                'amount_fields' => $amountFields,
+            ];
+        }
+
+        return $forms;
+    }
+
+    /**
+     * @param  list<array{code: string, name: string}>  $forms
+     * @return array{counts: array<string, int>, amounts: array<string, float>, total_count: int, total_amount: float}
+     */
+    private function emptyCampaignReportTotals(array $forms): array
+    {
+        return [
+            'counts' => array_fill_keys(array_column($forms, 'code'), 0),
+            'amounts' => array_fill_keys(array_column($forms, 'code'), 0.0),
+            'total_count' => 0,
+            'total_amount' => 0.0,
+        ];
+    }
+
+    /**
+     * @param  list<array{code: string, name: string}>  $forms
+     * @return array{agent: string, counts: array<string, int>, amounts: array<string, float>, total_count: int, total_amount: float}
+     */
+    private function emptyCampaignReportRow(array $forms): array
+    {
+        $totals = $this->emptyCampaignReportTotals($forms);
+
+        return [
+            'agent' => '',
+            ...$totals,
+        ];
+    }
+
+    /**
+     * @param  array<string, array{agent: string, counts: array<string, int>, amounts: array<string, float>, total_count: int, total_amount: float}>  $rows
+     * @param  array{counts: array<string, int>, amounts: array<string, float>, total_count: int, total_amount: float}  $totals
+     * @param  array{code: string, name: string, table: string, amount_fields: list<string>}  $form
+     * @param  list<array{code: string, name: string}>  $formColumns
+     */
+    private function addCampaignReportEntry(
+        array &$rows,
+        array &$totals,
+        array $form,
+        array $formColumns,
+        object $row,
+    ): void {
+        $agent = trim((string) ($row->agent ?? ''));
+        if ($agent === '') {
+            return;
+        }
+
+        $amount = $this->sumMarkedSaleValues($row, $form['amount_fields']) ?? 0.0;
+        if (! isset($rows[$agent])) {
+            $reportRow = $this->emptyCampaignReportRow($formColumns);
+            $reportRow['agent'] = $agent;
+            $rows[$agent] = $reportRow;
+        }
+
+        $rows[$agent]['counts'][$form['code']]++;
+        $rows[$agent]['amounts'][$form['code']] += $amount;
+        $rows[$agent]['total_count']++;
+        $rows[$agent]['total_amount'] += $amount;
+        $totals['counts'][$form['code']]++;
+        $totals['amounts'][$form['code']] += $amount;
+        $totals['total_count']++;
+        $totals['total_amount'] += $amount;
+    }
+
+    /**
+     * @param  array<string, array{agent: string, counts: array<string, int>, amounts: array<string, float>, total_count: int, total_amount: float}>  $rows
+     * @return list<array{agent: string, counts: array<string, int>, amounts: array<string, float>, total_count: int, total_amount: float}>
+     */
+    private function normalizeCampaignReportRows(array $rows): array
+    {
+        foreach ($rows as &$row) {
+            $row['total_amount'] = round($row['total_amount'], 2);
+            foreach ($row['amounts'] as &$amount) {
+                $amount = round($amount, 2);
+            }
+        }
+        unset($row, $amount);
+        ksort($rows, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return array_values($rows);
+    }
+
+    /**
+     * @param  array{counts: array<string, int>, amounts: array<string, float>, total_count: int, total_amount: float}  $totals
+     * @return array{counts: array<string, int>, amounts: array<string, float>, total_count: int, total_amount: float}
+     */
+    private function normalizeCampaignReportTotals(array $totals): array
+    {
+        foreach ($totals['amounts'] as &$amount) {
+            $amount = round($amount, 2);
+        }
+        unset($amount);
+        $totals['total_amount'] = round($totals['total_amount'], 2);
+
+        return $totals;
     }
 
     /**

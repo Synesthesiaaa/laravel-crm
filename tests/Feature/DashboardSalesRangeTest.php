@@ -186,6 +186,85 @@ class DashboardSalesRangeTest extends TestCase
         $response->assertDontSee('999.00', false);
     }
 
+    public function test_daily_campaign_report_aggregates_daily_and_month_to_date_rows_by_agent(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        Cache::flush();
+        $this->registerSalesForm('cash', 'Cash Sale', 'cash_sales');
+        $this->registerSalesForm('transfer', 'Bank Transfer', 'transfer_sales');
+
+        $this->insertSale('cash_sales', 'Alice', 100.00, '2026-05-15 07:00:00');
+        $this->insertSale('cash_sales', 'Alice', 900.00, '2026-05-14 07:00:00');
+        $this->insertSale('cash_sales', 'Bob', 25.00, '2026-05-15 08:00:00');
+        $this->insertSale('transfer_sales', 'Alice', 50.00, '2026-05-15 09:00:00');
+        $this->insertSale('transfer_sales', 'Bob', 70.00, '2026-05-13 10:00:00');
+
+        $report = app(DashboardStatsService::class)->getDailyCampaignReport(
+            'mbsales',
+            Carbon::parse('2026-05-15'),
+        );
+
+        $this->assertSame([
+            ['code' => 'cash', 'name' => 'Cash Sale'],
+            ['code' => 'transfer', 'name' => 'Bank Transfer'],
+        ], $report['forms']);
+
+        $daily = collect($report['daily'])->keyBy('agent');
+        $this->assertSame(2, $daily['Alice']['total_count']);
+        $this->assertSame(150.0, $daily['Alice']['total_amount']);
+        $this->assertSame(1, $daily['Bob']['counts']['cash']);
+        $this->assertSame(0, $daily['Bob']['counts']['transfer']);
+        $this->assertSame(25.0, $daily['Bob']['total_amount']);
+        $this->assertSame(3, $report['totals']['daily']['total_count']);
+        $this->assertSame(175.0, $report['totals']['daily']['total_amount']);
+
+        $monthToDate = collect($report['month_to_date'])->keyBy('agent');
+        $this->assertSame(3, $monthToDate['Alice']['total_count']);
+        $this->assertSame(1050.0, $monthToDate['Alice']['total_amount']);
+        $this->assertSame(2, $monthToDate['Bob']['total_count']);
+        $this->assertSame(95.0, $monthToDate['Bob']['total_amount']);
+        $this->assertSame(5, $report['totals']['month_to_date']['total_count']);
+        $this->assertSame(1145.0, $report['totals']['month_to_date']['total_amount']);
+    }
+
+    public function test_daily_campaign_report_returns_a_stable_empty_shape_without_valid_forms(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        Cache::flush();
+
+        $report = app(DashboardStatsService::class)->getDailyCampaignReport(
+            'mbsales',
+            Carbon::parse('2026-05-15'),
+        );
+
+        $this->assertSame('2026-05-15', $report['date']);
+        $this->assertSame([], $report['forms']);
+        $this->assertSame([], $report['daily']);
+        $this->assertSame([], $report['month_to_date']);
+        $this->assertSame(0, $report['totals']['daily']['total_count']);
+        $this->assertSame(0.0, $report['totals']['month_to_date']['total_amount']);
+    }
+
+    public function test_dashboard_renders_campaign_report_tables_without_mpi_cards_label(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        Cache::flush();
+        $this->registerSalesForm('cash', 'Cash Sale', 'cash_sales');
+        $this->insertSale('cash_sales', 'Alice', 100.00, '2026-05-15 07:00:00');
+
+        $response = $this->actingAs(User::factory()->create())
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertSee('Daily amounts', false);
+        $response->assertSee('Daily counts', false);
+        $response->assertSee('Month to date accounts', false);
+        $response->assertSee('Month to date submitted amounts', false);
+        $response->assertSee('Cash Sale', false);
+        $response->assertDontSee('MPI Cards', false);
+    }
+
     public function test_dashboard_reverts_invalid_sales_filters_to_the_default_business_hours(): void
     {
         Carbon::setTestNow('2026-05-15 12:00:00');
