@@ -274,6 +274,20 @@ class DashboardSalesRangeTest extends TestCase
         $this->assertStringContainsString('Cash Sale', $monthToDateAccounts);
         $this->assertStringContainsString('Total accounts', $monthToDateAccounts);
         $this->assertStringNotContainsString('Submitted amount', $monthToDateAccounts);
+        $this->assertLessThan(
+            strpos($content, 'data-report-table="daily-counts"'),
+            strpos($content, 'data-report-table="month-to-date-accounts"'),
+        );
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/<section[^>]*campaign-report-wide[^>]*data-report-table="daily-counts"/',
+            $content,
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/<section[^>]*campaign-report-wide[^>]*data-report-table="month-to-date-submitted-amounts"/',
+            $content,
+        );
+        $this->assertSame(4, substr_count($content, 'class="report-table--wide"'));
     }
 
     public function test_dashboard_reverts_invalid_sales_filters_to_the_default_business_hours(): void

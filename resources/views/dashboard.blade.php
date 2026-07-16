@@ -258,18 +258,17 @@
                 'mode' => 'amounts',
             ],
             [
-                'title' => 'Daily counts',
-                'subtitle' => 'Accounts submitted by form for '.($report['date'] ?? now()->toDateString()),
-                'rows' => $report['daily'] ?? [],
-                'totals' => $report['totals']['daily'] ?? ['counts' => [], 'amounts' => [], 'total_count' => 0, 'total_amount' => 0],
-                'mode' => 'counts',
-                'wide' => true,
-            ],
-            [
                 'title' => 'Month to date accounts',
                 'subtitle' => 'Accounts submitted since '.now()->startOfMonth()->format('M j, Y'),
                 'rows' => $report['month_to_date'] ?? [],
                 'totals' => $report['totals']['month_to_date'] ?? ['counts' => [], 'amounts' => [], 'total_count' => 0, 'total_amount' => 0],
+                'mode' => 'counts',
+            ],
+            [
+                'title' => 'Daily counts',
+                'subtitle' => 'Accounts submitted by form for '.($report['date'] ?? now()->toDateString()),
+                'rows' => $report['daily'] ?? [],
+                'totals' => $report['totals']['daily'] ?? ['counts' => [], 'amounts' => [], 'total_count' => 0, 'total_amount' => 0],
                 'mode' => 'counts',
             ],
             [
@@ -278,7 +277,6 @@
                 'rows' => $report['month_to_date'] ?? [],
                 'totals' => $report['totals']['month_to_date'] ?? ['counts' => [], 'amounts' => [], 'total_count' => 0, 'total_amount' => 0],
                 'mode' => 'amounts',
-                'wide' => true,
             ],
         ];
     @endphp
@@ -293,17 +291,17 @@
             @endif
         </div>
 
-        <div class="grid grid-cols-1 xl:grid-cols-2 gap-5 animate-stagger campaign-report-grid">
+        <div class="grid gap-5 animate-stagger campaign-report-grid">
             @foreach($reportTables as $reportTable)
-                <section class="md-card md-card--static overflow-hidden {{ ($reportTable['wide'] ?? false) ? 'campaign-report-wide' : '' }}" data-report-table="{{ Illuminate\Support\Str::slug($reportTable['title']) }}">
+                <section class="md-card md-card--static overflow-hidden" data-report-table="{{ Illuminate\Support\Str::slug($reportTable['title']) }}">
                     <div class="px-5 py-4 border-b border-[var(--color-border)]">
                         <h4 class="text-sm font-semibold text-[var(--color-on-surface)]">{{ $reportTable['title'] }}</h4>
                         <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">{{ $reportTable['subtitle'] }}</p>
                     </div>
-                    <div class="table-scroll-wrap">
+                    <div class="table-scroll-wrap campaign-report-table-wrap">
                         @if($reportTable['rows'] !== [])
                             <div class="md-table-wrap border-0 rounded-none shadow-none">
-                                <table class="{{ ($reportTable['wide'] ?? false) ? 'report-table--wide' : '' }}">
+                                <table class="report-table--wide">
                                     <thead>
                                         <tr>
                                             <th>Agent name</th>

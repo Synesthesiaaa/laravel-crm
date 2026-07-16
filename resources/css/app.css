@@ -512,10 +512,18 @@ html[data-theme="light"] {
     overscroll-behavior-x: contain;
     scrollbar-gutter: stable both-edges;
   }
+  .campaign-report-table-wrap {
+    scrollbar-gutter: stable;
+  }
+  .campaign-report-table-wrap > .md-table-wrap { overflow: visible; }
+
+  @media (min-width: 1536px) {
+    .campaign-report-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
 
   /* Keep wide dashboard report totals readable while preserving mobile scrolling. */
   .report-table--wide {
-    min-width: 48rem !important;
+    min-width: 52rem !important;
   }
   .report-table--wide th:first-child,
   .report-table--wide td:first-child {
@@ -536,8 +544,35 @@ html[data-theme="light"] {
   .report-table--wide td:last-child { background: var(--color-surface-card); }
   .report-table--wide tfoot td:last-child { background: var(--color-primary-muted); }
 
-  @media (min-width: 1280px) {
-    .campaign-report-grid .campaign-report-wide { grid-column: 1 / -1; }
+  @media (min-width: 768px) {
+    .report-table--wide {
+      width: 100% !important;
+      min-width: 0 !important;
+      table-layout: fixed;
+    }
+    .report-table--wide th,
+    .report-table--wide td {
+      padding-inline: .5rem;
+    }
+    .report-table--wide th {
+      white-space: normal;
+      line-height: 1.2;
+    }
+    .report-table--wide th:first-child,
+    .report-table--wide td:first-child {
+      width: 27%;
+      min-width: 0;
+    }
+    .report-table--wide th:not(:first-child),
+    .report-table--wide td:not(:first-child) {
+      width: 18.25%;
+      min-width: 0;
+    }
+    .report-table--wide th:last-child,
+    .report-table--wide td:last-child {
+      position: static;
+      box-shadow: none;
+    }
   }
 
   /* Empty state */
