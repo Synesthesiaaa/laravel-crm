@@ -513,6 +513,33 @@ html[data-theme="light"] {
     scrollbar-gutter: stable both-edges;
   }
 
+  /* Keep wide dashboard report totals readable while preserving mobile scrolling. */
+  .report-table--wide {
+    min-width: 48rem !important;
+  }
+  .report-table--wide th:first-child,
+  .report-table--wide td:first-child {
+    min-width: 14rem;
+  }
+  .report-table--wide th:not(:first-child),
+  .report-table--wide td:not(:first-child) {
+    min-width: 9rem;
+  }
+  .report-table--wide th:last-child,
+  .report-table--wide td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    box-shadow: -0.75rem 0 1rem -1rem var(--color-on-surface);
+  }
+  .report-table--wide th:last-child { background: var(--color-surface-2); }
+  .report-table--wide td:last-child { background: var(--color-surface-card); }
+  .report-table--wide tfoot td:last-child { background: var(--color-primary-muted); }
+
+  @media (min-width: 1280px) {
+    .campaign-report-grid .campaign-report-wide { grid-column: 1 / -1; }
+  }
+
   /* Empty state */
   .table-empty {
     padding: 3rem 1rem; text-align: center;

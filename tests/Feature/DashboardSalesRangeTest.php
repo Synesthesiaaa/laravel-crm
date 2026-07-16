@@ -263,6 +263,17 @@ class DashboardSalesRangeTest extends TestCase
         $response->assertSee('Month to date submitted amounts', false);
         $response->assertSee('Cash Sale', false);
         $response->assertDontSee('MPI Cards', false);
+
+        $content = $response->getContent();
+        $sectionStart = strpos($content, 'data-report-table="month-to-date-accounts"');
+        $sectionEnd = $sectionStart === false ? false : strpos($content, '</section>', $sectionStart);
+        $monthToDateAccounts = $sectionStart === false || $sectionEnd === false
+            ? ''
+            : substr($content, $sectionStart, $sectionEnd - $sectionStart);
+
+        $this->assertStringContainsString('Cash Sale', $monthToDateAccounts);
+        $this->assertStringContainsString('Total accounts', $monthToDateAccounts);
+        $this->assertStringNotContainsString('Submitted amount', $monthToDateAccounts);
     }
 
     public function test_dashboard_reverts_invalid_sales_filters_to_the_default_business_hours(): void
