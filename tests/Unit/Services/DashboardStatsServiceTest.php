@@ -356,7 +356,7 @@ class DashboardStatsServiceTest extends TestCase
         $this->assertSame(2, array_sum($trend['values']));
     }
 
-    public function test_get_agent_leaderboard_sorts_by_submissions_then_sales(): void
+    public function test_get_agent_leaderboard_sorts_by_sales_amount_then_sales_count_then_name(): void
     {
         Carbon::setTestNow('2026-05-15 10:00:00');
         Cache::flush();
@@ -381,14 +381,42 @@ class DashboardStatsServiceTest extends TestCase
             'agent' => 'Bob',
             'disposition_code' => 'SALE',
             'called_at' => Carbon::parse('2026-05-12 12:00:00'),
-            'lead_data_json' => ['ezycash_amount' => 100],
+            'lead_data_json' => ['ezycash_amount' => 300],
         ]);
         CampaignDispositionRecord::create([
             'campaign_code' => 'mbsales',
             'agent' => 'Bob',
             'disposition_code' => 'SALE',
             'called_at' => Carbon::parse('2026-05-12 14:00:00'),
+            'lead_data_json' => ['ezycash_amount' => 300],
+        ]);
+        CampaignDispositionRecord::create([
+            'campaign_code' => 'mbsales',
+            'agent' => 'Aaron',
+            'disposition_code' => 'SALE',
+            'called_at' => Carbon::parse('2026-05-12 16:00:00'),
             'lead_data_json' => ['ezycash_amount' => 200],
+        ]);
+        CampaignDispositionRecord::create([
+            'campaign_code' => 'mbsales',
+            'agent' => 'Aaron',
+            'disposition_code' => 'SALE',
+            'called_at' => Carbon::parse('2026-05-12 17:00:00'),
+            'lead_data_json' => ['ezycash_amount' => 200],
+        ]);
+        CampaignDispositionRecord::create([
+            'campaign_code' => 'mbsales',
+            'agent' => 'Amy',
+            'disposition_code' => 'SALE',
+            'called_at' => Carbon::parse('2026-05-12 18:00:00'),
+            'lead_data_json' => ['ezycash_amount' => 400],
+        ]);
+        CampaignDispositionRecord::create([
+            'campaign_code' => 'mbsales',
+            'agent' => 'Zed',
+            'disposition_code' => 'SALE',
+            'called_at' => Carbon::parse('2026-05-12 19:00:00'),
+            'lead_data_json' => ['ezycash_amount' => 400],
         ]);
         CampaignDispositionRecord::create([
             'campaign_code' => 'mbsales',
@@ -400,16 +428,27 @@ class DashboardStatsServiceTest extends TestCase
 
         $board = app(DashboardStatsService::class)->getAgentLeaderboard('mbsales', 10);
 
-        $this->assertSame('Carl', $board[0]['agent']);
-        $this->assertSame(3, $board[0]['submissions']);
-        $this->assertSame('Alice', $board[1]['agent']);
-        $this->assertSame(2, $board[1]['submissions']);
-        $this->assertSame(1, $board[1]['sales_count']);
-        $this->assertSame(500.0, $board[1]['sales_amount']);
-        $this->assertSame('Bob', $board[2]['agent']);
-        $this->assertSame(0, $board[2]['submissions']);
-        $this->assertSame(2, $board[2]['sales_count']);
-        $this->assertSame(300.0, $board[2]['sales_amount']);
+        $this->assertSame(
+            ['Bob', 'Alice', 'Aaron', 'Amy', 'Zed', 'Carl'],
+            array_column($board, 'agent'),
+        );
+
+        $rows = collect($board)->keyBy('agent');
+        $this->assertSame(0, $rows['Bob']['submissions']);
+        $this->assertSame(2, $rows['Bob']['sales_count']);
+        $this->assertSame(600.0, $rows['Bob']['sales_amount']);
+        $this->assertSame(2, $rows['Alice']['submissions']);
+        $this->assertSame(1, $rows['Alice']['sales_count']);
+        $this->assertSame(500.0, $rows['Alice']['sales_amount']);
+        $this->assertSame(2, $rows['Aaron']['sales_count']);
+        $this->assertSame(400.0, $rows['Aaron']['sales_amount']);
+        $this->assertSame(1, $rows['Amy']['sales_count']);
+        $this->assertSame(400.0, $rows['Amy']['sales_amount']);
+        $this->assertSame(1, $rows['Zed']['sales_count']);
+        $this->assertSame(400.0, $rows['Zed']['sales_amount']);
+        $this->assertSame(3, $rows['Carl']['submissions']);
+        $this->assertSame(0, $rows['Carl']['sales_count']);
+        $this->assertSame(0.0, $rows['Carl']['sales_amount']);
     }
 
     public function test_agent_leaderboard_sums_marked_values_per_submission(): void

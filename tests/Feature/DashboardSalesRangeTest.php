@@ -56,9 +56,9 @@ class DashboardSalesRangeTest extends TestCase
 
         $this->assertSame(3, $kpis['sales']);
         $this->assertSame(625.0, $kpis['sales_amount']);
-        $this->assertSame('Alice', $kpis['top_agent']);
-        $this->assertSame(2, $kpis['top_agent_sales']);
-        $this->assertSame(125.0, $kpis['top_agent_sales_amount']);
+        $this->assertSame('Bob', $kpis['top_agent']);
+        $this->assertSame(1, $kpis['top_agent_sales']);
+        $this->assertSame(500.0, $kpis['top_agent_sales_amount']);
 
         $breakdown = collect($kpis['sales_by_form'])->keyBy('form_code');
         $this->assertSame(2, $breakdown['cash']['sales']);
@@ -67,14 +67,18 @@ class DashboardSalesRangeTest extends TestCase
         $this->assertSame(500.0, $breakdown['transfer']['sales_amount']);
     }
 
-    public function test_sales_kpis_return_a_selected_range_leaderboard_sorted_by_sales_then_amount_then_name(): void
+    public function test_sales_kpis_return_a_selected_range_leaderboard_sorted_by_sales_amount_then_sales_count_then_name(): void
     {
         $this->registerSalesForm('cash', 'Cash Sale', 'cash_sales');
 
         $this->insertSale('cash_sales', 'Alice', 100.00, '2026-05-15 07:00:00');
         $this->insertSale('cash_sales', 'Alice', 25.00, '2026-05-15 08:00:00');
         $this->insertSale('cash_sales', 'Bob', 200.00, '2026-05-15 09:00:00');
-        $this->insertSale('cash_sales', 'Carl', 200.00, '2026-05-15 10:00:00');
+        $this->insertSale('cash_sales', 'Carl', 300.00, '2026-05-15 10:00:00');
+        $this->insertSale('cash_sales', 'Aaron', 150.00, '2026-05-15 11:00:00');
+        $this->insertSale('cash_sales', 'Aaron', 150.00, '2026-05-15 12:00:00');
+        $this->insertSale('cash_sales', 'Amy', 300.00, '2026-05-15 13:00:00');
+        $this->insertSale('cash_sales', 'Zed', 300.00, '2026-05-15 14:00:00');
         $this->insertSale('cash_sales', 'Zed', 999.00, '2026-05-15 19:00:00');
 
         $kpis = app(DashboardStatsService::class)->getSalesKpisForCampaign(
@@ -84,9 +88,12 @@ class DashboardSalesRangeTest extends TestCase
         );
 
         $this->assertSame([
-            ['agent' => 'Alice', 'sales_count' => 2, 'sales_amount' => 125.0],
+            ['agent' => 'Aaron', 'sales_count' => 2, 'sales_amount' => 300.0],
+            ['agent' => 'Amy', 'sales_count' => 1, 'sales_amount' => 300.0],
+            ['agent' => 'Carl', 'sales_count' => 1, 'sales_amount' => 300.0],
+            ['agent' => 'Zed', 'sales_count' => 1, 'sales_amount' => 300.0],
             ['agent' => 'Bob', 'sales_count' => 1, 'sales_amount' => 200.0],
-            ['agent' => 'Carl', 'sales_count' => 1, 'sales_amount' => 200.0],
+            ['agent' => 'Alice', 'sales_count' => 2, 'sales_amount' => 125.0],
         ], $kpis['agent_leaderboard']);
     }
 
@@ -154,6 +161,7 @@ class DashboardSalesRangeTest extends TestCase
         $response->assertSee('x-transition:leave="transition ease-in duration-150"', false);
         $response->assertSee('pointer-events: none;', false);
         $response->assertSee('pointer-events: auto;', false);
+        $response->assertSee('Ranked by total sale amount, then qualifying sales count and agent name.', false);
         $response->assertSee('x-on:mouseenter="openLeaderboardModal()"', false);
         $response->assertSee('x-on:click="openLeaderboardModal()"', false);
         $response->assertSee('Daily agent leaderboard', false);

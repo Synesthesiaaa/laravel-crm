@@ -164,7 +164,7 @@
                 </div>
             </form>
 
-            <p class="mt-5 text-sm text-[var(--color-on-surface-muted)]">{{ $salesRangeLabel }}. Ranked by qualifying form sales, then total marked-form sale amount.</p>
+            <p class="mt-5 text-sm text-[var(--color-on-surface-muted)]">{{ $salesRangeLabel }}. Ranked by total sale amount, then qualifying sales count and agent name.</p>
 
             <div class="md-table-wrap mt-4">
                 @if(!empty($agentLeaderboard))
@@ -215,7 +215,7 @@
     <div class="md-card overflow-hidden">
         <div class="px-5 py-4 border-b border-[var(--color-border)]">
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Agent leaderboard — {{ $salesRangeLabel }}</h3>
-            <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">Ranked by qualifying form sales, then total marked-form sale amount.</p>
+            <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">Ranked by total sale amount, then qualifying sales count and agent name.</p>
         </div>
         <div class="md-table-wrap">
             @if(!empty($agentLeaderboard))

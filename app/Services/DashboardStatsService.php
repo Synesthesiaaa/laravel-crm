@@ -206,14 +206,11 @@ class DashboardStatsService
             }
 
             usort($ranked, static function (array $a, array $b): int {
-                if ($a['submissions'] !== $b['submissions']) {
-                    return $b['submissions'] <=> $a['submissions'];
+                if ($a['sales_amount'] != $b['sales_amount']) {
+                    return $b['sales_amount'] <=> $a['sales_amount'];
                 }
                 if ($a['sales_count'] !== $b['sales_count']) {
                     return $b['sales_count'] <=> $a['sales_count'];
-                }
-                if ($a['sales_amount'] != $b['sales_amount']) {
-                    return $b['sales_amount'] <=> $a['sales_amount'];
                 }
 
                 return strcmp($a['agent'], $b['agent']);
@@ -954,11 +951,11 @@ class DashboardStatsService
         }
 
         usort($leaderboard, static function (array $a, array $b): int {
-            if ($a['sales_count'] !== $b['sales_count']) {
-                return $b['sales_count'] <=> $a['sales_count'];
-            }
             if ($a['sales_amount'] != $b['sales_amount']) {
                 return $b['sales_amount'] <=> $a['sales_amount'];
+            }
+            if ($a['sales_count'] !== $b['sales_count']) {
+                return $b['sales_count'] <=> $a['sales_count'];
             }
 
             return strcmp($a['agent'], $b['agent']);
