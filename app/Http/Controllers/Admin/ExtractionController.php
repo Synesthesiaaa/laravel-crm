@@ -47,9 +47,9 @@ class ExtractionController extends Controller
         $endDate = $request->input('end_date');
         $filename = 'export_'.$campaign.'_'.date('Y-m-d_His').'.csv';
 
-        return response()->streamDownload(function () use ($tables, $startDate, $endDate) {
+        return response()->streamDownload(function () use ($tables, $startDate, $endDate, $campaign) {
             $out = fopen('php://output', 'w');
-            $this->extractionService->streamCsv($out, $tables, $startDate, $endDate);
+            $this->extractionService->streamCsv($out, $tables, $startDate, $endDate, $campaign);
             fclose($out);
         }, $filename, ['Content-Type' => 'text/csv']);
     }

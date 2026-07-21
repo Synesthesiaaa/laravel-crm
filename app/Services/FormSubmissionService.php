@@ -11,7 +11,6 @@ use App\Support\PercentageValue;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Str;
 
 class FormSubmissionService
 {
@@ -44,7 +43,7 @@ class FormSubmissionService
             $recordId = DB::transaction(function () use ($tableName, $fields, $data, $agent, $campaign, $formType, $date): int {
                 $merged = array_merge($data, [
                     'date' => $date,
-                    'request_id' => (string) Str::ulid(),
+                    'request_id' => $this->generateUniqueRequestId($tableName),
                 ]);
                 $prepared = $this->prepareFormRow($fields, $merged, $agent, $tableName);
                 if ($prepared === null) {
@@ -247,6 +246,28 @@ class FormSubmissionService
                 }
             }
         });
+    }
+
+    protected function generateUniqueRequestId(string $tableName): string
+    {
+        for ($attempt = 0; $attempt < $this->requestIdGenerationAttempts(); $attempt++) {
+            $requestId = now()->format('YmdHis').$this->requestIdRandomSuffix();
+            if (! DB::table($tableName)->where('request_id', $requestId)->exists()) {
+                return $requestId;
+            }
+        }
+
+        throw new \RuntimeException('Unable to generate a unique request ID.');
+    }
+
+    protected function requestIdRandomSuffix(): string
+    {
+        return str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+    }
+
+    protected function requestIdGenerationAttempts(): int
+    {
+        return 10;
     }
 
     private function sanitizeDate(string $input): string

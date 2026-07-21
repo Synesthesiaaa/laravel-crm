@@ -82,6 +82,131 @@ class ExtractionExportTest extends TestCase
         $this->assertStringContainsString('12.5%', $content);
     }
 
+    public function test_extraction_exports_metadata_then_fields_in_field_logic_order_then_legacy_fields(): void
+    {
+        $this->preparePercentageFormRecord('12.5');
+        FormField::where('campaign_code', 'mbsales')
+            ->where('form_type', 'ezycash')
+            ->where('field_name', 'discount_rate')
+            ->update(['field_order' => 3]);
+        FormField::create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'rate',
+            'field_label' => 'Rate',
+            'field_type' => 'number',
+            'is_required' => false,
+            'field_order' => 1,
+        ]);
+        FormField::create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'cardholder_name',
+            'field_label' => 'Cardholder Name',
+            'field_type' => 'text',
+            'is_required' => false,
+            'field_order' => 2,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->post(route('admin.extraction.export'), [
+                'start_date' => '2026-01-01',
+                'end_date' => '2026-01-31',
+                'data_type' => 'ezycash',
+            ]);
+
+        $rows = $this->csvRows($response->streamedContent());
+
+        $this->assertSame([
+            'id',
+            'date',
+            'request_id',
+            'agent',
+            'rate',
+            'cardholder_name',
+            'discount_rate',
+            'mpi_credit_card_no',
+            'bank',
+            'account_type',
+            'account_number',
+            'surname',
+            'first_name',
+            'middle_name',
+            'ezycash_amount',
+            'term',
+            'amenable',
+            'remarks',
+            'lead_id',
+            'phone_number',
+            'created_at',
+            'updated_at',
+        ], $rows[0]);
+        $this->assertSame('1', $rows[1][0]);
+        $this->assertSame('1', $rows[1][4]);
+        $this->assertSame('Test Cardholder', $rows[1][5]);
+        $this->assertSame('12.5%', $rows[1][6]);
+        $this->assertNotSame('', $rows[1][20]);
+        $this->assertNotSame('', $rows[1][21]);
+    }
+
+    public function test_extraction_uses_canonical_header_for_an_empty_table_and_omits_stale_fields(): void
+    {
+        Form::create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'empty_export',
+            'name' => 'Empty Export',
+            'table_name' => 'empty_export',
+            'color' => 'green',
+            'icon' => 'document',
+            'display_order' => 2,
+            'is_active' => true,
+        ]);
+        foreach ([
+            ['field_name' => 'second_field', 'field_label' => 'Second', 'field_order' => 2],
+            ['field_name' => 'missing_field', 'field_label' => 'Missing', 'field_order' => 3],
+            ['field_name' => 'first_field', 'field_label' => 'First', 'field_order' => 1],
+        ] as $field) {
+            FormField::create(array_merge([
+                'campaign_code' => 'mbsales',
+                'form_type' => 'empty_export',
+                'field_type' => 'text',
+                'is_required' => false,
+            ], $field));
+        }
+        Schema::create('empty_export', function ($table) {
+            $table->id();
+            $table->date('date');
+            $table->string('request_id');
+            $table->string('agent');
+            $table->string('first_field');
+            $table->string('second_field');
+            $table->string('legacy_field');
+            $table->timestamps();
+        });
+        app(\App\Services\CampaignService::class)->clearCampaignsCache();
+
+        $response = $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->post(route('admin.extraction.export'), [
+                'start_date' => '2026-01-01',
+                'end_date' => '2026-01-31',
+                'data_type' => 'empty_export',
+            ]);
+
+        $this->assertSame([
+            'id',
+            'date',
+            'request_id',
+            'agent',
+            'first_field',
+            'second_field',
+            'legacy_field',
+            'created_at',
+            'updated_at',
+        ], $this->csvRows($response->streamedContent())[0]);
+    }
+
     public function test_data_master_displays_percentage_fields_with_suffix_for_existing_numeric_values(): void
     {
         $this->preparePercentageFormRecord('7');
@@ -213,5 +338,16 @@ class ExtractionExportTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    /**
+     * @return list<list<string|null>>
+     */
+    private function csvRows(string $content): array
+    {
+        return array_map(
+            static fn (string $line): array => str_getcsv($line),
+            preg_split('/\r\n|\r|\n/', trim($content)) ?: [],
+        );
     }
 }

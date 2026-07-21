@@ -9,10 +9,10 @@ use App\Models\FormField;
 use App\Models\User;
 use App\Services\CampaignService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class FormSubmissionTest extends TestCase
@@ -52,34 +52,40 @@ class FormSubmissionTest extends TestCase
 
     public function test_form_submit_succeeds_with_valid_data(): void
     {
+        Carbon::setTestNow('2026-07-21 14:30:15');
         $user = User::factory()->create(['username' => 'agent1']);
-        $response = $this->actingAs($user)->post(route('forms.store'), [
-            '_token' => csrf_token(),
-            'campaign' => 'mbsales',
-            'form_type' => 'ezycash',
-            'date' => now()->format('Y-m-d'),
-            'request_id' => 'client-should-be-ignored',
-            'cardholder_name' => 'John Doe',
-            'mpi_credit_card_no' => '4111111111111111',
-            'bank' => 'Test Bank',
-            'account_type' => 'Savings',
-            'account_number' => '123456',
-            'surname' => 'Doe',
-            'first_name' => 'John',
-            'ezycash_amount' => '100.00',
-            'term' => '12',
-            'rate' => '5.00',
-        ]);
-        $response->assertRedirect();
-        $response->assertSessionHas('success');
-        $this->assertDatabaseHas('ezycash', [
-            'agent' => $user->full_name ?? $user->username,
-            'cardholder_name' => 'John Doe',
-        ]);
-        $requestId = DB::table('ezycash')->where('cardholder_name', 'John Doe')->value('request_id');
-        $this->assertIsString($requestId);
-        $this->assertNotSame('client-should-be-ignored', $requestId);
-        $this->assertTrue(Str::isUlid($requestId));
+
+        try {
+            $response = $this->actingAs($user)->post(route('forms.store'), [
+                '_token' => csrf_token(),
+                'campaign' => 'mbsales',
+                'form_type' => 'ezycash',
+                'date' => now()->format('Y-m-d'),
+                'request_id' => 'client-should-be-ignored',
+                'cardholder_name' => 'John Doe',
+                'mpi_credit_card_no' => '4111111111111111',
+                'bank' => 'Test Bank',
+                'account_type' => 'Savings',
+                'account_number' => '123456',
+                'surname' => 'Doe',
+                'first_name' => 'John',
+                'ezycash_amount' => '100.00',
+                'term' => '12',
+                'rate' => '5.00',
+            ]);
+            $response->assertRedirect();
+            $response->assertSessionHas('success');
+            $this->assertDatabaseHas('ezycash', [
+                'agent' => $user->full_name ?? $user->username,
+                'cardholder_name' => 'John Doe',
+            ]);
+            $requestId = DB::table('ezycash')->where('cardholder_name', 'John Doe')->value('request_id');
+            $this->assertIsString($requestId);
+            $this->assertNotSame('client-should-be-ignored', $requestId);
+            $this->assertMatchesRegularExpression('/^20260721143015\d{6}$/', $requestId);
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_form_submit_broadcasts_dashboard_update_after_successful_commit(): void
@@ -110,6 +116,50 @@ class FormSubmissionTest extends TestCase
                 && $event->action === 'submitted'
                 && $event->recordId > 0;
         });
+    }
+
+    public function test_existing_request_ids_remain_unchanged_when_a_new_record_is_submitted(): void
+    {
+        DB::table('ezycash')->insert([
+            'date' => '2026-07-20',
+            'request_id' => 'legacy-request-id',
+            'cardholder_name' => 'Legacy Customer',
+            'mpi_credit_card_no' => '4111111111111111',
+            'bank' => 'Legacy Bank',
+            'account_type' => 'Savings',
+            'account_number' => '123456',
+            'surname' => 'Legacy',
+            'first_name' => 'Customer',
+            'ezycash_amount' => '100.00',
+            'term' => '12',
+            'rate' => '5.00',
+            'agent' => 'legacy-agent',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $user = User::factory()->create(['username' => 'agent1']);
+
+        $response = $this->actingAs($user)->post(route('forms.store'), [
+            'campaign' => 'mbsales',
+            'form_type' => 'ezycash',
+            'date' => '2026-07-21',
+            'cardholder_name' => 'New Customer',
+            'mpi_credit_card_no' => '4111111111111111',
+            'bank' => 'New Bank',
+            'account_type' => 'Savings',
+            'account_number' => '654321',
+            'surname' => 'New',
+            'first_name' => 'Customer',
+            'ezycash_amount' => '200.00',
+            'term' => '24',
+            'rate' => '6.00',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('ezycash', [
+            'request_id' => 'legacy-request-id',
+            'cardholder_name' => 'Legacy Customer',
+        ]);
     }
 
     public function test_form_submit_returns_json_for_ajax_requests(): void
