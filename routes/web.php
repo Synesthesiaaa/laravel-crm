@@ -50,6 +50,9 @@ Route::get('api/telephony/health', \App\Http\Controllers\Api\TelephonyHealthCont
 Route::get('api/websocket/health', \App\Http\Controllers\Api\WebsocketHealthController::class)->name('api.websocket.health');
 
 Route::middleware('auth')->group(function () {
+    Route::get('agent-webforms/{campaign}', [\App\Http\Controllers\AgentCaptureWebformController::class, 'show'])
+        ->name('agent-webforms.show')
+        ->where('campaign', '[a-z0-9_]+');
     Route::post('api/vicidial/session/login', [\App\Http\Controllers\Api\VicidialSessionController::class, 'login'])->name('api.vicidial.session.login')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
     Route::post('api/vicidial/session/verify', [\App\Http\Controllers\Api\VicidialSessionController::class, 'verify'])->name('api.vicidial.session.verify')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
     Route::post('api/vicidial/session/pause', [\App\Http\Controllers\Api\VicidialSessionController::class, 'pause'])->name('api.vicidial.session.pause')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
@@ -185,6 +188,7 @@ Route::middleware(['auth', 'campaign'])->group(function () {
             Route::post('lead-hopper/import', [\App\Http\Controllers\Admin\LeadHopperController::class, 'import'])->name('lead-hopper.import');
             Route::get('agent-screen', [\App\Http\Controllers\Admin\AgentScreenController::class, 'index'])->name('agent-screen.index');
             Route::post('agent-screen', [\App\Http\Controllers\Admin\AgentScreenController::class, 'store'])->name('agent-screen.store');
+            Route::post('agent-screen/webform', [\App\Http\Controllers\Admin\AgentScreenController::class, 'saveWebform'])->name('agent-screen.webform.update');
             Route::put('agent-screen/{field}', [\App\Http\Controllers\Admin\AgentScreenController::class, 'update'])->name('agent-screen.update');
             Route::post('agent-screen/delete', [\App\Http\Controllers\Admin\AgentScreenController::class, 'destroy'])->name('agent-screen.destroy');
             Route::get('attendance-statuses', [\App\Http\Controllers\Admin\AttendanceStatusTypesController::class, 'index'])->name('attendance-statuses.index');

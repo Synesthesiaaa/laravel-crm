@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\LogOptions;
@@ -29,6 +30,7 @@ class Campaign extends Model
         'predictive_delay_seconds',
         'predictive_max_attempts',
         'display_order',
+        'agent_webform_form_id',
     ];
 
     protected function casts(): array
@@ -38,12 +40,18 @@ class Campaign extends Model
             'predictive_enabled' => 'boolean',
             'predictive_delay_seconds' => 'integer',
             'predictive_max_attempts' => 'integer',
+            'agent_webform_form_id' => 'integer',
         ];
     }
 
     public function forms(): HasMany
     {
         return $this->hasMany(Form::class, 'campaign_code', 'code');
+    }
+
+    public function agentWebformForm(): BelongsTo
+    {
+        return $this->belongsTo(Form::class, 'agent_webform_form_id');
     }
 
     public function dispositionCodes(): HasMany

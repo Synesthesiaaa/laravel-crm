@@ -3,9 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\SaveAgentScreenWebformRequest;
 use App\Http\Requests\Admin\StoreAgentScreenFieldRequest;
 use App\Http\Requests\Admin\UpdateAgentScreenFieldRequest;
 use App\Models\AgentScreenField;
+use App\Models\Campaign;
+use App\Models\Form;
+use App\Services\AgentCaptureWebformService;
 use App\Services\CampaignService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,6 +20,7 @@ class AgentScreenController extends Controller
 {
     public function __construct(
         protected CampaignService $campaignService,
+        protected AgentCaptureWebformService $webformService,
     ) {}
 
     public function index(Request $request): View
@@ -29,6 +34,20 @@ class AgentScreenController extends Controller
             ->orderBy('field_order')
             ->orderBy('id')
             ->get();
+        $campaignModel = Campaign::query()->where('code', $selectedCampaign)->first();
+        $selectedWebformForm = $campaignModel?->agentWebformForm;
+        if (
+            ! $selectedWebformForm
+            || ! $selectedWebformForm->is_active
+            || $selectedWebformForm->campaign_code !== $selectedCampaign
+        ) {
+            $selectedWebformForm = null;
+        }
+        $webformOptions = Form::query()
+            ->active()
+            ->forCampaign($selectedCampaign)
+            ->ordered()
+            ->get();
 
         return view('admin.agent_screen', [
             'campaigns' => $campaigns,
@@ -36,7 +55,23 @@ class AgentScreenController extends Controller
             'selectedCampaign' => $selectedCampaign,
             'viciFields' => config('vicidial_fields.fields', []),
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),
+            'webformOptions' => $webformOptions,
+            'selectedWebformForm' => $selectedWebformForm,
+            'vicidialWebformUrl' => $selectedWebformForm
+                ? $this->webformService->vicidialUrl($selectedCampaign, $fields)
+                : null,
         ]);
+    }
+
+    public function saveWebform(SaveAgentScreenWebformRequest $request): RedirectResponse
+    {
+        $validated = $request->validated();
+        $campaign = Campaign::query()->where('code', $validated['campaign_code'])->firstOrFail();
+        $campaign->update(['agent_webform_form_id' => $validated['agent_webform_form_id'] ?? null]);
+        $this->campaignService->clearCampaignsCache();
+
+        return redirect()->route('admin.agent-screen.index', ['campaign' => $campaign->code])
+            ->with('success', 'Agent capture webform updated.');
     }
 
     public function store(StoreAgentScreenFieldRequest $request): RedirectResponse

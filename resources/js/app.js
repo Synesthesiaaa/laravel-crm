@@ -6,6 +6,7 @@ import './phone-widget';
 import './quick-form-widget';
 import './soft-navigate';
 import './form-visibility';
+import './agent-capture-webform';
 import './telephony-media-path';
 import TelephonyCore from './telephony-core';
 
