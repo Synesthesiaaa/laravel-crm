@@ -219,6 +219,23 @@ class ExtractionExportTest extends TestCase
             ->assertSee('7%');
     }
 
+    public function test_data_master_renders_desktop_table_and_mobile_cards_with_all_fields(): void
+    {
+        $this->preparePercentageFormRecord('7');
+
+        $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->get(route('admin.data-master.index', ['type' => 'ezycash']))
+            ->assertOk()
+            ->assertSee('role="grid"', false)
+            ->assertSee('data-master-mobile-list', false)
+            ->assertSee('data-master-mobile-card', false)
+            ->assertSee('Discount Rate')
+            ->assertSee('7%')
+            ->assertSee('Edit')
+            ->assertSee('Delete');
+    }
+
     public function test_data_master_update_broadcasts_dashboard_update(): void
     {
         Event::fake([DashboardDataUpdated::class]);

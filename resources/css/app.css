@@ -512,6 +512,52 @@ html[data-theme="light"] {
     overscroll-behavior-x: contain;
     scrollbar-gutter: stable both-edges;
   }
+  .data-master-mobile-table { display: none; }
+  .data-master-mobile-list { display: grid; gap: 0; }
+  .data-master-mobile-card {
+    padding: .875rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .data-master-mobile-card:last-child { border-bottom: none; }
+  .data-master-mobile-field {
+    display: grid;
+    grid-template-columns: minmax(0, 40%) minmax(0, 60%);
+    gap: .75rem;
+    padding: .5rem 0;
+    min-width: 0;
+  }
+  .data-master-mobile-field dt {
+    color: var(--color-on-surface-muted);
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    line-height: 1.35;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+  .data-master-mobile-field dd {
+    min-width: 0;
+    color: var(--color-on-surface);
+    font-size: .8125rem;
+    line-height: 1.45;
+    text-align: right;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .data-master-mobile-action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: .375rem;
+    padding-top: .75rem;
+    margin-top: .5rem;
+    border-top: 1px solid var(--color-border);
+  }
+  .data-master-mobile-action-buttons form { margin: 0; }
+  @media (max-width: 1023px) {
+    .data-master-desktop-table { display: none; }
+    .data-master-mobile-table { display: block; width: 100%; max-width: 100%; }
+  }
   .campaign-report-table-wrap {
     scrollbar-gutter: stable;
   }

@@ -27,7 +27,8 @@
 </div>
 
 @if($tableName)
-<x-table.index caption="Data master records">
+<div class="data-master-responsive">
+<x-table.index caption="Data master records" class="data-master-desktop-table">
     <thead>
         <tr>
             @foreach($columns as $col)
@@ -46,27 +47,11 @@
                     <td>{{ $dataMasterService->formatValue($col, is_object($row) ? ($row->$col ?? '') : ($row[$col] ?? ''), $percentageColumns ?? []) }}</td>
                 @endforeach
                 <td>
-                    <div class="table-actions" x-data="{ async del(form) {
-                        const ok = await Alpine.store('confirm').ask('Delete record?', 'This record will be permanently removed.');
-                        if (ok) form.submit();
-                    }}">
-                        <a href="{{ route('admin.data-master.edit', ['id' => $row->id ?? $row['id'], 'type' => $type]) }}"
-                           class="btn-secondary text-xs px-2 py-1">
-                            <x-icon name="pencil" class="w-3.5 h-3.5" />
-                            Edit
-                        </a>
-                        <form method="POST" action="{{ route('admin.data-master.destroy') }}" x-ref="delFormDM{{ $row->id ?? $row['id'] }}">
-                            @csrf
-                            <input type="hidden" name="_table" value="{{ $tableName }}">
-                            <input type="hidden" name="_id" value="{{ $row->id ?? $row['id'] }}">
-                            <input type="hidden" name="_type" value="{{ $type }}">
-                            <button type="button" class="btn-danger text-xs px-2 py-1"
-                                    @click="del($refs['delFormDM{{ $row->id ?? $row['id'] }}'])">
-                                <x-icon name="trash" class="w-3.5 h-3.5" />
-                                Delete
-                            </button>
-                        </form>
-                    </div>
+                    @include('admin.partials.data_master_actions', [
+                        'row' => $row,
+                        'tableName' => $tableName,
+                        'type' => $type,
+                    ])
                 </td>
             </tr>
         @endforeach
@@ -76,6 +61,37 @@
         <x-table.pagination :paginator="$records" />
     </x-slot:footer>
 </x-table.index>
+<div class="md-table-wrap data-master-mobile-table" aria-label="Data master records">
+    @if($records->isEmpty())
+        <div class="table-empty">
+            <x-icon name="document-text" class="w-10 h-10 mx-auto mb-2" />
+            <p class="font-medium text-sm">No records found.</p>
+        </div>
+    @else
+        <div class="data-master-mobile-list">
+            @foreach($records as $row)
+                <article class="data-master-mobile-card">
+                    <dl>
+                        @foreach($columns as $col)
+                            <div class="data-master-mobile-field">
+                                <dt>{{ $headers[$col] ?? $col }}</dt>
+                                <dd>{{ $dataMasterService->formatValue($col, is_object($row) ? ($row->$col ?? '') : ($row[$col] ?? ''), $percentageColumns ?? []) }}</dd>
+                            </div>
+                        @endforeach
+                    </dl>
+                    @include('admin.partials.data_master_actions', [
+                        'row' => $row,
+                        'tableName' => $tableName,
+                        'type' => $type,
+                        'class' => 'data-master-mobile-action-buttons',
+                    ])
+                </article>
+            @endforeach
+        </div>
+    @endif
+    <x-table.pagination :paginator="$records" />
+</div>
+</div>
 @elseif(empty($forms))
 <div class="md-card">
     <div class="table-empty py-12">
