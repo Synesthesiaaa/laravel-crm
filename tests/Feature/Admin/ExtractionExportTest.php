@@ -219,6 +219,17 @@ class ExtractionExportTest extends TestCase
             ->assertSee('7%');
     }
 
+    public function test_data_master_renders_desktop_table_layout_hook(): void
+    {
+        $this->preparePercentageFormRecord('7');
+
+        $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->get(route('admin.data-master.index', ['type' => 'ezycash']))
+            ->assertOk()
+            ->assertSee('data-master-desktop-table', false);
+    }
+
     public function test_data_master_update_broadcasts_dashboard_update(): void
     {
         Event::fake([DashboardDataUpdated::class]);

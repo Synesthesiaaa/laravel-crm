@@ -27,6 +27,7 @@
 </div>
 
 @if($tableName)
+<div class="data-master-desktop-table">
 <x-table.index caption="Data master records">
     <thead>
         <tr>
@@ -76,6 +77,7 @@
         <x-table.pagination :paginator="$records" />
     </x-slot:footer>
 </x-table.index>
+</div>
 @elseif(empty($forms))
 <div class="md-card">
     <div class="table-empty py-12">
