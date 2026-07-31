@@ -13,14 +13,14 @@ export const FAB_STACK = {
     sizePx: 48,
 };
 
-export function defaultQuickFormPosition(width, height) {
+export function defaultQuickFormPosition(width) {
     const reservedBottom = FAB_STACK.baseBottomPx
         + (2 * (FAB_STACK.sizePx + FAB_STACK.gapPx))
         + 16;
 
     return {
         x: Math.max(0, window.innerWidth - width - FAB_STACK.baseRightPx),
-        y: Math.max(0, window.innerHeight - height - reservedBottom),
+        y: Math.max(0, window.innerHeight - reservedBottom),
     };
 }
 

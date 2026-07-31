@@ -27,7 +27,7 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         onHydrate: (layout) => widgetCtx?.applyLayout(layout),
     });
 
-    const defaultPosition = defaultQuickFormPosition(defaultWidth, defaultHeight);
+    const defaultPosition = defaultQuickFormPosition(defaultWidth);
 
     return {
         open: false,

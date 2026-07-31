@@ -28,6 +28,15 @@ class QuickFormBootstrapApiTest extends TestCase
         $user = User::factory()->create();
 
         $service = Mockery::mock(CampaignService::class);
+        $service->shouldReceive('resolveCampaignForRequest')
+            ->once()
+            ->andReturn([
+                'code' => 'mbsales',
+                'config' => [
+                    'name' => 'MB Sales',
+                    'forms' => [],
+                ],
+            ]);
         $service->shouldReceive('getCampaign')
             ->once()
             ->with('mbsales')
