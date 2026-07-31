@@ -137,6 +137,9 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     // Admin: Team Leader, Admin, or Super Admin
     Route::middleware('role:Team Leader,Admin,Super Admin')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'index'])->name('dashboard');
+        Route::post('dashboard-layout', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'updateLayout'])
+            ->middleware('role:Admin,Super Admin')
+            ->name('dashboard-layout.update');
         Route::get('supervisor', [\App\Http\Controllers\Admin\SupervisorController::class, 'index'])->name('supervisor');
         Route::get('telephony-monitor', [\App\Http\Controllers\Admin\TelephonyMonitorController::class, 'index'])->name('telephony-monitor');
         Route::get('attendance', [\App\Http\Controllers\Admin\AttendanceLogsController::class, 'index'])->name('attendance.index');

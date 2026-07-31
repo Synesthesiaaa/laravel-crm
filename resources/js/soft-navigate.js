@@ -296,6 +296,22 @@ function shouldInterceptAnchor(anchor, event) {
     return true;
 }
 
+function getSoftNavFormUrl(form) {
+    const action = form.getAttribute('action') || window.location.href;
+    const url = new URL(action, window.location.href);
+    const params = new URLSearchParams();
+
+    new FormData(form).forEach((value, key) => {
+        if (typeof value === 'string') {
+            params.append(key, value);
+        }
+    });
+
+    url.search = params.toString();
+
+    return url;
+}
+
 function initSoftNavigate() {
     currentSoftNavScope = normalizeSoftNavScope(window.location.pathname);
     currentSoftNavPhase = 'idle';
@@ -309,6 +325,33 @@ function initSoftNavigate() {
             }
             event.preventDefault();
             softNavigate(anchor.href, { push: true });
+        },
+        true,
+    );
+
+    document.addEventListener(
+        'submit',
+        (event) => {
+            const form = event.target.closest?.('form[data-soft-nav]');
+            const method = (form?.getAttribute('method') || 'get').toLowerCase();
+
+            if (!form || method !== 'get' || event.defaultPrevented) {
+                return;
+            }
+
+            let url;
+            try {
+                url = getSoftNavFormUrl(form);
+            } catch (_) {
+                return;
+            }
+
+            if (url.origin !== window.location.origin) {
+                return;
+            }
+
+            event.preventDefault();
+            softNavigate(url.href, { push: true });
         },
         true,
     );

@@ -263,10 +263,12 @@ export function subscribeDashboardChannel(campaignCode, handler) {
 
     const channel = window.Echo.private(`dashboard.${campaignCode}`);
     channel.listen('.dashboard.data.updated', handler);
+    channel.listen('.dashboard.layout.updated', handler);
     TelephonyLogger.info('TelephonyEcho', 'Subscribed to dashboard data channel', { campaign: campaignCode });
 
     const teardown = () => {
         channel.stopListening('.dashboard.data.updated');
+        channel.stopListening('.dashboard.layout.updated');
         if (_teardownDashboardChannel === teardown) {
             _teardownDashboardChannel = null;
             _dashboardChannelSig = null;

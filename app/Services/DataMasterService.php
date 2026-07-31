@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Contracts\Repositories\FormFieldRepositoryInterface;
 use App\Support\PercentageValue;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -108,14 +109,37 @@ class DataMasterService
         return $allowed;
     }
 
-    public function getRecords(string $tableName, array $allowedTables, int $perPage = 20): LengthAwarePaginator
-    {
+    public function getRecords(
+        string $tableName,
+        array $allowedTables,
+        int $perPage = 20,
+        ?string $search = null,
+    ): LengthAwarePaginator {
         if (! $this->isTableAllowed($tableName, $allowedTables)) {
             return new LengthAwarePaginator([], 0, $perPage);
         }
 
         try {
-            return DB::table($tableName)->orderByDesc('id')->paginate($perPage);
+            $query = DB::table($tableName)->orderByDesc('id');
+            $search = $search === null ? '' : trim($search);
+
+            if ($search !== '') {
+                $searchableColumns = array_values(array_filter(
+                    Schema::getColumnListing($tableName),
+                    static fn (mixed $column): bool => is_string($column)
+                        && preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $column) === 1,
+                ));
+
+                if ($searchableColumns !== []) {
+                    $query->where(function (Builder $query) use ($searchableColumns, $search): void {
+                        foreach ($searchableColumns as $column) {
+                            $query->orWhere($column, 'like', '%'.$search.'%');
+                        }
+                    });
+                }
+            }
+
+            return $query->paginate($perPage);
         } catch (\Throwable) {
             return new LengthAwarePaginator([], 0, $perPage);
         }

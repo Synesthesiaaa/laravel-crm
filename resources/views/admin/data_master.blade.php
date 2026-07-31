@@ -15,12 +15,22 @@
 
 <div class="md-card mb-4">
     <div class="p-4">
-        <form method="GET" action="{{ route('admin.data-master.index') }}" class="flex flex-wrap items-end gap-4">
+        <form method="GET" action="{{ route('admin.data-master.index') }}" data-soft-nav class="flex flex-wrap items-end gap-4">
             <x-form.select name="type" label="Form Type"
                 :options="collect($forms)->mapWithKeys(fn($v,$k) => [$k => $v['name'] ?? $k])->all()"
                 :selected="$type" :empty="false" />
+            <div class="form-field min-w-[16rem] flex-1">
+                <label for="data-master-search" class="form-label">Search data</label>
+                <input id="data-master-search" type="search" name="search" value="{{ $search ?? '' }}"
+                       class="form-input" placeholder="Search across this form's records" maxlength="100">
+            </div>
             <div class="form-actions-bottom">
                 <button type="submit" class="btn-primary"><x-icon name="funnel" class="w-4 h-4" /> Load</button>
+                @if(($search ?? '') !== '')
+                    <a href="{{ route('admin.data-master.index', ['type' => $type]) }}" class="btn-ghost" data-soft-nav-clear>
+                        Clear
+                    </a>
+                @endif
             </div>
         </form>
     </div>
@@ -38,7 +48,7 @@
         </tr>
     </thead>
     @if($records->isEmpty())
-        <x-table.empty :colspan="count($columns) + 1" message="No records found." />
+        <x-table.empty :colspan="count($columns) + 1" :message="($search ?? '') !== '' ? 'No records match this search.' : 'No records found.'" />
     @else
     <tbody>
         @foreach($records as $row)

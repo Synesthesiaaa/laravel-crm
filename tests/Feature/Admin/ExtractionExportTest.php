@@ -230,6 +230,102 @@ class ExtractionExportTest extends TestCase
             ->assertSee('data-master-desktop-table', false);
     }
 
+    public function test_data_master_search_filters_records_and_keeps_the_search_value(): void
+    {
+        $this->preparePercentageFormRecord('7');
+        DB::table('ezycash')->insert([
+            'date' => '2026-01-16',
+            'request_id' => '260116002',
+            'cardholder_name' => 'Second Cardholder',
+            'mpi_credit_card_no' => '4222222222222222',
+            'bank' => 'Second Bank',
+            'account_type' => 'Savings',
+            'account_number' => '654321',
+            'surname' => 'Smith',
+            'first_name' => 'Jane',
+            'ezycash_amount' => '200.00',
+            'term' => '24',
+            'rate' => '2.00',
+            'agent' => 'agent_search',
+            'discount_rate' => '8',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->get(route('admin.data-master.index', ['type' => 'ezycash', 'search' => 'Second Bank']))
+            ->assertOk()
+            ->assertSee('name="search"', false)
+            ->assertSee('Second Bank')
+            ->assertDontSee('Test Bank')
+            ->assertSee('value="Second Bank"', false);
+    }
+
+    public function test_data_master_search_preserves_query_parameters_in_pagination_links(): void
+    {
+        $this->preparePercentageFormRecord('7');
+        $records = [];
+
+        for ($index = 1; $index <= 21; $index++) {
+            $records[] = [
+                'date' => '2026-01-16',
+                'request_id' => '260116'.str_pad((string) $index, 3, '0', STR_PAD_LEFT),
+                'cardholder_name' => 'Search Cardholder '.$index,
+                'mpi_credit_card_no' => '4222222222222222',
+                'bank' => 'Search Bank',
+                'account_type' => 'Savings',
+                'account_number' => '65432'.$index,
+                'surname' => 'Smith',
+                'first_name' => 'Jane',
+                'ezycash_amount' => '200.00',
+                'term' => '24',
+                'rate' => '2.00',
+                'agent' => 'agent_search',
+                'discount_rate' => '8',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+        }
+        DB::table('ezycash')->insert($records);
+
+        $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->get(route('admin.data-master.index', ['type' => 'ezycash', 'search' => 'Search Bank']))
+            ->assertOk()
+            ->assertSee('search=Search', false)
+            ->assertSee('page=2', false);
+    }
+
+    public function test_data_master_search_normalizes_invalid_and_oversized_query_values(): void
+    {
+        $this->preparePercentageFormRecord('7');
+        $oversizedSearch = str_repeat('x', 120);
+
+        $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->get(route('admin.data-master.index', ['type' => 'ezycash', 'search' => $oversizedSearch]))
+            ->assertOk()
+            ->assertSee('value="'.str_repeat('x', 100).'"', false);
+
+        $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->get(route('admin.data-master.index').'?type=ezycash&search%5B0%5D=invalid')
+            ->assertOk()
+            ->assertSee('value=""', false);
+    }
+
+    public function test_data_master_form_selector_is_marked_for_soft_navigation(): void
+    {
+        $this->preparePercentageFormRecord('7');
+
+        $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->get(route('admin.data-master.index', ['type' => 'ezycash']))
+            ->assertOk()
+            ->assertSee('data-soft-nav', false);
+    }
+
     public function test_data_master_update_broadcasts_dashboard_update(): void
     {
         Event::fake([DashboardDataUpdated::class]);

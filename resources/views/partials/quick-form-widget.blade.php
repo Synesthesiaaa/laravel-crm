@@ -13,6 +13,7 @@
 
 <div id="quick-form-widget-root"
      class="fixed z-20"
+     :class="isSplitActive() ? 'widget-root--split widget-root--split-right' : ''"
      x-data="quickFormWidget(@js($quickFormBoot))"
      :style="widgetStyle"
      x-init="init()"
@@ -43,12 +44,20 @@
                 </button>
                 <span class="text-xs font-semibold text-[var(--color-on-surface)] truncate">Quick Form</span>
             </div>
-            <button type="button"
-                    class="btn-ghost text-[10px] px-2 py-1 shrink-0"
-                    @click="closePanel()"
-                    title="Minimize widget">
-                <x-icon name="chevron-down" class="w-4 h-4" />
-            </button>
+            <div class="flex items-center gap-1 shrink-0">
+                <button type="button"
+                        class="btn-ghost text-[10px] px-2 py-1"
+                        @click="toggleSplitScreen()"
+                        :title="isSplitActive() ? 'Exit split view' : 'Open split view'">
+                    <span x-text="isSplitActive() ? 'Exit split' : 'Split view'"></span>
+                </button>
+                <button type="button"
+                        class="btn-ghost text-[10px] px-2 py-1"
+                        @click="closePanel()"
+                        title="Minimize widget">
+                    <x-icon name="chevron-down" class="w-4 h-4" />
+                </button>
+            </div>
         </div>
 
         <div x-show="open" class="flex-1 min-h-0 relative">

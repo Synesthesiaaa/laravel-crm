@@ -19,6 +19,8 @@
 {{-- VICIdial session: FAB + expandable panel. Iframe is never inside x-show (WebRTC). Collapsed = 1×1px viewport slot. --}}
 <div id="phone-widget-root"
      class="fab-stack-1 flex flex-col-reverse items-end gap-2"
+     :class="isSplitActive() ? 'widget-root--split widget-root--split-left' : ''"
+     :style="rootStyle"
      x-data="phoneWidget(@js($phoneWidgetBoot))"
      x-init="init()"
      @click.stop>
@@ -75,12 +77,20 @@
                       }[vici.phase] || vici.phase">
                 </span>
             </div>
-            <button type="button"
-                    class="btn-ghost text-[10px] px-2 py-1 shrink-0"
-                    @click="closePanel()"
-                    title="Minimize (session keeps running)">
-                <x-icon name="chevron-down" class="w-4 h-4" />
-            </button>
+            <div class="flex items-center gap-1 shrink-0">
+                <button type="button"
+                        class="btn-ghost text-[10px] px-2 py-1"
+                        @click="toggleSplitScreen()"
+                        :title="isSplitActive() ? 'Exit split view' : 'Open split view'">
+                    <span x-text="isSplitActive() ? 'Exit split' : 'Split view'"></span>
+                </button>
+                <button type="button"
+                        class="btn-ghost text-[10px] px-2 py-1"
+                        @click="closePanel()"
+                        title="Minimize (session keeps running)">
+                    <x-icon name="chevron-down" class="w-4 h-4" />
+                </button>
+            </div>
         </div>
 
         {{-- Login controls: fixed height via splitter; hidden when minimized (not wrapping iframe) --}}

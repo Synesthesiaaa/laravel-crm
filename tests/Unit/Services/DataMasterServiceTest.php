@@ -35,6 +35,35 @@ class DataMasterServiceTest extends TestCase
         $this->assertFalse($service->storesPercentageAsNumeric('percentage_probe_records', 'missing'));
     }
 
+    public function test_get_records_searches_allowed_table_columns(): void
+    {
+        Schema::create('data_master_search_records', function ($table) {
+            $table->id();
+            $table->string('request_id');
+            $table->string('remarks')->nullable();
+        });
+
+        DB::table('data_master_search_records')->insert([
+            ['request_id' => 'REQ-001', 'remarks' => 'First customer'],
+            ['request_id' => 'REQ-002', 'remarks' => 'Second customer'],
+        ]);
+
+        $service = new DataMasterService(
+            Mockery::mock(CampaignService::class),
+            Mockery::mock(FormFieldRepositoryInterface::class),
+        );
+
+        $records = $service->getRecords(
+            'data_master_search_records',
+            ['data_master_search_records'],
+            20,
+            'second customer',
+        );
+
+        $this->assertSame(1, $records->total());
+        $this->assertSame('REQ-002', $records->first()->request_id);
+    }
+
     public function test_update_record_refreshes_the_updated_at_timestamp(): void
     {
         Schema::create('data_master_timestamp_records', function ($table) {

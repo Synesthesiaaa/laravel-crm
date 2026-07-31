@@ -30,7 +30,13 @@ class DataMasterController extends Controller
         }
         $tableName = $forms[$type]['table_name'] ?? $forms[$type]['table'] ?? '';
         $allowedTables = $this->dataMasterService->getAllowedTables($campaignConfig);
-        $records = $this->dataMasterService->getRecords($tableName, $allowedTables);
+        $search = $request->query('search');
+        $search = is_string($search) ? mb_substr(trim($search), 0, 100) : '';
+        $records = $this->dataMasterService->getRecords(
+            $tableName,
+            $allowedTables,
+            search: $search !== '' ? $search : null,
+        );
         $available = null;
         $first = $records->first();
         if ($first) {
@@ -49,6 +55,7 @@ class DataMasterController extends Controller
             'columns' => $layout['columns'],
             'headers' => $layout['headers'],
             'percentageColumns' => $percentageColumns,
+            'search' => $search,
             'dataMasterService' => $this->dataMasterService,
         ]);
     }

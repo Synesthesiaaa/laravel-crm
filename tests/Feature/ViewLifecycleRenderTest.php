@@ -61,6 +61,16 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertDontSee('Calls (9h)', false);
     }
 
+    public function test_soft_navigation_script_handles_marked_get_forms(): void
+    {
+        $contents = file_get_contents(resource_path('js/soft-navigate.js'));
+
+        $this->assertIsString($contents);
+        $this->assertStringContainsString('form[data-soft-nav]', $contents);
+        $this->assertStringContainsString('new FormData(form)', $contents);
+        $this->assertStringContainsString('softNavigate(url.href, { push: true })', $contents);
+    }
+
     public function test_top_agent_stat_card_renders_sales_summary(): void
     {
         $html = view('components.stat-card', [

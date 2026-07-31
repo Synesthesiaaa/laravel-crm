@@ -7,11 +7,16 @@
 @section('content')
 @php
     $monthTitle = now()->format('F Y');
+    $dashboardSections = $dashboardLayout['sections'] ?? [];
+    $sectionVisible = static fn (string $key): bool => ($dashboardSections[$key]['visible'] ?? true) === true;
+    $sectionOrder = static fn (string $key): int => (int) ($dashboardSections[$key]['order'] ?? 0);
     $salesRangeLabel = $salesFilter['from']->format('M j, Y').' · '.$salesFilter['from']->format('g:i A').'–'.$salesFilter['until']->format('g:i A');
 @endphp
-<div class="space-y-8">
+<div class="space-y-8 flex flex-col">
 
     {{-- Welcome hero --}}
+    @if($sectionVisible('welcome'))
+    <section data-dashboard-section="welcome" style="order: {{ $sectionOrder('welcome') }}">
     <div class="md-hero">
         <div class="flex items-start justify-between flex-wrap gap-4">
             <div>
@@ -23,7 +28,11 @@
             <x-badge type="active">Online</x-badge>
         </div>
     </div>
+    </section>
+    @endif
 
+    @if($sectionVisible('kpis'))
+    <section data-dashboard-section="kpis" style="order: {{ $sectionOrder('kpis') }}">
     <div x-data="{
         salesModalCloseTimer: null,
         leaderboardModalCloseTimer: null,
@@ -194,8 +203,12 @@
             </div>
         </x-modal>
     </div>
+    </section>
+    @endif
 
     {{-- Activity charts: daily / weekly / monthly --}}
+    @if($sectionVisible('activity'))
+    <section data-dashboard-section="activity" style="order: {{ $sectionOrder('activity') }}">
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-stagger">
         <div class="chart-container">
             <p class="chart-title">Activity — last 24 hours</p>
@@ -210,8 +223,12 @@
             <div id="chart-monthly-activity" class="w-full" style="min-height: 240px;"></div>
         </div>
     </div>
+    </section>
+    @endif
 
     {{-- Daily campaign leaderboard --}}
+    @if($sectionVisible('leaderboard'))
+    <section data-dashboard-section="leaderboard" style="order: {{ $sectionOrder('leaderboard') }}">
     <div class="md-card overflow-hidden">
         <div class="px-5 py-4 border-b border-[var(--color-border)]">
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Agent leaderboard — {{ $salesRangeLabel }}</h3>
@@ -244,8 +261,12 @@
             @endif
         </div>
     </div>
+    </section>
+    @endif
 
     {{-- Daily and month-to-date campaign report --}}
+    @if($sectionVisible('campaign_report'))
+    <section data-dashboard-section="campaign_report" style="order: {{ $sectionOrder('campaign_report') }}">
     @php
         $report = $dailyCampaignReport ?? [];
         $reportForms = $report['forms'] ?? [];
@@ -353,8 +374,12 @@
             @endforeach
         </div>
     </div>
+    </section>
+    @endif
 
     {{-- Campaign forms --}}
+    @if($sectionVisible('forms'))
+    <section data-dashboard-section="forms" style="order: {{ $sectionOrder('forms') }}">
     @if(!empty($forms))
     <div>
         <h3 class="text-xs font-bold text-[var(--color-on-surface-dim)] uppercase tracking-widest mb-4">Campaign Forms</h3>
@@ -376,8 +401,12 @@
         </div>
     </div>
     @endif
+    </section>
+    @endif
 
     {{-- Quick links --}}
+    @if($sectionVisible('quick_links'))
+    <section data-dashboard-section="quick_links" style="order: {{ $sectionOrder('quick_links') }}">
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <a href="{{ route('records.index') }}" class="md-card p-4 flex items-center gap-3 no-underline group">
             <x-icon name="clipboard-document-list" class="w-5 h-5 text-[var(--color-primary)]" />
@@ -396,6 +425,8 @@
             <x-icon name="chevron-right" class="w-4 h-4 text-[var(--color-on-surface-dim)] group-hover:text-[var(--color-primary)]" />
         </a>
     </div>
+    </section>
+    @endif
 
 </div>
 @endsection

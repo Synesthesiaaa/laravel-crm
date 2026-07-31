@@ -28,6 +28,63 @@
         </div>
     </div>
 
+    @if($user->isAdmin())
+        @php
+            $savedDashboardSections = collect($dashboardLayout['sections'] ?? [])
+                ->sortBy('order')
+                ->keys()
+                ->values()
+                ->all();
+            $visibleDashboardSections = collect($dashboardLayout['sections'] ?? [])
+                ->filter(fn ($section) => ($section['visible'] ?? false) === true)
+                ->keys()
+                ->values()
+                ->all();
+        @endphp
+        <div class="md-card" x-data="{
+            sections: @js($savedDashboardSections),
+            visible: @js($visibleDashboardSections),
+            labels: @js($dashboardSections),
+            move(index, direction) {
+                const next = index + direction;
+                if (next < 0 || next >= this.sections.length) return;
+                const current = this.sections[index];
+                this.sections[index] = this.sections[next];
+                this.sections[next] = current;
+            },
+        }">
+            <div class="p-5 border-b border-[var(--color-border)]">
+                <div class="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                        <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Customize user dashboard</h3>
+                        <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">Choose visible sections and use the arrows to set their order for {{ $campaignName }}.</p>
+                    </div>
+                    <x-badge type="info">Admin controlled</x-badge>
+                </div>
+            </div>
+            <form method="POST" action="{{ route('admin.dashboard-layout.update') }}" class="p-5 space-y-3">
+                @csrf
+                <div class="space-y-2">
+                    <template x-for="(section, index) in sections" :key="section">
+                        <div class="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2">
+                            <input type="hidden" name="section_order[]" :value="section">
+                            <input type="checkbox" name="visible_sections[]" :value="section" :id="'dashboard-section-' + section" x-model="visible" class="form-checkbox">
+                            <label :for="'dashboard-section-' + section" class="flex-1 text-sm text-[var(--color-on-surface)]" x-text="labels[section]"></label>
+                            <div class="flex items-center gap-1">
+                                <button type="button" class="btn-icon" @click="move(index, -1)" :disabled="index === 0" :aria-label="'Move ' + labels[section] + ' up'">↑</button>
+                                <button type="button" class="btn-icon" @click="move(index, 1)" :disabled="index === sections.length - 1" :aria-label="'Move ' + labels[section] + ' down'">↓</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                <div class="flex items-center justify-between gap-3 flex-wrap pt-2">
+                    <p class="text-xs text-[var(--color-on-surface-dim)]">Changes apply to users viewing this campaign.</p>
+                    <button type="submit" class="btn-primary">Apply dashboard layout</button>
+                </div>
+            </form>
+        </div>
+    @endif
+
     {{-- KPI stat cards --}}
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 animate-stagger">
         @foreach($stats as $formCode => $stat)

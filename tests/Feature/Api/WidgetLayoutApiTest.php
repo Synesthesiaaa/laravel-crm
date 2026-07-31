@@ -80,4 +80,33 @@ class WidgetLayoutApiTest extends TestCase
             ->assertJsonPath('layouts.softphone.x', 8)
             ->assertJsonPath('layouts.softphone.open', false);
     }
+
+    public function test_workspace_split_screen_preference_is_persisted_per_user(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->putJson('/api/widgets/layouts/workspace', [
+                'layout' => ['splitScreen' => true],
+            ])
+            ->assertOk()
+            ->assertJsonPath('layout.splitScreen', true);
+
+        $this->actingAs($user)
+            ->getJson('/api/widgets/layouts')
+            ->assertOk()
+            ->assertJsonPath('layouts.workspace.splitScreen', true);
+    }
+
+    public function test_workspace_rejects_non_boolean_split_screen_values(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->putJson('/api/widgets/layouts/workspace', [
+                'layout' => ['splitScreen' => 'yes'],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['layout.splitScreen']);
+    }
 }

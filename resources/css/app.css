@@ -978,6 +978,51 @@ html[data-theme="light"] {
     flex-direction: column;
   }
 
+  .widget-root--split {
+    z-index: 50;
+  }
+
+  .widget-root--split > .widget-launcher {
+    display: none;
+  }
+
+  .widget-root--split .widget-panel-upper-left {
+    position: static;
+    width: 100%;
+    height: 100%;
+  }
+
+  .widget-root--split .phone-widget-shell {
+    width: 100%;
+    height: 100%;
+  }
+
+  @media (max-width: 1023px) {
+    .widget-root--split {
+      position: fixed;
+      left: auto !important;
+      top: auto !important;
+      right: var(--fab-stack-base-right) !important;
+      bottom: var(--fab-stack-base-bottom) !important;
+      width: auto !important;
+      height: auto !important;
+    }
+
+    .widget-root--split-left {
+      bottom: calc(var(--fab-stack-base-bottom) + var(--fab-stack-gap)) !important;
+    }
+
+    .widget-root--split > .widget-launcher {
+      display: flex;
+    }
+
+    .widget-root--split .widget-panel-upper-left {
+      position: absolute;
+      width: auto;
+      height: auto;
+    }
+  }
+
   .widget-splitter {
     position: relative;
     flex-shrink: 0;

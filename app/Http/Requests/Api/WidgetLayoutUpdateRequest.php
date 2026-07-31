@@ -7,7 +7,7 @@ use Illuminate\Validation\Rule;
 
 class WidgetLayoutUpdateRequest extends FormRequest
 {
-    private const ALLOWED_WIDGETS = ['softphone', 'quick_form'];
+    private const ALLOWED_WIDGETS = ['softphone', 'quick_form', 'workspace'];
 
     public function authorize(): bool
     {
@@ -35,6 +35,7 @@ class WidgetLayoutUpdateRequest extends FormRequest
             'layout.z' => ['nullable', 'integer', 'min:1', 'max:999'],
             'layout.formType' => ['nullable', 'string', 'max:100'],
             'layout.campaign' => ['nullable', 'string', 'max:100'],
+            'layout.splitScreen' => ['nullable', 'boolean'],
         ];
     }
 }

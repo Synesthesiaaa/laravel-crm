@@ -2,6 +2,7 @@ import './bootstrap';
 import './echo';
 import './components';
 import './vicidial-session';
+import './widgets/workspace';
 import './phone-widget';
 import './quick-form-widget';
 import './soft-navigate';

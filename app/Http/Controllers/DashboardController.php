@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\CampaignService;
+use App\Services\DashboardLayoutService;
 use App\Services\DashboardStatsService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -13,6 +14,7 @@ class DashboardController extends Controller
     public function __construct(
         protected CampaignService $campaignService,
         protected DashboardStatsService $dashboardStats,
+        protected DashboardLayoutService $dashboardLayoutService,
     ) {}
 
     public function index(Request $request): View
@@ -47,6 +49,7 @@ class DashboardController extends Controller
             'weeklyActivity' => $weeklyActivity,
             'monthlyActivity' => $monthlyActivity,
             'agentLeaderboard' => $kpis['agent_leaderboard'] ?? [],
+            'dashboardLayout' => $this->dashboardLayoutService->getForCampaign($campaign),
         ]);
     }
 

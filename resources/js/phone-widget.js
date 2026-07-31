@@ -2,6 +2,7 @@ import {
     createLayoutPersistence,
     maxShellHeightForFabStack,
 } from './widgets/layout-manager';
+import { isSplitViewport, splitWorkspaceGeometry } from './widgets/workspace';
 
 const HEADER_CHROME_HEIGHT = 40;
 const SPLITTER_HEIGHT = 8;
@@ -65,6 +66,10 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         controlsHeight: defaultControlsHeight,
         isResizing: false,
         isSplitterResizing: false,
+        splitScreen: false,
+        preSplitOpen: false,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
         bounds,
         sessionControls: boot.sessionControls !== false,
 
@@ -128,6 +133,15 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         },
 
         get shellStyle() {
+            if (this.isSplitActive()) {
+                return {
+                    width: '100%',
+                    maxWidth: '100%',
+                    height: '100%',
+                    maxHeight: '100%',
+                };
+            }
+
             if (!this.open) {
                 return {
                     width: '1px',
@@ -145,6 +159,44 @@ window.phoneWidget = function phoneWidget(boot = {}) {
                 height: `${this.height}px`,
                 maxHeight: `${this.height}px`,
             };
+        },
+
+        get rootStyle() {
+            if (!this.isSplitActive()) {
+                return {};
+            }
+
+            const geometry = splitWorkspaceGeometry(this.viewportWidth, this.viewportHeight).left;
+
+            return {
+                left: `${geometry.left}px`,
+                top: `${geometry.top}px`,
+                right: 'auto',
+                bottom: 'auto',
+                width: `${geometry.width}px`,
+                height: `${geometry.height}px`,
+                zIndex: '50',
+            };
+        },
+
+        isSplitActive() {
+            return this.splitScreen && isSplitViewport(this.viewportWidth);
+        },
+
+        toggleSplitScreen() {
+            window.crmWidgetWorkspace?.toggle?.();
+        },
+
+        _onWorkspaceChange(event) {
+            const next = event.detail?.splitScreen === true;
+
+            if (next && !this.splitScreen) {
+                this.preSplitOpen = this.open;
+            }
+
+            this.splitScreen = next;
+            this.open = next ? true : this.preSplitOpen;
+            this.onWindowResize();
         },
 
         get controlsPanelStyle() {
@@ -272,6 +324,8 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         },
 
         onWindowResize() {
+            this.viewportWidth = window.innerWidth;
+            this.viewportHeight = window.innerHeight;
             const nextSize = this.clampShellDimensions(this.width, this.height);
             this.width = nextSize.width;
             this.height = nextSize.height;
@@ -349,7 +403,10 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             this.controlsHeight = this.clampControlsHeight(this.controlsHeight, this.height);
             window.addEventListener('vicidial-ws-phase', this._onWsPhase.bind(this));
             window.addEventListener('telephony-shortcut-pause', this._pauseShortcut.bind(this));
+            window.addEventListener('crm-widget-workspace', this._onWorkspaceChange.bind(this));
             window.addEventListener('resize', this.onWindowResize.bind(this));
+            this.splitScreen = window.crmWidgetWorkspace?.isSplitScreen?.() === true;
+            this.open = this.splitScreen ? true : this.open;
             this.onWindowResize();
             await persistence.load();
 

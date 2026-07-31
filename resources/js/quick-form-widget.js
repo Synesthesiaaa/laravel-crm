@@ -2,6 +2,7 @@ import {
     createLayoutPersistence,
     defaultQuickFormPosition,
 } from './widgets/layout-manager';
+import { isSplitViewport, splitWorkspaceGeometry } from './widgets/workspace';
 
 const FORM_ROUTE_PATTERN = /\/forms\/([^/?#]+)/i;
 const ICON_GAP_PX = 8;
@@ -37,6 +38,10 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         height: defaultHeight,
         isDragging: false,
         isResizing: false,
+        splitScreen: false,
+        preSplitOpen: false,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
         suppressToggleClick: false,
         bounds,
         loading: false,
@@ -48,6 +53,18 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         currentFormType: boot.current_form_type || null,
 
         get widgetStyle() {
+            if (this.isSplitActive()) {
+                const geometry = splitWorkspaceGeometry(this.viewportWidth, this.viewportHeight).right;
+
+                return {
+                    left: `${geometry.left}px`,
+                    top: `${geometry.top}px`,
+                    width: `${geometry.width}px`,
+                    height: `${geometry.height}px`,
+                    zIndex: '50',
+                };
+            }
+
             return {
                 left: `${this.x}px`,
                 top: `${this.y}px`,
@@ -55,6 +72,18 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         },
 
         get shellStyle() {
+            if (this.isSplitActive()) {
+                return {
+                    position: 'static',
+                    left: 'auto',
+                    top: 'auto',
+                    right: 'auto',
+                    bottom: 'auto',
+                    width: '100%',
+                    height: '100%',
+                };
+            }
+
             if (!this.open) {
                 return {
                     width: '1px',
@@ -70,6 +99,26 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
                 width: `${this.width}px`,
                 height: `${this.height}px`,
             };
+        },
+
+        isSplitActive() {
+            return this.splitScreen && isSplitViewport(this.viewportWidth);
+        },
+
+        toggleSplitScreen() {
+            window.crmWidgetWorkspace?.toggle?.();
+        },
+
+        _onWorkspaceChange(event) {
+            const next = event.detail?.splitScreen === true;
+
+            if (next && !this.splitScreen) {
+                this.preSplitOpen = this.open;
+            }
+
+            this.splitScreen = next;
+            this.open = next ? true : this.preSplitOpen;
+            this.onWindowResize();
         },
 
         applyLayout(layout) {
@@ -363,6 +412,8 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         },
 
         onWindowResize() {
+            this.viewportWidth = window.innerWidth;
+            this.viewportHeight = window.innerHeight;
             const anchor = this.clampAnchorPosition(this.x, this.y);
             this.x = anchor.x;
             this.y = anchor.y;
@@ -409,7 +460,10 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
 
         async init() {
             widgetCtx = this;
+            window.addEventListener('crm-widget-workspace', this._onWorkspaceChange.bind(this));
             window.addEventListener('resize', this.onWindowResize.bind(this));
+            this.splitScreen = window.crmWidgetWorkspace?.isSplitScreen?.() === true;
+            this.open = this.splitScreen ? true : this.open;
             window.addEventListener('soft-navigate', (event) => {
                 const switched = this.syncFromUrl(event?.detail?.url || window.location.href);
                 if (!switched && !this.frameSrc) {
