@@ -38,3 +38,12 @@ The split-view preference MUST be stored through the authenticated widget-layout
 
 - **WHEN** the workspace layout request fails or contains invalid data
 - **THEN** the widgets use their normal local defaults and the Vicidial session controls remain usable
+
+### Requirement: Quick Form can switch active campaign forms inside the workspace
+
+The Quick Form widget MUST provide a selector for active forms in the current campaign and MUST change only its own iframe when a valid form is selected.
+
+#### Scenario: User changes forms while split view is active
+
+- **WHEN** a user selects another active form from the Quick Form selector in split view
+- **THEN** the Quick Form iframe SHALL load the selected form while the Vicidial iframe, session state, parent URL, and split layout remain unchanged

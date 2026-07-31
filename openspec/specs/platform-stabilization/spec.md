@@ -32,6 +32,10 @@ The system SHALL destroy and recreate page-scoped chart and widget instances whe
 - **WHEN** a user switches the selected Data Master form through a marked GET form
 - **THEN** the global phone widget SHALL remain mounted with its current iframe URL and session state
 
+#### Scenario: Quick Form selector changes while Vicidial is active
+- **WHEN** a user selects another active form from the Quick Form widget
+- **THEN** only the Quick Form iframe SHALL change and the global phone widget SHALL remain mounted with its current iframe URL and session state
+
 ### Requirement: Softphone campaign selection is resolved outside the widget
 The system SHALL resolve the Vicidial campaign used by the floating softphone widget from the existing campaign source chain and SHALL NOT expose a widget-side campaign selector, allowed-campaign list, or widget-specific campaign preference. The system SHALL keep the CRM campaign value separate and SHALL NOT require CRM campaign equality as a condition for softphone connection.
 

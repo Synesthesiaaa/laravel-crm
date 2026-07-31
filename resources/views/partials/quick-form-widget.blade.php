@@ -42,7 +42,20 @@
                         title="Drag widget">
                     <x-icon name="bars-3" class="w-3.5 h-3.5" />
                 </button>
-                <span class="text-xs font-semibold text-[var(--color-on-surface)] truncate">Quick Form</span>
+                <span x-show="formOptions.length === 0"
+                      class="text-xs font-semibold text-[var(--color-on-surface)] truncate">Quick Form</span>
+                <label for="quick-form-selector" class="sr-only">Quick form selection</label>
+                <select id="quick-form-selector"
+                        x-show="formOptions.length > 0"
+                        aria-label="Quick form selection"
+                        class="form-select min-w-0 max-w-[12rem] text-xs py-1"
+                        :value="currentFormType || ''"
+                        @change="selectForm($event.target.value)"
+                        :disabled="formsLoading || formOptions.length === 0">
+                    <template x-for="option in formOptions" :key="option.type">
+                        <option :value="option.type" x-text="option.name"></option>
+                    </template>
+                </select>
             </div>
             <div class="flex items-center gap-1 shrink-0">
                 <button type="button"

@@ -29,7 +29,7 @@
 **Interfaces:**
 - The authenticated `GET /api/forms/quick/bootstrap` response keeps all existing fields and adds `forms: list<array{type: string, name: string}>`.
 
-- [ ] **Step 1: Add the failing API assertion**
+- [x] **Step 1: Add the failing API assertion**
 
 Extend `test_bootstrap_returns_active_campaign_first_form` with:
 
@@ -40,7 +40,7 @@ Extend `test_bootstrap_returns_active_campaign_first_form` with:
 ]);
 ```
 
-- [ ] **Step 2: Run the focused test and confirm it fails**
+- [x] **Step 2: Run the focused test and confirm it fails**
 
 Run:
 
@@ -50,7 +50,7 @@ php artisan test --compact tests/Feature/Api/QuickFormBootstrapApiTest.php --fil
 
 Expected: failure because the bootstrap response does not yet contain `forms`.
 
-- [ ] **Step 3: Return normalized active-form options**
+- [x] **Step 3: Return normalized active-form options**
 
 In `QuickFormController::bootstrap`, map `$forms` in configuration order, keep only non-empty string keys, and return each option as:
 
@@ -60,11 +60,11 @@ In `QuickFormController::bootstrap`, map `$forms` in configuration order, keep o
 
 Keep the existing first-form fields and 422 response unchanged.
 
-- [ ] **Step 4: Run the API test and confirm it passes**
+- [x] **Step 4: Run the API test and confirm it passes**
 
 Run the same focused PHPUnit command. Expected: PASS.
 
-- [ ] **Step 5: Commit the API slice**
+- [x] **Step 5: Commit the API slice**
 
 ```bash
 git add app/Http/Controllers/Api/QuickFormController.php tests/Feature/Api/QuickFormBootstrapApiTest.php
@@ -81,7 +81,7 @@ git commit -m "feat: expose quick form options"
 - `normalizeQuickFormOptions(forms: unknown): Array<{type: string, name: string}>`
 - `hasQuickFormOption(options: Array<{type: string, name: string}>, formType: unknown): boolean`
 
-- [ ] **Step 1: Write failing Node tests**
+- [x] **Step 1: Write failing Node tests**
 
 Add tests for valid options, fallback labels, duplicate/invalid entries, and selection validation:
 
@@ -105,7 +105,7 @@ test('accepts only loaded form types', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+- [x] **Step 2: Run the tests and confirm they fail**
 
 Run:
 
@@ -115,11 +115,11 @@ node --test tests/JavaScript/widgets/quick-form-options.test.js
 
 Expected: module-not-found or missing-export failure.
 
-- [ ] **Step 3: Implement the pure utility**
+- [x] **Step 3: Implement the pure utility**
 
 Normalize only object entries with non-empty string `type`; use `name` when it is a non-empty string and otherwise use the form type; preserve first occurrence order and remove duplicate types. `hasQuickFormOption` must require an exact string type match.
 
-- [ ] **Step 4: Run the Node tests and confirm they pass**
+- [x] **Step 4: Run the Node tests and confirm they pass**
 
 Run the same command. Expected: PASS.
 
@@ -134,11 +134,11 @@ Run the same command. Expected: PASS.
 - Quick Form state adds `formOptions`, `formsLoading`, and `loadFormOptions()`.
 - `selectForm(formType: string): void` ignores types not in `formOptions`; valid types call `syncFrameSrc(formType, currentCampaign, { force: true })`.
 
-- [ ] **Step 1: Add view assertions for the selector contract**
+- [x] **Step 1: Add view assertions for the selector contract**
 
 Render an authenticated form page and assert the response contains the Quick Form selector label, `formOptions`, and `selectForm($event.target.value)` bindings without changing the form page submission hooks.
 
-- [ ] **Step 2: Run the view test and confirm it fails**
+- [x] **Step 2: Run the view test and confirm it fails**
 
 Run:
 
@@ -148,7 +148,7 @@ php artisan test --compact tests/Feature/FormShowViewRenderTest.php
 
 Expected: failure because the Quick Form partial has no form selector.
 
-- [ ] **Step 3: Load metadata without replacing an existing current frame**
+- [x] **Step 3: Load metadata without replacing an existing current frame**
 
 Import the pure option helpers. Add state:
 
@@ -159,7 +159,7 @@ formsLoading: false,
 
 Implement `loadFormOptions()` to GET `/api/forms/quick/bootstrap`, normalize `data.forms`, set `currentCampaign` from `data.campaign` only when unset, and keep the existing `frameSrc`/current form when a current form is already active. If there is no current form, reuse the existing first-form bootstrap URL path. On failure, retain the existing frame and expose no selectable options.
 
-- [ ] **Step 4: Implement guarded selection**
+- [x] **Step 4: Implement guarded selection**
 
 Add:
 
@@ -176,11 +176,11 @@ selectForm(formType) {
 
 Call `loadFormOptions()` during `init()` for both dashboard pages and form pages. Do not call `persistLayout()` from `selectForm()`.
 
-- [ ] **Step 5: Render the selector in the Quick Form header**
+- [x] **Step 5: Render the selector in the Quick Form header**
 
 Replace the static `Quick Form` title with a compact labeled `<select>` that loops over `formOptions`, binds its value to `currentFormType`, invokes `selectForm($event.target.value)`, and is disabled while `formsLoading` or when no options exist. Keep the Split view and minimize controls in the same header.
 
-- [ ] **Step 6: Run the view and widget tests**
+- [x] **Step 6: Run the view and widget tests**
 
 Run:
 
@@ -191,7 +191,7 @@ node --test tests/JavaScript/widgets/*.test.js
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit the widget slice**
+- [x] **Step 7: Commit the widget slice**
 
 ```bash
 git add resources/js/widgets/quick-form-options.js resources/js/quick-form-widget.js resources/views/partials/quick-form-widget.blade.php tests/JavaScript/widgets/quick-form-options.test.js tests/Feature/FormShowViewRenderTest.php
@@ -212,11 +212,11 @@ git commit -m "feat: add quick form widget selector"
 - No new persistence key, route, or database table.
 - Existing `crm-widget-workspace` event and `window.crmWidgetWorkspace` API remain unchanged.
 
-- [ ] **Step 1: Add the OpenSpec selector requirement and tasks**
+- [x] **Step 1: Add the OpenSpec selector requirement and tasks**
 
 Document that active current-campaign forms are selectable inside the persistent Quick Form panel and that changing the selection preserves Vicidial and split state.
 
-- [ ] **Step 2: Run the production frontend build**
+- [x] **Step 2: Run the production frontend build**
 
 ```bash
 npm run build
@@ -224,7 +224,7 @@ npm run build
 
 Expected: Vite completes successfully.
 
-- [ ] **Step 3: Run the complete automated regression set**
+- [x] **Step 3: Run the complete automated regression set**
 
 ```bash
 php artisan test --compact
@@ -235,7 +235,7 @@ git diff --check
 
 Expected: all tests pass, Pint reports pass or formatted files, and diff check is clean.
 
-- [ ] **Step 4: Verify the browser flow**
+- [x] **Step 4: Verify the browser flow**
 
 With a campaign containing at least two active forms:
 
@@ -246,7 +246,7 @@ With a campaign containing at least two active forms:
 5. Assert `window.crmWidgetWorkspace.isSplitScreen()` remains true and `#phone-widget-root` remains mounted.
 6. If the bootstrap request fails, assert the existing iframe remains visible and the selector is disabled.
 
-- [ ] **Step 5: Validate and sync OpenSpec**
+- [x] **Step 5: Validate and sync OpenSpec**
 
 ```bash
 openspec validate data-master-vicidial-workspace-dashboard --type change --strict --no-interactive --json

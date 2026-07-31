@@ -56,6 +56,9 @@ class FormShowViewRenderTest extends TestCase
         $this->assertStringContainsString('x-bind:disabled="!isVisible(', $html);
         $this->assertStringContainsString('x-data="formVisibility({ submitting: false, autosave: true })"', $html);
         $this->assertStringContainsString('@submit.prevent="submitForm()"', $html);
+        $this->assertStringContainsString('aria-label="Quick form selection"', $html);
+        $this->assertStringContainsString('formOptions', $html);
+        $this->assertStringContainsString('selectForm($event.target.value)', $html);
         $this->assertStringContainsString('data-user-id="'.$user->id.'"', $html);
         $this->assertStringContainsString('data-campaign="mbsales"', $html);
     }

@@ -2,6 +2,10 @@ import {
     createLayoutPersistence,
     defaultQuickFormPosition,
 } from './widgets/layout-manager';
+import {
+    hasQuickFormOption,
+    normalizeQuickFormOptions,
+} from './widgets/quick-form-options.js';
 import { isSplitViewport, splitWorkspaceGeometry } from './widgets/workspace';
 
 const FORM_ROUTE_PATTERN = /\/forms\/([^/?#]+)/i;
@@ -46,6 +50,8 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         bounds,
         loading: false,
         error: null,
+        formOptions: normalizeQuickFormOptions(boot.forms),
+        formsLoading: false,
         frameSrc: boot.current_form_url || null,
         frameKey: 0,
         refreshOnOpen: false,
@@ -244,6 +250,36 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
             return true;
         },
 
+        selectForm(formType) {
+            if (!hasQuickFormOption(this.formOptions, formType) || !this.currentCampaign) {
+                return;
+            }
+
+            this.open = true;
+            this.syncFrameSrc(formType, this.currentCampaign, { force: true });
+        },
+
+        async loadFormOptions() {
+            this.formsLoading = true;
+
+            try {
+                const { data } = await window.axios.get('/api/forms/quick/bootstrap');
+                this.formOptions = normalizeQuickFormOptions(data?.forms);
+
+                if (!this.currentCampaign && typeof data?.campaign === 'string') {
+                    this.currentCampaign = data.campaign;
+                }
+
+                return data;
+            } catch (_) {
+                this.formOptions = [];
+
+                return null;
+            } finally {
+                this.formsLoading = false;
+            }
+        },
+
         syncFromUrl(rawUrl) {
             let url;
             try {
@@ -424,38 +460,36 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         },
 
         async resolveDefaultSource() {
-            if (boot.current_form_url) {
-                const synced = this.syncFrameSrc(
-                    boot.current_form_type || this.currentFormType,
-                    boot.current_campaign || this.currentCampaign || 'mbsales',
-                    { force: true },
-                );
-                if (!synced) {
-                    this.frameKey += 1;
-                    this.frameSrc = `${boot.current_form_url}${boot.current_form_url.includes('?') ? '&' : '?'}_wfs=${this.frameKey}`;
-                }
+            const hasCurrentFrame = Boolean(this.frameSrc && this.currentFormType && this.currentCampaign);
+
+            if (!hasCurrentFrame) {
+                this.loading = true;
                 this.error = null;
+            }
+
+            const data = await this.loadFormOptions();
+
+            if (hasCurrentFrame) {
                 return;
             }
 
-            this.loading = true;
-            this.error = null;
-            try {
-                const { data } = await window.axios.get('/api/forms/quick/bootstrap');
-                if (!data?.success || !data?.form_url) {
-                    this.error = data?.message || 'Unable to resolve quick form source.';
-                    return;
-                }
-                const synced = this.syncFrameSrc(data.form_type, data.campaign, { force: true });
-                if (!synced) {
-                    this.frameKey += 1;
-                    this.frameSrc = `${data.form_url}${data.form_url.includes('?') ? '&' : '?'}_wfs=${this.frameKey}`;
-                }
-            } catch (error) {
-                this.error = error?.response?.data?.message || 'Unable to load quick form.';
-            } finally {
+            if (!data?.success || !data?.form_url) {
+                this.error = data?.message || 'Unable to resolve quick form source.';
                 this.loading = false;
+                return;
             }
+
+            const defaultFormType = hasQuickFormOption(this.formOptions, data.form_type)
+                ? data.form_type
+                : this.formOptions[0]?.type;
+            const synced = this.syncFrameSrc(defaultFormType, data.campaign, { force: true });
+
+            if (!synced) {
+                this.frameKey += 1;
+                this.frameSrc = `${data.form_url}${data.form_url.includes('?') ? '&' : '?'}_wfs=${this.frameKey}`;
+            }
+
+            this.loading = false;
         },
 
         async init() {
@@ -465,9 +499,15 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
             this.splitScreen = window.crmWidgetWorkspace?.isSplitScreen?.() === true;
             this.open = this.splitScreen ? true : this.open;
             window.addEventListener('soft-navigate', (event) => {
+                const previousCampaign = this.currentCampaign;
                 const switched = this.syncFromUrl(event?.detail?.url || window.location.href);
+
+                if (switched && previousCampaign !== this.currentCampaign) {
+                    void this.loadFormOptions();
+                }
+
                 if (!switched && !this.frameSrc) {
-                    this.resolveDefaultSource();
+                    void this.resolveDefaultSource();
                 }
             });
             document.addEventListener('click', (event) => {
@@ -478,10 +518,8 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
             }, true);
             this.onWindowResize();
             await persistence.load();
-            const switched = this.syncFromUrl(window.location.href);
-            if (!switched) {
-                await this.resolveDefaultSource();
-            }
+            this.syncFromUrl(window.location.href);
+            await this.resolveDefaultSource();
         },
     };
 };

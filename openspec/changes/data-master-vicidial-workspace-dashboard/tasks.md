@@ -27,3 +27,10 @@
 - [x] 4.2 Use Playwright to verify Data Master form switching/search, split view at desktop/mobile sizes, and admin-to-user dashboard publication.
 - [x] 4.3 Run the supported OpenSpec validation command and sync the completed delta specs.
 - [x] 4.4 Review the final diff and report exact tests, browser checks, assumptions, and any unverified external Vicidial behavior.
+
+## 5. Quick Form widget form selector
+
+- [x] 5.1 Extend the authenticated Quick Form bootstrap response with active current-campaign form options and cover the response contract with PHPUnit.
+- [x] 5.2 Add pure JavaScript normalization and selection guards for malformed or unavailable form options.
+- [x] 5.3 Add the Quick Form selector UI and switch only the Quick Form iframe source while preserving the Vicidial iframe and split-workspace state.
+- [x] 5.4 Verify the selector in normal and split views with focused tests, the Vite build, and browser interaction checks.
