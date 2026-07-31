@@ -28,6 +28,19 @@ class QuickFormController extends Controller
 
         $firstType = (string) array_key_first($forms);
         $firstConfig = (array) ($forms[$firstType] ?? []);
+        $formOptions = [];
+
+        foreach ($forms as $formType => $formConfig) {
+            if (! is_string($formType) || trim($formType) === '') {
+                continue;
+            }
+
+            $formConfig = (array) $formConfig;
+            $formOptions[] = [
+                'type' => $formType,
+                'name' => (string) ($formConfig['name'] ?? $formType),
+            ];
+        }
 
         return response()->json([
             'success' => true,
@@ -36,6 +49,7 @@ class QuickFormController extends Controller
             'form_type' => $firstType,
             'form_name' => (string) ($firstConfig['name'] ?? $firstType),
             'form_url' => route('forms.show', ['type' => $firstType, 'campaign' => $campaign, 'widget_embed' => 1]),
+            'forms' => $formOptions,
         ]);
     }
 }

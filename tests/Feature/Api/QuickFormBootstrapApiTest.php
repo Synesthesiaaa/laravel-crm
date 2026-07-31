@@ -57,6 +57,10 @@ class QuickFormBootstrapApiTest extends TestCase
             ->assertJsonPath('campaign', 'mbsales')
             ->assertJsonPath('form_type', 'verification')
             ->assertJsonPath('form_name', 'Verification')
+            ->assertJsonPath('forms', [
+                ['type' => 'verification', 'name' => 'Verification'],
+                ['type' => 'disposition', 'name' => 'Disposition'],
+            ])
             ->assertJsonPath('form_url', route('forms.show', [
                 'type' => 'verification',
                 'campaign' => 'mbsales',
