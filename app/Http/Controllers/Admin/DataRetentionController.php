@@ -20,6 +20,10 @@ class DataRetentionController extends Controller
             ['form_id' => $validated['form_id']],
             [
                 'cutoff_date' => $validated['cutoff_date'],
+                'deletion_mode' => $validated['deletion_mode'],
+                'selected_fields' => $validated['deletion_mode'] === 'selected_fields'
+                    ? array_values($validated['selected_fields'])
+                    : null,
                 'is_active' => $isActive,
             ],
         );

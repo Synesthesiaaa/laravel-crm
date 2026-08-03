@@ -2,7 +2,7 @@
 
 - [x] 1.1 Add `deletion_mode` and nullable `selected_fields` columns to the retention policy migration with backward-compatible defaults.
 - [x] 1.2 Add model fillable attributes, casts, and test coverage for whole-record and selected-field policy persistence.
-- [ ] 1.3 Extend the retention form request and controller tests for mode validation, eligible field validation, policy upsert, and clearing selections when switching to whole-record mode.
+- [x] 1.3 Extend the retention form request and controller tests for mode validation, eligible field validation, policy upsert, and clearing selections when switching to whole-record mode.
 
 ## 2. Type-safe scheduled cleanup
 

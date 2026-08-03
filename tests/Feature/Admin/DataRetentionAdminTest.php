@@ -5,6 +5,7 @@ namespace Tests\Feature\Admin;
 use App\Models\Campaign;
 use App\Models\DataRetentionPolicy;
 use App\Models\Form;
+use App\Models\FormField;
 use App\Models\User;
 use App\Services\CampaignService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -81,6 +82,7 @@ class DataRetentionAdminTest extends TestCase
             ->post(route('admin.configuration.retention.store'), [
                 'form_id' => $form->id,
                 'cutoff_date' => '2026-01-31',
+                'deletion_mode' => 'whole_record',
             ])
             ->assertRedirect(route('admin.configuration', [
                 'tab' => 'retention',
@@ -96,6 +98,7 @@ class DataRetentionAdminTest extends TestCase
             ->post(route('admin.configuration.retention.store'), [
                 'form_id' => $form->id,
                 'cutoff_date' => '2026-02-28',
+                'deletion_mode' => 'whole_record',
                 'is_active' => true,
             ])
             ->assertRedirect();
@@ -112,6 +115,82 @@ class DataRetentionAdminTest extends TestCase
         $this->assertFalse($policy->fresh()->is_active);
     }
 
+    public function test_super_admin_can_create_selected_field_policy_and_clear_selection_when_switching_mode(): void
+    {
+        $form = $this->createForm();
+        $this->createField($form, 'cardholder_name');
+        $this->createField($form, 'account_number');
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.configuration.retention.store'), [
+                'form_id' => $form->id,
+                'cutoff_date' => '2026-01-31',
+                'deletion_mode' => 'selected_fields',
+                'selected_fields' => ['cardholder_name', 'account_number'],
+            ])
+            ->assertRedirect();
+
+        $policy = DataRetentionPolicy::query()->firstOrFail();
+        $this->assertSame('selected_fields', $policy->deletion_mode);
+        $this->assertSame(['cardholder_name', 'account_number'], $policy->selected_fields);
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.configuration.retention.store'), [
+                'form_id' => $form->id,
+                'cutoff_date' => '2026-02-28',
+                'deletion_mode' => 'whole_record',
+            ])
+            ->assertRedirect();
+
+        $policy->refresh();
+        $this->assertSame('whole_record', $policy->deletion_mode);
+        $this->assertNull($policy->selected_fields);
+    }
+
+    public function test_selected_field_policy_requires_eligible_fields_for_the_selected_form(): void
+    {
+        $form = $this->createForm();
+        $otherForm = $this->createForm([
+            'form_code' => 'ezyconvert',
+            'name' => 'EzyConvert',
+            'table_name' => 'ezyconvert',
+        ]);
+        $this->createField($form, 'cardholder_name');
+        $this->createField($otherForm, 'rate');
+
+        $this->actingAs($this->superAdmin)
+            ->from(route('admin.configuration', ['tab' => 'retention']))
+            ->post(route('admin.configuration.retention.store'), [
+                'form_id' => $form->id,
+                'cutoff_date' => '2026-01-31',
+                'deletion_mode' => 'selected_fields',
+                'selected_fields' => [],
+            ])
+            ->assertSessionHasErrors('selected_fields');
+
+        $this->actingAs($this->superAdmin)
+            ->from(route('admin.configuration', ['tab' => 'retention']))
+            ->post(route('admin.configuration.retention.store'), [
+                'form_id' => $form->id,
+                'cutoff_date' => '2026-01-31',
+                'deletion_mode' => 'selected_fields',
+                'selected_fields' => ['rate'],
+            ])
+            ->assertSessionHasErrors('selected_fields');
+
+        $this->actingAs($this->superAdmin)
+            ->from(route('admin.configuration', ['tab' => 'retention']))
+            ->post(route('admin.configuration.retention.store'), [
+                'form_id' => $form->id,
+                'cutoff_date' => '2026-01-31',
+                'deletion_mode' => 'selected_fields',
+                'selected_fields' => ['date'],
+            ])
+            ->assertSessionHasErrors('selected_fields');
+
+        $this->assertDatabaseCount('data_retention_policies', 0);
+    }
+
     /**
      * @param  array<string, mixed>  $overrides
      */
@@ -124,5 +203,17 @@ class DataRetentionAdminTest extends TestCase
             'table_name' => 'ezycash',
             'is_active' => true,
         ], $overrides));
+    }
+
+    private function createField(Form $form, string $fieldName): FormField
+    {
+        return FormField::query()->create([
+            'campaign_code' => $form->campaign_code,
+            'form_type' => $form->form_code,
+            'field_name' => $fieldName,
+            'field_label' => str_replace('_', ' ', ucfirst($fieldName)),
+            'field_type' => 'text',
+            'field_order' => 1,
+        ]);
     }
 }
