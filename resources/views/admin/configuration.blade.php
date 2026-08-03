@@ -11,7 +11,7 @@
 <div class="md-card">
     <div class="flex gap-2 p-4 border-b border-[var(--color-border)]">
         <a href="?tab=general"
-           class="{{ !in_array(($tab ?? ''), ['disposition', 'telephony', 'diagnostics'], true) ? 'btn-primary' : 'btn-secondary' }} text-sm">
+           class="{{ !in_array(($tab ?? ''), ['disposition', 'telephony', 'diagnostics', 'retention'], true) ? 'btn-primary' : 'btn-secondary' }} text-sm">
             General
         </a>
         <a href="?tab=disposition"
@@ -25,6 +25,10 @@
         <a href="?tab=diagnostics"
            class="{{ ($tab ?? '') === 'diagnostics' ? 'btn-primary' : 'btn-secondary' }} text-sm">
             Diagnostics
+        </a>
+        <a href="?tab=retention"
+           class="{{ ($tab ?? '') === 'retention' ? 'btn-primary' : 'btn-secondary' }} text-sm">
+            Data Retention
         </a>
     </div>
     <div class="p-6">
@@ -161,6 +165,109 @@
                         </template>
                     </div>
                 </template>
+            </div>
+        @elseif(($tab ?? '') === 'retention')
+            @php
+                $selectedRetentionForm = collect($retentionForms ?? [])->firstWhere('id', (int) ($selectedRetentionFormId ?? 0));
+                $selectedRetentionPolicy = $selectedRetentionForm?->retentionPolicy;
+                $retentionCutoffDate = old('cutoff_date', $selectedRetentionPolicy?->cutoff_date?->format('Y-m-d') ?? '');
+                $retentionIsActive = old('is_active', $selectedRetentionPolicy?->is_active ?? true);
+            @endphp
+
+            <div class="space-y-6">
+                <x-alert type="warning" title="Permanent deletion">
+                    Retention cleanup permanently deletes complete records from the selected form when their record date is on or before the configured cutoff date. This cannot be undone.
+                </x-alert>
+
+                <form method="GET" action="{{ route('admin.configuration') }}" class="md-card md-card--static">
+                    <input type="hidden" name="tab" value="retention">
+                    <div class="p-4">
+                        <div class="form-field max-w-xl">
+                            <label class="form-label" for="retention-form-filter">Form</label>
+                            <select id="retention-form-filter" name="retention_form" class="form-select" @change="$el.form.submit()">
+                                @forelse($retentionForms ?? [] as $retentionForm)
+                                    <option value="{{ $retentionForm->id }}" @selected((int) $selectedRetentionFormId === $retentionForm->id)>
+                                        {{ $retentionForm->campaign_code }} — {{ $retentionForm->name }}
+                                    </option>
+                                @empty
+                                    <option value="">No active forms configured</option>
+                                @endforelse
+                            </select>
+                        </div>
+                    </div>
+                </form>
+
+                @if($selectedRetentionForm)
+                    <form method="POST" action="{{ route('admin.configuration.retention.store') }}" class="space-y-4">
+                        @csrf
+                        <input type="hidden" name="form_id" value="{{ $selectedRetentionForm->id }}">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div class="form-field">
+                                <label class="form-label" for="retention-cutoff-date">Delete records dated on or before</label>
+                                <input id="retention-cutoff-date" type="date" name="cutoff_date" value="{{ $retentionCutoffDate }}" class="form-input @error('cutoff_date') error @enderror" required>
+                                @error('cutoff_date')<p class="form-error">{{ $message }}</p>@enderror
+                            </div>
+                            <div class="form-field flex items-end pb-1">
+                                <label class="checkbox-row">
+                                    <input type="checkbox" name="is_active" value="1" @checked($retentionIsActive)>
+                                    <span>Active automatic cleanup</span>
+                                </label>
+                            </div>
+                        </div>
+                        @error('form_id')<p class="form-error">{{ $message }}</p>@enderror
+                        <div>
+                            <button type="submit" class="btn-primary">Save Retention Policy</button>
+                        </div>
+                    </form>
+                @endif
+
+                <div>
+                    <h3 class="text-sm font-semibold text-[var(--color-on-surface)] mb-3">Configured policies</h3>
+                    <x-table.index caption="Configured data retention policies">
+                        <x-table.head :columns="[
+                            ['label' => 'Campaign'],
+                            ['label' => 'Form'],
+                            ['label' => 'Storage table'],
+                            ['label' => 'Cutoff date'],
+                            ['label' => 'Status'],
+                            ['label' => 'Last run'],
+                            ['label' => 'Deleted'],
+                            ['label' => 'Actions', 'align' => 'right'],
+                        ]" />
+                        <tbody>
+                            @forelse($retentionPolicies ?? [] as $policy)
+                                <tr>
+                                    <td>{{ $policy->form?->campaign?->name ?? $policy->form?->campaign_code ?? '—' }}</td>
+                                    <td>{{ $policy->form?->name ?? 'Form unavailable' }}</td>
+                                    <td class="font-mono text-xs">{{ $policy->form?->table_name ?? '—' }}</td>
+                                    <td>{{ $policy->cutoff_date?->format('Y-m-d') ?? '—' }}</td>
+                                    <td>
+                                        <x-badge :type="$policy->is_active ? 'active' : 'inactive'">
+                                            {{ $policy->is_active ? 'Active' : 'Inactive' }}
+                                        </x-badge>
+                                    </td>
+                                    <td>{{ $policy->last_run_at?->format('Y-m-d H:i') ?? 'Never' }}</td>
+                                    <td>{{ number_format($policy->last_deleted_count) }}</td>
+                                    <td>
+                                        <div class="table-actions justify-end">
+                                            @if($policy->form)
+                                                <a href="{{ route('admin.configuration', ['tab' => 'retention', 'retention_form' => $policy->form_id]) }}" class="btn-secondary text-xs px-2 py-1">Edit</a>
+                                            @endif
+                                            @if($policy->is_active)
+                                                <form method="POST" action="{{ route('admin.configuration.retention.deactivate', $policy) }}">
+                                                    @csrf
+                                                    <button type="submit" class="btn-danger text-xs px-2 py-1">Deactivate</button>
+                                                </form>
+                                            @endif
+                                        </div>
+                                    </td>
+                                </tr>
+                            @empty
+                                <x-table.empty :colspan="8" message="No retention policies configured." description="Choose an active form and cutoff date above to begin." />
+                            @endforelse
+                        </tbody>
+                    </x-table.index>
+                </div>
             </div>
         @else
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">

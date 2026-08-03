@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\DataRetentionPolicy;
+use App\Models\Form;
 use App\Services\CampaignService;
 use App\Services\TelephonyFeatureService;
 use Illuminate\Http\RedirectResponse;
@@ -20,11 +22,28 @@ class ConfigurationController extends Controller
     {
         $tab = $request->query('tab', 'general');
         $campaigns = $this->campaignService->getCampaigns();
+        $retentionForms = Form::query()
+            ->where('is_active', true)
+            ->with('retentionPolicy')
+            ->orderBy('campaign_code')
+            ->orderBy('display_order')
+            ->orderBy('id')
+            ->get();
+        $selectedRetentionFormId = (int) $request->query('retention_form', 0);
+        if (! $retentionForms->contains('id', $selectedRetentionFormId)) {
+            $selectedRetentionFormId = (int) ($retentionForms->first()?->id ?? 0);
+        }
 
         return view('admin.configuration', [
             'tab' => $tab,
             'campaigns' => $campaigns,
             'telephonyFeatures' => $this->telephonyFeatureService->getAll(),
+            'retentionForms' => $retentionForms,
+            'retentionPolicies' => DataRetentionPolicy::query()
+                ->with('form.campaign')
+                ->latest('id')
+                ->get(),
+            'selectedRetentionFormId' => $selectedRetentionFormId,
         ]);
     }
 

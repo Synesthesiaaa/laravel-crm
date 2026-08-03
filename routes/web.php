@@ -169,6 +169,8 @@ Route::middleware(['auth', 'campaign'])->group(function () {
         // Super Admin only
         Route::middleware('role:Super Admin')->group(function () {
             Route::get('configuration', [\App\Http\Controllers\Admin\ConfigurationController::class, 'index'])->name('configuration');
+            Route::post('configuration/retention', [\App\Http\Controllers\Admin\DataRetentionController::class, 'store'])->name('configuration.retention.store');
+            Route::post('configuration/retention/{policy}/deactivate', [\App\Http\Controllers\Admin\DataRetentionController::class, 'deactivate'])->name('configuration.retention.deactivate');
             Route::post('configuration/telephony-features', [\App\Http\Controllers\Admin\ConfigurationController::class, 'updateTelephonyFeatures'])->name('configuration.telephony-features.update');
             Route::post('configuration/telephony-diagnostics', \App\Http\Controllers\Admin\TelephonyDiagnosticsController::class)->name('configuration.telephony-diagnostics');
             Route::get('users', [\App\Http\Controllers\Admin\UsersController::class, 'index'])->name('users.index');
