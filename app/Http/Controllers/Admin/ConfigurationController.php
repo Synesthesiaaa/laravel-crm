@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\DataRetentionPolicy;
 use App\Models\Form;
 use App\Services\CampaignService;
+use App\Services\DataRetentionService;
 use App\Services\TelephonyFeatureService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,6 +17,7 @@ class ConfigurationController extends Controller
     public function __construct(
         protected CampaignService $campaignService,
         protected TelephonyFeatureService $telephonyFeatureService,
+        protected DataRetentionService $dataRetentionService,
     ) {}
 
     public function index(Request $request): View
@@ -29,6 +31,9 @@ class ConfigurationController extends Controller
             ->orderBy('display_order')
             ->orderBy('id')
             ->get();
+        $retentionForms->each(function (Form $form): void {
+            $form->setRelation('formFields', $this->dataRetentionService->eligibleFields($form));
+        });
         $selectedRetentionFormId = (int) $request->query('retention_form', 0);
         if (! $retentionForms->contains('id', $selectedRetentionFormId)) {
             $selectedRetentionFormId = (int) ($retentionForms->first()?->id ?? 0);

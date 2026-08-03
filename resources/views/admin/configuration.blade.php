@@ -172,12 +172,22 @@
                 $selectedRetentionPolicy = $selectedRetentionForm?->retentionPolicy;
                 $retentionCutoffDate = old('cutoff_date', $selectedRetentionPolicy?->cutoff_date?->format('Y-m-d') ?? '');
                 $retentionIsActive = old('is_active', $selectedRetentionPolicy?->is_active ?? true);
+                $retentionDeletionMode = old('deletion_mode', $selectedRetentionPolicy?->deletion_mode ?? 'whole_record');
+                $retentionSelectedFields = old('selected_fields', $selectedRetentionPolicy?->selected_fields ?? []);
+                $retentionSelectedFields = is_array($retentionSelectedFields) ? $retentionSelectedFields : [];
             @endphp
 
-            <div class="space-y-6">
-                <x-alert type="warning" title="Permanent deletion">
-                    Retention cleanup permanently deletes complete records from the selected form when their record date is on or before the configured cutoff date. This cannot be undone.
-                </x-alert>
+            <div class="space-y-6" x-data="{ mode: @js($retentionDeletionMode) }">
+                <div x-show="mode === 'whole_record'" x-cloak>
+                    <x-alert type="warning" title="Permanent deletion">
+                        Retention cleanup permanently deletes complete records from the selected form when their record date is on or before the configured cutoff date. This cannot be undone.
+                    </x-alert>
+                </div>
+                <div x-show="mode === 'selected_fields'" x-cloak>
+                    <x-alert type="warning" title="Permanent field clearing">
+                        Retention cleanup permanently clears the selected field values from records on or before the configured cutoff date. The records and unselected fields are preserved, but cleared values cannot be recovered.
+                    </x-alert>
+                </div>
 
                 <form method="GET" action="{{ route('admin.configuration') }}" class="md-card md-card--static">
                     <input type="hidden" name="tab" value="retention">
@@ -202,6 +212,26 @@
                         @csrf
                         <input type="hidden" name="form_id" value="{{ $selectedRetentionForm->id }}">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div class="form-field sm:col-span-2">
+                                <span class="form-label">Deletion scope</span>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <label class="flex items-start gap-3 rounded-lg border border-[var(--color-border)] p-3 cursor-pointer">
+                                        <input type="radio" name="deletion_mode" value="whole_record" x-model="mode" @checked($retentionDeletionMode === 'whole_record') class="mt-1">
+                                        <span>
+                                            <span class="block text-sm font-medium text-[var(--color-on-surface)]">Delete entire records</span>
+                                            <span class="block text-xs text-[var(--color-on-surface-dim)] mt-1">Remove every field from matching form records.</span>
+                                        </span>
+                                    </label>
+                                    <label class="flex items-start gap-3 rounded-lg border border-[var(--color-border)] p-3 cursor-pointer">
+                                        <input type="radio" name="deletion_mode" value="selected_fields" x-model="mode" @checked($retentionDeletionMode === 'selected_fields') class="mt-1">
+                                        <span>
+                                            <span class="block text-sm font-medium text-[var(--color-on-surface)]">Clear selected fields only</span>
+                                            <span class="block text-xs text-[var(--color-on-surface-dim)] mt-1">Preserve records and all fields that are not selected.</span>
+                                        </span>
+                                    </label>
+                                </div>
+                                @error('deletion_mode')<p class="form-error">{{ $message }}</p>@enderror
+                            </div>
                             <div class="form-field">
                                 <label class="form-label" for="retention-cutoff-date">Delete records dated on or before</label>
                                 <input id="retention-cutoff-date" type="date" name="cutoff_date" value="{{ $retentionCutoffDate }}" class="form-input @error('cutoff_date') error @enderror" required>
@@ -213,6 +243,36 @@
                                     <span>Active automatic cleanup</span>
                                 </label>
                             </div>
+                        </div>
+                        <div x-show="mode === 'selected_fields'" x-cloak class="rounded-lg border border-[var(--color-border)] p-4">
+                            <div class="flex items-start justify-between gap-3 mb-3">
+                                <div>
+                                    <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Fields to clear</h3>
+                                    <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">Choose one or more fields. The record and unselected fields will remain.</p>
+                                </div>
+                                <span class="text-xs text-[var(--color-on-surface-dim)]">{{ $selectedRetentionForm->form_code }}</span>
+                            </div>
+                            @if($selectedRetentionForm->formFields->isNotEmpty())
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                    @foreach($selectedRetentionForm->formFields as $field)
+                                        <label class="flex items-start gap-3 rounded-md border border-[var(--color-border)] p-3 cursor-pointer">
+                                            <input type="checkbox"
+                                                   name="selected_fields[]"
+                                                   value="{{ $field->field_name }}"
+                                                   @checked(in_array($field->field_name, $retentionSelectedFields, true))
+                                                   x-bind:disabled="mode !== 'selected_fields'"
+                                                   class="mt-1 h-4 w-4 rounded border-[var(--color-border)]">
+                                            <span class="min-w-0">
+                                                <span class="block text-sm text-[var(--color-on-surface)]">{{ $field->field_label }}</span>
+                                                <span class="block text-xs font-mono text-[var(--color-on-surface-dim)] truncate">{{ $field->field_name }}</span>
+                                            </span>
+                                        </label>
+                                    @endforeach
+                                </div>
+                            @else
+                                <p class="text-sm text-[var(--color-on-surface-dim)]">No eligible fields are registered for this form.</p>
+                            @endif
+                            @error('selected_fields')<p class="form-error mt-3">{{ $message }}</p>@enderror
                         </div>
                         @error('form_id')<p class="form-error">{{ $message }}</p>@enderror
                         <div>
@@ -228,6 +288,8 @@
                             ['label' => 'Campaign'],
                             ['label' => 'Form'],
                             ['label' => 'Storage table'],
+                            ['label' => 'Deletion scope'],
+                            ['label' => 'Selected fields'],
                             ['label' => 'Cutoff date'],
                             ['label' => 'Status'],
                             ['label' => 'Last run'],
@@ -240,6 +302,8 @@
                                     <td>{{ $policy->form?->campaign?->name ?? $policy->form?->campaign_code ?? '—' }}</td>
                                     <td>{{ $policy->form?->name ?? 'Form unavailable' }}</td>
                                     <td class="font-mono text-xs">{{ $policy->form?->table_name ?? '—' }}</td>
+                                    <td>{{ $policy->deletion_mode === 'selected_fields' ? 'Clear selected fields' : 'Delete entire records' }}</td>
+                                    <td class="max-w-xs text-xs">{{ $policy->selected_fields ? implode(', ', $policy->selected_fields) : '—' }}</td>
                                     <td>{{ $policy->cutoff_date?->format('Y-m-d') ?? '—' }}</td>
                                     <td>
                                         <x-badge :type="$policy->is_active ? 'active' : 'inactive'">
@@ -263,7 +327,7 @@
                                     </td>
                                 </tr>
                             @empty
-                                <x-table.empty :colspan="8" message="No retention policies configured." description="Choose an active form and cutoff date above to begin." />
+                                <x-table.empty :colspan="10" message="No retention policies configured." description="Choose an active form and cutoff date above to begin." />
                             @endforelse
                         </tbody>
                     </x-table.index>

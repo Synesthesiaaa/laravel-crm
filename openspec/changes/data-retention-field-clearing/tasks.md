@@ -13,9 +13,9 @@
 
 ## 3. Super Admin retention interface
 
-- [ ] 3.1 Load selected-form field metadata and saved policy values in the configuration controller.
-- [ ] 3.2 Add mode controls, dynamic field checkboxes, mode-specific warnings, and mode/field summaries to the Data Retention Blade view.
-- [ ] 3.3 Add feature tests for mode rendering, form-specific field filtering, selected-field persistence, and validation errors.
+- [x] 3.1 Load selected-form field metadata and saved policy values in the configuration controller.
+- [x] 3.2 Add mode controls, dynamic field checkboxes, mode-specific warnings, and mode/field summaries to the Data Retention Blade view.
+- [x] 3.3 Add feature tests for mode rendering, form-specific field filtering, selected-field persistence, and validation errors.
 
 ## 4. Full verification and specification alignment
 

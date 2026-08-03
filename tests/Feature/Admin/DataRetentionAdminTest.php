@@ -32,9 +32,18 @@ class DataRetentionAdminTest extends TestCase
     public function test_super_admin_can_view_retention_configuration(): void
     {
         $form = $this->createForm();
+        $otherForm = $this->createForm([
+            'form_code' => 'ezyconvert',
+            'name' => 'EzyConvert',
+            'table_name' => 'ezyconvert',
+        ]);
+        $this->createField($form, 'cardholder_name');
+        $this->createField($otherForm, 'rate');
         DataRetentionPolicy::query()->create([
             'form_id' => $form->id,
             'cutoff_date' => '2026-01-31',
+            'deletion_mode' => 'selected_fields',
+            'selected_fields' => ['cardholder_name'],
         ]);
         app(CampaignService::class)->clearCampaignsCache();
 
@@ -47,6 +56,11 @@ class DataRetentionAdminTest extends TestCase
         $response->assertOk();
         $response->assertSee('Data Retention', false);
         $response->assertSee('permanently deletes complete records', false);
+        $response->assertSee('Delete entire records', false);
+        $response->assertSee('Clear selected fields only', false);
+        $response->assertSee('Cardholder name', false);
+        $response->assertDontSee('Rate', false);
+        $response->assertSee('Selected fields', false);
         $response->assertSee('ezycash', false);
         $response->assertSee('2026-01-31', false);
     }
