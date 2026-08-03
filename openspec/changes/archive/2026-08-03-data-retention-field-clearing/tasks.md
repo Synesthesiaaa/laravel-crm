@@ -19,7 +19,7 @@
 
 ## 4. Full verification and specification alignment
 
-- [ ] 4.1 Run Pint on all modified PHP files and fix formatting issues.
-- [ ] 4.2 Run the focused PHPUnit suite, command/schedule checks, and the full PHPUnit suite.
-- [ ] 4.3 Verify the Data Retention flow in the browser, including form switching, mode switching, field selection, and saved policy display.
-- [ ] 4.4 Sync the modified `data-retention` capability spec, verify the OpenSpec change, and archive it after implementation is complete.
+- [x] 4.1 Run Pint on all modified PHP files and fix formatting issues.
+- [x] 4.2 Run the focused PHPUnit suite, command/schedule checks, and the full PHPUnit suite.
+- [x] 4.3 Verify the Data Retention flow in the browser, including form switching, mode switching, field selection, and saved policy display.
+- [x] 4.4 Sync the modified `data-retention` capability spec, verify the OpenSpec change, and archive it after implementation is complete.
