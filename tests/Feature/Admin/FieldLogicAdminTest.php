@@ -164,7 +164,8 @@ class FieldLogicAdminTest extends TestCase
             ->get(route('admin.field-logic.index', ['form' => 'lead_capture']))
             ->assertOk()
             ->assertSee('field-logic/'.$field->id.'/edit', false)
-            ->assertDontSee('edit-field-logic', false);
+            ->assertDontSee('edit-field-logic', false)
+            ->assertSee('@change="$el.form.submit()"', false);
     }
 
     public function test_update_persists_sale_amount_for_numeric_fields_and_clears_it_for_text_fields(): void

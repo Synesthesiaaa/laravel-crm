@@ -41,17 +41,11 @@
             <form method="GET" action="{{ route('admin.field-logic.index') }}" class="filter-row">
                 <div class="form-field">
                     <label class="form-label" for="form-filter">Form</label>
-                    <select id="form-filter" name="form" class="form-select max-w-xs">
+                    <select id="form-filter" name="form" class="form-select max-w-xs" @change="$el.form.submit()">
                         @foreach($forms as $code => $config)
                             <option value="{{ $code }}" {{ $formType === $code ? 'selected' : '' }}>{{ $config['name'] ?? $code }}</option>
                         @endforeach
                     </select>
-                </div>
-                <div class="form-actions-bottom">
-                    <button type="submit" class="btn-primary">
-                        <x-icon name="funnel" class="w-4 h-4" />
-                        Load
-                    </button>
                 </div>
             </form>
         </div>
