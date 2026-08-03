@@ -33,9 +33,34 @@ class DataRetentionPolicyTest extends TestCase
         $this->assertSame($form->id, $policy->form->id);
         $this->assertSame('2026-01-31', $policy->cutoff_date->format('Y-m-d'));
         $this->assertTrue($policy->is_active);
+        $this->assertSame('whole_record', $policy->deletion_mode);
+        $this->assertNull($policy->selected_fields);
         $this->assertNull($policy->last_run_at);
         $this->assertSame(0, $policy->last_deleted_count);
         $this->assertSame($policy->id, $form->fresh()->retentionPolicy->id);
+    }
+
+    public function test_policy_casts_selected_field_configuration(): void
+    {
+        $form = Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'ezyconvert',
+            'name' => 'EzyConvert',
+            'table_name' => 'ezyconvert',
+            'is_active' => true,
+        ]);
+
+        $policy = DataRetentionPolicy::query()->create([
+            'form_id' => $form->id,
+            'cutoff_date' => '2026-01-31',
+            'deletion_mode' => 'selected_fields',
+            'selected_fields' => ['cardholder_name', 'account_number'],
+        ]);
+
+        $policy->refresh();
+
+        $this->assertSame('selected_fields', $policy->deletion_mode);
+        $this->assertSame(['cardholder_name', 'account_number'], $policy->selected_fields);
     }
 
     public function test_form_can_have_only_one_retention_policy(): void

@@ -10,6 +10,8 @@ class DataRetentionPolicy extends Model
     protected $fillable = [
         'form_id',
         'cutoff_date',
+        'deletion_mode',
+        'selected_fields',
         'is_active',
         'last_run_at',
         'last_deleted_count',
@@ -19,6 +21,7 @@ class DataRetentionPolicy extends Model
     {
         return [
             'cutoff_date' => 'date',
+            'selected_fields' => 'array',
             'is_active' => 'boolean',
             'last_run_at' => 'datetime',
             'last_deleted_count' => 'integer',
