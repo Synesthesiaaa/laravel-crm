@@ -6,10 +6,10 @@
 
 ## 2. Type-safe scheduled cleanup
 
-- [ ] 2.1 Add failing service tests proving selected-field cleanup preserves records and unselected values while clearing nullable, text, numeric, and boolean columns type-safely.
-- [ ] 2.2 Add failing service tests for unsupported/stale selected fields being skipped without affecting other policies.
-- [ ] 2.3 Implement the selected-field cleanup branch with schema metadata inspection, safe identifier validation, and complete update-map validation before mutation.
-- [ ] 2.4 Run focused retention service, command, and model tests and preserve the existing whole-record behavior.
+- [x] 2.1 Add failing service tests proving selected-field cleanup preserves records and unselected values while clearing nullable, text, numeric, and boolean columns type-safely.
+- [x] 2.2 Add failing service tests for unsupported/stale selected fields being skipped without affecting other policies.
+- [x] 2.3 Implement the selected-field cleanup branch with schema metadata inspection, safe identifier validation, and complete update-map validation before mutation.
+- [x] 2.4 Run focused retention service, command, and model tests and preserve the existing whole-record behavior.
 
 ## 3. Super Admin retention interface
 

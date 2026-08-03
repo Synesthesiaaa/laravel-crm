@@ -93,9 +93,29 @@ class DataRetentionService
                     continue;
                 }
 
-                $deleted = DB::table($tableName)
-                    ->whereDate('date', '<=', $policy->cutoff_date->format('Y-m-d'))
-                    ->delete();
+                if ($policy->deletion_mode === 'selected_fields') {
+                    $updates = $this->selectedFieldUpdates($form, $tableName, $policy->selected_fields);
+
+                    if ($updates === null) {
+                        $this->skipPolicy($policy, 'The policy contains fields that are not eligible for safe clearing.');
+                        $summary['skipped']++;
+
+                        continue;
+                    }
+
+                    $deleted = DB::table($tableName)
+                        ->whereDate('date', '<=', $policy->cutoff_date->format('Y-m-d'))
+                        ->update($updates);
+                } elseif ($policy->deletion_mode === 'whole_record') {
+                    $deleted = DB::table($tableName)
+                        ->whereDate('date', '<=', $policy->cutoff_date->format('Y-m-d'))
+                        ->delete();
+                } else {
+                    $this->skipPolicy($policy, 'The policy has an unsupported deletion mode.');
+                    $summary['skipped']++;
+
+                    continue;
+                }
 
                 $policy->forceFill([
                     'last_run_at' => now(),
@@ -125,6 +145,40 @@ class DataRetentionService
             'form_id' => $policy->form_id,
             'reason' => $reason,
         ]);
+    }
+
+    /**
+     * @param  list<string>|null  $selectedFields
+     * @return array<string, mixed>|null
+     */
+    private function selectedFieldUpdates(Form $form, string $tableName, ?array $selectedFields): ?array
+    {
+        if ($selectedFields === null || $selectedFields === [] || count($selectedFields) !== count(array_unique($selectedFields))) {
+            return null;
+        }
+
+        $eligibleFields = $this->eligibleFields($form)->pluck('field_name')->all();
+        if (array_diff($selectedFields, $eligibleFields) !== []) {
+            return null;
+        }
+
+        $columns = collect(Schema::getColumns($tableName))->keyBy('name');
+        $updates = [];
+
+        foreach ($selectedFields as $fieldName) {
+            if (! is_string($fieldName) || ! preg_match('/^[A-Za-z0-9_]+$/', $fieldName)) {
+                return null;
+            }
+
+            $clearValue = $this->clearValueForColumn($columns->get($fieldName));
+            if (! $clearValue['supported']) {
+                return null;
+            }
+
+            $updates[$fieldName] = $clearValue['value'];
+        }
+
+        return $updates;
     }
 
     /**
