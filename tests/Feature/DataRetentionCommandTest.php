@@ -39,7 +39,7 @@ class DataRetentionCommandTest extends TestCase
         ]);
         DataRetentionPolicy::query()->create([
             'form_id' => $form->id,
-            'cutoff_date' => '2026-01-31',
+            'to_date' => '2026-01-31',
         ]);
         DB::table('command_retention_records')->insert([
             'date' => '2026-01-01',

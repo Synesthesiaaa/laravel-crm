@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\DataRetentionPolicy;
 use App\Models\Form;
 use App\Models\FormField;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -103,13 +104,9 @@ class DataRetentionService
                         continue;
                     }
 
-                    $deleted = DB::table($tableName)
-                        ->whereDate('date', '<=', $policy->cutoff_date->format('Y-m-d'))
-                        ->update($updates);
+                    $deleted = $this->retentionQuery($tableName, $policy)->update($updates);
                 } elseif ($policy->deletion_mode === 'whole_record') {
-                    $deleted = DB::table($tableName)
-                        ->whereDate('date', '<=', $policy->cutoff_date->format('Y-m-d'))
-                        ->delete();
+                    $deleted = $this->retentionQuery($tableName, $policy)->delete();
                 } else {
                     $this->skipPolicy($policy, 'The policy has an unsupported deletion mode.');
                     $summary['skipped']++;
@@ -145,6 +142,17 @@ class DataRetentionService
             'form_id' => $policy->form_id,
             'reason' => $reason,
         ]);
+    }
+
+    private function retentionQuery(string $tableName, DataRetentionPolicy $policy): Builder
+    {
+        $query = DB::table($tableName);
+
+        if ($policy->from_date !== null) {
+            $query->whereDate('date', '>=', $policy->from_date->format('Y-m-d'));
+        }
+
+        return $query->whereDate('date', '<=', $policy->to_date->format('Y-m-d'));
     }
 
     /**

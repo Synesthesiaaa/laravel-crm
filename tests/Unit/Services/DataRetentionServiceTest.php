@@ -26,7 +26,7 @@ class DataRetentionServiceTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_it_deletes_records_on_or_before_the_cutoff_and_isolates_forms(): void
+    public function test_it_deletes_only_records_inside_the_inclusive_range_and_isolates_forms(): void
     {
         $sourceTable = $this->createStorageTable('retention_source_records');
         $otherTable = $this->createStorageTable('retention_other_records');
@@ -48,13 +48,16 @@ class DataRetentionServiceTest extends TestCase
 
         $policy = DataRetentionPolicy::query()->create([
             'form_id' => $sourceForm->id,
-            'cutoff_date' => '2026-01-31',
+            'from_date' => '2026-01-01',
+            'to_date' => '2026-01-31',
         ]);
 
         DB::table($sourceTable)->insert([
-            ['date' => '2025-12-31', 'request_id' => 'before-cutoff', 'created_at' => now(), 'updated_at' => now()],
-            ['date' => '2026-01-31', 'request_id' => 'on-cutoff', 'created_at' => now(), 'updated_at' => now()],
-            ['date' => '2026-02-01', 'request_id' => 'after-cutoff', 'created_at' => now(), 'updated_at' => now()],
+            ['date' => '2025-12-31', 'request_id' => 'before-range', 'created_at' => now(), 'updated_at' => now()],
+            ['date' => '2026-01-01', 'request_id' => 'on-from', 'created_at' => now(), 'updated_at' => now()],
+            ['date' => '2026-01-15', 'request_id' => 'inside-range', 'created_at' => now(), 'updated_at' => now()],
+            ['date' => '2026-01-31', 'request_id' => 'on-to', 'created_at' => now(), 'updated_at' => now()],
+            ['date' => '2026-02-01', 'request_id' => 'after-range', 'created_at' => now(), 'updated_at' => now()],
         ]);
         DB::table($otherTable)->insert([
             'date' => '2025-12-31',
@@ -66,14 +69,46 @@ class DataRetentionServiceTest extends TestCase
         $summary = app(DataRetentionService::class)->run();
 
         $this->assertSame(1, $summary['processed']);
-        $this->assertSame(2, $summary['deleted']);
+        $this->assertSame(3, $summary['deleted']);
         $this->assertSame(0, $summary['skipped']);
-        $this->assertDatabaseMissing($sourceTable, ['request_id' => 'before-cutoff']);
-        $this->assertDatabaseMissing($sourceTable, ['request_id' => 'on-cutoff']);
-        $this->assertDatabaseHas($sourceTable, ['request_id' => 'after-cutoff']);
+        $this->assertDatabaseHas($sourceTable, ['request_id' => 'before-range']);
+        $this->assertDatabaseMissing($sourceTable, ['request_id' => 'on-from']);
+        $this->assertDatabaseMissing($sourceTable, ['request_id' => 'inside-range']);
+        $this->assertDatabaseMissing($sourceTable, ['request_id' => 'on-to']);
+        $this->assertDatabaseHas($sourceTable, ['request_id' => 'after-range']);
         $this->assertDatabaseHas($otherTable, ['request_id' => 'other-form-record']);
         $this->assertNotNull($policy->fresh()->last_run_at);
-        $this->assertSame(2, $policy->fresh()->last_deleted_count);
+        $this->assertSame(3, $policy->fresh()->last_deleted_count);
+    }
+
+    public function test_it_preserves_legacy_upper_cutoff_behavior_without_a_from_date(): void
+    {
+        $table = $this->createStorageTable('retention_legacy_records');
+        $form = Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'legacy_form',
+            'name' => 'Legacy Form',
+            'table_name' => $table,
+            'is_active' => true,
+        ]);
+
+        DataRetentionPolicy::query()->create([
+            'form_id' => $form->id,
+            'to_date' => '2026-01-31',
+        ]);
+        DB::table($table)->insert([
+            ['date' => '2025-12-31', 'request_id' => 'legacy-before', 'created_at' => now(), 'updated_at' => now()],
+            ['date' => '2026-01-31', 'request_id' => 'legacy-on-to', 'created_at' => now(), 'updated_at' => now()],
+            ['date' => '2026-02-01', 'request_id' => 'legacy-after', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        $summary = app(DataRetentionService::class)->run();
+
+        $this->assertSame(1, $summary['processed']);
+        $this->assertSame(2, $summary['deleted']);
+        $this->assertDatabaseMissing($table, ['request_id' => 'legacy-before']);
+        $this->assertDatabaseMissing($table, ['request_id' => 'legacy-on-to']);
+        $this->assertDatabaseHas($table, ['request_id' => 'legacy-after']);
     }
 
     public function test_it_skips_missing_storage_and_continues_with_other_policies(): void
@@ -96,11 +131,11 @@ class DataRetentionServiceTest extends TestCase
 
         DataRetentionPolicy::query()->create([
             'form_id' => $validForm->id,
-            'cutoff_date' => '2026-01-31',
+            'to_date' => '2026-01-31',
         ]);
         DataRetentionPolicy::query()->create([
             'form_id' => $missingForm->id,
-            'cutoff_date' => '2026-01-31',
+            'to_date' => '2026-01-31',
         ]);
         DB::table($validTable)->insert([
             'date' => '2026-01-01',
@@ -147,11 +182,22 @@ class DataRetentionServiceTest extends TestCase
 
         $policy = DataRetentionPolicy::query()->create([
             'form_id' => $form->id,
-            'cutoff_date' => '2026-01-31',
+            'from_date' => '2026-01-01',
+            'to_date' => '2026-01-31',
             'deletion_mode' => 'selected_fields',
             'selected_fields' => ['required_text', 'nullable_text', 'amount', 'consent_flag'],
         ]);
 
+        $beforeId = DB::table($table)->insertGetId([
+            'date' => '2025-12-31',
+            'required_text' => 'Before Range',
+            'nullable_text' => 'Keep before value',
+            'amount' => 75.25,
+            'consent_flag' => 1,
+            'unselected_text' => 'Keep before record',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         $matchingId = DB::table($table)->insertGetId([
             'date' => '2026-01-31',
             'required_text' => 'Jane Doe',
@@ -178,8 +224,12 @@ class DataRetentionServiceTest extends TestCase
         $this->assertSame(1, $summary['processed']);
         $this->assertSame(1, $summary['deleted']);
         $this->assertSame(0, $summary['skipped']);
+        $before = (array) DB::table($table)->where('id', $beforeId)->first();
         $matching = (array) DB::table($table)->where('id', $matchingId)->first();
         $future = (array) DB::table($table)->where('id', $futureId)->first();
+        $this->assertSame('Before Range', $before['required_text']);
+        $this->assertSame('Keep before value', $before['nullable_text']);
+        $this->assertSame('Keep before record', $before['unselected_text']);
         $this->assertSame('', $matching['required_text']);
         $this->assertNull($matching['nullable_text']);
         $this->assertEquals(0, $matching['amount']);
@@ -220,11 +270,11 @@ class DataRetentionServiceTest extends TestCase
 
         DataRetentionPolicy::query()->create([
             'form_id' => $validForm->id,
-            'cutoff_date' => '2026-01-31',
+            'to_date' => '2026-01-31',
         ]);
         DataRetentionPolicy::query()->create([
             'form_id' => $unsupportedForm->id,
-            'cutoff_date' => '2026-01-31',
+            'to_date' => '2026-01-31',
             'deletion_mode' => 'selected_fields',
             'selected_fields' => ['event_date'],
         ]);

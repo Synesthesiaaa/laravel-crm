@@ -9,7 +9,8 @@ class DataRetentionPolicy extends Model
 {
     protected $fillable = [
         'form_id',
-        'cutoff_date',
+        'from_date',
+        'to_date',
         'deletion_mode',
         'selected_fields',
         'is_active',
@@ -20,7 +21,8 @@ class DataRetentionPolicy extends Model
     protected function casts(): array
     {
         return [
-            'cutoff_date' => 'date',
+            'from_date' => 'date',
+            'to_date' => 'date',
             'selected_fields' => 'array',
             'is_active' => 'boolean',
             'last_run_at' => 'datetime',

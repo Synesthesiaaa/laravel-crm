@@ -24,7 +24,8 @@ class UpsertDataRetentionPolicyRequest extends FormRequest
                 'integer',
                 Rule::exists('forms', 'id')->where(fn (Builder $query): Builder => $query->where('is_active', true)),
             ],
-            'cutoff_date' => ['required', 'date_format:Y-m-d'],
+            'from_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:to_date'],
+            'to_date' => ['required', 'date_format:Y-m-d'],
             'deletion_mode' => ['required', Rule::in(['whole_record', 'selected_fields'])],
             'selected_fields' => [
                 'exclude_unless:deletion_mode,selected_fields',

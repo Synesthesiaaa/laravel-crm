@@ -170,7 +170,8 @@
             @php
                 $selectedRetentionForm = collect($retentionForms ?? [])->firstWhere('id', (int) ($selectedRetentionFormId ?? 0));
                 $selectedRetentionPolicy = $selectedRetentionForm?->retentionPolicy;
-                $retentionCutoffDate = old('cutoff_date', $selectedRetentionPolicy?->cutoff_date?->format('Y-m-d') ?? '');
+                $retentionFromDate = old('from_date', $selectedRetentionPolicy?->from_date?->format('Y-m-d') ?? '');
+                $retentionToDate = old('to_date', $selectedRetentionPolicy?->to_date?->format('Y-m-d') ?? '');
                 $retentionIsActive = old('is_active', $selectedRetentionPolicy?->is_active ?? true);
                 $retentionDeletionMode = old('deletion_mode', $selectedRetentionPolicy?->deletion_mode ?? 'whole_record');
                 $retentionSelectedFields = old('selected_fields', $selectedRetentionPolicy?->selected_fields ?? []);
@@ -180,12 +181,12 @@
             <div class="space-y-6" x-data="{ mode: @js($retentionDeletionMode) }">
                 <div x-show="mode === 'whole_record'" x-cloak>
                     <x-alert type="warning" title="Permanent deletion">
-                        Retention cleanup permanently deletes complete records from the selected form when their record date is on or before the configured cutoff date. This cannot be undone.
+                        Retention cleanup permanently deletes complete records from the selected form when their record date is within the configured From and To dates. This cannot be undone.
                     </x-alert>
                 </div>
                 <div x-show="mode === 'selected_fields'" x-cloak>
                     <x-alert type="warning" title="Permanent field clearing">
-                        Retention cleanup permanently clears the selected field values from records on or before the configured cutoff date. The records and unselected fields are preserved, but cleared values cannot be recovered.
+                        Retention cleanup permanently clears the selected field values from records within the configured From and To dates. The records and unselected fields are preserved, but cleared values cannot be recovered.
                     </x-alert>
                 </div>
 
@@ -233,11 +234,16 @@
                                 @error('deletion_mode')<p class="form-error">{{ $message }}</p>@enderror
                             </div>
                             <div class="form-field">
-                                <label class="form-label" for="retention-cutoff-date">Delete records dated on or before</label>
-                                <input id="retention-cutoff-date" type="date" name="cutoff_date" value="{{ $retentionCutoffDate }}" class="form-input @error('cutoff_date') error @enderror" required>
-                                @error('cutoff_date')<p class="form-error">{{ $message }}</p>@enderror
+                                <label class="form-label" for="retention-from-date">From date</label>
+                                <input id="retention-from-date" type="date" name="from_date" value="{{ $retentionFromDate }}" class="form-input @error('from_date') error @enderror" required>
+                                @error('from_date')<p class="form-error">{{ $message }}</p>@enderror
                             </div>
-                            <div class="form-field flex items-end pb-1">
+                            <div class="form-field">
+                                <label class="form-label" for="retention-to-date">To date</label>
+                                <input id="retention-to-date" type="date" name="to_date" value="{{ $retentionToDate }}" class="form-input @error('to_date') error @enderror" required>
+                                @error('to_date')<p class="form-error">{{ $message }}</p>@enderror
+                            </div>
+                            <div class="form-field sm:col-span-2 flex items-end pb-1">
                                 <label class="checkbox-row">
                                     <input type="checkbox" name="is_active" value="1" @checked($retentionIsActive)>
                                     <span>Active automatic cleanup</span>
@@ -290,7 +296,8 @@
                             ['label' => 'Storage table'],
                             ['label' => 'Deletion scope'],
                             ['label' => 'Selected fields'],
-                            ['label' => 'Cutoff date'],
+                            ['label' => 'From date'],
+                            ['label' => 'To date'],
                             ['label' => 'Status'],
                             ['label' => 'Last run'],
                             ['label' => 'Deleted'],
@@ -304,7 +311,8 @@
                                     <td class="font-mono text-xs">{{ $policy->form?->table_name ?? '—' }}</td>
                                     <td>{{ $policy->deletion_mode === 'selected_fields' ? 'Clear selected fields' : 'Delete entire records' }}</td>
                                     <td class="max-w-xs text-xs">{{ $policy->selected_fields ? implode(', ', $policy->selected_fields) : '—' }}</td>
-                                    <td>{{ $policy->cutoff_date?->format('Y-m-d') ?? '—' }}</td>
+                                    <td>{{ $policy->from_date?->format('Y-m-d') ?? 'Any date' }}</td>
+                                    <td>{{ $policy->to_date?->format('Y-m-d') ?? '—' }}</td>
                                     <td>
                                         <x-badge :type="$policy->is_active ? 'active' : 'inactive'">
                                             {{ $policy->is_active ? 'Active' : 'Inactive' }}
@@ -327,7 +335,7 @@
                                     </td>
                                 </tr>
                             @empty
-                                <x-table.empty :colspan="10" message="No retention policies configured." description="Choose an active form and cutoff date above to begin." />
+                                <x-table.empty :colspan="11" message="No retention policies configured." description="Choose an active form and date range above to begin." />
                             @endforelse
                         </tbody>
                     </x-table.index>

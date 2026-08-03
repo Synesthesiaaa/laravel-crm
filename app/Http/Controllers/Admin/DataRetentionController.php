@@ -19,7 +19,8 @@ class DataRetentionController extends Controller
         DataRetentionPolicy::query()->updateOrCreate(
             ['form_id' => $validated['form_id']],
             [
-                'cutoff_date' => $validated['cutoff_date'],
+                'from_date' => $validated['from_date'],
+                'to_date' => $validated['to_date'],
                 'deletion_mode' => $validated['deletion_mode'],
                 'selected_fields' => $validated['deletion_mode'] === 'selected_fields'
                     ? array_values($validated['selected_fields'])

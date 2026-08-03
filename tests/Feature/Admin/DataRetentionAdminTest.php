@@ -41,7 +41,7 @@ class DataRetentionAdminTest extends TestCase
         $this->createField($otherForm, 'rate');
         DataRetentionPolicy::query()->create([
             'form_id' => $form->id,
-            'cutoff_date' => '2026-01-31',
+            'to_date' => '2026-01-31',
             'deletion_mode' => 'selected_fields',
             'selected_fields' => ['cardholder_name'],
         ]);
@@ -58,10 +58,15 @@ class DataRetentionAdminTest extends TestCase
         $response->assertSee('permanently deletes complete records', false);
         $response->assertSee('Delete entire records', false);
         $response->assertSee('Clear selected fields only', false);
+        $response->assertSee('From date', false);
+        $response->assertSee('To date', false);
+        $response->assertSee('name="from_date"', false);
+        $response->assertSee('name="to_date"', false);
         $response->assertSee('Cardholder name', false);
         $response->assertDontSee('Rate', false);
         $response->assertSee('Selected fields', false);
         $response->assertSee('ezycash', false);
+        $response->assertSee('Any date', false);
         $response->assertSee('2026-01-31', false);
     }
 
@@ -73,7 +78,7 @@ class DataRetentionAdminTest extends TestCase
         $response->assertForbidden();
     }
 
-    public function test_policy_requires_an_active_form_and_valid_cutoff_date(): void
+    public function test_policy_requires_an_active_form_and_valid_date_range(): void
     {
         $inactiveForm = $this->createForm(['is_active' => false]);
 
@@ -81,9 +86,27 @@ class DataRetentionAdminTest extends TestCase
             ->from(route('admin.configuration', ['tab' => 'retention']))
             ->post(route('admin.configuration.retention.store'), [
                 'form_id' => $inactiveForm->id,
-                'cutoff_date' => '31-01-2026',
+                'from_date' => '31-01-2026',
+                'to_date' => '2026-01-31',
             ])
-            ->assertSessionHasErrors(['form_id', 'cutoff_date']);
+            ->assertSessionHasErrors(['form_id', 'from_date']);
+
+        $this->assertDatabaseCount('data_retention_policies', 0);
+    }
+
+    public function test_policy_rejects_a_reversed_date_range(): void
+    {
+        $form = $this->createForm();
+
+        $this->actingAs($this->superAdmin)
+            ->from(route('admin.configuration', ['tab' => 'retention']))
+            ->post(route('admin.configuration.retention.store'), [
+                'form_id' => $form->id,
+                'from_date' => '2026-02-01',
+                'to_date' => '2026-01-31',
+                'deletion_mode' => 'whole_record',
+            ])
+            ->assertSessionHasErrors('from_date');
 
         $this->assertDatabaseCount('data_retention_policies', 0);
     }
@@ -95,7 +118,8 @@ class DataRetentionAdminTest extends TestCase
         $this->actingAs($this->superAdmin)
             ->post(route('admin.configuration.retention.store'), [
                 'form_id' => $form->id,
-                'cutoff_date' => '2026-01-31',
+                'from_date' => '2026-01-01',
+                'to_date' => '2026-01-31',
                 'deletion_mode' => 'whole_record',
             ])
             ->assertRedirect(route('admin.configuration', [
@@ -106,19 +130,22 @@ class DataRetentionAdminTest extends TestCase
 
         $policy = DataRetentionPolicy::query()->firstOrFail();
         $this->assertTrue($policy->is_active);
-        $this->assertSame('2026-01-31', $policy->cutoff_date->format('Y-m-d'));
+        $this->assertSame('2026-01-01', $policy->from_date->format('Y-m-d'));
+        $this->assertSame('2026-01-31', $policy->to_date->format('Y-m-d'));
 
         $this->actingAs($this->superAdmin)
             ->post(route('admin.configuration.retention.store'), [
                 'form_id' => $form->id,
-                'cutoff_date' => '2026-02-28',
+                'from_date' => '2026-02-01',
+                'to_date' => '2026-02-28',
                 'deletion_mode' => 'whole_record',
                 'is_active' => true,
             ])
             ->assertRedirect();
 
         $policy->refresh();
-        $this->assertSame('2026-02-28', $policy->cutoff_date->format('Y-m-d'));
+        $this->assertSame('2026-02-01', $policy->from_date->format('Y-m-d'));
+        $this->assertSame('2026-02-28', $policy->to_date->format('Y-m-d'));
         $this->assertSame(1, DataRetentionPolicy::query()->count());
 
         $this->actingAs($this->superAdmin)
@@ -138,7 +165,8 @@ class DataRetentionAdminTest extends TestCase
         $this->actingAs($this->superAdmin)
             ->post(route('admin.configuration.retention.store'), [
                 'form_id' => $form->id,
-                'cutoff_date' => '2026-01-31',
+                'from_date' => '2026-01-01',
+                'to_date' => '2026-01-31',
                 'deletion_mode' => 'selected_fields',
                 'selected_fields' => ['cardholder_name', 'account_number'],
             ])
@@ -151,7 +179,8 @@ class DataRetentionAdminTest extends TestCase
         $this->actingAs($this->superAdmin)
             ->post(route('admin.configuration.retention.store'), [
                 'form_id' => $form->id,
-                'cutoff_date' => '2026-02-28',
+                'from_date' => '2026-02-01',
+                'to_date' => '2026-02-28',
                 'deletion_mode' => 'whole_record',
             ])
             ->assertRedirect();
@@ -176,7 +205,8 @@ class DataRetentionAdminTest extends TestCase
             ->from(route('admin.configuration', ['tab' => 'retention']))
             ->post(route('admin.configuration.retention.store'), [
                 'form_id' => $form->id,
-                'cutoff_date' => '2026-01-31',
+                'from_date' => '2026-01-01',
+                'to_date' => '2026-01-31',
                 'deletion_mode' => 'selected_fields',
                 'selected_fields' => [],
             ])
@@ -186,7 +216,8 @@ class DataRetentionAdminTest extends TestCase
             ->from(route('admin.configuration', ['tab' => 'retention']))
             ->post(route('admin.configuration.retention.store'), [
                 'form_id' => $form->id,
-                'cutoff_date' => '2026-01-31',
+                'from_date' => '2026-01-01',
+                'to_date' => '2026-01-31',
                 'deletion_mode' => 'selected_fields',
                 'selected_fields' => ['rate'],
             ])
@@ -196,7 +227,8 @@ class DataRetentionAdminTest extends TestCase
             ->from(route('admin.configuration', ['tab' => 'retention']))
             ->post(route('admin.configuration.retention.store'), [
                 'form_id' => $form->id,
-                'cutoff_date' => '2026-01-31',
+                'from_date' => '2026-01-01',
+                'to_date' => '2026-01-31',
                 'deletion_mode' => 'selected_fields',
                 'selected_fields' => ['date'],
             ])
