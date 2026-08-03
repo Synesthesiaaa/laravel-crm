@@ -36,6 +36,14 @@ Schedule::command('queue:prune-failed --hours=168')
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/scheduler.log'));
 
+// Permanently delete records covered by active form retention policies.
+Schedule::command('data-retention:run')
+    ->daily()
+    ->at('03:00')
+    ->withoutOverlapping(60)
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/scheduler.log'));
+
 // Clear expired cache entries (file driver only — Redis manages its own TTL)
 Schedule::command('cache:prune-stale-tags')
     ->hourly()
