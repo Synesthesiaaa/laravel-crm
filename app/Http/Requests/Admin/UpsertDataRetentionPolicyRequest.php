@@ -35,6 +35,12 @@ class UpsertDataRetentionPolicyRequest extends FormRequest
             ],
             'selected_fields.*' => ['string', 'distinct'],
             'is_active' => ['nullable', 'boolean'],
+            'run_mode' => ['required', Rule::in(['once', 'recurring'])],
+            'run_at' => ['exclude_unless:run_mode,once', 'required', 'date_format:Y-m-d\\TH:i'],
+            'recurrence' => ['exclude_unless:run_mode,recurring', 'required', Rule::in(['daily', 'weekly', 'monthly'])],
+            'run_time' => ['exclude_unless:run_mode,recurring', 'required', 'date_format:H:i'],
+            'run_day_of_week' => ['exclude_unless:recurrence,weekly', 'required', 'integer', 'between:1,7'],
+            'run_day_of_month' => ['exclude_unless:recurrence,monthly', 'required', 'integer', 'between:1,31'],
         ];
     }
 

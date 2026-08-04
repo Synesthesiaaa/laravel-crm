@@ -111,6 +111,63 @@ class DataRetentionAdminTest extends TestCase
         $this->assertDatabaseCount('data_retention_policies', 0);
     }
 
+    public function test_policy_requires_execution_settings_for_the_selected_mode(): void
+    {
+        $form = $this->createForm();
+
+        $this->actingAs($this->superAdmin)
+            ->from(route('admin.configuration', ['tab' => 'retention']))
+            ->post(route('admin.configuration.retention.store'), [
+                'form_id' => $form->id,
+                'from_date' => '2026-01-01',
+                'to_date' => '2026-01-31',
+                'deletion_mode' => 'whole_record',
+                'run_mode' => 'once',
+            ])
+            ->assertSessionHasErrors('run_at');
+
+        $this->actingAs($this->superAdmin)
+            ->from(route('admin.configuration', ['tab' => 'retention']))
+            ->post(route('admin.configuration.retention.store'), [
+                'form_id' => $form->id,
+                'from_date' => '2026-01-01',
+                'to_date' => '2026-01-31',
+                'deletion_mode' => 'whole_record',
+                'run_mode' => 'recurring',
+            ])
+            ->assertSessionHasErrors(['recurrence', 'run_time']);
+    }
+
+    public function test_policy_rejects_invalid_schedule_values(): void
+    {
+        $form = $this->createForm();
+
+        $this->actingAs($this->superAdmin)
+            ->from(route('admin.configuration', ['tab' => 'retention']))
+            ->post(route('admin.configuration.retention.store'), [
+                'form_id' => $form->id,
+                'from_date' => '2026-01-01',
+                'to_date' => '2026-01-31',
+                'deletion_mode' => 'whole_record',
+                'run_mode' => 'once',
+                'run_at' => '04-08-2026 09:15',
+            ])
+            ->assertSessionHasErrors('run_at');
+
+        $this->actingAs($this->superAdmin)
+            ->from(route('admin.configuration', ['tab' => 'retention']))
+            ->post(route('admin.configuration.retention.store'), [
+                'form_id' => $form->id,
+                'from_date' => '2026-01-01',
+                'to_date' => '2026-01-31',
+                'deletion_mode' => 'whole_record',
+                'run_mode' => 'recurring',
+                'recurrence' => 'weekly',
+                'run_time' => '09:15',
+            ])
+            ->assertSessionHasErrors('run_day_of_week');
+    }
+
     public function test_super_admin_can_create_update_and_deactivate_a_policy(): void
     {
         $form = $this->createForm();
@@ -121,6 +178,9 @@ class DataRetentionAdminTest extends TestCase
                 'from_date' => '2026-01-01',
                 'to_date' => '2026-01-31',
                 'deletion_mode' => 'whole_record',
+                'run_mode' => 'recurring',
+                'recurrence' => 'daily',
+                'run_time' => '03:00',
             ])
             ->assertRedirect(route('admin.configuration', [
                 'tab' => 'retention',
@@ -132,6 +192,10 @@ class DataRetentionAdminTest extends TestCase
         $this->assertTrue($policy->is_active);
         $this->assertSame('2026-01-01', $policy->from_date->format('Y-m-d'));
         $this->assertSame('2026-01-31', $policy->to_date->format('Y-m-d'));
+        $this->assertSame('recurring', $policy->run_mode);
+        $this->assertSame('daily', $policy->recurrence);
+        $this->assertSame('03:00', substr((string) $policy->run_time, 0, 5));
+        $this->assertNotNull($policy->next_run_at);
 
         $this->actingAs($this->superAdmin)
             ->post(route('admin.configuration.retention.store'), [
@@ -140,12 +204,17 @@ class DataRetentionAdminTest extends TestCase
                 'to_date' => '2026-02-28',
                 'deletion_mode' => 'whole_record',
                 'is_active' => true,
+                'run_mode' => 'recurring',
+                'recurrence' => 'daily',
+                'run_time' => '03:00',
             ])
             ->assertRedirect();
 
         $policy->refresh();
         $this->assertSame('2026-02-01', $policy->from_date->format('Y-m-d'));
         $this->assertSame('2026-02-28', $policy->to_date->format('Y-m-d'));
+        $this->assertSame('recurring', $policy->run_mode);
+        $this->assertNotNull($policy->next_run_at);
         $this->assertSame(1, DataRetentionPolicy::query()->count());
 
         $this->actingAs($this->superAdmin)
@@ -169,6 +238,9 @@ class DataRetentionAdminTest extends TestCase
                 'to_date' => '2026-01-31',
                 'deletion_mode' => 'selected_fields',
                 'selected_fields' => ['cardholder_name', 'account_number'],
+                'run_mode' => 'recurring',
+                'recurrence' => 'daily',
+                'run_time' => '03:00',
             ])
             ->assertRedirect();
 
@@ -182,6 +254,9 @@ class DataRetentionAdminTest extends TestCase
                 'from_date' => '2026-02-01',
                 'to_date' => '2026-02-28',
                 'deletion_mode' => 'whole_record',
+                'run_mode' => 'recurring',
+                'recurrence' => 'daily',
+                'run_time' => '03:00',
             ])
             ->assertRedirect();
 
@@ -209,6 +284,9 @@ class DataRetentionAdminTest extends TestCase
                 'to_date' => '2026-01-31',
                 'deletion_mode' => 'selected_fields',
                 'selected_fields' => [],
+                'run_mode' => 'recurring',
+                'recurrence' => 'daily',
+                'run_time' => '03:00',
             ])
             ->assertSessionHasErrors('selected_fields');
 
@@ -220,6 +298,9 @@ class DataRetentionAdminTest extends TestCase
                 'to_date' => '2026-01-31',
                 'deletion_mode' => 'selected_fields',
                 'selected_fields' => ['rate'],
+                'run_mode' => 'recurring',
+                'recurrence' => 'daily',
+                'run_time' => '03:00',
             ])
             ->assertSessionHasErrors('selected_fields');
 
@@ -231,6 +312,9 @@ class DataRetentionAdminTest extends TestCase
                 'to_date' => '2026-01-31',
                 'deletion_mode' => 'selected_fields',
                 'selected_fields' => ['date'],
+                'run_mode' => 'recurring',
+                'recurrence' => 'daily',
+                'run_time' => '03:00',
             ])
             ->assertSessionHasErrors('selected_fields');
 
