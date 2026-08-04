@@ -326,6 +326,40 @@ class FormSubmissionTest extends TestCase
         $this->assertFalse(Schema::hasColumn('schema_drift_records', 'configured_bank'));
     }
 
+    public function test_storage_alignment_migration_renames_one_unrepresented_storage_column(): void
+    {
+        Form::create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'migration_drift_form',
+            'name' => 'Migration Drift Form',
+            'table_name' => 'migration_drift_records',
+            'display_order' => 100,
+        ]);
+        FormField::create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'migration_drift_form',
+            'field_name' => 'configured_bank',
+            'field_label' => 'Bank',
+            'field_type' => 'text',
+            'is_required' => true,
+            'field_order' => 1,
+        ]);
+        Schema::create('migration_drift_records', function ($table): void {
+            $table->id();
+            $table->date('date');
+            $table->string('request_id');
+            $table->string('storage_bank');
+            $table->string('agent');
+            $table->timestamps();
+        });
+
+        $migration = require database_path('migrations/2026_08_05_072452_align_registered_form_storage_columns.php');
+        $migration->up();
+
+        $this->assertTrue(Schema::hasColumn('migration_drift_records', 'configured_bank'));
+        $this->assertFalse(Schema::hasColumn('migration_drift_records', 'storage_bank'));
+    }
+
     public function test_form_submit_returns_validation_errors_for_ajax_requests(): void
     {
         Event::fake([DashboardDataUpdated::class]);
