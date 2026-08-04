@@ -13,7 +13,7 @@ class RunDataRetention extends Command
 
     public function handle(DataRetentionService $retentionService): int
     {
-        $summary = $retentionService->run();
+        $summary = $retentionService->runDue();
 
         $this->line('Processed: '.$summary['processed']);
         $this->line('Skipped: '.$summary['skipped']);

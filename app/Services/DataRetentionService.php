@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\DataRetentionPolicy;
 use App\Models\Form;
 use App\Models\FormField;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,8 @@ class DataRetentionService
         'lead_id',
         'phone_number',
     ];
+
+    public function __construct(private DataRetentionScheduleService $scheduleService) {}
 
     /**
      * @return Collection<int, \App\Models\FormField>
@@ -62,7 +65,116 @@ class DataRetentionService
     /**
      * @return array{processed: int, deleted: int, skipped: int}
      */
+    public function runDue(): array
+    {
+        $policies = DataRetentionPolicy::query()
+            ->where('is_active', true)
+            ->whereNotNull('next_run_at')
+            ->where('next_run_at', '<=', now())
+            ->with('form')
+            ->get();
+
+        return $this->processPolicies($policies);
+    }
+
+    /**
+     * Execute every active policy immediately for backwards-compatible callers.
+     *
+     * @return array{processed: int, deleted: int, skipped: int}
+     */
     public function run(): array
+    {
+        return $this->processPolicies(
+            DataRetentionPolicy::query()
+                ->where('is_active', true)
+                ->with('form')
+                ->get(),
+            true,
+        );
+    }
+
+    /**
+     * @return array{status: string, error: ?string, deleted: int}
+     */
+    public function runPolicy(DataRetentionPolicy $policy, bool $manual = false): array
+    {
+        $policy->loadMissing('form');
+        $runAt = CarbonImmutable::now();
+
+        try {
+            $form = $policy->form;
+            $tableName = (string) ($form?->table_name ?? '');
+
+            if (! $form?->is_active || ! preg_match('/^[A-Za-z0-9_]+$/', $tableName)) {
+                return $this->recordOutcome(
+                    $policy,
+                    'skipped',
+                    'The policy has no active form or a valid storage table.',
+                    0,
+                    $manual,
+                    $runAt,
+                );
+            }
+
+            if (! Schema::hasTable($tableName) || ! Schema::hasColumn($tableName, 'date')) {
+                return $this->recordOutcome(
+                    $policy,
+                    'skipped',
+                    "Storage table '{$tableName}' is missing or has no date column.",
+                    0,
+                    $manual,
+                    $runAt,
+                );
+            }
+
+            $deletionMode = $policy->deletion_mode ?? 'whole_record';
+
+            if ($deletionMode === 'selected_fields') {
+                $updates = $this->selectedFieldUpdates($form, $tableName, $policy->selected_fields);
+
+                if ($updates === null) {
+                    return $this->recordOutcome(
+                        $policy,
+                        'skipped',
+                        'The policy contains fields that are not eligible for safe clearing.',
+                        0,
+                        $manual,
+                        $runAt,
+                    );
+                }
+
+                $deleted = $this->retentionQuery($tableName, $policy)->update($updates);
+            } elseif ($deletionMode === 'whole_record') {
+                $deleted = $this->retentionQuery($tableName, $policy)->delete();
+            } else {
+                return $this->recordOutcome(
+                    $policy,
+                    'skipped',
+                    'The policy has an unsupported deletion mode.',
+                    0,
+                    $manual,
+                    $runAt,
+                );
+            }
+
+            return $this->recordOutcome($policy, 'success', null, $deleted, $manual, $runAt);
+        } catch (\Throwable $exception) {
+            return $this->recordOutcome(
+                $policy,
+                'failed',
+                $exception->getMessage() ?: $exception::class,
+                0,
+                $manual,
+                $runAt,
+            );
+        }
+    }
+
+    /**
+     * @param  Collection<int, DataRetentionPolicy>  $policies
+     * @return array{processed: int, deleted: int, skipped: int}
+     */
+    private function processPolicies(Collection $policies, bool $manual = false): array
     {
         $summary = [
             'processed' => 0,
@@ -70,69 +182,77 @@ class DataRetentionService
             'skipped' => 0,
         ];
 
-        $policies = DataRetentionPolicy::query()
-            ->where('is_active', true)
-            ->with('form')
-            ->get();
-
         foreach ($policies as $policy) {
-            try {
-                $form = $policy->form;
-                $tableName = (string) ($form?->table_name ?? '');
+            $result = $this->runPolicy($policy, $manual);
 
-                if (! $form?->is_active || ! preg_match('/^[A-Za-z0-9_]+$/', $tableName)) {
-                    $this->skipPolicy($policy, 'The policy has no active form or a valid storage table.');
-                    $summary['skipped']++;
-
-                    continue;
-                }
-
-                if (! Schema::hasTable($tableName) || ! Schema::hasColumn($tableName, 'date')) {
-                    $this->skipPolicy($policy, "Storage table '{$tableName}' is missing or has no date column.");
-                    $summary['skipped']++;
-
-                    continue;
-                }
-
-                if ($policy->deletion_mode === 'selected_fields') {
-                    $updates = $this->selectedFieldUpdates($form, $tableName, $policy->selected_fields);
-
-                    if ($updates === null) {
-                        $this->skipPolicy($policy, 'The policy contains fields that are not eligible for safe clearing.');
-                        $summary['skipped']++;
-
-                        continue;
-                    }
-
-                    $deleted = $this->retentionQuery($tableName, $policy)->update($updates);
-                } elseif ($policy->deletion_mode === 'whole_record') {
-                    $deleted = $this->retentionQuery($tableName, $policy)->delete();
-                } else {
-                    $this->skipPolicy($policy, 'The policy has an unsupported deletion mode.');
-                    $summary['skipped']++;
-
-                    continue;
-                }
-
-                $policy->forceFill([
-                    'last_run_at' => now(),
-                    'last_deleted_count' => $deleted,
-                ])->save();
-
+            if ($result['status'] === 'success') {
                 $summary['processed']++;
-                $summary['deleted'] += $deleted;
-            } catch (\Throwable $exception) {
+                $summary['deleted'] += $result['deleted'];
+            } else {
                 $summary['skipped']++;
-
-                Log::error('Data retention policy failed.', [
-                    'policy_id' => $policy->id,
-                    'form_id' => $policy->form_id,
-                    'exception' => $exception,
-                ]);
             }
         }
 
         return $summary;
+    }
+
+    /**
+     * @return array{status: string, error: ?string, deleted: int}
+     */
+    private function recordOutcome(
+        DataRetentionPolicy $policy,
+        string $status,
+        ?string $error,
+        int $deleted,
+        bool $manual,
+        CarbonImmutable $runAt,
+    ): array {
+        $nextRunAt = $policy->next_run_at;
+
+        if ($policy->run_mode === 'once') {
+            $nextRunAt = null;
+
+            if ($status === 'success') {
+                $policy->is_active = false;
+            }
+        } elseif (! $manual) {
+            try {
+                $nextRunAt = $this->scheduleService->nextRunAt($policy, $runAt);
+            } catch (\Throwable $exception) {
+                $nextRunAt = $runAt->addDay();
+                $status = 'failed';
+                $error = $error ?? ($exception->getMessage() ?: $exception::class);
+            }
+        }
+
+        $policy->forceFill([
+            'last_run_at' => $runAt,
+            'last_deleted_count' => $status === 'success' ? $deleted : 0,
+            'last_run_status' => $status,
+            'last_error' => $error,
+            'next_run_at' => $nextRunAt,
+        ])->save();
+
+        if ($status === 'success') {
+            Log::info('Data retention policy completed.', [
+                'policy_id' => $policy->id,
+                'form_id' => $policy->form_id,
+                'deleted' => $deleted,
+            ]);
+        } else {
+            Log::warning('Data retention policy did not complete.', [
+                'policy_id' => $policy->id,
+                'form_id' => $policy->form_id,
+                'status' => $status,
+                'reason' => $error,
+            ]);
+        }
+
+        return [
+            'status' => $status,
+            'error' => $error,
+            'deleted' => $status === 'success' ? $deleted : 0,
+        ];
     }
 
     private function skipPolicy(DataRetentionPolicy $policy, string $reason): void

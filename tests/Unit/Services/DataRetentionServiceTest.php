@@ -301,6 +301,192 @@ class DataRetentionServiceTest extends TestCase
         $this->assertDatabaseHas($unsupportedTable, ['request_id' => 'unsupported-expired']);
     }
 
+    public function test_run_due_processes_due_policies_and_preserves_future_policies(): void
+    {
+        $dueTable = $this->createStorageTable('retention_due_records');
+        $futureTable = $this->createStorageTable('retention_future_records');
+        $dueForm = Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'due_form',
+            'name' => 'Due Form',
+            'table_name' => $dueTable,
+            'is_active' => true,
+        ]);
+        $futureForm = Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'future_form',
+            'name' => 'Future Form',
+            'table_name' => $futureTable,
+            'is_active' => true,
+        ]);
+        $duePolicy = DataRetentionPolicy::query()->create([
+            'form_id' => $dueForm->id,
+            'to_date' => '2026-01-31',
+            'run_mode' => 'recurring',
+            'recurrence' => 'daily',
+            'run_time' => '03:00',
+            'next_run_at' => now()->subMinute(),
+        ]);
+        $futurePolicy = DataRetentionPolicy::query()->create([
+            'form_id' => $futureForm->id,
+            'to_date' => '2026-01-31',
+            'run_mode' => 'recurring',
+            'recurrence' => 'daily',
+            'run_time' => '03:00',
+            'next_run_at' => now()->addDay(),
+        ]);
+        DB::table($dueTable)->insert([
+            'date' => '2026-01-01',
+            'request_id' => 'due-record',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table($futureTable)->insert([
+            'date' => '2026-01-01',
+            'request_id' => 'future-record',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $summary = app(DataRetentionService::class)->runDue();
+
+        $this->assertSame(1, $summary['processed']);
+        $this->assertSame(1, $summary['deleted']);
+        $this->assertSame(0, $summary['skipped']);
+        $this->assertDatabaseMissing($dueTable, ['request_id' => 'due-record']);
+        $this->assertDatabaseHas($futureTable, ['request_id' => 'future-record']);
+        $this->assertSame('success', $duePolicy->fresh()->last_run_status);
+        $this->assertNotNull($duePolicy->fresh()->next_run_at);
+        $this->assertSame(
+            $futurePolicy->next_run_at->format('Y-m-d H:i:s'),
+            $futurePolicy->fresh()->next_run_at->format('Y-m-d H:i:s'),
+        );
+    }
+
+    public function test_manual_one_time_run_deactivates_the_policy_after_success(): void
+    {
+        $table = $this->createStorageTable('retention_manual_once_records');
+        $form = Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'manual_once_form',
+            'name' => 'Manual Once Form',
+            'table_name' => $table,
+            'is_active' => true,
+        ]);
+        $policy = DataRetentionPolicy::query()->create([
+            'form_id' => $form->id,
+            'to_date' => '2026-01-31',
+            'run_mode' => 'once',
+            'run_at' => now()->addDay(),
+            'next_run_at' => now()->addDay(),
+        ]);
+        DB::table($table)->insert([
+            'date' => '2026-01-01',
+            'request_id' => 'manual-once-record',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $result = app(DataRetentionService::class)->runPolicy($policy, true);
+
+        $this->assertSame('success', $result['status'], (string) $result['error']);
+        $this->assertSame(1, $result['deleted']);
+        $this->assertFalse($policy->fresh()->is_active);
+        $this->assertNull($policy->fresh()->next_run_at);
+        $this->assertDatabaseMissing($table, ['request_id' => 'manual-once-record']);
+    }
+
+    public function test_manual_recurring_run_preserves_its_next_run(): void
+    {
+        $table = $this->createStorageTable('retention_manual_recurring_records');
+        $form = Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'manual_recurring_form',
+            'name' => 'Manual Recurring Form',
+            'table_name' => $table,
+            'is_active' => true,
+        ]);
+        $nextRunAt = now()->addDay();
+        $policy = DataRetentionPolicy::query()->create([
+            'form_id' => $form->id,
+            'to_date' => '2026-01-31',
+            'run_mode' => 'recurring',
+            'recurrence' => 'daily',
+            'run_time' => '03:00',
+            'next_run_at' => $nextRunAt,
+        ]);
+        DB::table($table)->insert([
+            'date' => '2026-01-01',
+            'request_id' => 'manual-recurring-record',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $result = app(DataRetentionService::class)->runPolicy($policy, true);
+
+        $this->assertSame('success', $result['status'], (string) $result['error']);
+        $this->assertSame(
+            $nextRunAt->format('Y-m-d H:i:s'),
+            $policy->fresh()->next_run_at->format('Y-m-d H:i:s'),
+        );
+        $this->assertTrue($policy->fresh()->is_active);
+    }
+
+    public function test_failed_one_time_run_records_the_error_and_clears_the_next_run(): void
+    {
+        $form = Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'failed_once_form',
+            'name' => 'Failed Once Form',
+            'table_name' => 'missing_retention_table',
+            'is_active' => true,
+        ]);
+        $policy = DataRetentionPolicy::query()->create([
+            'form_id' => $form->id,
+            'to_date' => '2026-01-31',
+            'run_mode' => 'once',
+            'run_at' => now()->subMinute(),
+            'next_run_at' => now()->subMinute(),
+        ]);
+
+        $result = app(DataRetentionService::class)->runPolicy($policy);
+
+        $freshPolicy = $policy->fresh();
+        $this->assertSame('skipped', $result['status']);
+        $this->assertSame('skipped', $freshPolicy->last_run_status);
+        $this->assertNotNull($freshPolicy->last_error);
+        $this->assertNull($freshPolicy->next_run_at);
+        $this->assertTrue($freshPolicy->is_active);
+    }
+
+    public function test_skipped_recurring_policy_advances_after_a_due_attempt(): void
+    {
+        $form = Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'failed_recurring_form',
+            'name' => 'Failed Recurring Form',
+            'table_name' => 'missing_recurring_table',
+            'is_active' => true,
+        ]);
+        $policy = DataRetentionPolicy::query()->create([
+            'form_id' => $form->id,
+            'to_date' => '2026-01-31',
+            'run_mode' => 'recurring',
+            'recurrence' => 'daily',
+            'run_time' => '03:00',
+            'next_run_at' => now()->subMinute(),
+        ]);
+
+        $summary = app(DataRetentionService::class)->runDue();
+
+        $freshPolicy = $policy->fresh();
+        $this->assertSame(0, $summary['processed']);
+        $this->assertSame(1, $summary['skipped']);
+        $this->assertSame('skipped', $freshPolicy->last_run_status);
+        $this->assertGreaterThan(now(), $freshPolicy->next_run_at);
+        $this->assertTrue($freshPolicy->is_active);
+    }
+
     private function createStorageTable(string $table): string
     {
         Schema::create($table, function ($table): void {

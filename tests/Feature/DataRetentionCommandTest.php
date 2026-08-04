@@ -40,6 +40,10 @@ class DataRetentionCommandTest extends TestCase
         DataRetentionPolicy::query()->create([
             'form_id' => $form->id,
             'to_date' => '2026-01-31',
+            'run_mode' => 'recurring',
+            'recurrence' => 'daily',
+            'run_time' => '03:00',
+            'next_run_at' => now()->subMinute(),
         ]);
         DB::table('command_retention_records')->insert([
             'date' => '2026-01-01',
@@ -55,7 +59,7 @@ class DataRetentionCommandTest extends TestCase
         $this->assertDatabaseMissing('command_retention_records', ['request_id' => 'expired']);
     }
 
-    public function test_schedule_contains_the_daily_retention_command(): void
+    public function test_schedule_contains_the_every_minute_retention_command(): void
     {
         $commands = collect(app(\Illuminate\Console\Scheduling\Schedule::class)->events())
             ->map(fn ($event): string => (string) $event->command)
