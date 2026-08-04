@@ -360,6 +360,55 @@ class FormSubmissionTest extends TestCase
         $this->assertFalse(Schema::hasColumn('migration_drift_records', 'storage_bank'));
     }
 
+    public function test_storage_alignment_migration_makes_unrepresented_required_column_nullable(): void
+    {
+        Form::create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'legacy_drift_form',
+            'name' => 'Legacy Drift Form',
+            'table_name' => 'legacy_drift_records',
+            'display_order' => 101,
+        ]);
+        FormField::create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'legacy_drift_form',
+            'field_name' => 'configured_bank',
+            'field_label' => 'Bank',
+            'field_type' => 'text',
+            'is_required' => true,
+            'field_order' => 1,
+        ]);
+        Schema::create('legacy_drift_records', function ($table): void {
+            $table->id();
+            $table->date('date');
+            $table->string('request_id');
+            $table->string('configured_bank');
+            $table->string('legacy_bank');
+            $table->string('agent');
+            $table->timestamps();
+        });
+
+        $migration = require database_path('migrations/2026_08_05_073958_make_unrepresented_form_columns_nullable.php');
+        $migration->up();
+
+        $columns = collect(Schema::getColumns('legacy_drift_records'))->keyBy('name');
+        $this->assertTrue($columns['legacy_bank']['nullable']);
+
+        DB::table('legacy_drift_records')->insert([
+            'date' => '2026-08-05',
+            'request_id' => 'legacy-drift-request',
+            'configured_bank' => 'Test Bank',
+            'agent' => 'Administrator',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->assertDatabaseHas('legacy_drift_records', [
+            'request_id' => 'legacy-drift-request',
+            'configured_bank' => 'Test Bank',
+        ]);
+    }
+
     public function test_form_submit_returns_validation_errors_for_ajax_requests(): void
     {
         Event::fake([DashboardDataUpdated::class]);
