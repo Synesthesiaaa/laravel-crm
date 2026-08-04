@@ -14,8 +14,17 @@ class DataRetentionPolicy extends Model
         'deletion_mode',
         'selected_fields',
         'is_active',
+        'run_mode',
+        'run_at',
+        'recurrence',
+        'run_time',
+        'run_day_of_week',
+        'run_day_of_month',
+        'next_run_at',
         'last_run_at',
         'last_deleted_count',
+        'last_run_status',
+        'last_error',
     ];
 
     protected function casts(): array
@@ -25,6 +34,10 @@ class DataRetentionPolicy extends Model
             'to_date' => 'date',
             'selected_fields' => 'array',
             'is_active' => 'boolean',
+            'run_at' => 'datetime',
+            'run_day_of_week' => 'integer',
+            'run_day_of_month' => 'integer',
+            'next_run_at' => 'datetime',
             'last_run_at' => 'datetime',
             'last_deleted_count' => 'integer',
         ];
