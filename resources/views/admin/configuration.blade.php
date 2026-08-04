@@ -176,15 +176,21 @@
                 $retentionDeletionMode = old('deletion_mode', $selectedRetentionPolicy?->deletion_mode ?? 'whole_record');
                 $retentionSelectedFields = old('selected_fields', $selectedRetentionPolicy?->selected_fields ?? []);
                 $retentionSelectedFields = is_array($retentionSelectedFields) ? $retentionSelectedFields : [];
+                $retentionRunMode = old('run_mode', $selectedRetentionPolicy?->run_mode ?? 'recurring');
+                $retentionRunAt = old('run_at', $selectedRetentionPolicy?->run_at?->format('Y-m-d\\TH:i') ?? '');
+                $retentionRecurrence = old('recurrence', $selectedRetentionPolicy?->recurrence ?? 'daily');
+                $retentionRunTime = old('run_time', $selectedRetentionPolicy?->run_time ? substr((string) $selectedRetentionPolicy->run_time, 0, 5) : '03:00');
+                $retentionRunDayOfWeek = old('run_day_of_week', $selectedRetentionPolicy?->run_day_of_week ?? 1);
+                $retentionRunDayOfMonth = old('run_day_of_month', $selectedRetentionPolicy?->run_day_of_month ?? 1);
             @endphp
 
-            <div class="space-y-6" x-data="{ mode: @js($retentionDeletionMode) }">
-                <div x-show="mode === 'whole_record'" x-cloak>
+            <div class="space-y-6" x-data="{ deletionMode: @js($retentionDeletionMode), executionMode: @js($retentionRunMode), recurrence: @js($retentionRecurrence) }">
+                <div x-show="deletionMode === 'whole_record'" x-cloak>
                     <x-alert type="warning" title="Permanent deletion">
                         Retention cleanup permanently deletes complete records from the selected form when their record date is within the configured From and To dates. This cannot be undone.
                     </x-alert>
                 </div>
-                <div x-show="mode === 'selected_fields'" x-cloak>
+                <div x-show="deletionMode === 'selected_fields'" x-cloak>
                     <x-alert type="warning" title="Permanent field clearing">
                         Retention cleanup permanently clears the selected field values from records within the configured From and To dates. The records and unselected fields are preserved, but cleared values cannot be recovered.
                     </x-alert>
@@ -217,14 +223,14 @@
                                 <span class="form-label">Deletion scope</span>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <label class="flex items-start gap-3 rounded-lg border border-[var(--color-border)] p-3 cursor-pointer">
-                                        <input type="radio" name="deletion_mode" value="whole_record" x-model="mode" @checked($retentionDeletionMode === 'whole_record') class="mt-1">
+                                        <input type="radio" name="deletion_mode" value="whole_record" x-model="deletionMode" @checked($retentionDeletionMode === 'whole_record') class="mt-1">
                                         <span>
                                             <span class="block text-sm font-medium text-[var(--color-on-surface)]">Delete entire records</span>
                                             <span class="block text-xs text-[var(--color-on-surface-dim)] mt-1">Remove every field from matching form records.</span>
                                         </span>
                                     </label>
                                     <label class="flex items-start gap-3 rounded-lg border border-[var(--color-border)] p-3 cursor-pointer">
-                                        <input type="radio" name="deletion_mode" value="selected_fields" x-model="mode" @checked($retentionDeletionMode === 'selected_fields') class="mt-1">
+                                        <input type="radio" name="deletion_mode" value="selected_fields" x-model="deletionMode" @checked($retentionDeletionMode === 'selected_fields') class="mt-1">
                                         <span>
                                             <span class="block text-sm font-medium text-[var(--color-on-surface)]">Clear selected fields only</span>
                                             <span class="block text-xs text-[var(--color-on-surface-dim)] mt-1">Preserve records and all fields that are not selected.</span>
@@ -249,8 +255,74 @@
                                     <span>Active automatic cleanup</span>
                                 </label>
                             </div>
+                            <div class="form-field sm:col-span-2 rounded-lg border border-[var(--color-border)] p-4 space-y-4">
+                                <div>
+                                    <span class="form-label">Execution mode</span>
+                                    <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">Run Once supports a scheduled date/time and the Run Now action. Recurring policies can run daily, weekly, or monthly.</p>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <label class="flex items-start gap-3 rounded-lg border border-[var(--color-border)] p-3 cursor-pointer">
+                                        <input type="radio" name="run_mode" value="once" x-model="executionMode" @checked($retentionRunMode === 'once') class="mt-1">
+                                        <span>
+                                            <span class="block text-sm font-medium text-[var(--color-on-surface)]">Run Once</span>
+                                            <span class="block text-xs text-[var(--color-on-surface-dim)] mt-1">Schedule one automatic execution or run it immediately from the policy list.</span>
+                                        </span>
+                                    </label>
+                                    <label class="flex items-start gap-3 rounded-lg border border-[var(--color-border)] p-3 cursor-pointer">
+                                        <input type="radio" name="run_mode" value="recurring" x-model="executionMode" @checked($retentionRunMode === 'recurring') class="mt-1">
+                                        <span>
+                                            <span class="block text-sm font-medium text-[var(--color-on-surface)]">Recurring</span>
+                                            <span class="block text-xs text-[var(--color-on-surface-dim)] mt-1">Keep the policy active and run it on a daily, weekly, or monthly schedule.</span>
+                                        </span>
+                                    </label>
+                                </div>
+                                @error('run_mode')<p class="form-error">{{ $message }}</p>@enderror
+
+                                <div x-show="executionMode === 'once'" x-cloak class="form-field">
+                                    <label class="form-label" for="retention-run-at">Scheduled run date and time</label>
+                                    <input id="retention-run-at" type="datetime-local" name="run_at" value="{{ $retentionRunAt }}" class="form-input @error('run_at') error @enderror" x-bind:disabled="executionMode !== 'once'">
+                                    <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">Use Run Now below when this one-time policy should execute immediately.</p>
+                                    @error('run_at')<p class="form-error">{{ $message }}</p>@enderror
+                                </div>
+
+                                <div x-show="executionMode === 'recurring'" x-cloak class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="form-field">
+                                        <label class="form-label" for="retention-recurrence">Frequency</label>
+                                        <select id="retention-recurrence" name="recurrence" class="form-select" x-model="recurrence" x-bind:disabled="executionMode !== 'recurring'">
+                                            <option value="daily">Daily</option>
+                                            <option value="weekly">Weekly</option>
+                                            <option value="monthly">Monthly</option>
+                                        </select>
+                                        @error('recurrence')<p class="form-error">{{ $message }}</p>@enderror
+                                    </div>
+                                    <div class="form-field">
+                                        <label class="form-label" for="retention-run-time">Run time</label>
+                                        <input id="retention-run-time" type="time" name="run_time" value="{{ $retentionRunTime }}" class="form-input @error('run_time') error @enderror" x-bind:disabled="executionMode !== 'recurring'">
+                                        @error('run_time')<p class="form-error">{{ $message }}</p>@enderror
+                                    </div>
+                                    <div x-show="recurrence === 'weekly'" x-cloak class="form-field">
+                                        <label class="form-label" for="retention-run-day-of-week">Day of week</label>
+                                        <select id="retention-run-day-of-week" name="run_day_of_week" class="form-select" x-bind:disabled="executionMode !== 'recurring' || recurrence !== 'weekly'">
+                                            @foreach([1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday', 7 => 'Sunday'] as $dayValue => $dayLabel)
+                                                <option value="{{ $dayValue }}" @selected((int) $retentionRunDayOfWeek === $dayValue)>{{ $dayLabel }}</option>
+                                            @endforeach
+                                        </select>
+                                        @error('run_day_of_week')<p class="form-error">{{ $message }}</p>@enderror
+                                    </div>
+                                    <div x-show="recurrence === 'monthly'" x-cloak class="form-field">
+                                        <label class="form-label" for="retention-run-day-of-month">Day of month</label>
+                                        <select id="retention-run-day-of-month" name="run_day_of_month" class="form-select" x-bind:disabled="executionMode !== 'recurring' || recurrence !== 'monthly'">
+                                            @foreach(range(1, 31) as $dayValue)
+                                                <option value="{{ $dayValue }}" @selected((int) $retentionRunDayOfMonth === $dayValue)>{{ $dayValue }}</option>
+                                            @endforeach
+                                        </select>
+                                        <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">If a month is shorter, the last day of that month is used.</p>
+                                        @error('run_day_of_month')<p class="form-error">{{ $message }}</p>@enderror
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div x-show="mode === 'selected_fields'" x-cloak class="rounded-lg border border-[var(--color-border)] p-4">
+                        <div x-show="deletionMode === 'selected_fields'" x-cloak class="rounded-lg border border-[var(--color-border)] p-4">
                             <div class="flex items-start justify-between gap-3 mb-3">
                                 <div>
                                     <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Fields to clear</h3>
@@ -266,7 +338,7 @@
                                                    name="selected_fields[]"
                                                    value="{{ $field->field_name }}"
                                                    @checked(in_array($field->field_name, $retentionSelectedFields, true))
-                                                   x-bind:disabled="mode !== 'selected_fields'"
+                                                   x-bind:disabled="deletionMode !== 'selected_fields'"
                                                    class="mt-1 h-4 w-4 rounded border-[var(--color-border)]">
                                             <span class="min-w-0">
                                                 <span class="block text-sm text-[var(--color-on-surface)]">{{ $field->field_label }}</span>
@@ -298,9 +370,10 @@
                             ['label' => 'Selected fields'],
                             ['label' => 'From date'],
                             ['label' => 'To date'],
-                            ['label' => 'Status'],
+                            ['label' => 'Execution'],
+                            ['label' => 'Next run'],
                             ['label' => 'Last run'],
-                            ['label' => 'Deleted'],
+                            ['label' => 'Result'],
                             ['label' => 'Actions', 'align' => 'right'],
                         ]" />
                         <tbody>
@@ -317,25 +390,40 @@
                                         <x-badge :type="$policy->is_active ? 'active' : 'inactive'">
                                             {{ $policy->is_active ? 'Active' : 'Inactive' }}
                                         </x-badge>
+                                        <span class="block text-xs text-[var(--color-on-surface-dim)] mt-1">
+                                            {{ $policy->run_mode === 'once' ? 'Run Once' : 'Recurring '.ucfirst($policy->recurrence ?? 'daily') }}
+                                        </span>
                                     </td>
+                                    <td class="whitespace-nowrap">{{ $policy->next_run_at?->format('Y-m-d H:i') ?? '—' }}</td>
                                     <td>{{ $policy->last_run_at?->format('Y-m-d H:i') ?? 'Never' }}</td>
-                                    <td>{{ number_format($policy->last_deleted_count) }}</td>
                                     <td>
-                                        <div class="table-actions justify-end">
+                                        <span class="block">{{ $policy->last_run_status ? ucfirst($policy->last_run_status) : 'Not run' }}</span>
+                                        <span class="block text-xs text-[var(--color-on-surface-dim)]">{{ number_format($policy->last_deleted_count) }} affected</span>
+                                        @if($policy->last_error)
+                                            <span class="block max-w-xs text-xs text-red-500 truncate" title="{{ $policy->last_error }}">{{ $policy->last_error }}</span>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        <div class="table-actions justify-end flex-wrap">
                                             @if($policy->form)
                                                 <a href="{{ route('admin.configuration', ['tab' => 'retention', 'retention_form' => $policy->form_id]) }}" class="btn-secondary text-xs px-2 py-1">Edit</a>
                                             @endif
                                             @if($policy->is_active)
-                                                <form method="POST" action="{{ route('admin.configuration.retention.deactivate', $policy) }}">
+                                                <form method="POST" action="{{ route('admin.configuration.retention.run', $policy) }}" onsubmit="return confirm('Run this retention policy now? This may permanently delete or clear matching data.')">
                                                     @csrf
-                                                    <button type="submit" class="btn-danger text-xs px-2 py-1">Deactivate</button>
+                                                    <button type="submit" class="btn-danger text-xs px-2 py-1">Run Now</button>
                                                 </form>
                                             @endif
+                                            <form method="POST" action="{{ route('admin.configuration.retention.destroy', $policy) }}" onsubmit="return confirm('Delete only this retention policy configuration? Form data will not be changed.')">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="btn-danger text-xs px-2 py-1">Delete</button>
+                                            </form>
                                         </div>
                                     </td>
                                 </tr>
                             @empty
-                                <x-table.empty :colspan="11" message="No retention policies configured." description="Choose an active form and date range above to begin." />
+                                <x-table.empty :colspan="13" message="No retention policies configured." description="Choose an active form, date range, and execution schedule above to begin." />
                             @endforelse
                         </tbody>
                     </x-table.index>
