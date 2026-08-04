@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpsertDataRetentionPolicyRequest;
 use App\Models\DataRetentionPolicy;
 use App\Services\DataRetentionScheduleService;
+use App\Services\DataRetentionService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 
@@ -57,15 +58,31 @@ class DataRetentionController extends Controller
             ->with('status', 'Data retention policy saved.');
     }
 
-    public function deactivate(DataRetentionPolicy $policy): RedirectResponse
+    public function run(DataRetentionPolicy $policy, DataRetentionService $retentionService): RedirectResponse
     {
-        $policy->update(['is_active' => false]);
+        $result = $retentionService->runPolicy($policy, true);
+        $message = $result['status'] === 'success'
+            ? 'Data retention policy ran successfully. Affected records: '.$result['deleted'].'.'
+            : 'Data retention policy was '.$result['status'].': '.$result['error'];
 
         return redirect()
             ->route('admin.configuration', [
                 'tab' => 'retention',
                 'retention_form' => $policy->form_id,
             ])
-            ->with('status', 'Data retention policy deactivated.');
+            ->with($result['status'] === 'success' ? 'status' : 'error', $message);
+    }
+
+    public function destroy(DataRetentionPolicy $policy): RedirectResponse
+    {
+        $formId = $policy->form_id;
+        $policy->delete();
+
+        return redirect()
+            ->route('admin.configuration', [
+                'tab' => 'retention',
+                'retention_form' => $formId,
+            ])
+            ->with('status', 'Data retention policy configuration deleted. Form data was not changed.');
     }
 }

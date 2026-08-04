@@ -38,8 +38,7 @@ Schedule::command('queue:prune-failed --hours=168')
 
 // Permanently delete records covered by active form retention policies.
 Schedule::command('data-retention:run')
-    ->daily()
-    ->at('03:00')
+    ->everyMinute()
     ->withoutOverlapping(60)
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/scheduler.log'));

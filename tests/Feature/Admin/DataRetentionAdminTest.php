@@ -9,6 +9,8 @@ use App\Models\FormField;
 use App\Models\User;
 use App\Services\CampaignService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class DataRetentionAdminTest extends TestCase
@@ -27,6 +29,13 @@ class DataRetentionAdminTest extends TestCase
             'name' => 'MB Sales',
             'color' => '#3b82f6',
         ]);
+    }
+
+    protected function tearDown(): void
+    {
+        Schema::dropIfExists('retention_admin_action_records');
+
+        parent::tearDown();
     }
 
     public function test_super_admin_can_view_retention_configuration(): void
@@ -68,6 +77,14 @@ class DataRetentionAdminTest extends TestCase
         $response->assertSee('ezycash', false);
         $response->assertSee('Any date', false);
         $response->assertSee('2026-01-31', false);
+        $response->assertSee('Run Once', false);
+        $response->assertSee('Recurring', false);
+        $response->assertSee('Scheduled run date and time', false);
+        $response->assertSee('Frequency', false);
+        $response->assertSee('Next run', false);
+        $response->assertSee('Run Now', false);
+        $response->assertSee('Delete', false);
+        $response->assertDontSee('Deactivate', false);
     }
 
     public function test_non_super_admin_cannot_view_retention_configuration(): void
@@ -168,7 +185,7 @@ class DataRetentionAdminTest extends TestCase
             ->assertSessionHasErrors('run_day_of_week');
     }
 
-    public function test_super_admin_can_create_update_and_deactivate_a_policy(): void
+    public function test_super_admin_can_create_update_and_delete_a_policy(): void
     {
         $form = $this->createForm();
 
@@ -218,11 +235,11 @@ class DataRetentionAdminTest extends TestCase
         $this->assertSame(1, DataRetentionPolicy::query()->count());
 
         $this->actingAs($this->superAdmin)
-            ->post(route('admin.configuration.retention.deactivate', $policy))
+            ->delete(route('admin.configuration.retention.destroy', $policy))
             ->assertRedirect()
             ->assertSessionHas('status');
 
-        $this->assertFalse($policy->fresh()->is_active);
+        $this->assertDatabaseMissing('data_retention_policies', ['id' => $policy->id]);
     }
 
     public function test_super_admin_can_create_selected_field_policy_and_clear_selection_when_switching_mode(): void
@@ -263,6 +280,123 @@ class DataRetentionAdminTest extends TestCase
         $policy->refresh();
         $this->assertSame('whole_record', $policy->deletion_mode);
         $this->assertNull($policy->selected_fields);
+    }
+
+    public function test_super_admin_can_run_once_now_and_delete_only_policy_configuration(): void
+    {
+        Schema::create('retention_admin_action_records', function ($table): void {
+            $table->id();
+            $table->date('date');
+            $table->string('request_id');
+            $table->timestamps();
+        });
+
+        $form = $this->createForm([
+            'form_code' => 'action_form',
+            'table_name' => 'retention_admin_action_records',
+        ]);
+        $policy = DataRetentionPolicy::query()->create([
+            'form_id' => $form->id,
+            'to_date' => '2026-01-31',
+            'run_mode' => 'once',
+            'run_at' => now()->addDay(),
+            'next_run_at' => now()->addDay(),
+        ]);
+        DB::table('retention_admin_action_records')->insert([
+            'date' => '2026-01-01',
+            'request_id' => 'run-now-record',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.configuration.retention.run', $policy))
+            ->assertRedirect()
+            ->assertSessionHas('status');
+
+        $this->assertFalse($policy->fresh()->is_active);
+        $this->assertDatabaseMissing('retention_admin_action_records', ['request_id' => 'run-now-record']);
+
+        $deleteForm = $this->createForm([
+            'form_code' => 'delete_action_form',
+            'table_name' => 'retention_admin_action_records',
+        ]);
+        $deletePolicy = DataRetentionPolicy::query()->create([
+            'form_id' => $deleteForm->id,
+            'to_date' => '2026-01-31',
+        ]);
+        DB::table('retention_admin_action_records')->insert([
+            'date' => '2026-01-01',
+            'request_id' => 'preserve-on-policy-delete',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($this->superAdmin)
+            ->delete(route('admin.configuration.retention.destroy', $deletePolicy))
+            ->assertRedirect()
+            ->assertSessionHas('status');
+
+        $this->assertDatabaseMissing('data_retention_policies', ['id' => $deletePolicy->id]);
+        $this->assertDatabaseHas('retention_admin_action_records', ['request_id' => 'preserve-on-policy-delete']);
+    }
+
+    public function test_super_admin_run_now_preserves_a_recurring_schedule(): void
+    {
+        Schema::create('retention_admin_action_records', function ($table): void {
+            $table->id();
+            $table->date('date');
+            $table->string('request_id');
+            $table->timestamps();
+        });
+
+        $form = $this->createForm([
+            'form_code' => 'recurring_action_form',
+            'table_name' => 'retention_admin_action_records',
+        ]);
+        $nextRunAt = now()->addDay();
+        $policy = DataRetentionPolicy::query()->create([
+            'form_id' => $form->id,
+            'to_date' => '2026-01-31',
+            'run_mode' => 'recurring',
+            'recurrence' => 'daily',
+            'run_time' => '03:00',
+            'next_run_at' => $nextRunAt,
+        ]);
+        DB::table('retention_admin_action_records')->insert([
+            'date' => '2026-01-01',
+            'request_id' => 'recurring-run-now-record',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.configuration.retention.run', $policy))
+            ->assertRedirect();
+
+        $freshPolicy = $policy->fresh();
+        $this->assertTrue($freshPolicy->is_active);
+        $this->assertSame($nextRunAt->format('Y-m-d H:i:s'), $freshPolicy->next_run_at->format('Y-m-d H:i:s'));
+    }
+
+    public function test_non_super_admin_cannot_run_or_delete_retention_policies(): void
+    {
+        $form = $this->createForm();
+        $policy = DataRetentionPolicy::query()->create([
+            'form_id' => $form->id,
+            'to_date' => '2026-01-31',
+        ]);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.configuration.retention.run', $policy))
+            ->assertForbidden();
+
+        $this->actingAs($admin)
+            ->delete(route('admin.configuration.retention.destroy', $policy))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('data_retention_policies', ['id' => $policy->id]);
     }
 
     public function test_selected_field_policy_requires_eligible_fields_for_the_selected_form(): void

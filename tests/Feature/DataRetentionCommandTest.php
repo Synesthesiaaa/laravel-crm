@@ -61,10 +61,10 @@ class DataRetentionCommandTest extends TestCase
 
     public function test_schedule_contains_the_every_minute_retention_command(): void
     {
-        $commands = collect(app(\Illuminate\Console\Scheduling\Schedule::class)->events())
-            ->map(fn ($event): string => (string) $event->command)
-            ->all();
+        $retentionEvent = collect(app(\Illuminate\Console\Scheduling\Schedule::class)->events())
+            ->first(fn ($event): bool => str_contains((string) $event->command, 'data-retention:run'));
 
-        $this->assertTrue(collect($commands)->contains(fn (string $command): bool => str_contains($command, 'data-retention:run')));
+        $this->assertNotNull($retentionEvent);
+        $this->assertSame('* * * * *', $retentionEvent->expression);
     }
 }
