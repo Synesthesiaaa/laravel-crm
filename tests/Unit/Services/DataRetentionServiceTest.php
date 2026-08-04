@@ -432,6 +432,40 @@ class DataRetentionServiceTest extends TestCase
         $this->assertTrue($policy->fresh()->is_active);
     }
 
+    public function test_scheduled_one_time_run_deactivates_after_success(): void
+    {
+        $table = $this->createStorageTable('retention_scheduled_once_records');
+        $form = Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'scheduled_once_form',
+            'name' => 'Scheduled Once Form',
+            'table_name' => $table,
+            'is_active' => true,
+        ]);
+        $policy = DataRetentionPolicy::query()->create([
+            'form_id' => $form->id,
+            'to_date' => '2026-01-31',
+            'run_mode' => 'once',
+            'run_at' => now()->subMinute(),
+            'next_run_at' => now()->subMinute(),
+        ]);
+        DB::table($table)->insert([
+            'date' => '2026-01-01',
+            'request_id' => 'scheduled-once-record',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $summary = app(DataRetentionService::class)->runDue();
+
+        $freshPolicy = $policy->fresh();
+        $this->assertSame(1, $summary['processed']);
+        $this->assertSame('success', $freshPolicy->last_run_status);
+        $this->assertFalse($freshPolicy->is_active);
+        $this->assertNull($freshPolicy->next_run_at);
+        $this->assertDatabaseMissing($table, ['request_id' => 'scheduled-once-record']);
+    }
+
     public function test_failed_one_time_run_records_the_error_and_clears_the_next_run(): void
     {
         $form = Form::query()->create([

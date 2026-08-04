@@ -242,6 +242,28 @@ class DataRetentionAdminTest extends TestCase
         $this->assertDatabaseMissing('data_retention_policies', ['id' => $policy->id]);
     }
 
+    public function test_super_admin_can_save_a_policy_without_automatic_execution(): void
+    {
+        $form = $this->createForm();
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.configuration.retention.store'), [
+                'form_id' => $form->id,
+                'from_date' => '2026-01-01',
+                'to_date' => '2026-01-31',
+                'deletion_mode' => 'whole_record',
+                'is_active' => '0',
+                'run_mode' => 'recurring',
+                'recurrence' => 'daily',
+                'run_time' => '03:00',
+            ])
+            ->assertRedirect();
+
+        $policy = DataRetentionPolicy::query()->firstOrFail();
+        $this->assertFalse($policy->is_active);
+        $this->assertNull($policy->next_run_at);
+    }
+
     public function test_super_admin_can_create_selected_field_policy_and_clear_selection_when_switching_mode(): void
     {
         $form = $this->createForm();

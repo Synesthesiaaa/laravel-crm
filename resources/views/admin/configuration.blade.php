@@ -251,6 +251,7 @@
                             </div>
                             <div class="form-field sm:col-span-2 flex items-end pb-1">
                                 <label class="checkbox-row">
+                                    <input type="hidden" name="is_active" value="0">
                                     <input type="checkbox" name="is_active" value="1" @checked($retentionIsActive)>
                                     <span>Active automatic cleanup</span>
                                 </label>
