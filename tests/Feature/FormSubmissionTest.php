@@ -283,6 +283,49 @@ class FormSubmissionTest extends TestCase
         });
     }
 
+    public function test_submission_reconciles_one_configured_field_with_one_unrepresented_storage_column(): void
+    {
+        Form::create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'schema_drift_form',
+            'name' => 'Schema Drift Form',
+            'table_name' => 'schema_drift_records',
+            'display_order' => 99,
+        ]);
+        FormField::create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'schema_drift_form',
+            'field_name' => 'configured_bank',
+            'field_label' => 'Bank',
+            'field_type' => 'text',
+            'is_required' => true,
+            'field_order' => 1,
+        ]);
+        Schema::create('schema_drift_records', function ($table): void {
+            $table->id();
+            $table->date('date');
+            $table->string('request_id');
+            $table->string('storage_bank');
+            $table->string('agent');
+            $table->timestamps();
+        });
+
+        $user = User::factory()->create(['username' => 'drift_agent']);
+        $response = $this->actingAs($user)->post(route('forms.store'), [
+            'campaign' => 'mbsales',
+            'form_type' => 'schema_drift_form',
+            'date' => '2026-08-04',
+            'configured_bank' => 'EastWest Bank',
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+        $this->assertDatabaseHas('schema_drift_records', [
+            'storage_bank' => 'EastWest Bank',
+        ]);
+        $this->assertFalse(Schema::hasColumn('schema_drift_records', 'configured_bank'));
+    }
+
     public function test_form_submit_returns_validation_errors_for_ajax_requests(): void
     {
         Event::fake([DashboardDataUpdated::class]);
