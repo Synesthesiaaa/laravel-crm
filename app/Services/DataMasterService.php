@@ -12,6 +12,20 @@ use Illuminate\Support\Str;
 
 class DataMasterService
 {
+    /**
+     * Framework-managed columns shown in Data Master when present in a record.
+     *
+     * @var list<string>
+     */
+    private const SYSTEM_COLUMNS = [
+        'id',
+        'date',
+        'request_id',
+        'agent',
+        'created_at',
+        'updated_at',
+    ];
+
     public function __construct(
         protected CampaignService $campaignService,
         protected FormFieldRepositoryInterface $formFieldRepository,
@@ -21,7 +35,7 @@ class DataMasterService
      * Build the default Data Master column layout for a given form.
      *
      * Order: `id` first, then fields defined in `form_fields` ordered by `field_order`,
-     * then any remaining DB columns (from the sample row) appended at the end.
+     * then approved framework-managed columns present in the sample row.
      * Headers use `field_label` where available, otherwise a humanized `field_name`.
      *
      * @param  array<int, string>|null  $availableColumns  Column names present in the actual DB row.
@@ -50,10 +64,14 @@ class DataMasterService
             $columns = array_values(array_unique(array_merge(['id'], $ordered)));
         } else {
             $available = array_values(array_unique($availableColumns));
-            $orderedInDb = array_values(array_intersect($ordered, $available));
-            $idFirst = in_array('id', $available, true) ? ['id'] : [];
-            $remaining = array_values(array_diff($available, $idFirst, $orderedInDb));
-            $columns = array_values(array_unique(array_merge($idFirst, $orderedInDb, $remaining)));
+            $orderedInDb = array_values(array_diff(
+                array_intersect($ordered, $available),
+                self::SYSTEM_COLUMNS,
+            ));
+            $systemInDb = array_values(array_intersect(self::SYSTEM_COLUMNS, $available));
+            $idFirst = in_array('id', $systemInDb, true) ? ['id'] : [];
+            $managed = array_values(array_diff($systemInDb, ['id']));
+            $columns = array_values(array_unique(array_merge($idFirst, $orderedInDb, $managed)));
         }
 
         foreach ($columns as $col) {

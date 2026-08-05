@@ -17,6 +17,40 @@ class DataMasterServiceTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_column_layout_excludes_unregistered_physical_columns(): void
+    {
+        $fieldRepository = Mockery::mock(FormFieldRepositoryInterface::class);
+        $fieldRepository->shouldReceive('getFieldsForForm')->once()->andReturn(collect([
+            (object) ['field_name' => 'configured_bank', 'field_label' => 'Bank'],
+        ]));
+        $service = new DataMasterService(
+            Mockery::mock(CampaignService::class),
+            $fieldRepository,
+        );
+
+        $layout = $service->getColumnLayout('mbsales', 'cleanup_form', [
+            'id',
+            'date',
+            'request_id',
+            'agent',
+            'configured_bank',
+            'legacy_bank',
+            'created_at',
+            'updated_at',
+        ]);
+
+        $this->assertSame([
+            'id',
+            'configured_bank',
+            'date',
+            'request_id',
+            'agent',
+            'created_at',
+            'updated_at',
+        ], $layout['columns']);
+        $this->assertArrayNotHasKey('legacy_bank', $layout['headers']);
+    }
+
     public function test_detects_numeric_percentage_storage(): void
     {
         Schema::create('percentage_probe_records', function ($table) {

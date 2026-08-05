@@ -409,6 +409,85 @@ class FormSubmissionTest extends TestCase
         ]);
     }
 
+    public function test_form_storage_cleanup_migration_drops_unregistered_columns_and_preserves_system_columns(): void
+    {
+        Form::create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'cleanup_form',
+            'name' => 'Cleanup Form',
+            'table_name' => 'cleanup_records',
+            'display_order' => 102,
+        ]);
+        FormField::create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'cleanup_form',
+            'field_name' => 'configured_bank',
+            'field_label' => 'Bank',
+            'field_type' => 'text',
+            'is_required' => true,
+            'field_order' => 1,
+        ]);
+        Schema::create('cleanup_records', function ($table): void {
+            $table->id();
+            $table->date('date');
+            $table->string('request_id');
+            $table->string('agent');
+            $table->string('configured_bank');
+            $table->string('legacy_bank');
+            $table->timestamps();
+        });
+
+        $migration = require database_path('migrations/2026_08_05_080950_cleanup_unregistered_form_columns.php');
+        $migration->up();
+
+        foreach (['id', 'date', 'request_id', 'agent', 'created_at', 'updated_at', 'configured_bank'] as $column) {
+            $this->assertTrue(Schema::hasColumn('cleanup_records', $column));
+        }
+        $this->assertFalse(Schema::hasColumn('cleanup_records', 'legacy_bank'));
+    }
+
+    public function test_form_storage_cleanup_migration_preserves_fields_from_forms_sharing_a_table(): void
+    {
+        foreach ([
+            ['form_code' => 'shared_cleanup_one', 'field_name' => 'first_field'],
+            ['form_code' => 'shared_cleanup_two', 'field_name' => 'second_field'],
+        ] as $definition) {
+            Form::create([
+                'campaign_code' => 'mbsales',
+                'form_code' => $definition['form_code'],
+                'name' => $definition['form_code'],
+                'table_name' => 'shared_cleanup_records',
+                'display_order' => 103,
+            ]);
+            FormField::create([
+                'campaign_code' => 'mbsales',
+                'form_type' => $definition['form_code'],
+                'field_name' => $definition['field_name'],
+                'field_label' => $definition['field_name'],
+                'field_type' => 'text',
+                'is_required' => true,
+                'field_order' => 1,
+            ]);
+        }
+        Schema::create('shared_cleanup_records', function ($table): void {
+            $table->id();
+            $table->date('date');
+            $table->string('request_id');
+            $table->string('agent');
+            $table->string('first_field');
+            $table->string('second_field');
+            $table->string('legacy_field');
+            $table->timestamps();
+        });
+
+        $migration = require database_path('migrations/2026_08_05_080950_cleanup_unregistered_form_columns.php');
+        $migration->up();
+
+        $this->assertTrue(Schema::hasColumn('shared_cleanup_records', 'first_field'));
+        $this->assertTrue(Schema::hasColumn('shared_cleanup_records', 'second_field'));
+        $this->assertFalse(Schema::hasColumn('shared_cleanup_records', 'legacy_field'));
+    }
+
     public function test_form_submit_returns_validation_errors_for_ajax_requests(): void
     {
         Event::fake([DashboardDataUpdated::class]);
