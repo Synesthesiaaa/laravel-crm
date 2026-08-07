@@ -283,8 +283,12 @@ class DashboardSalesRangeTest extends TestCase
         $this->assertStringContainsString('Total accounts', $monthToDateAccounts);
         $this->assertStringNotContainsString('Submitted amount', $monthToDateAccounts);
         $this->assertLessThan(
-            strpos($content, 'data-report-table="daily-counts"'),
             strpos($content, 'data-report-table="month-to-date-accounts"'),
+            strpos($content, 'data-report-table="daily-counts"'),
+        );
+        $this->assertLessThan(
+            strpos($content, 'data-report-table="daily-counts"'),
+            strpos($content, 'data-report-table="month-to-date-submitted-amounts"'),
         );
 
         $this->assertDoesNotMatchRegularExpression(

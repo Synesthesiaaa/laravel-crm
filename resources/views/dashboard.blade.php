@@ -279,11 +279,11 @@
                 'mode' => 'amounts',
             ],
             [
-                'title' => 'Month to date accounts',
-                'subtitle' => 'Accounts submitted since '.now()->startOfMonth()->format('M j, Y'),
+                'title' => 'Month to date submitted amounts',
+                'subtitle' => 'Submitted amounts by form since '.now()->startOfMonth()->format('M j, Y'),
                 'rows' => $report['month_to_date'] ?? [],
                 'totals' => $report['totals']['month_to_date'] ?? ['counts' => [], 'amounts' => [], 'total_count' => 0, 'total_amount' => 0],
-                'mode' => 'counts',
+                'mode' => 'amounts',
             ],
             [
                 'title' => 'Daily counts',
@@ -293,11 +293,11 @@
                 'mode' => 'counts',
             ],
             [
-                'title' => 'Month to date submitted amounts',
-                'subtitle' => 'Submitted amounts by form since '.now()->startOfMonth()->format('M j, Y'),
+                'title' => 'Month to date accounts',
+                'subtitle' => 'Accounts submitted since '.now()->startOfMonth()->format('M j, Y'),
                 'rows' => $report['month_to_date'] ?? [],
                 'totals' => $report['totals']['month_to_date'] ?? ['counts' => [], 'amounts' => [], 'total_count' => 0, 'total_amount' => 0],
-                'mode' => 'amounts',
+                'mode' => 'counts',
             ],
         ];
     @endphp
