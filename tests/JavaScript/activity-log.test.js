@@ -85,3 +85,12 @@ test('does not duplicate a request activity received by both realtime and pollin
 
     assert.deepEqual(Array.from(component.entries, (entry) => entry.id), [10, 11]);
 });
+
+test('renders structured audit detail sections for expanded entries', () => {
+    assert.match(activityLogView, /Actor/);
+    assert.match(activityLogView, /Event/);
+    assert.match(activityLogView, /Request/);
+    assert.match(activityLogView, /Before/);
+    assert.match(activityLogView, /After/);
+    assert.match(activityLogView, /changes\.diff/);
+});

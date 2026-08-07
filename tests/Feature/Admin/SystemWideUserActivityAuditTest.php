@@ -46,6 +46,47 @@ class SystemWideUserActivityAuditTest extends TestCase
         $this->assertArrayNotHasKey('headers', $properties['request']);
     }
 
+    public function test_activity_entries_include_actor_details_and_changed_field_diff(): void
+    {
+        $admin = User::factory()->create([
+            'username' => 'detail-admin',
+            'full_name' => 'Detail Administrator',
+            'role' => User::ROLE_SUPER_ADMIN,
+        ]);
+
+        activity('configuration')
+            ->causedBy($admin)
+            ->event('updated')
+            ->withProperties([
+                'attributes' => [
+                    'status' => 'active',
+                    'name' => 'New name',
+                ],
+                'old' => [
+                    'status' => 'inactive',
+                    'name' => 'Old name',
+                    'removed' => 'legacy value',
+                ],
+            ])
+            ->log('Detailed configuration update');
+
+        $this->actingAs($admin)
+            ->getJson(route('admin.activity-log.entries', [
+                'search' => 'Detailed configuration update',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.0.actor_details.id', $admin->id)
+            ->assertJsonPath('data.0.actor_details.username', 'detail-admin')
+            ->assertJsonPath('data.0.actor_details.full_name', 'Detail Administrator')
+            ->assertJsonPath('data.0.actor_details.role', User::ROLE_SUPER_ADMIN)
+            ->assertJsonPath('data.0.changes.diff.status.old', 'inactive')
+            ->assertJsonPath('data.0.changes.diff.status.new', 'active')
+            ->assertJsonPath('data.0.changes.diff.name.old', 'Old name')
+            ->assertJsonPath('data.0.changes.diff.name.new', 'New name')
+            ->assertJsonPath('data.0.changes.diff.removed.old', 'legacy value')
+            ->assertJsonPath('data.0.changes.diff.removed.new', null);
+    }
+
     public function test_logout_requests_retain_the_authenticated_actor(): void
     {
         $user = User::factory()->create(['role' => User::ROLE_AGENT]);

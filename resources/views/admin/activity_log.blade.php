@@ -101,20 +101,51 @@
                         <span class="activity-terminal-actor" x-text="`[${entry.actor}]`"></span>
                     </button>
                     <div x-show="isExpanded(entry.id)" x-cloak class="activity-terminal-details">
+                        <div class="activity-terminal-section-title">Audit context</div>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                            <div><span class="activity-terminal-key">resource</span><span x-text="entry.resource_type ? `${entry.resource_type} ${entry.resource ?? ''}` : 'system'"></span></div>
-                            <div><span class="activity-terminal-key">activity_id</span><span x-text="entry.id"></span></div>
-                            <div><span class="activity-terminal-key">severity</span><span x-text="entry.severity"></span></div>
+                            <div><span class="activity-terminal-key">Actor</span><span x-text="entry.actor"></span></div>
+                            <div><span class="activity-terminal-key">Username</span><span x-text="entry.actor_details?.username || 'system'"></span></div>
+                            <div><span class="activity-terminal-key">Role</span><span x-text="entry.actor_details?.role || 'system'"></span></div>
+                            <div><span class="activity-terminal-key">User ID</span><span x-text="entry.actor_details?.id || '—'"></span></div>
+                            <div><span class="activity-terminal-key">Event</span><span x-text="entry.event || entry.action"></span></div>
+                            <div><span class="activity-terminal-key">Source</span><span x-text="entry.log_name || 'system'"></span></div>
+                            <div><span class="activity-terminal-key">Resource</span><span x-text="entry.resource_type ? `${entry.resource_type} ${entry.resource ?? ''}` : 'system'"></span></div>
+                            <div><span class="activity-terminal-key">Resource ID</span><span x-text="entry.resource_id || '—'"></span></div>
+                            <div><span class="activity-terminal-key">Severity</span><span x-text="entry.severity"></span></div>
                         </div>
                         <template x-if="entry.request">
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3 text-xs">
-                                <div><span class="activity-terminal-key">request</span><span x-text="`${entry.request.method} ${entry.request.path}`"></span></div>
-                                <div><span class="activity-terminal-key">route</span><span x-text="entry.request.route || 'anonymous route'"></span></div>
-                                <div><span class="activity-terminal-key">status</span><span x-text="entry.request.status"></span></div>
+                            <div class="activity-terminal-detail-section">
+                                <div class="activity-terminal-section-title">Request</div>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                                    <div><span class="activity-terminal-key">Method / path</span><span x-text="`${entry.request.method} ${entry.request.path}`"></span></div>
+                                    <div><span class="activity-terminal-key">Route</span><span x-text="entry.request.route || 'anonymous route'"></span></div>
+                                    <div><span class="activity-terminal-key">Status</span><span x-text="entry.request.status"></span></div>
+                                    <div><span class="activity-terminal-key">IP address</span><span x-text="entry.request.ip || '—'"></span></div>
+                                    <div class="md:col-span-2"><span class="activity-terminal-key">User agent</span><span x-text="entry.request.user_agent || '—'"></span></div>
+                                </div>
+                                <template x-if="entry.request.query && Object.keys(entry.request.query).length">
+                                    <pre class="activity-terminal-json" x-text="JSON.stringify(entry.request.query, null, 2)"></pre>
+                                </template>
                             </div>
                         </template>
-                        <pre x-show="entry.request" class="activity-terminal-json" x-text="JSON.stringify(entry.request, null, 2)"></pre>
-                        <pre class="activity-terminal-json" x-text="JSON.stringify(entry.changes, null, 2)"></pre>
+                        <template x-if="entry.changes?.diff && Object.keys(entry.changes.diff).length">
+                            <div class="activity-terminal-detail-section">
+                                <div class="activity-terminal-section-title">Changes</div>
+                                <div class="activity-terminal-diff">
+                                    <template x-for="[field, change] in Object.entries(entry.changes.diff)" :key="field">
+                                        <div class="activity-terminal-diff-row">
+                                            <span class="activity-terminal-diff-field" x-text="field"></span>
+                                            <span><span class="activity-terminal-key">Before</span><span x-text="formatDetailValue(change.old)"></span></span>
+                                            <span><span class="activity-terminal-key">After</span><span x-text="formatDetailValue(change.new)"></span></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                        <div class="activity-terminal-detail-section">
+                            <div class="activity-terminal-section-title">Raw sanitized record</div>
+                            <pre class="activity-terminal-json" x-text="JSON.stringify(entry, null, 2)"></pre>
+                        </div>
                     </div>
                 </article>
             </template>
@@ -154,7 +185,12 @@
     .activity-terminal-entry--error .activity-terminal-mark, .activity-terminal-entry--error .activity-terminal-action { color: #ff6d7e; }
     .activity-terminal-description { overflow: hidden; color: #e6e9ee; text-overflow: ellipsis; white-space: nowrap; }
     .activity-terminal-details { margin: .15rem 1rem .65rem 18.2rem; border-left: 1px solid rgba(120, 140, 160, .3); padding: .45rem .75rem; color: #aab5c2; }
+    .activity-terminal-detail-section { margin-top: .85rem; }
+    .activity-terminal-section-title { margin-bottom: .4rem; color: #66e3a2; font-size: .68rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
     .activity-terminal-key { display: inline-block; width: 5.5rem; color: #687585; }
+    .activity-terminal-diff { display: grid; gap: .35rem; }
+    .activity-terminal-diff-row { display: grid; grid-template-columns: minmax(7rem, .7fr) minmax(0, 1fr) minmax(0, 1fr); gap: .65rem; border-top: 1px solid rgba(120, 140, 160, .16); padding-top: .35rem; }
+    .activity-terminal-diff-field { color: #8cc8ff; }
     .activity-terminal-json { margin-top: .65rem; overflow-x: auto; color: #a9e8c3; }
     .activity-terminal-empty { padding: 2.5rem 1rem; text-align: center; color: #687585; }
     @media (max-width: 720px) {
@@ -163,6 +199,7 @@
         .activity-terminal-description { grid-column: 3; }
         .activity-terminal-actor { display: none; }
         .activity-terminal-details { margin-left: .7rem; margin-right: .7rem; }
+        .activity-terminal-diff-row { grid-template-columns: 1fr; gap: .2rem; }
         .activity-terminal-toolbar { align-items: flex-start; flex-direction: column; }
     }
 </style>
@@ -265,6 +302,10 @@ window.activityLogTerminal = function (config) {
         formatTime(timestamp) {
             if (!timestamp) return '--:--:--';
             return new Date(timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' });
+        },
+        formatDetailValue(value) {
+            if (value === null || value === undefined || value === '') return '—';
+            return typeof value === 'object' ? JSON.stringify(value) : String(value);
         },
         scrollToBottom() {
             if (this.$refs.output && this.following && !this.paused) this.$refs.output.scrollTop = this.$refs.output.scrollHeight;

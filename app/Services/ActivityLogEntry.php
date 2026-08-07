@@ -39,6 +39,8 @@ class ActivityLogEntry
         $event = strtolower((string) ($activity->event ?: 'action'));
         $properties = $this->sanitizer->sanitize($activity->properties?->toArray() ?? []);
         $request = is_array($properties['request'] ?? null) ? $properties['request'] : null;
+        $attributes = is_array($properties['attributes'] ?? null) ? $properties['attributes'] : [];
+        $old = is_array($properties['old'] ?? null) ? $properties['old'] : [];
         $action = $this->actionFor($event, $request);
         $subject = $activity->subject;
         $causer = $activity->causer;
@@ -48,7 +50,9 @@ class ActivityLogEntry
             'timestamp' => $activity->created_at?->toIso8601String(),
             'actor' => $this->actorLabel($causer),
             'actor_id' => $causer?->getKey(),
+            'actor_details' => $this->actorDetails($causer),
             'event' => $event,
+            'log_name' => $activity->log_name,
             'action' => $action,
             'resource' => $this->resourceLabel($subject, $activity->subject_id),
             'resource_type' => $activity->subject_type ? class_basename($activity->subject_type) : null,
@@ -57,8 +61,9 @@ class ActivityLogEntry
             'severity' => $this->severityFor($action, $request),
             'request' => $request,
             'changes' => [
-                'attributes' => $properties['attributes'] ?? [],
-                'old' => $properties['old'] ?? [],
+                'attributes' => $attributes,
+                'old' => $old,
+                'diff' => $this->changeDiff($attributes, $old),
             ],
         ];
     }
@@ -117,6 +122,50 @@ class ActivityLogEntry
             ?? $causer->name
             ?? $causer->username
             ?? 'USER #'.$causer->getKey());
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function actorDetails(mixed $causer): ?array
+    {
+        if ($causer === null) {
+            return null;
+        }
+
+        return [
+            'id' => $causer->getKey(),
+            'username' => $causer->getAttribute('username'),
+            'full_name' => $causer->getAttribute('full_name') ?? $causer->getAttribute('name'),
+            'role' => $causer->getAttribute('role'),
+        ];
+    }
+
+    /**
+     * @param  array<string|int, mixed>  $attributes
+     * @param  array<string|int, mixed>  $old
+     * @return array<string, array{old: mixed, new: mixed}>
+     */
+    private function changeDiff(array $attributes, array $old): array
+    {
+        $diff = [];
+        $keys = array_unique(array_merge(array_keys($old), array_keys($attributes)));
+
+        foreach ($keys as $key) {
+            $oldValue = $old[$key] ?? null;
+            $newValue = $attributes[$key] ?? null;
+
+            if ($oldValue === $newValue) {
+                continue;
+            }
+
+            $diff[(string) $key] = [
+                'old' => $oldValue,
+                'new' => $newValue,
+            ];
+        }
+
+        return $diff;
     }
 
     private function resourceLabel(mixed $subject, ?int $subjectId): ?string
