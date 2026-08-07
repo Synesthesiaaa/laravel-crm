@@ -36,8 +36,10 @@ class ActivityLogEntry
      */
     public function format(Activity $activity): array
     {
-        $action = strtolower((string) ($activity->event ?: 'action'));
+        $event = strtolower((string) ($activity->event ?: 'action'));
         $properties = $this->sanitizer->sanitize($activity->properties?->toArray() ?? []);
+        $request = is_array($properties['request'] ?? null) ? $properties['request'] : null;
+        $action = $this->actionFor($event, $request);
         $subject = $activity->subject;
         $causer = $activity->causer;
 
@@ -46,12 +48,14 @@ class ActivityLogEntry
             'timestamp' => $activity->created_at?->toIso8601String(),
             'actor' => $this->actorLabel($causer),
             'actor_id' => $causer?->getKey(),
+            'event' => $event,
             'action' => $action,
             'resource' => $this->resourceLabel($subject, $activity->subject_id),
             'resource_type' => $activity->subject_type ? class_basename($activity->subject_type) : null,
             'resource_id' => $activity->subject_id,
             'description' => (string) $activity->description,
-            'severity' => $this->severityFor($action),
+            'severity' => $this->severityFor($action, $request),
+            'request' => $request,
             'changes' => [
                 'attributes' => $properties['attributes'] ?? [],
                 'old' => $properties['old'] ?? [],
@@ -84,7 +88,9 @@ class ActivityLogEntry
                 $searchQuery
                     ->where('description', 'like', $search)
                     ->orWhere('log_name', 'like', $search)
-                    ->orWhere('subject_type', 'like', $search);
+                    ->orWhere('subject_type', 'like', $search)
+                    ->orWhere('properties->request->path', 'like', $search)
+                    ->orWhere('properties->request->route', 'like', $search);
             });
         }
 
@@ -129,8 +135,30 @@ class ActivityLogEntry
         return '#'.$subject->getKey();
     }
 
-    private function severityFor(string $action): string
+    private function actionFor(string $event, ?array $request): string
     {
+        if ($event !== 'request' || $request === null) {
+            return $event;
+        }
+
+        $method = strtoupper((string) ($request['method'] ?? ''));
+
+        return $method !== '' ? $method : $event;
+    }
+
+    private function severityFor(string $action, ?array $request = null): string
+    {
+        if ($request !== null && array_key_exists('status', $request)) {
+            $status = (int) $request['status'];
+
+            return match (true) {
+                $status >= 500 => 'error',
+                $status >= 400 => 'warning',
+                $status >= 200 && $status < 400 => 'success',
+                default => 'info',
+            };
+        }
+
         return match (true) {
             in_array($action, ['failed', 'force_deleted'], true) => 'error',
             in_array($action, ['deleted', 'logout'], true) => 'warning',

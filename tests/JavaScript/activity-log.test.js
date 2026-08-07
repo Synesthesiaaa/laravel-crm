@@ -49,3 +49,39 @@ test('reconciles missed activity events while Echo remains connected', async () 
     assert.equal(component.lastId, 11);
     assert.equal(component.entries.at(-1).description, 'Latest activity');
 });
+
+test('exposes request activities in the terminal filters and details', () => {
+    assert.match(activityLogView, /<option value="request">Requests<\/option>/);
+    assert.match(activityLogView, /entry\.request/);
+});
+
+test('does not duplicate a request activity received by both realtime and polling', async () => {
+    const context = {
+        window: {
+            TelephonyEcho: {
+                isBroadcastEnabled: () => true,
+                isEchoConnected: () => true,
+            },
+            axios: {
+                get: async () => ({
+                    data: {
+                        data: [{ id: 11, action: 'GET', description: 'GET /dashboard' }],
+                    },
+                }),
+            },
+        },
+    };
+
+    vm.runInNewContext(activityLogScript, context);
+
+    const component = context.window.activityLogTerminal({
+        initialEntries: [{ id: 10, description: 'Previous activity' }],
+        historyUrl: '/admin/activity-log/entries',
+    });
+    component.$nextTick = () => {};
+
+    component.append({ id: 11, action: 'GET', description: 'GET /dashboard' });
+    await component.poll();
+
+    assert.deepEqual(Array.from(component.entries, (entry) => entry.id), [10, 11]);
+});

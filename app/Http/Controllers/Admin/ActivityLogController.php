@@ -16,7 +16,6 @@ class ActivityLogController extends Controller
         return view('admin.activity_log', [
             'entries' => $entryFormatter->recent($this->filters($request)),
             'actors' => User::query()
-                ->whereNotNull('role')
                 ->orderBy('full_name')
                 ->orderBy('username')
                 ->get(['id', 'username', 'full_name']),

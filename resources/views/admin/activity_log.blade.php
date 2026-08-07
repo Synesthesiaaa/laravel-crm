@@ -48,6 +48,7 @@
                     <option value="login">Login</option>
                     <option value="logout">Logout</option>
                     <option value="retention_run">Retention run</option>
+                    <option value="request">Requests</option>
                 </select>
             </div>
             <div class="form-field">
@@ -105,6 +106,14 @@
                             <div><span class="activity-terminal-key">activity_id</span><span x-text="entry.id"></span></div>
                             <div><span class="activity-terminal-key">severity</span><span x-text="entry.severity"></span></div>
                         </div>
+                        <template x-if="entry.request">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3 text-xs">
+                                <div><span class="activity-terminal-key">request</span><span x-text="`${entry.request.method} ${entry.request.path}`"></span></div>
+                                <div><span class="activity-terminal-key">route</span><span x-text="entry.request.route || 'anonymous route'"></span></div>
+                                <div><span class="activity-terminal-key">status</span><span x-text="entry.request.status"></span></div>
+                            </div>
+                        </template>
+                        <pre x-show="entry.request" class="activity-terminal-json" x-text="JSON.stringify(entry.request, null, 2)"></pre>
                         <pre class="activity-terminal-json" x-text="JSON.stringify(entry.changes, null, 2)"></pre>
                     </div>
                 </article>

@@ -49,6 +49,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'api/webhooks/ami',
             'api/webhooks/vicidial-events',
         ]);
+        $middleware->web(append: [
+            \App\Http\Middleware\AuditUserActivity::class,
+        ]);
+        $middleware->api(append: [
+            \App\Http\Middleware\AuditUserActivity::class,
+        ]);
         $middleware->alias([
             'campaign' => \App\Http\Middleware\EnsureCampaignSelected::class,
             'role' => \App\Http\Middleware\CheckRole::class,
