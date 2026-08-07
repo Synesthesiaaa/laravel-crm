@@ -16,6 +16,7 @@ let _teardownUserNotifications = null;
 let _userNotificationsSig = null;
 let _teardownDashboardChannel = null;
 let _dashboardChannelSig = null;
+let _teardownActivityLogChannel = null;
 
 const key = import.meta.env.VITE_REVERB_APP_KEY || import.meta.env.VITE_PUSHER_APP_KEY;
 const broadcaster = import.meta.env.VITE_BROADCAST_DRIVER || 'reverb';
@@ -282,6 +283,35 @@ export function subscribeDashboardChannel(campaignCode, handler) {
 }
 
 /**
+ * Subscribe to the Super Admin activity stream.
+ * @param {(entry: object) => void} handler
+ * @returns {() => void}
+ */
+export function subscribeActivityLog(handler) {
+    if (!window.Echo || typeof handler !== 'function') {
+        TelephonyLogger.warn('TelephonyEcho', 'Activity log subscription skipped', { has_echo: !!window.Echo });
+
+        return () => {};
+    }
+
+    if (typeof _teardownActivityLogChannel === 'function') {
+        _teardownActivityLogChannel();
+    }
+
+    const channel = window.Echo.private('activity-log');
+    channel.listen('.activity.log.created', (payload) => handler(payload?.entry || payload));
+    TelephonyLogger.info('TelephonyEcho', 'Subscribed to activity log channel');
+
+    const teardown = () => {
+        channel.stopListening('.activity.log.created');
+        if (_teardownActivityLogChannel === teardown) _teardownActivityLogChannel = null;
+    };
+    _teardownActivityLogChannel = teardown;
+
+    return teardown;
+}
+
+/**
  * Join the agents presence channel for real-time online/offline tracking.
  * @param {object} handlers - { onHere, onJoining, onLeaving }
  */
@@ -305,6 +335,7 @@ window.TelephonyEcho = {
     subscribeUserNotifications,
     subscribeSupervisorChannel,
     subscribeDashboardChannel,
+    subscribeActivityLog,
     joinAgentsPresence,
     isBroadcastEnabled,
 };

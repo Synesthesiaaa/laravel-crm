@@ -169,6 +169,8 @@ Route::middleware(['auth', 'campaign'])->group(function () {
         // Super Admin only
         Route::middleware('role:Super Admin')->group(function () {
             Route::get('configuration', [\App\Http\Controllers\Admin\ConfigurationController::class, 'index'])->name('configuration');
+            Route::get('activity-log', [\App\Http\Controllers\Admin\ActivityLogController::class, 'index'])->name('activity-log.index');
+            Route::get('activity-log/entries', [\App\Http\Controllers\Admin\ActivityLogController::class, 'entries'])->name('activity-log.entries');
             Route::post('configuration/retention', [\App\Http\Controllers\Admin\DataRetentionController::class, 'store'])->name('configuration.retention.store');
             Route::post('configuration/retention/{policy}/run', [\App\Http\Controllers\Admin\DataRetentionController::class, 'run'])->name('configuration.retention.run');
             Route::delete('configuration/retention/{policy}', [\App\Http\Controllers\Admin\DataRetentionController::class, 'destroy'])->name('configuration.retention.destroy');

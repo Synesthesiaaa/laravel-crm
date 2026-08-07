@@ -39,3 +39,10 @@ Broadcast::channel('agents.online', function ($user) {
         'role' => $user->role ?? 'Agent',
     ];
 });
+
+/**
+ * Super Admin activity stream.
+ */
+Broadcast::channel('activity-log', function (User $user): bool {
+    return $user->isSuperAdmin();
+});

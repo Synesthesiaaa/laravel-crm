@@ -4,9 +4,38 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class DataRetentionPolicy extends Model
 {
+    use LogsActivity;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly([
+                'form_id',
+                'from_date',
+                'to_date',
+                'deletion_mode',
+                'selected_fields',
+                'is_active',
+                'run_mode',
+                'run_at',
+                'recurrence',
+                'run_time',
+                'run_day_of_week',
+                'run_day_of_month',
+                'next_run_at',
+                'last_run_at',
+                'last_deleted_count',
+                'last_run_status',
+            ])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+
     protected $fillable = [
         'form_id',
         'from_date',

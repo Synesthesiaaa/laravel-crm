@@ -9,6 +9,7 @@ use App\Models\DispositionCode;
 use App\Models\Form;
 use App\Models\FormField;
 use App\Models\VicidialServer;
+use App\Observers\ActivityObserver;
 use App\Observers\CampaignConfigurationObserver;
 use App\Policies\CampaignPolicy;
 use App\Policies\DispositionCodePolicy;
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Spatie\Activitylog\Models\Activity;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -45,6 +47,7 @@ class AppServiceProvider extends ServiceProvider
         FormField::observe(CampaignConfigurationObserver::class);
         AgentScreenField::observe(CampaignConfigurationObserver::class);
         DispositionCode::observe(CampaignConfigurationObserver::class);
+        Activity::observe(ActivityObserver::class);
 
         View::composer(['layouts.app', 'layouts.sidebar'], function ($view) {
             $view->with('user', Auth::user());

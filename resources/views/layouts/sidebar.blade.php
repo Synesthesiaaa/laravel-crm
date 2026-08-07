@@ -55,6 +55,7 @@
         ['route' => 'admin.agent-screen.index',     'label' => 'Agent Screen Cfg', 'icon' => 'computer-desktop'],
         ['route' => 'admin.attendance-statuses.index', 'label' => 'Attendance Statuses', 'icon' => 'clock'],
         ['route' => 'admin.configuration',          'label' => 'Configuration',    'icon' => 'cog-6-tooth'],
+        ['route' => 'admin.activity-log.index',     'label' => 'Activity Log',      'icon' => 'document-text'],
     ];
 @endphp
 

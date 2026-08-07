@@ -248,6 +248,24 @@ class DataRetentionService
             ]);
         }
 
+        $logger = activity('configuration')
+            ->event('retention_run')
+            ->performedOn($policy)
+            ->withProperties([
+                'attributes' => [
+                    'status' => $status,
+                    'deleted' => $status === 'success' ? $deleted : 0,
+                    'manual' => $manual,
+                    'error' => $error,
+                ],
+            ]);
+
+        if (auth()->check()) {
+            $logger->causedBy(auth()->user());
+        }
+
+        $logger->log('Data retention policy executed');
+
         return [
             'status' => $status,
             'error' => $error,

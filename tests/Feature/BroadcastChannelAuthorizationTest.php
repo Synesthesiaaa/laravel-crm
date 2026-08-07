@@ -31,4 +31,13 @@ class BroadcastChannelAuthorizationTest extends TestCase
         $this->assertFalse($callback($user, 'inactive'));
         $this->assertFalse($callback($user, 'unknown'));
     }
+
+    public function test_activity_log_channel_is_restricted_to_super_admins(): void
+    {
+        $callback = Broadcast::getChannels()->get('activity-log');
+
+        $this->assertIsCallable($callback);
+        $this->assertTrue($callback(User::factory()->make(['role' => User::ROLE_SUPER_ADMIN])));
+        $this->assertFalse($callback(User::factory()->make(['role' => User::ROLE_ADMIN])));
+    }
 }

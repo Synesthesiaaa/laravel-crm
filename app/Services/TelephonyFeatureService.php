@@ -51,6 +51,8 @@ class TelephonyFeatureService
 
     public function updateMany(array $values): void
     {
+        $before = $this->getAll();
+
         foreach (self::FEATURE_KEYS as $feature) {
             $enabled = ! empty($values[$feature]);
             SystemSetting::query()->updateOrCreate(
@@ -60,6 +62,24 @@ class TelephonyFeatureService
         }
 
         $this->flush();
+        $after = $this->getAll();
+
+        if ($before === $after) {
+            return;
+        }
+
+        $logger = activity('configuration')
+            ->event('updated')
+            ->withProperties([
+                'attributes' => ['features' => $after],
+                'old' => ['features' => $before],
+            ]);
+
+        if (auth()->check()) {
+            $logger->causedBy(auth()->user());
+        }
+
+        $logger->log('Telephony feature access updated');
     }
 
     public function flush(): void
