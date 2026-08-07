@@ -212,20 +212,20 @@ window.activityLogTerminal = function (config) {
         },
         async poll() {
             const echoConnected = window.TelephonyEcho?.isEchoConnected?.();
-            if (echoConnected) {
+            if (!echoConnected) {
+                this.connection = window.TelephonyEcho?.isBroadcastEnabled?.() ? 'offline' : 'polling';
+            } else {
                 this.connection = 'connected';
-                return;
             }
 
-            this.connection = window.TelephonyEcho?.isBroadcastEnabled?.() ? 'offline' : 'polling';
             try {
                 const response = await window.axios.get(this.historyUrl, {
                     params: { ...this.queryParams(), since_id: this.lastId || undefined, limit: 100 },
                 });
                 (response.data?.data || []).forEach((entry) => this.append(entry, false));
-                this.connection = 'polling';
+                if (!echoConnected) this.connection = 'polling';
             } catch (error) {
-                this.connection = 'offline';
+                if (!echoConnected) this.connection = 'offline';
             }
         },
         queryParams() {
