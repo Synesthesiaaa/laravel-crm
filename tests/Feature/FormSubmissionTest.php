@@ -88,6 +88,38 @@ class FormSubmissionTest extends TestCase
         }
     }
 
+    public function test_agent_submission_uses_the_current_server_date_even_when_request_contains_a_different_date(): void
+    {
+        Carbon::setTestNow('2026-08-17 10:30:00');
+        $user = User::factory()->create(['username' => 'agent1', 'role' => User::ROLE_AGENT]);
+
+        try {
+            $response = $this->actingAs($user)->post(route('forms.store'), [
+                'campaign' => 'mbsales',
+                'form_type' => 'ezycash',
+                'date' => '2020-01-01',
+                'cardholder_name' => 'Agent Current Date',
+                'mpi_credit_card_no' => '4111111111111111',
+                'bank' => 'Test Bank',
+                'account_type' => 'Savings',
+                'account_number' => '123456',
+                'surname' => 'Doe',
+                'first_name' => 'John',
+                'ezycash_amount' => '100.00',
+                'term' => '12',
+                'rate' => '5.00',
+            ]);
+
+            $response->assertRedirect();
+            $this->assertDatabaseHas('ezycash', [
+                'date' => '2026-08-17',
+                'cardholder_name' => 'Agent Current Date',
+            ]);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_form_submit_broadcasts_dashboard_update_after_successful_commit(): void
     {
         Event::fake([DashboardDataUpdated::class]);

@@ -106,4 +106,63 @@ class FormShowViewRenderTest extends TestCase
         $this->assertStringContainsString('@submit.prevent="submitForm()"', $html);
         $this->assertStringContainsString('data-user-id="'.$user->id.'"', $html);
     }
+
+    public function test_agent_sees_a_read_only_date_on_regular_crm_forms(): void
+    {
+        Campaign::create([
+            'code' => 'mbsales',
+            'name' => 'MB Sales',
+            'description' => 'Test campaign',
+            'display_order' => 0,
+        ]);
+        Form::create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'ezycash',
+            'name' => 'EzyCash',
+            'table_name' => 'ezycash',
+            'display_order' => 1,
+        ]);
+        $user = User::factory()->create(['role' => User::ROLE_AGENT]);
+
+        $response = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('forms.show', ['type' => 'ezycash', 'campaign' => 'mbsales']));
+
+        $response->assertOk();
+        $this->assertMatchesRegularExpression(
+            '/<input\s+type="date"\s+name="date"[^>]*\sreadonly(?:\s|>)/',
+            (string) $response->getContent(),
+        );
+    }
+
+    public function test_elevated_roles_can_edit_the_date_on_regular_crm_forms(): void
+    {
+        Campaign::create([
+            'code' => 'mbsales',
+            'name' => 'MB Sales',
+            'description' => 'Test campaign',
+            'display_order' => 0,
+        ]);
+        Form::create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'ezycash',
+            'name' => 'EzyCash',
+            'table_name' => 'ezycash',
+            'display_order' => 1,
+        ]);
+
+        foreach ([User::ROLE_TEAM_LEADER, User::ROLE_ADMIN, User::ROLE_SUPER_ADMIN] as $role) {
+            $user = User::factory()->create(['role' => $role]);
+
+            $response = $this->actingAs($user)
+                ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+                ->get(route('forms.show', ['type' => 'ezycash', 'campaign' => 'mbsales']));
+
+            $response->assertOk();
+            $this->assertDoesNotMatchRegularExpression(
+                '/<input\s+type="date"\s+name="date"[^>]*\sreadonly(?:\s|>)/',
+                (string) $response->getContent(),
+            );
+        }
+    }
 }
