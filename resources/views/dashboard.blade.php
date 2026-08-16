@@ -10,6 +10,8 @@
     $dashboardSections = $dashboardLayout['sections'] ?? [];
     $sectionVisible = static fn (string $key): bool => ($dashboardSections[$key]['visible'] ?? true) === true;
     $sectionOrder = static fn (string $key): int => (int) ($dashboardSections[$key]['order'] ?? 0);
+    $leaderboardTotalSales = collect($agentLeaderboard ?? [])->sum('sales_count');
+    $leaderboardTotalAmount = collect($agentLeaderboard ?? [])->sum('sales_amount');
     $salesRangeLabel = $salesFilter['from']->format('M j, Y').' · '.$salesFilter['from']->format('g:i A').'–'.$salesFilter['until']->format('g:i A');
 @endphp
 <div class="space-y-8 flex flex-col">
@@ -196,6 +198,13 @@
                                 </tr>
                             @endforeach
                         </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="2" class="font-semibold text-[var(--color-on-surface)]">Total</td>
+                                <td class="text-right font-semibold tabular-nums">{{ number_format($leaderboardTotalSales) }}</td>
+                                <td class="text-right font-semibold tabular-nums">{{ number_format($leaderboardTotalAmount, 2) }}</td>
+                            </tr>
+                        </tfoot>
                     </table>
                 @else
                     <p class="table-empty py-8 text-center text-sm text-[var(--color-on-surface-dim)]">No qualifying form sales are available for this range.</p>
@@ -255,6 +264,13 @@
                             </tr>
                         @endforeach
                     </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="2" class="font-semibold text-[var(--color-on-surface)]">Total</td>
+                            <td class="text-right font-semibold tabular-nums">{{ number_format($leaderboardTotalSales) }}</td>
+                            <td class="text-right font-semibold tabular-nums">{{ number_format($leaderboardTotalAmount, 2) }}</td>
+                        </tr>
+                    </tfoot>
                 </table>
             @else
                 <p class="table-empty py-8 text-center text-sm text-[var(--color-on-surface-dim)]">No qualifying form sales are available for this range.</p>

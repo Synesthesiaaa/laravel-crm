@@ -1,38 +1,4 @@
-## Purpose
-
-Allow administrators to designate numeric form fields as sale amounts and use marked submission values for dashboard sales metrics.
-
-## Requirements
-
-### Requirement: Administrators can mark numeric form fields as sale amounts
-The system SHALL persist a boolean sale-amount designation for each form field. The Field Logic add and edit forms SHALL expose the designation for numeric fields, and the field list SHALL show whether each field is marked.
-
-#### Scenario: Mark a numeric field while adding it
-- **WHEN** an administrator submits a new field with type `number` and the sale-amount checkbox selected
-- **THEN** the field is saved with its sale-amount designation enabled
-
-#### Scenario: Mark a numeric field while editing it
-- **WHEN** an administrator updates an existing numeric field with the sale-amount checkbox selected
-- **THEN** the field is saved with its sale-amount designation enabled
-
-#### Scenario: A non-numeric field cannot be a sale amount
-- **WHEN** an administrator submits a non-numeric field type with the sale-amount flag enabled
-- **THEN** the field is saved with the sale-amount designation disabled
-
-### Requirement: Marked form submissions count as sales
-The system SHALL count a form submission as one sale when at least one active numeric field marked as a sale amount contains a non-null, non-empty numeric value. A submission SHALL count at most once regardless of how many marked fields contain values.
-
-#### Scenario: One marked value creates one sale
-- **WHEN** a form submission contains a numeric value in one marked field
-- **THEN** the dashboard sales count increases by one
-
-#### Scenario: Multiple marked values still create one sale
-- **WHEN** a form submission contains numeric values in multiple marked fields
-- **THEN** the dashboard sales count increases by one for that submission
-
-#### Scenario: Empty marked values do not create sales
-- **WHEN** every marked field in a submission is null or empty
-- **THEN** that submission is excluded from the dashboard sales count
+## MODIFIED Requirements
 
 ### Requirement: Marked values contribute to dashboard sale amounts
 The system SHALL persist capture timestamps for new form submissions and calculate dashboard Sales, Top Agent, per-form breakdown, and campaign leaderboard metrics exclusively from non-empty numeric values in active fields marked as sale amounts. The dashboard SHALL accept a selected date, start time, and end time, defaulting to the current date from `06:00` inclusive through `18:00` exclusive, and SHALL apply that same range to every dashboard sales metric. The dashboard SHALL show the Sales and Top Agent cards, SHALL NOT render a Calls KPI card, and SHALL NOT use campaign disposition records or lead-data amounts as a fallback. If no valid marked sale field exists for the campaign, the dashboard SHALL return zero sales, zero amount, no Top Agent, an empty form breakdown, and an empty leaderboard.

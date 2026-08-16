@@ -192,6 +192,12 @@ class DashboardSalesRangeTest extends TestCase
         $response->assertSee('100.00', false);
         $response->assertSee('250.00', false);
         $response->assertDontSee('999.00', false);
+
+        $content = $response->getContent();
+
+        $this->assertSame(2, substr_count($content, '>Total</td>'));
+        $this->assertSame(2, substr_count($content, '<td class="text-right font-semibold tabular-nums">2</td>'));
+        $this->assertSame(2, substr_count($content, '<td class="text-right font-semibold tabular-nums">350.00</td>'));
     }
 
     public function test_daily_campaign_report_aggregates_daily_and_month_to_date_rows_by_agent(): void
