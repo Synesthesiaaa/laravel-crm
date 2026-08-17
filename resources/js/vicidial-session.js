@@ -229,6 +229,14 @@ function clearFrame() {
     frame.src = 'about:blank';
 }
 
+function resetForCampaignChange(ctx = null) {
+    cancelVerify(ctx);
+    state.inflight = false;
+    clearFrame();
+    phaseSet(ctx, 'idle');
+    loadingSet(ctx, false);
+}
+
 /**
  * Reload the session iframe from a stored URL when the server session is still active.
  *
@@ -603,6 +611,7 @@ const VicidialSession = {
     popout,
     cancelVerify,
     clearFrame,
+    resetForCampaignChange,
     get inflight() {
         return state.inflight;
     },

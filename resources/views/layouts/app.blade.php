@@ -21,13 +21,16 @@
 </head>
 @php
     $layoutTelephonyCampaign = (string) (
-        session('vicidial_campaign')
-        ?? auth()->user()?->default_campaign
-        ?? 'mbsales'
+        session('campaign')
+        ?: session('vicidial_campaign')
+        ?: auth()->user()?->default_campaign
+        ?: config('vicidial.default_campaign', 'mbsales')
     );
+    $layoutCampaignName = (string) (session('campaign_name') ?: $layoutTelephonyCampaign);
 @endphp
 <body class="min-h-screen flex" style="margin: 0;" x-data
-      data-campaign="{{ session('campaign', 'mbsales') }}"
+      data-campaign="{{ $layoutTelephonyCampaign }}"
+      data-campaign-name="{{ $layoutCampaignName }}"
       data-telephony-campaign="{{ $layoutTelephonyCampaign }}"
       data-user-id="{{ auth()->id() }}">
 

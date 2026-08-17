@@ -4,7 +4,7 @@
     <form action="{{ route('forms.store') }}" method="POST"
           x-data="formVisibility({ submitting: false, autosave: true })"
           x-init="init(@js($prefill ?? []))"
-          @submit.prevent="submitForm()"
+          @submit.prevent="openReview()"
           data-user-id="{{ auth()->id() }}"
           data-campaign="{{ $campaign }}"
           data-form-type="{{ $formType }}"
@@ -261,6 +261,59 @@
                 <span x-text="submitting ? 'Saving...' : 'Save Record'">Save Record</span>
             </button>
             <a href="{{ route('dashboard') }}" class="btn-ghost">Cancel</a>
+        </div>
+
+        <div x-cloak
+             x-show="reviewOpen"
+             x-transition:enter="transition-opacity ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition-opacity ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             x-trap.noscroll="reviewOpen"
+             @keydown.escape.window="closeReview()"
+             class="modal-backdrop"
+             style="display: none;">
+            <div class="modal-box max-w-2xl"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="crm-form-review-title"
+                 @click.stop
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95">
+                <div class="modal-header">
+                    <div>
+                        <h2 id="crm-form-review-title" class="modal-title">Review your information</h2>
+                        <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">Please check the details before saving this record.</p>
+                    </div>
+                    <button type="button" class="btn-icon" @click="closeReview()" aria-label="Close review">
+                        <x-icon name="x-mark" class="w-4 h-4" />
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <dl class="max-h-[55vh] overflow-y-auto divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)]">
+                        <template x-for="field in reviewFields" :key="field.label">
+                            <div class="grid grid-cols-1 gap-1 px-4 py-3 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] sm:gap-4">
+                                <dt class="text-xs font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]" x-text="field.label"></dt>
+                                <dd class="whitespace-pre-wrap break-words text-sm text-[var(--color-on-surface)]" x-text="field.value"></dd>
+                            </div>
+                        </template>
+                    </dl>
+                    <p x-show="reviewFields.length === 0" class="py-4 text-center text-sm text-[var(--color-on-surface-dim)]">No form details to review.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-ghost" @click="closeReview()">Back to Form</button>
+                    <button type="button" class="btn-primary" @click="confirmReview()" :disabled="submitting">
+                        <x-icon name="check" class="w-4 h-4" />
+                        <span x-text="submitting ? 'Saving...' : 'Confirm &amp; Save'">Confirm &amp; Save</span>
+                    </button>
+                </div>
+            </div>
         </div>
     </form>
 </div>

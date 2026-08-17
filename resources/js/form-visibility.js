@@ -88,6 +88,123 @@ function isArrayFieldName(name) {
     return /\[\]$/.test(String(name ?? ''));
 }
 
+const reviewExcludedFields = new Set([
+    '_token',
+    'campaign',
+    'form_type',
+    'lead_id',
+    'phone_number',
+    'request_id',
+    'agent',
+    'id',
+    'created_at',
+    'updated_at',
+]);
+
+const emptyReviewValue = '—';
+
+function cleanReviewText(value) {
+    return String(value ?? '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/\s*\*$/, '')
+        .trim();
+}
+
+function reviewOptionLabel(option) {
+    return cleanReviewText(option?.textContent || option?.label || option?.value || '');
+}
+
+function reviewElementLabel(form, element) {
+    const labels = Array.from(form?.querySelectorAll?.('label') ?? []);
+    const associatedLabel = labels.find((label) => {
+        const labelFor = label.htmlFor || label.getAttribute?.('for') || '';
+
+        return element.id && String(labelFor) === String(element.id);
+    });
+
+    if (associatedLabel) {
+        return cleanReviewText(associatedLabel.textContent);
+    }
+
+    const fieldContainer = element.closest?.('.form-field, fieldset');
+    const fieldLabel = fieldContainer?.querySelector?.('label, legend');
+    if (fieldLabel) {
+        return cleanReviewText(fieldLabel.textContent);
+    }
+
+    const enclosingLabel = element.closest?.('label');
+    if (enclosingLabel) {
+        return cleanReviewText(enclosingLabel.textContent);
+    }
+
+    return cleanReviewText(element.name);
+}
+
+function reviewOptionValue(element) {
+    const label = element.closest?.('label');
+
+    return cleanReviewText(label?.textContent || element.value);
+}
+
+function isReviewElementVisible(element, form) {
+    let current = element;
+
+    while (current && current !== form) {
+        if (current.hidden || current.style?.display === 'none') {
+            return false;
+        }
+
+        current = current.parentElement;
+    }
+
+    return true;
+}
+
+function formatReviewGroup(group) {
+    const element = group.elements[0];
+
+    if (group.type === 'checkbox') {
+        if (group.isArray) {
+            const selected = group.elements
+                .filter((control) => control.checked)
+                .map((control) => reviewOptionValue(control))
+                .filter((value) => value !== '');
+
+            return selected.join(', ') || emptyReviewValue;
+        }
+
+        return element.checked ? 'Yes' : 'No';
+    }
+
+    if (group.type === 'radio') {
+        const selected = group.elements.find((control) => control.checked);
+
+        return selected ? reviewOptionValue(selected) : emptyReviewValue;
+    }
+
+    if (element instanceof HTMLSelectElement) {
+        const selected = Array.from(element.selectedOptions ?? [])
+            .filter((option) => String(option?.value ?? '') !== '')
+            .map((option) => reviewOptionLabel(option))
+            .filter((value) => value !== '');
+
+        return selected.join(', ') || emptyReviewValue;
+    }
+
+    const value = cleanReviewText(element.value);
+    if (!value) {
+        return emptyReviewValue;
+    }
+
+    const suffix = element.closest?.('.relative')?.querySelector?.('span');
+    if (suffix && cleanReviewText(suffix.textContent) === '%') {
+        return value.endsWith('%') ? value : `${value}%`;
+    }
+
+    return value;
+}
+
 function storageAvailable() {
     try {
         return typeof window.localStorage !== 'undefined';
@@ -100,6 +217,8 @@ window.formVisibility = function formVisibility(extraState = {}) {
     return {
         values: {},
         initialValues: {},
+        reviewOpen: false,
+        reviewFields: [],
         saveStatus: '',
         saveMessage: '',
         saveErrors: [],
@@ -223,6 +342,93 @@ window.formVisibility = function formVisibility(extraState = {}) {
             });
 
             return values;
+        },
+
+        collectReviewFields(form = this.getFormElement()) {
+            const groups = new Map();
+            if (!form) {
+                return [];
+            }
+
+            form.querySelectorAll('input, select, textarea').forEach((element) => {
+                const fieldName = normalizeFieldName(element.name);
+                if (!fieldName
+                    || reviewExcludedFields.has(fieldName)
+                    || element.disabled
+                    || element.type === 'hidden'
+                    || !isReviewElementVisible(element, form)) {
+                    return;
+                }
+
+                if (!groups.has(fieldName)) {
+                    groups.set(fieldName, {
+                        name: fieldName,
+                        elements: [],
+                        isArray: isArrayFieldName(element.name),
+                        type: element.type === 'checkbox' || element.type === 'radio'
+                            ? element.type
+                            : element instanceof HTMLSelectElement
+                                ? 'select'
+                                : 'value',
+                    });
+                }
+
+                groups.get(fieldName).elements.push(element);
+            });
+
+            return Array.from(groups.values()).map((group) => ({
+                label: reviewElementLabel(form, group.elements[0]),
+                value: formatReviewGroup(group),
+            }));
+        },
+
+        openReview() {
+            if (this.submitting) {
+                return false;
+            }
+
+            const form = this.getFormElement();
+            if (!form) {
+                return false;
+            }
+
+            if (typeof form.checkValidity === 'function' && !form.checkValidity()) {
+                form.reportValidity?.();
+
+                return false;
+            }
+
+            this.values = this.cloneValues(this.collectFormValues(form));
+            this.reviewFields = this.collectReviewFields(form);
+            this.reviewOpen = true;
+
+            return true;
+        },
+
+        closeReview() {
+            this.reviewOpen = false;
+        },
+
+        async confirmReview() {
+            if (this.submitting) {
+                return false;
+            }
+
+            const form = this.getFormElement();
+            if (!form) {
+                return false;
+            }
+
+            if (typeof form.checkValidity === 'function' && !form.checkValidity()) {
+                this.closeReview();
+                form.reportValidity?.();
+
+                return false;
+            }
+
+            this.closeReview();
+
+            return this.submitForm();
         },
 
         applyValuesToForm(form = this.getFormElement(), values = {}) {

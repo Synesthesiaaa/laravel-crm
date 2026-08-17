@@ -125,6 +125,31 @@ function syncSidebarActiveFromFetchedDocument(doc) {
     });
 }
 
+function syncCampaignStateFromFetchedDocument(doc) {
+    const nextBody = doc?.body;
+    const nextCampaign = String(nextBody?.dataset?.campaign || '').trim();
+    if (!nextCampaign || !document.body) {
+        return null;
+    }
+
+    const currentCampaign = String(document.body.dataset.campaign || '').trim();
+    const currentTelephonyCampaign = String(document.body.dataset.telephonyCampaign || '').trim();
+    const campaignName = String(nextBody.dataset.campaignName || nextCampaign).trim();
+
+    document.body.dataset.campaign = nextCampaign;
+    document.body.dataset.campaignName = campaignName;
+    document.body.dataset.telephonyCampaign = nextCampaign;
+
+    if (nextCampaign === currentCampaign && nextCampaign === currentTelephonyCampaign) {
+        return null;
+    }
+
+    return {
+        campaign: nextCampaign,
+        campaignName,
+    };
+}
+
 function executeScriptsAfterMarker(doc) {
     const marker = doc.getElementById('soft-nav-scripts-marker');
     if (!marker) {
@@ -197,6 +222,8 @@ async function softNavigate(url, { push = true } = {}) {
         return;
     }
 
+    const campaignChange = syncCampaignStateFromFetchedDocument(doc);
+
     const previousScope = currentSoftNavScope || normalizeSoftNavScope(window.location.pathname);
     const nextScope = getSoftNavScopeFromUrl(url);
 
@@ -237,6 +264,10 @@ async function softNavigate(url, { push = true } = {}) {
         }
     } catch (e) {
         console.warn('[soft-navigate] Alpine.initTree failed', e);
+    }
+
+    if (campaignChange) {
+        window.dispatchEvent(new CustomEvent('crm-campaign-changed', { detail: campaignChange }));
     }
 
     runSoftNavHandler(nextScope, 'afterSwap', { url, scope: nextScope, previousScope });

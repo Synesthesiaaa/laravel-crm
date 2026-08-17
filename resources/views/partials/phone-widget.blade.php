@@ -3,9 +3,10 @@
 </script>
 @php
     $defaultVicidialCampaign = (string) (
-        session('vicidial_campaign')
-        ?? auth()->user()?->default_campaign
-        ?? 'mbsales'
+        session('campaign')
+        ?: session('vicidial_campaign')
+        ?: auth()->user()?->default_campaign
+        ?: config('vicidial.default_campaign', 'mbsales')
     );
     $phoneWidgetBoot = [
         'vici_campaign' => $defaultVicidialCampaign,

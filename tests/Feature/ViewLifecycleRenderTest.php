@@ -69,6 +69,9 @@ class ViewLifecycleRenderTest extends TestCase
         $this->assertStringContainsString('form[data-soft-nav]', $contents);
         $this->assertStringContainsString('new FormData(form)', $contents);
         $this->assertStringContainsString('softNavigate(url.href, { push: true })', $contents);
+        $this->assertStringContainsString('dataset.campaign', $contents);
+        $this->assertStringContainsString('crm-campaign-changed', $contents);
+        $this->assertStringContainsString('campaignName', $contents);
     }
 
     public function test_top_agent_stat_card_renders_sales_summary(): void

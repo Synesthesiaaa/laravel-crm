@@ -55,7 +55,12 @@ class FormShowViewRenderTest extends TestCase
         $this->assertStringNotContainsString('@js(', $html);
         $this->assertStringContainsString('x-bind:disabled="!isVisible(', $html);
         $this->assertStringContainsString('x-data="formVisibility({ submitting: false, autosave: true })"', $html);
-        $this->assertStringContainsString('@submit.prevent="submitForm()"', $html);
+        $this->assertStringContainsString('@submit.prevent="openReview()"', $html);
+        $this->assertStringContainsString('x-show="reviewOpen"', $html);
+        $this->assertStringContainsString('role="dialog"', $html);
+        $this->assertStringContainsString('aria-modal="true"', $html);
+        $this->assertStringContainsString('Back to Form', $html);
+        $this->assertStringContainsString('Confirm &amp; Save', $html);
         $this->assertStringContainsString('aria-label="Quick form selection"', $html);
         $this->assertStringContainsString('formOptions', $html);
         $this->assertStringContainsString('selectForm($event.target.value)', $html);
@@ -103,7 +108,12 @@ class FormShowViewRenderTest extends TestCase
         $html = (string) $response->getContent();
 
         $this->assertStringContainsString('x-data="formVisibility({ submitting: false, autosave: true })"', $html);
-        $this->assertStringContainsString('@submit.prevent="submitForm()"', $html);
+        $this->assertStringContainsString('@submit.prevent="openReview()"', $html);
+        $this->assertStringContainsString('x-show="reviewOpen"', $html);
+        $this->assertStringContainsString('role="dialog"', $html);
+        $this->assertStringContainsString('aria-modal="true"', $html);
+        $this->assertStringContainsString('Back to Form', $html);
+        $this->assertStringContainsString('Confirm &amp; Save', $html);
         $this->assertStringContainsString('data-user-id="'.$user->id.'"', $html);
     }
 

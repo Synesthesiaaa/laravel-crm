@@ -332,10 +332,42 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             this.controlsHeight = this.clampControlsHeight(this.controlsHeight, this.height);
         },
 
-        /** VICIdial / dialer campaign only — never reads CRM `data-campaign`. */
+        /** VICIdial / dialer campaign synchronized with the active CRM campaign. */
         telephonyCampaign() {
             const fromBody = document.body?.dataset?.telephonyCampaign;
             return this.vici.vici_campaign || fromBody || 'mbsales';
+        },
+
+        handleCrmCampaignChanged(event) {
+            const campaign = String(event.detail?.campaign || '').trim();
+            if (!campaign || campaign === this.telephonyCampaign()) {
+                return;
+            }
+
+            const store = Alpine.store('vicidial');
+            const wasActive = store.loggedIn
+                || CONTINUING_SESSION_STATUSES.includes(store.status)
+                || ['requesting', 'iframe_loading', 'syncing'].includes(this.vici.phase);
+            const campaignName = String(event.detail?.campaignName || campaign).trim();
+
+            window.VicidialSession?.resetForCampaignChange?.(this);
+            this.vici.vici_campaign = campaign;
+            this.vici.last_iframe_url = null;
+
+            store.loggedIn = false;
+            store.status = 'logged_out';
+            store.pauseCode = '';
+            store.queueCount = 0;
+            store.campaign = campaign;
+            store.ingroups = [];
+            store.ingroupsRaw = '';
+            store.lastSyncAt = null;
+
+            if (wasActive) {
+                Alpine.store('toast').info(
+                    `CRM campaign changed to ${campaignName}. Log into VICIdial for this campaign.`,
+                );
+            }
         },
 
         syncCampaignFromStatus(data) {
@@ -404,6 +436,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             window.addEventListener('vicidial-ws-phase', this._onWsPhase.bind(this));
             window.addEventListener('telephony-shortcut-pause', this._pauseShortcut.bind(this));
             window.addEventListener('crm-widget-workspace', this._onWorkspaceChange.bind(this));
+            window.addEventListener('crm-campaign-changed', this.handleCrmCampaignChanged.bind(this));
             window.addEventListener('resize', this.onWindowResize.bind(this));
             this.splitScreen = window.crmWidgetWorkspace?.isSplitScreen?.() === true;
             this.open = this.splitScreen ? true : this.open;
