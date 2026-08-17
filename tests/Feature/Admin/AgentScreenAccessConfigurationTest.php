@@ -82,6 +82,47 @@ class AgentScreenAccessConfigurationTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_disabled_agent_screen_configuration_links_are_hidden_from_super_admin_dashboard(): void
+    {
+        $this->actingAs($this->superAdmin)
+            ->withSession($this->campaignSession())
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertDontSee('href="'.route('admin.agent-screen.index').'"', false)
+            ->assertDontSee('Agent Screen Cfg', false);
+
+        $this->actingAs($this->superAdmin)
+            ->withSession($this->campaignSession())
+            ->getJson(route('api.search', ['q' => 'agent']))
+            ->assertOk()
+            ->assertJsonMissing(['title' => 'Agent Screen']);
+    }
+
+    public function test_enabled_agent_screen_configuration_links_are_visible_to_super_admin(): void
+    {
+        SystemSetting::query()->create([
+            'setting_key' => 'telephony_feature_agent_screen_access',
+            'setting_value' => '1',
+        ]);
+
+        $this->actingAs($this->superAdmin)
+            ->withSession($this->campaignSession())
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('href="'.route('admin.agent-screen.index').'"', false)
+            ->assertSee('Agent Screen Cfg', false);
+
+        $this->actingAs($this->superAdmin)
+            ->withSession($this->campaignSession())
+            ->getJson(route('api.search', ['q' => 'agent']))
+            ->assertOk()
+            ->assertJsonFragment([
+                'title' => 'Agent Screen',
+                'subtitle' => null,
+                'url' => route('agent.index'),
+            ]);
+    }
+
     /**
      * @return array{campaign: string, campaign_name: string}
      */

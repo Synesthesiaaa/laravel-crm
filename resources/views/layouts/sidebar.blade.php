@@ -2,8 +2,7 @@
     $campaignName = session('campaign_name', 'CRM');
     $campaign     = session('campaign', '');
     $forms        = $campaignConfig['forms'] ?? [];
-    $agentScreenVisible = ($user?->isSuperAdmin() ?? false)
-        || app(\App\Services\TelephonyFeatureService::class)->isEnabled('agent_screen_access');
+    $agentScreenVisible = app(\App\Services\TelephonyFeatureService::class)->isEnabled('agent_screen_access');
     /** Route `forms/{type}` — use route param for active state. */
     $formsRouteType = request()->route('type');
 
@@ -144,6 +143,7 @@
             @if($user->isSuperAdmin())
             <div class="sidebar-section-label">Super Admin</div>
             @foreach($superAdminItems as $item)
+                @if($item['route'] !== 'admin.agent-screen.index' || $agentScreenVisible)
                 <a href="{{ route($item['route']) }}"
                    class="sidebar-item {{ $sidebarLinkActive($item['route']) ? 'active' : '' }}"
                    title="{{ $item['label'] }}"
@@ -151,6 +151,7 @@
                     <x-icon :name="$item['icon']" class="sidebar-icon shrink-0" />
                     <span class="sidebar-item-label">{{ $item['label'] }}</span>
                 </a>
+                @endif
             @endforeach
             @endif
         @endif

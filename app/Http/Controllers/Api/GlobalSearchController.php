@@ -74,8 +74,7 @@ class GlobalSearchController extends Controller
             'extraction' => ['title' => 'Data Extraction',    'url' => route('admin.extraction.index'),   'keywords' => ['extract', 'export', 'csv']],
         ];
 
-        if (auth()->user()?->isSuperAdmin()
-            || app(TelephonyFeatureService::class)->isEnabled('agent_screen_access')) {
+        if (app(TelephonyFeatureService::class)->isEnabled('agent_screen_access')) {
             $navLinks['agent'] = [
                 'title' => 'Agent Screen',
                 'url' => route('agent.index'),

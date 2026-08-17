@@ -13,13 +13,14 @@ This change covers the shared Agent Screen entry points and the Agent Capture we
 - The new `agent_screen_access` feature flag is stored in the existing `system_settings` table through `TelephonyFeatureService`.
 - The flag defaults to disabled when no setting has been saved.
 - Super Admins can change the flag from Configuration → Telephony Features.
-- When the flag is disabled for non-Super Admin users:
+- When the flag is disabled for all users:
   - The main Agent Screen item is omitted from the Telephony sidebar.
+  - The Agent Screen configuration item is omitted from the Super Admin sidebar and dashboard.
   - Agent Screen links returned by global search are omitted.
   - Direct requests to the Agent Screen page are rejected.
   - Agent Capture webform pages and capture submissions are rejected.
 - When the flag is enabled, the existing Agent Screen navigation and endpoints remain available.
-- Super Admins retain access to the existing configuration page and bypass the feature gate, following the current telephony feature-gating convention.
+- Super Admins retain access to the existing Configuration page and direct Agent Screen management route so they can re-enable the feature.
 - Regular CRM forms remain available and are not changed by this toggle.
 
 ## Implementation
@@ -30,7 +31,7 @@ This change covers the shared Agent Screen entry points and the Agent Capture we
 
 The web route for the Agent Screen page, the Agent Capture webform page, and the Agent Capture API submission route will use the existing `telephony_feature` middleware. The middleware will support an HTML response suitable for browser requests while retaining the current JSON response for API requests.
 
-Blade navigation and global search will read the same feature service so disabled links are not rendered. The Super Admin configuration link remains available through the existing Super Admin navigation and dashboard.
+Blade navigation, the Super Admin dashboard, and global search will read the same feature service so disabled Agent Screen links and cards are not rendered. The Configuration link remains available through the existing Super Admin navigation and dashboard.
 
 ## Testing
 

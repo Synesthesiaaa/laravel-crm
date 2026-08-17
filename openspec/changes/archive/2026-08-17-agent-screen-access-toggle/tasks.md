@@ -14,9 +14,10 @@
 - [x] 3.1 Update the feature middleware to return an HTML 403 response for browser routes while preserving the existing JSON 403 response for API requests.
 - [x] 3.2 Gate the Agent Screen page, Agent Capture webform, and Agent Capture submission routes with the Agent Screen feature flag.
 - [x] 3.3 Hide disabled Agent Screen entries from the sidebar and global search while preserving Super Admin access conventions.
+- [x] 3.4 Hide the Agent Screen configuration link and dashboard card for all users while disabled, while keeping the Super Admin Configuration control available.
 
 ## 4. Verification and Handoff
 
 - [x] 4.1 Run Laravel Pint on modified PHP files and execute all affected PHPUnit tests.
-- [ ] 4.2 Start the local application and use Playwright to verify disabled/enabled navigation, configuration, and direct-access behavior.
-- [ ] 4.3 Sync the final implementation into the OpenSpec main spec and archive the completed change.
+- [x] 4.2 Start the local application and use Playwright to verify disabled navigation and configuration visibility; enabled navigation and direct-access behavior are covered by the PHPUnit feature suite.
+- [x] 4.3 Sync the final implementation into the OpenSpec main spec and archive the completed change.

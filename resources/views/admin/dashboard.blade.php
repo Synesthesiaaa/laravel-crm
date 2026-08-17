@@ -5,6 +5,9 @@
 @section('header-title', 'Management Dashboard')
 
 @section('content')
+@php
+    $agentScreenVisible = app(\App\Services\TelephonyFeatureService::class)->isEnabled('agent_screen_access');
+@endphp
 <div class="space-y-8">
 
     <div class="md-hero">
@@ -162,6 +165,7 @@
         @endphp
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 animate-stagger">
             @foreach($superLinks as $link)
+                @if($link['route'] !== 'admin.agent-screen.index' || $agentScreenVisible)
                 <a href="{{ route($link['route']) }}" class="md-card p-4 flex items-center gap-3 no-underline group">
                     <div class="w-10 h-10 rounded-lg bg-[var(--color-danger-muted)] border border-[var(--color-border)] flex items-center justify-center shrink-0 group-hover:border-[var(--color-danger)] transition-colors">
                         <x-icon :name="$link['icon']" class="w-5 h-5 text-[var(--color-danger-fg)]" />
@@ -171,6 +175,7 @@
                         <p class="text-xs text-[var(--color-on-surface-dim)] truncate">{{ $link['desc'] }}</p>
                     </div>
                 </a>
+                @endif
             @endforeach
         </div>
     </div>

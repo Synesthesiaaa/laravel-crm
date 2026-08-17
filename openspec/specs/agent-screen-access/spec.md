@@ -33,16 +33,16 @@ The Super Admin Telephony Features configuration SHALL provide a labeled Agent S
 
 ### Requirement: Disabled Agent Screen surfaces are hidden
 
-The system SHALL omit Agent Screen navigation and global-search links for non-Super Admin users when Agent Screen access is disabled.
+The system SHALL omit Agent Screen navigation, dashboard cards, and global-search links for all users when Agent Screen access is disabled.
 
-#### Scenario: Regular user views navigation while disabled
+#### Scenario: Authenticated user views navigation while disabled
 
-- **WHEN** a non-Super Admin user views an authenticated page while Agent Screen access is disabled
+- **WHEN** an authenticated user views an authenticated page while Agent Screen access is disabled
 - **THEN** the page does not render the Agent Screen navigation link
 
-#### Scenario: Regular user searches while disabled
+#### Scenario: Authenticated user searches while disabled
 
-- **WHEN** a non-Super Admin user requests global search results while Agent Screen access is disabled
+- **WHEN** an authenticated user requests global search results while Agent Screen access is disabled
 - **THEN** the results do not include the Agent Screen entry
 
 ### Requirement: Disabled Agent Screen surfaces reject direct access

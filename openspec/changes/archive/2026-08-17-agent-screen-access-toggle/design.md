@@ -29,7 +29,7 @@ Alternatives considered: a dedicated settings service would duplicate existing p
 
 ### Gate all Agent Screen surfaces at both rendering and request time
 
-Use the existing `telephony_feature` middleware on the Agent Screen page, Agent Capture webform page, and Agent Capture API submission route. Update the middleware to return an HTML 403 response for non-JSON requests while retaining its current JSON response for API requests. Sidebar and global search will conditionally omit Agent Screen links using the same service flag, with Super Admin visibility preserved through the existing bypass convention.
+Use the existing `telephony_feature` middleware on the Agent Screen page, Agent Capture webform page, and Agent Capture API submission route. Update the middleware to return an HTML 403 response for non-JSON requests while retaining its current JSON response for API requests. Sidebar, dashboard cards, and global search will conditionally omit Agent Screen links using the same service flag for all users while disabled. Super Admins retain direct access to the configuration area and existing management route so they can re-enable the feature.
 
 Alternatives considered: hiding links only would leave direct URLs usable; route-only enforcement would leave misleading navigation and search results visible.
 
@@ -49,4 +49,4 @@ No data migration is required. Deploying the code causes the new flag to default
 
 ## Open Questions
 
-None. The approved design specifies that Super Admins retain configuration access and follow the existing Super Admin feature-gate bypass behavior.
+None. Super Admins retain configuration access and direct management-route access while disabled, but navigation and search surfaces stay hidden until the feature is enabled.
