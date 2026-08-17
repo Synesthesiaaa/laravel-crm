@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CampaignDispositionRecord;
 use App\Models\User;
 use App\Repositories\CampaignRepository;
+use App\Services\TelephonyFeatureService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -66,13 +67,21 @@ class GlobalSearchController extends Controller
         $navLinks = [
             'dashboard' => ['title' => 'Dashboard',         'url' => route('dashboard'),                 'keywords' => ['dash', 'home']],
             'records' => ['title' => 'Call History',       'url' => route('records.index'),             'keywords' => ['call', 'history', 'record']],
-            'agent' => ['title' => 'Agent Screen',       'url' => route('agent.index'),               'keywords' => ['agent', 'softphone', 'dial']],
             'admin' => ['title' => 'Admin Dashboard',    'url' => route('admin.dashboard'),           'keywords' => ['admin', 'manage', 'mgt']],
             'users' => ['title' => 'User Access',        'url' => route('admin.users.index'),         'keywords' => ['user', 'access', 'staff']],
             'campaigns' => ['title' => 'Campaigns',          'url' => route('admin.campaigns.index'),     'keywords' => ['campaign']],
             'disposition' => ['title' => 'Disposition Records', 'url' => route('admin.disposition-records.index'), 'keywords' => ['disposition', 'disp']],
             'extraction' => ['title' => 'Data Extraction',    'url' => route('admin.extraction.index'),   'keywords' => ['extract', 'export', 'csv']],
         ];
+
+        if (auth()->user()?->isSuperAdmin()
+            || app(TelephonyFeatureService::class)->isEnabled('agent_screen_access')) {
+            $navLinks['agent'] = [
+                'title' => 'Agent Screen',
+                'url' => route('agent.index'),
+                'keywords' => ['agent', 'softphone', 'dial'],
+            ];
+        }
 
         $navMatches = [];
         foreach ($navLinks as $nav) {

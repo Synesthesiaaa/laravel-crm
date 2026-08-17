@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\AgentScreenField;
 use App\Models\Campaign;
 use App\Models\Form;
+use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -12,6 +13,16 @@ use Tests\TestCase;
 class AgentCaptureWebformTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        SystemSetting::query()->create([
+            'setting_key' => 'telephony_feature_agent_screen_access',
+            'setting_value' => '1',
+        ]);
+    }
 
     public function test_unauthenticated_agents_are_redirected_to_crm_login(): void
     {

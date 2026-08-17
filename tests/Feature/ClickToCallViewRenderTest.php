@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Campaign;
+use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -14,6 +15,11 @@ class ClickToCallViewRenderTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        SystemSetting::query()->create([
+            'setting_key' => 'telephony_feature_agent_screen_access',
+            'setting_value' => '1',
+        ]);
 
         Campaign::factory()->create([
             'code' => 'mbsales',

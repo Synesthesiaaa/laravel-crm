@@ -56,11 +56,12 @@
                         'callback_controls' => 'Callback Scheduling',
                         'lead_tools' => 'Lead Search and Lead Tools',
                         'predictive_dialing' => 'Predictive Dialing',
+                        'agent_screen_access' => 'Agent Screen Access',
                     ];
                 @endphp
 
                 <x-alert type="info" title="Feature Gating">
-                    Disabled features are hidden from agent screen and blocked at API level for non-Super Admin users.
+                    Disabled telephony features are hidden from the Agent Screen and blocked at API level for non-Super Admin users. Agent Screen Access also controls Agent Capture webforms.
                 </x-alert>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">

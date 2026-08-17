@@ -52,7 +52,8 @@ Route::get('api/websocket/health', \App\Http\Controllers\Api\WebsocketHealthCont
 Route::middleware('auth')->group(function () {
     Route::get('agent-webforms/{campaign}', [\App\Http\Controllers\AgentCaptureWebformController::class, 'show'])
         ->name('agent-webforms.show')
-        ->where('campaign', '[a-z0-9_]+');
+        ->where('campaign', '[a-z0-9_]+')
+        ->middleware('telephony_feature:agent_screen_access');
     Route::post('api/vicidial/session/login', [\App\Http\Controllers\Api\VicidialSessionController::class, 'login'])->name('api.vicidial.session.login')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
     Route::post('api/vicidial/session/verify', [\App\Http\Controllers\Api\VicidialSessionController::class, 'verify'])->name('api.vicidial.session.verify')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
     Route::post('api/vicidial/session/pause', [\App\Http\Controllers\Api\VicidialSessionController::class, 'pause'])->name('api.vicidial.session.pause')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
@@ -66,7 +67,9 @@ Route::middleware('auth')->group(function () {
 Route::middleware(['auth', 'campaign'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('records', [RecordsController::class, 'index'])->name('records.index');
-    Route::get('agent', [AgentController::class, 'index'])->name('agent.index');
+    Route::get('agent', [AgentController::class, 'index'])
+        ->name('agent.index')
+        ->middleware('telephony_feature:agent_screen_access');
     Route::get('api/vicidial/proxy', VicidialProxyController::class)->name('api.vicidial.proxy')->middleware('throttle:vicidial');
     Route::post('api/call/dial', [\App\Http\Controllers\Api\CallController::class, 'dial'])->name('api.call.dial')->middleware('throttle:vicidial');
     Route::post('api/call/predictive-dial', [\App\Http\Controllers\Api\CallController::class, 'predictiveDial'])->name('api.call.predictive-dial')->middleware(['throttle:vicidial', 'telephony_feature:predictive_dialing']);
@@ -109,7 +112,9 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::get('api/reports/in-group-status', [\App\Http\Controllers\Api\ReportingController::class, 'inGroupStatus'])->name('api.reports.in-group-status')->middleware('throttle:api');
     Route::get('api/reports/agent-status', [\App\Http\Controllers\Api\ReportingController::class, 'agentStatus'])->name('api.reports.agent-status')->middleware('throttle:api');
     Route::get('api/sip/credentials', [\App\Http\Controllers\Api\SipCredentialsController::class, 'show'])->name('api.sip.credentials')->middleware(['throttle:telephony-poll', 'log_throttle']);
-    Route::post('api/agent/capture', [\App\Http\Controllers\Api\AgentCaptureController::class, 'store'])->name('api.agent.capture')->middleware('throttle:api');
+    Route::post('api/agent/capture', [\App\Http\Controllers\Api\AgentCaptureController::class, 'store'])
+        ->name('api.agent.capture')
+        ->middleware(['throttle:api', 'telephony_feature:agent_screen_access']);
     Route::get('api/leads/next', \App\Http\Controllers\Api\NextLeadController::class)->name('api.leads.next')->middleware('throttle:api');
     Route::get('api/disposition-codes', \App\Http\Controllers\Api\DispositionController::class)->name('api.disposition.codes')->middleware('throttle:api');
     Route::get('api/notifications', \App\Http\Controllers\Api\NotificationsController::class)->name('api.notifications')->middleware(['throttle:telephony-poll', 'log_throttle']);

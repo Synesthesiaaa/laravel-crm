@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Models\AgentCaptureRecord;
 use App\Models\AgentScreenField;
 use App\Models\CallSession;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\Telephony\LeadService;
 use App\Support\OperationResult;
@@ -15,6 +16,16 @@ use Tests\TestCase;
 class AgentCaptureApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        SystemSetting::query()->create([
+            'setting_key' => 'telephony_feature_agent_screen_access',
+            'setting_value' => '1',
+        ]);
+    }
 
     protected function tearDown(): void
     {
