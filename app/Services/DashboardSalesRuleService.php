@@ -13,6 +13,15 @@ class DashboardSalesRuleService
 
     public const MODE_LEGACY = 'legacy';
 
+    public const TRIGGER_FORM = 'form';
+
+    public const TRIGGER_TAG = 'tag';
+
+    public const TRIGGER_MARKED_AMOUNT = 'marked_amount';
+
+    /** @var list<string> */
+    public const TRIGGERS = [self::TRIGGER_FORM, self::TRIGGER_TAG, self::TRIGGER_MARKED_AMOUNT];
+
     /** @var list<string> */
     private const TAG_FIELD_TYPES = ['text', 'select'];
 
@@ -24,7 +33,7 @@ class DashboardSalesRuleService
      * Resolve a stored sales configuration into safe, queryable metadata.
      *
      * @param  array<string, mixed>|null  $salesConfig
-     * @return array{mode: string, forms: list<array{form_code: string, form_name: string, table: string, amount_field: string|null, conditions: list<array{field_name: string, accepted_values: list<string>}>}>, warnings: list<string>}
+     * @return array{mode: string, forms: list<array{form_code: string, form_name: string, table: string, amount_field: string|null, trigger: string, conditions: list<array{field_name: string, accepted_values: list<string>}>}>, warnings: list<string>}
      */
     public function resolveForCampaign(string $campaignCode, ?array $salesConfig): array
     {
@@ -91,17 +100,37 @@ class DashboardSalesRuleService
                 $formCode,
                 $warnings,
             );
+            $hasRawConditions = is_array($formGroup['conditions'] ?? null)
+                && ($formGroup['conditions'] ?? []) !== [];
 
-            $rawConditions = $formGroup['conditions'] ?? null;
-            $markerOnlyRule = $conditions === []
-                && is_array($rawConditions)
-                && $rawConditions === []
-                && $this->isMarkedSaleAmountField($amountField, $fieldsByName);
+            $trigger = $this->resolveTrigger(
+                $formGroup['trigger'] ?? null,
+                $conditions,
+                $hasRawConditions,
+                $amountField,
+                $fieldsByName,
+                $formCode,
+                $warnings,
+            );
+            if ($trigger === null) {
+                continue;
+            }
 
-            if ($conditions === [] && ! $markerOnlyRule) {
-                $warnings[] = is_array($rawConditions) && $rawConditions === []
-                    ? "Sales form '{$formCode}' needs a text/select tag condition or a numeric field marked as a sale amount."
-                    : "Sales form '{$formCode}' has no valid tag conditions.";
+            if ($trigger === self::TRIGGER_TAG && $conditions === []) {
+                $warnings[] = "Sales form '{$formCode}' needs at least one valid tag condition.";
+
+                continue;
+            }
+
+            if ($trigger !== self::TRIGGER_TAG && $hasRawConditions) {
+                $warnings[] = "Sales form '{$formCode}' cannot use tag conditions with the selected trigger.";
+
+                continue;
+            }
+
+            if ($trigger === self::TRIGGER_MARKED_AMOUNT
+                && ! $this->isMarkedSaleAmountField($amountField, $fieldsByName)) {
+                $warnings[] = "Sales form '{$formCode}' needs a numeric field marked as a sale amount.";
 
                 continue;
             }
@@ -111,6 +140,7 @@ class DashboardSalesRuleService
                 'form_name' => (string) ($formConfig['name'] ?? $formCode),
                 'table' => $tableName,
                 'amount_field' => $amountField,
+                'trigger' => $trigger,
                 'conditions' => $conditions,
             ];
         }
@@ -209,17 +239,49 @@ class DashboardSalesRuleService
                 $errors[] = ['key' => $prefix.'.amount_field', 'message' => 'Choose a numeric amount field from this form.'];
             }
 
-            $conditions = $formGroup['conditions'] ?? null;
+            $conditions = $formGroup['conditions'] ?? [];
             if (! is_array($conditions)) {
-                $errors[] = ['key' => $prefix.'.conditions', 'message' => 'Add a tag condition or select a marked sale amount field.'];
+                $errors[] = ['key' => $prefix.'.conditions', 'message' => 'Add tag conditions, or choose a form/submission trigger.'];
+
+                continue;
+            }
+
+            $trigger = trim((string) ($formGroup['trigger'] ?? ''));
+            if ($trigger === '') {
+                $trigger = $conditions !== []
+                    ? self::TRIGGER_TAG
+                    : (($amountField !== '' && ($form['fields'][$amountField]['is_sale_amount'] ?? false))
+                        ? self::TRIGGER_MARKED_AMOUNT
+                        : self::TRIGGER_FORM);
+            }
+
+            if (! in_array($trigger, self::TRIGGERS, true)) {
+                $errors[] = ['key' => $prefix.'.trigger', 'message' => 'Choose a valid sales trigger.'];
+
+                continue;
+            }
+
+            if ($trigger === self::TRIGGER_FORM) {
+                if ($conditions !== []) {
+                    $errors[] = ['key' => $prefix.'.conditions', 'message' => 'Form submission triggers cannot include tag conditions.'];
+                }
+
+                continue;
+            }
+
+            if ($trigger === self::TRIGGER_MARKED_AMOUNT) {
+                if ($conditions !== []) {
+                    $errors[] = ['key' => $prefix.'.conditions', 'message' => 'Marked amount triggers cannot include tag conditions.'];
+                }
+                if ($amountField === '' || ! ($form['fields'][$amountField]['is_sale_amount'] ?? false)) {
+                    $errors[] = ['key' => $prefix.'.amount_field', 'message' => 'Choose a numeric field marked as a sale amount.'];
+                }
 
                 continue;
             }
 
             if ($conditions === []) {
-                if ($amountField === '' || ! ($form['fields'][$amountField]['is_sale_amount'] ?? false)) {
-                    $errors[] = ['key' => $prefix.'.conditions', 'message' => 'Select a marked sale amount field when no tag condition is configured.'];
-                }
+                $errors[] = ['key' => $prefix.'.conditions', 'message' => 'Add at least one tag condition.'];
 
                 continue;
             }
@@ -263,7 +325,7 @@ class DashboardSalesRuleService
      * Normalize a validated custom configuration before storing it in the layout JSON.
      *
      * @param  array<string, mixed>  $salesConfig
-     * @return array{mode: string, forms: list<array{form_code: string, amount_field: string|null, conditions: list<array{field_name: string, accepted_values: list<string>}>}>}
+     * @return array{mode: string, forms: list<array{form_code: string, amount_field: string|null, trigger: string, conditions: list<array{field_name: string, accepted_values: list<string>}>}>}
      */
     public function normalizeForPersistence(array $salesConfig): array
     {
@@ -290,9 +352,16 @@ class DashboardSalesRuleService
                 ];
             }
 
+            $amountField = trim((string) ($formGroup['amount_field'] ?? ''));
+            $trigger = trim((string) ($formGroup['trigger'] ?? ''));
+            if (! in_array($trigger, self::TRIGGERS, true)) {
+                $trigger = $conditions !== [] ? self::TRIGGER_TAG : self::TRIGGER_FORM;
+            }
+
             $forms[] = [
                 'form_code' => trim((string) ($formGroup['form_code'] ?? '')),
-                'amount_field' => ($amount = trim((string) ($formGroup['amount_field'] ?? ''))) !== '' ? $amount : null,
+                'amount_field' => $amountField !== '' ? $amountField : null,
+                'trigger' => $trigger,
                 'conditions' => $conditions,
             ];
         }
@@ -415,6 +484,44 @@ class DashboardSalesRuleService
         }
 
         return $conditions;
+    }
+
+    /**
+     * Resolve an explicit trigger, or infer one for layouts saved before trigger modes existed.
+     *
+     * @param  Collection<string, FormField>  $fieldsByName
+     * @param  list<array{field_name: string, accepted_values: list<string>}>  $conditions
+     * @param  list<string>  $warnings
+     */
+    private function resolveTrigger(
+        mixed $rawTrigger,
+        array $conditions,
+        bool $hasRawConditions,
+        ?string $amountField,
+        Collection $fieldsByName,
+        string $formCode,
+        array &$warnings,
+    ): ?string {
+        $trigger = trim((string) $rawTrigger);
+        if ($trigger !== '') {
+            if (! in_array($trigger, self::TRIGGERS, true)) {
+                $warnings[] = "Sales form '{$formCode}' has an invalid sales trigger.";
+
+                return null;
+            }
+
+            return $trigger;
+        }
+
+        if ($hasRawConditions || $conditions !== []) {
+            return self::TRIGGER_TAG;
+        }
+
+        if ($this->isMarkedSaleAmountField($amountField, $fieldsByName)) {
+            return self::TRIGGER_MARKED_AMOUNT;
+        }
+
+        return self::TRIGGER_FORM;
     }
 
     /**

@@ -132,6 +132,7 @@ class DashboardSalesRangeTest extends TestCase
                 'forms' => [[
                     'form_code' => 'cash',
                     'amount_field' => 'amount',
+                    'trigger' => 'marked_amount',
                     'conditions' => [],
                 ]],
             ],
@@ -146,6 +147,58 @@ class DashboardSalesRangeTest extends TestCase
             'amount' => null,
             'created_at' => '2026-05-15 11:30:00',
             'updated_at' => '2026-05-15 11:30:00',
+        ]);
+
+        $range = app(DashboardStatsService::class)->getSalesKpisForCampaign(
+            'mbsales',
+            Carbon::parse('2026-05-15 06:00:00'),
+            Carbon::parse('2026-05-15 12:00:00'),
+        );
+
+        $this->assertSame(2, $range['sales']);
+        $this->assertSame(100.0, $range['sales_amount']);
+        $this->assertSame(['Alice', 'Bob'], array_column($range['agent_leaderboard'], 'agent'));
+
+        config(['dashboard.sales_kpi_window_hours' => 6]);
+        $rolling = app(DashboardStatsService::class)->getKpisForCampaign('mbsales');
+        $this->assertSame(2, $rolling['sales']);
+        $this->assertSame(100.0, $rolling['sales_amount']);
+
+        $report = app(DashboardStatsService::class)->getDailyCampaignReport(
+            'mbsales',
+            Carbon::parse('2026-05-15'),
+        );
+        $this->assertSame(2, $report['totals']['daily']['total_count']);
+        $this->assertSame(100.0, $report['totals']['daily']['total_amount']);
+    }
+
+    public function test_form_submission_custom_rules_count_rows_without_numeric_values_across_kpis_and_report(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        $this->registerSalesForm('submitted', 'Submitted Form', 'submitted_sales');
+        app(\App\Services\DashboardLayoutService::class)->saveForCampaign(
+            'mbsales',
+            array_keys(\App\Services\DashboardLayoutService::sectionDefinitions()),
+            ['welcome'],
+            [
+                'mode' => 'custom',
+                'forms' => [[
+                    'form_code' => 'submitted',
+                    'amount_field' => 'amount',
+                    'trigger' => 'form',
+                    'conditions' => [],
+                ]],
+            ],
+        );
+
+        $this->insertSale('submitted_sales', 'Alice', 100.00, '2026-05-15 10:00:00');
+        DB::table('submitted_sales')->insert([
+            'date' => '2026-05-15',
+            'request_id' => 'submitted_'.uniqid(),
+            'agent' => 'Bob',
+            'amount' => null,
+            'created_at' => '2026-05-15 11:00:00',
+            'updated_at' => '2026-05-15 11:00:00',
         ]);
 
         $range = app(DashboardStatsService::class)->getSalesKpisForCampaign(

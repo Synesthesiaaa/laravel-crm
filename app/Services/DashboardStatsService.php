@@ -552,7 +552,7 @@ class DashboardStatsService
     }
 
     /**
-     * @param  list<array{form_code: string, form_name: string, table: string, amount_field: string|null, conditions: list<array{field_name: string, accepted_values: list<string>}>}>  $forms
+     * @param  list<array{form_code: string, form_name: string, table: string, amount_field: string|null, trigger: string, conditions: list<array{field_name: string, accepted_values: list<string>}>}>  $forms
      * @return array{date: string, forms: list<array{code: string, name: string}>, daily: list<array<string, mixed>>, month_to_date: list<array<string, mixed>>, totals: array<string, mixed>}
      */
     private function buildCustomDailyCampaignReport(array $forms, Carbon $businessDate, string $date): array
@@ -604,7 +604,7 @@ class DashboardStatsService
                     $date,
                 ): void {
                     foreach ($rows as $row) {
-                        if (! $this->matchesCustomConditions($row, $form['conditions'], $form['amount_field'])) {
+                        if (! $this->matchesCustomConditions($row, $form['conditions'], $form['amount_field'], $form['trigger'])) {
                             continue;
                         }
 
@@ -1101,7 +1101,7 @@ class DashboardStatsService
     }
 
     /**
-     * @param  list<array{form_code: string, form_name: string, table: string, amount_field: string|null, conditions: list<array{field_name: string, accepted_values: list<string>}>}>  $forms
+     * @param  list<array{form_code: string, form_name: string, table: string, amount_field: string|null, trigger: string, conditions: list<array{field_name: string, accepted_values: list<string>}>}>  $forms
      * @return array{count: int, amount: float, counts: array<string, int>, amounts: array<string, float>, sales_by_form: list<array{form_code: string, form_name: string, sales: int, sales_amount: float}>}
      */
     private function getCustomSalesByAgentInRange(array $forms, Carbon $from, Carbon $until): array
@@ -1145,7 +1145,7 @@ class DashboardStatsService
                 ->orderBy('id')
                 ->chunk(1000, function ($rows) use (&$sales, &$amount, &$counts, &$amounts, &$salesByForm, $tableName, $form): void {
                     foreach ($rows as $row) {
-                        if (! $this->matchesCustomConditions($row, $form['conditions'], $form['amount_field'])) {
+                        if (! $this->matchesCustomConditions($row, $form['conditions'], $form['amount_field'], $form['trigger'])) {
                             continue;
                         }
 
@@ -1181,7 +1181,7 @@ class DashboardStatsService
     }
 
     /**
-     * @param  list<array{form_code: string, form_name: string, table: string, amount_field: string|null, conditions: list<array{field_name: string, accepted_values: list<string>}>}>  $forms
+     * @param  list<array{form_code: string, form_name: string, table: string, amount_field: string|null, trigger: string, conditions: list<array{field_name: string, accepted_values: list<string>}>}>  $forms
      * @return array{count: int, amount: float, counts: array<string, int>, amounts: array<string, float>}
      */
     private function getCustomSalesByAgentSince(array $forms, Carbon $since): array
@@ -1209,7 +1209,7 @@ class DashboardStatsService
                 ->orderBy('id')
                 ->chunk(1000, function ($rows) use (&$sales, &$amount, &$counts, &$amounts, $form): void {
                     foreach ($rows as $row) {
-                        if (! $this->matchesCustomConditions($row, $form['conditions'], $form['amount_field'])) {
+                        if (! $this->matchesCustomConditions($row, $form['conditions'], $form['amount_field'], $form['trigger'])) {
                             continue;
                         }
 
@@ -1236,7 +1236,7 @@ class DashboardStatsService
     }
 
     /**
-     * @param  list<array{form_code: string, form_name: string, table: string, amount_field: string|null, conditions: list<array{field_name: string, accepted_values: list<string>}>}>  $forms
+     * @param  list<array{form_code: string, form_name: string, table: string, amount_field: string|null, trigger: string, conditions: list<array{field_name: string, accepted_values: list<string>}>}>  $forms
      * @return array{count: int, amount: float, counts: array<string, int>, amounts: array<string, float>}
      */
     private function getCustomSalesByAgentInDateRange(array $forms, string $fromYmd, string $toYmd): array
@@ -1263,7 +1263,7 @@ class DashboardStatsService
                 ->orderBy('id')
                 ->chunk(1000, function ($rows) use (&$sales, &$amount, &$counts, &$amounts, $form): void {
                     foreach ($rows as $row) {
-                        if (! $this->matchesCustomConditions($row, $form['conditions'], $form['amount_field'])) {
+                        if (! $this->matchesCustomConditions($row, $form['conditions'], $form['amount_field'], $form['trigger'])) {
                             continue;
                         }
 
@@ -1292,9 +1292,17 @@ class DashboardStatsService
     /**
      * @param  list<array{field_name: string, accepted_values: list<string>}>  $conditions
      */
-    private function matchesCustomConditions(object $row, array $conditions, ?string $markerField = null): bool
-    {
-        if ($conditions === []) {
+    private function matchesCustomConditions(
+        object $row,
+        array $conditions,
+        ?string $markerField = null,
+        string $trigger = DashboardSalesRuleService::TRIGGER_TAG,
+    ): bool {
+        if ($trigger === DashboardSalesRuleService::TRIGGER_FORM) {
+            return true;
+        }
+
+        if ($trigger === DashboardSalesRuleService::TRIGGER_MARKED_AMOUNT) {
             return $markerField !== null && $this->hasNumericValue($row->{$markerField} ?? null);
         }
 

@@ -138,6 +138,7 @@ class AdminDashboardLayoutTest extends TestCase
                 'sales_forms' => [[
                     'form_code' => 'ezycash',
                     'amount_field' => 'ezycash_amount',
+                    'trigger' => 'tag',
                     'conditions' => [[
                         'field_name' => 'amenable',
                         'accepted_values' => ['Yes', 'Approved'],
@@ -231,6 +232,7 @@ class AdminDashboardLayoutTest extends TestCase
                 'sales_forms' => [[
                     'form_code' => 'ezycash',
                     'amount_field' => 'ezycash_amount',
+                    'trigger' => 'marked_amount',
                     'conditions' => [],
                 ]],
             ])
@@ -242,6 +244,83 @@ class AdminDashboardLayoutTest extends TestCase
             ->firstOrFail()
             ->layout;
         $this->assertSame([], data_get($layout, 'sales.forms.0.conditions'));
+    }
+
+    public function test_admin_can_save_a_form_submission_rule_without_a_tag_or_amount(): void
+    {
+        Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'ezycash',
+            'name' => 'EzyCash',
+            'table_name' => 'ezycash',
+            'display_order' => 1,
+            'is_active' => true,
+        ]);
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'customer_name',
+            'field_label' => 'Customer name',
+            'field_type' => 'text',
+            'is_required' => false,
+            'field_order' => 1,
+        ]);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)
+            ->withSession(['campaign' => 'mbsales'])
+            ->post(route('admin.dashboard-layout.update'), [
+                'campaign_code' => 'mbsales',
+                'section_order' => array_keys(
+                    \App\Services\DashboardLayoutService::sectionDefinitions(),
+                ),
+                'visible_sections' => ['welcome'],
+                'sales_mode' => 'custom',
+                'sales_forms' => [[
+                    'form_code' => 'ezycash',
+                    'amount_field' => '',
+                    'trigger' => 'form',
+                ]],
+            ])
+            ->assertRedirect(route('admin.dashboard', ['campaign' => 'mbsales']))
+            ->assertSessionHasNoErrors();
+
+        $layout = \App\Models\DashboardLayout::query()
+            ->where('campaign_code', 'mbsales')
+            ->firstOrFail()
+            ->layout;
+        $this->assertSame('form', data_get($layout, 'sales.forms.0.trigger'));
+        $this->assertNull(data_get($layout, 'sales.forms.0.amount_field'));
+    }
+
+    public function test_request_rejects_an_unknown_sales_trigger(): void
+    {
+        Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'ezycash',
+            'name' => 'EzyCash',
+            'table_name' => 'ezycash',
+            'display_order' => 1,
+            'is_active' => true,
+        ]);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)
+            ->withSession(['campaign' => 'mbsales'])
+            ->post(route('admin.dashboard-layout.update'), [
+                'campaign_code' => 'mbsales',
+                'section_order' => array_keys(
+                    \App\Services\DashboardLayoutService::sectionDefinitions(),
+                ),
+                'visible_sections' => ['welcome'],
+                'sales_mode' => 'custom',
+                'sales_forms' => [[
+                    'form_code' => 'ezycash',
+                    'amount_field' => '',
+                    'trigger' => 'unknown',
+                ]],
+            ])
+            ->assertSessionHasErrors('sales_forms.0.trigger');
     }
 
     public function test_admin_can_reset_custom_sales_rules_to_legacy_mode(): void

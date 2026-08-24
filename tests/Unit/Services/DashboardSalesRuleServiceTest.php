@@ -57,6 +57,7 @@ class DashboardSalesRuleServiceTest extends TestCase
             'form_name' => 'EzyCash',
             'table' => 'ezycash',
             'amount_field' => 'ezycash_amount',
+            'trigger' => 'tag',
             'conditions' => [[
                 'field_name' => 'amenable',
                 'accepted_values' => ['yes', 'approved'],
@@ -105,12 +106,14 @@ class DashboardSalesRuleServiceTest extends TestCase
             'forms' => [[
                 'form_code' => 'ezycash',
                 'amount_field' => 'ezycash_amount',
+                'trigger' => 'marked_amount',
                 'conditions' => [],
             ]],
         ]);
 
         $this->assertSame([], $resolved['warnings']);
         $this->assertSame([], $resolved['forms'][0]['conditions']);
+        $this->assertSame('marked_amount', $resolved['forms'][0]['trigger']);
         $this->assertTrue(collect($service->editorData('mbsales')[0]['fields'])
             ->firstWhere('name', 'ezycash_amount')['is_sale_amount']);
     }
@@ -134,10 +137,104 @@ class DashboardSalesRuleServiceTest extends TestCase
             'forms' => [[
                 'form_code' => 'ezycash',
                 'amount_field' => 'ezycash_amount',
+                'trigger' => 'marked_amount',
+                'conditions' => [],
+            ]],
+        ]);
+
+        $this->assertSame('sales_forms.0.amount_field', $errors[0]['key']);
+    }
+
+    public function test_resolves_a_form_submission_rule_without_a_numeric_field(): void
+    {
+        $this->seed(CampaignSeeder::class);
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'customer_name',
+            'field_label' => 'Customer name',
+            'field_type' => 'text',
+            'is_required' => false,
+            'field_order' => 1,
+        ]);
+
+        $resolved = app(DashboardSalesRuleService::class)->resolveForCampaign('mbsales', [
+            'mode' => 'custom',
+            'forms' => [[
+                'form_code' => 'ezycash',
+                'amount_field' => null,
+                'trigger' => 'form',
+                'conditions' => [],
+            ]],
+        ]);
+
+        $this->assertSame([], $resolved['warnings']);
+        $this->assertSame('form', $resolved['forms'][0]['trigger']);
+        $this->assertNull($resolved['forms'][0]['amount_field']);
+    }
+
+    public function test_validation_rejects_tag_conditions_for_form_trigger_and_unknown_triggers(): void
+    {
+        $this->seed(CampaignSeeder::class);
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'amenable',
+            'field_label' => 'Amenable',
+            'field_type' => 'text',
+            'is_required' => false,
+            'field_order' => 1,
+        ]);
+
+        $service = app(DashboardSalesRuleService::class);
+        $errors = $service->validationErrors('mbsales', [
+            'mode' => 'custom',
+            'forms' => [[
+                'form_code' => 'ezycash',
+                'amount_field' => null,
+                'trigger' => 'form',
+                'conditions' => [[
+                    'field_name' => 'amenable',
+                    'accepted_values' => ['Yes'],
+                ]],
+            ], [
+                'form_code' => 'ezycash',
+                'amount_field' => null,
+                'trigger' => 'unknown',
                 'conditions' => [],
             ]],
         ]);
 
         $this->assertSame('sales_forms.0.conditions', $errors[0]['key']);
+        $this->assertSame('sales_forms.1.trigger', $errors[1]['key']);
+    }
+
+    public function test_old_rule_with_only_invalid_tag_conditions_is_not_inferred_as_every_submission(): void
+    {
+        $this->seed(CampaignSeeder::class);
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'customer_name',
+            'field_label' => 'Customer name',
+            'field_type' => 'text',
+            'is_required' => false,
+            'field_order' => 1,
+        ]);
+
+        $resolved = app(DashboardSalesRuleService::class)->resolveForCampaign('mbsales', [
+            'mode' => 'custom',
+            'forms' => [[
+                'form_code' => 'ezycash',
+                'amount_field' => null,
+                'conditions' => [[
+                    'field_name' => 'removed_tag',
+                    'accepted_values' => ['Yes'],
+                ]],
+            ]],
+        ]);
+
+        $this->assertSame([], $resolved['forms']);
+        $this->assertNotEmpty($resolved['warnings']);
     }
 }
