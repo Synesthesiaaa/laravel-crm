@@ -35,6 +35,22 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertSee('window.TelephonyMediaPath?.isDual?.() === true', false);
     }
 
+    public function test_authenticated_layout_exposes_accessible_shell_landmarks(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('dashboard'));
+
+        $response->assertOk()
+            ->assertSee('Skip to main content', false)
+            ->assertSee('href="#main-content"', false)
+            ->assertSee('aria-controls="sidebar"', false)
+            ->assertSee('aria-current="page"', false)
+            ->assertSee('id="main-content"', false);
+    }
+
     public function test_dashboard_renders_soft_nav_chart_lifecycle_hooks(): void
     {
         $user = User::factory()->create();

@@ -18,10 +18,13 @@ $colorMap = [
     'info'    => ['bg' => 'var(--color-info-muted)',     'text' => 'var(--color-info)'],
 ];
 $c = $colorMap[$color] ?? $colorMap['primary'];
-$statCardClass = 'stat-card'.($href ? ' cursor-pointer hover:-translate-y-0.5 transition-transform' : '');
+$statCardClass = 'stat-card'.($href ? ' cursor-pointer hover:-translate-y-0.5 transition-transform focus-visible:outline-3 focus-visible:outline-[var(--color-primary)] focus-visible:outline-offset-3' : '');
 @endphp
-<div {{ $attributes->merge(['class' => $statCardClass]) }}
-     @if($href) onclick="window.location='{{ $href }}'" @endif>
+@if($href)
+<a href="{{ $href }}" {{ $attributes->merge(['class' => $statCardClass]) }}>
+@else
+<div {{ $attributes->merge(['class' => $statCardClass]) }}>
+@endif
     <div class="flex items-start justify-between">
         <span class="stat-card-label">{{ $label }}</span>
         <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style="background: {{ $c['bg'] }}; color: {{ $c['text'] }}">
@@ -43,4 +46,8 @@ $statCardClass = 'stat-card'.($href ? ' cursor-pointer hover:-translate-y-0.5 tr
             <span class="font-normal text-[var(--color-on-surface-dim)]">vs last period</span>
         </div>
     @endif
+@if($href)
+</a>
+@else
 </div>
+@endif

@@ -94,3 +94,11 @@ test('renders structured audit detail sections for expanded entries', () => {
     assert.match(activityLogView, /After/);
     assert.match(activityLogView, /changes\.diff/);
 });
+
+test('marks the activity stream as a responsive live region with cleanup hooks', () => {
+    assert.match(activityLogView, /aria-live="polite"/);
+    assert.match(activityLogView, /:aria-busy="loading"/);
+    assert.match(activityLogView, /activity-terminal-entry__meta/);
+    assert.match(activityLogScript, /destroy\(\)\s*\{/);
+    assert.match(activityLogScript, /clearInterval\(this\._pollTimer\)/);
+});

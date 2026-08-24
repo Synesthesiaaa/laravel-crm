@@ -11,7 +11,7 @@
             @endif
         </div>
         @if($slot->isNotEmpty())
-        <div class="flex items-center gap-2 shrink-0">
+        <div class="flex items-center gap-2 shrink-0 flex-wrap">
             {{ $slot }}
         </div>
         @endif
