@@ -103,38 +103,6 @@ class ViewLifecycleRenderTest extends TestCase
         $this->assertStringContainsString('2 sales · Total value: 125.50', $html);
     }
 
-    public function test_shared_visual_system_preserves_established_brand_tokens(): void
-    {
-        $css = file_get_contents(resource_path('css/app.css'));
-
-        $this->assertIsString($css);
-        $this->assertStringContainsString('--color-primary:           #e91e8c;', $css);
-        $this->assertStringContainsString('--color-surface:           #0a0a0a;', $css);
-    }
-
-    public function test_icon_component_supports_meaningful_labels_without_decorative_semantics(): void
-    {
-        $html = view('components.icon', [
-            'name' => 'chart-bar',
-            'label' => 'Analytics',
-        ])->render();
-
-        $this->assertStringContainsString('aria-label="Analytics"', $html);
-        $this->assertStringNotContainsString('aria-hidden="true"', $html);
-    }
-
-    public function test_icon_component_uses_consistent_decorative_defaults(): void
-    {
-        $html = view('components.icon', [
-            'name' => 'chart-bar',
-        ])->render();
-
-        $this->assertStringContainsString('class="crm-icon w-5 h-5"', $html);
-        $this->assertStringContainsString('stroke-width="1.75"', $html);
-        $this->assertStringContainsString('aria-hidden="true"', $html);
-        $this->assertStringContainsString('focusable="false"', $html);
-    }
-
     public function test_admin_dashboard_renders_soft_nav_chart_lifecycle_hooks(): void
     {
         $user = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);

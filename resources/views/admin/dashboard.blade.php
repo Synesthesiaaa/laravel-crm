@@ -111,11 +111,11 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div class="lg:col-span-2 chart-container">
             <p class="chart-title">Submission Activity — Last 30 days</p>
-            <div id="admin-chart-activity" class="chart-host" style="min-height: 240px;"></div>
+            <div id="admin-chart-activity" style="min-height: 240px;"></div>
         </div>
         <div class="chart-container">
             <p class="chart-title">Top Agents</p>
-            <div id="admin-chart-agents" class="chart-host" style="min-height: 240px;"></div>
+            <div id="admin-chart-agents" style="min-height: 240px;"></div>
         </div>
     </div>
     @endif
@@ -207,22 +207,24 @@
             return;
         }
 
-        const chartTheme = window.crmChartTheme?.() ?? {};
+        const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+        const textColor = isDark ? '#a1a1aa' : '#52525b';
+        const gridColor = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
 
         const activityEl = document.getElementById('admin-chart-activity');
         if (activityEl) {
             const activity = new ApexCharts(activityEl, {
-                ...chartTheme,
                 series: [{ name: 'Submissions', data: @json($activityTrend['values'] ?? []) }],
-                chart: { ...chartTheme.chart, type: 'area', height: 240 },
-                colors: [chartTheme.colors[0]],
+                chart: { type: 'area', height: 240, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
+                colors: ['#e91e8c'],
                 fill: { type: 'gradient', gradient: { opacityFrom: .35, opacityTo: .03 } },
-                stroke: { ...chartTheme.stroke, curve: 'smooth', width: 2 },
-                xaxis: { ...chartTheme.xaxis, categories: @json($activityTrend['labels'] ?? []), labels: { ...chartTheme.xaxis.labels, style: { ...chartTheme.xaxis.labels.style, fontSize: '11px' }, rotate: -30 }, axisBorder: { show: false }, axisTicks: { show: false } },
-                yaxis: { ...chartTheme.yaxis, labels: { ...chartTheme.yaxis.labels, style: { ...chartTheme.yaxis.labels.style, fontSize: '11px' } }, min: 0 },
-                grid: { ...chartTheme.grid, strokeDashArray: 3 },
-                tooltip: { ...chartTheme.tooltip },
+                stroke: { curve: 'smooth', width: 2 },
+                xaxis: { categories: @json($activityTrend['labels'] ?? []), labels: { style: { colors: textColor, fontSize: '11px' }, rotate: -30 }, axisBorder: { show: false }, axisTicks: { show: false } },
+                yaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
+                grid: { borderColor: gridColor, strokeDashArray: 3 },
+                tooltip: { theme: isDark ? 'dark' : 'light' },
                 dataLabels: { enabled: false },
+                theme: { mode: isDark ? 'dark' : 'light' },
             });
             window.crmCharts?.register?.(chartGroup, 'activity', activity);
             await activity.render();
@@ -232,16 +234,17 @@
         const agentsEl = document.getElementById('admin-chart-agents');
         if (agentLabels.length && agentsEl) {
             const agents = new ApexCharts(agentsEl, {
-                ...chartTheme,
                 series: [{ name: 'Submissions', data: @json($topAgents['values'] ?? []) }],
-                chart: { ...chartTheme.chart, type: 'bar', height: 240 },
-                colors: [chartTheme.colors[0]],
+                chart: { type: 'bar', height: 240, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
+                colors: ['#e91e8c'],
                 plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '55%' } },
-                xaxis: { ...chartTheme.xaxis, categories: agentLabels, labels: { ...chartTheme.xaxis.labels, style: { ...chartTheme.xaxis.labels.style, fontSize: '11px' } }, axisBorder: { show: false } },
-                yaxis: { ...chartTheme.yaxis, labels: { ...chartTheme.yaxis.labels, style: { ...chartTheme.yaxis.labels.style }, maxWidth: 120 } },
-                grid: { ...chartTheme.grid, xaxis: { lines: { show: true } }, yaxis: { lines: { show: false } } },
-                tooltip: { ...chartTheme.tooltip },
+                xaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, axisBorder: { show: false } },
+                yaxis: { labels: { style: { colors: textColor, fontSize: '11px' }, maxWidth: 120 } },
+                grid: { borderColor: gridColor, xaxis: { lines: { show: true } }, yaxis: { lines: { show: false } } },
+                tooltip: { theme: isDark ? 'dark' : 'light' },
                 dataLabels: { enabled: false },
+                theme: { mode: isDark ? 'dark' : 'light' },
+                categories: agentLabels,
             });
             window.crmCharts?.register?.(chartGroup, 'agents', agents);
             await agents.render();

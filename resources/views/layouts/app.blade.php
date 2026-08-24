@@ -582,7 +582,6 @@
             btn.setAttribute('aria-label', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
             btn.setAttribute('title', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
           }
-          window.dispatchEvent(new CustomEvent('crm-theme-changed', { detail: { theme: t } }));
         }
         document.addEventListener('click', function (e) {
           var toggle = e.target && e.target.closest && e.target.closest('#theme-toggle');

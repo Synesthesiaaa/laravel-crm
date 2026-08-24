@@ -221,15 +221,15 @@
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-stagger">
         <div class="chart-container">
             <p class="chart-title">Activity — last 24 hours</p>
-            <div id="chart-daily-activity" class="w-full chart-host" style="min-height: 240px;"></div>
+            <div id="chart-daily-activity" class="w-full" style="min-height: 240px;"></div>
         </div>
         <div class="chart-container">
             <p class="chart-title">Weekly activity — this week</p>
-            <div id="chart-weekly-activity" class="w-full chart-host" style="min-height: 240px;"></div>
+            <div id="chart-weekly-activity" class="w-full" style="min-height: 240px;"></div>
         </div>
         <div class="chart-container">
             <p class="chart-title">Monthly activity — {{ $monthTitle }}</p>
-            <div id="chart-monthly-activity" class="w-full chart-host" style="min-height: 240px;"></div>
+            <div id="chart-monthly-activity" class="w-full" style="min-height: 240px;"></div>
         </div>
     </div>
     </section>
@@ -517,7 +517,7 @@
         }, fallbackIntervalMs);
     }
 
-    async function mountAreaChart(ApexCharts, elId, categories, values, chartTheme) {
+    async function mountAreaChart(ApexCharts, elId, categories, values, config) {
         const el = document.getElementById(elId);
         if (!el || !document.getElementById('main-layout')?.contains(el)) {
             return;
@@ -528,28 +528,30 @@
 
         el.innerHTML = '';
         const chart = new ApexCharts(el, {
-            ...chartTheme,
             series: [{ name: 'Submissions', data: values }],
             chart: {
-                ...chartTheme.chart,
                 type: 'area',
                 height: 240,
                 width: '100%',
+                toolbar: { show: false },
+                background: 'transparent',
+                fontFamily: 'DM Sans, ui-sans-serif',
+                animations: { enabled: true, easing: 'easeinout', speed: 600 },
             },
-            colors: [chartTheme.colors[0]],
+            colors: ['#e91e8c'],
             fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: .35, opacityTo: .03 } },
-            stroke: { ...chartTheme.stroke, curve: 'smooth', width: 2 },
+            stroke: { curve: 'smooth', width: 2 },
             xaxis: {
-                ...chartTheme.xaxis,
                 categories,
-                labels: { ...chartTheme.xaxis.labels, style: { ...chartTheme.xaxis.labels.style, fontSize: '11px' }, rotate: -30 },
+                labels: { style: { colors: config.textColor, fontSize: '11px' }, rotate: -30 },
                 axisBorder: { show: false },
                 axisTicks: { show: false },
             },
-            yaxis: { ...chartTheme.yaxis, labels: { ...chartTheme.yaxis.labels, style: { ...chartTheme.yaxis.labels.style, fontSize: '11px' } }, min: 0 },
-            grid: { ...chartTheme.grid, strokeDashArray: 3 },
-            tooltip: { ...chartTheme.tooltip },
+            yaxis: { labels: { style: { colors: config.textColor, fontSize: '11px' } }, min: 0 },
+            grid: { borderColor: config.gridColor, strokeDashArray: 3 },
+            tooltip: { theme: config.isDark ? 'dark' : 'light' },
             dataLabels: { enabled: false },
+            theme: { mode: config.isDark ? 'dark' : 'light' },
         });
 
         window.crmCharts?.register?.(chartGroup, elId, chart);
@@ -577,12 +579,17 @@
             return;
         }
 
-        const chartTheme = window.crmChartTheme?.() ?? {};
+        const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+        const config = {
+            isDark,
+            textColor: isDark ? '#a1a1aa' : '#52525b',
+            gridColor: isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)',
+        };
 
         await Promise.all([
-            mountAreaChart(ApexCharts, 'chart-daily-activity', @json($dailyActivity['labels'] ?? []), @json($dailyActivity['values'] ?? []), chartTheme),
-            mountAreaChart(ApexCharts, 'chart-weekly-activity', @json($weeklyActivity['labels'] ?? []), @json($weeklyActivity['values'] ?? []), chartTheme),
-            mountAreaChart(ApexCharts, 'chart-monthly-activity', @json($monthlyActivity['labels'] ?? []), @json($monthlyActivity['values'] ?? []), chartTheme),
+            mountAreaChart(ApexCharts, 'chart-daily-activity', @json($dailyActivity['labels'] ?? []), @json($dailyActivity['values'] ?? []), config),
+            mountAreaChart(ApexCharts, 'chart-weekly-activity', @json($weeklyActivity['labels'] ?? []), @json($weeklyActivity['values'] ?? []), config),
+            mountAreaChart(ApexCharts, 'chart-monthly-activity', @json($monthlyActivity['labels'] ?? []), @json($monthlyActivity['values'] ?? []), config),
         ]);
 
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));

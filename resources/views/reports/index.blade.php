@@ -184,14 +184,14 @@
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <div class="chart-container">
                 <p class="chart-title">Hourly volume</p>
-                <div x-show="dashboard.status.hourlyLabels.length" id="chart-status-hourly" class="w-full chart-host" style="min-height: 280px;"></div>
+                <div x-show="dashboard.status.hourlyLabels.length" id="chart-status-hourly" class="w-full" style="min-height: 280px;"></div>
                 <div x-show="!dashboard.status.hourlyLabels.length" class="table-empty py-10 text-center text-sm text-[var(--color-on-surface-dim)]">
                     No hourly data yet.
                 </div>
             </div>
             <div class="chart-container">
                 <p class="chart-title">Status mix</p>
-                <div x-show="dashboard.status.statusLabels.length" id="chart-status-mix" class="w-full chart-host" style="min-height: 280px;"></div>
+                <div x-show="dashboard.status.statusLabels.length" id="chart-status-mix" class="w-full" style="min-height: 280px;"></div>
                 <div x-show="!dashboard.status.statusLabels.length" class="table-empty py-10 text-center text-sm text-[var(--color-on-surface-dim)]">
                     No status breakdown yet.
                 </div>
@@ -245,7 +245,7 @@
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <div class="chart-container">
                 <p class="chart-title">Calls by agent</p>
-                <div x-show="dashboard.agents.callsLabels.length" id="chart-agent-calls" class="w-full chart-host" style="min-height: 280px;"></div>
+                <div x-show="dashboard.agents.callsLabels.length" id="chart-agent-calls" class="w-full" style="min-height: 280px;"></div>
                 <div x-show="!dashboard.agents.callsLabels.length" class="table-empty py-10 text-center text-sm text-[var(--color-on-surface-dim)]">
                     No agent rows yet.
                 </div>
@@ -324,7 +324,7 @@
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <div class="chart-container">
                 <p class="chart-title">Disposition mix</p>
-                <div x-show="dashboard.dispo.labels.length" id="chart-dispo-breakdown" class="w-full chart-host" style="min-height: 280px;"></div>
+                <div x-show="dashboard.dispo.labels.length" id="chart-dispo-breakdown" class="w-full" style="min-height: 280px;"></div>
                 <div x-show="!dashboard.dispo.labels.length" class="table-empty py-10 text-center text-sm text-[var(--color-on-surface-dim)]">
                     No disposition data yet.
                 </div>
@@ -843,21 +843,23 @@ window.telephonyReports = function () {
                 return;
             }
 
-            const chartTheme = window.crmChartTheme?.() ?? {};
+            const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+            const textColor = isDark ? '#a1a1aa' : '#52525b';
+            const gridColor = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
 
             if (statusHourlyEl && this.dashboard.status.hourlyLabels.length) {
                 const chart = new ApexCharts(statusHourlyEl, {
-                    ...chartTheme,
                     series: [{ name: 'Calls', data: this.dashboard.status.hourlyValues }],
-                    chart: { ...chartTheme.chart, type: 'area', height: 280 },
-                    colors: [chartTheme.colors[0]],
+                    chart: { type: 'area', height: 280, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
+                    colors: ['#e91e8c'],
                     fill: { type: 'gradient', gradient: { opacityFrom: 0.32, opacityTo: 0.05 } },
-                    stroke: { ...chartTheme.stroke, curve: 'smooth', width: 2 },
-                    xaxis: { ...chartTheme.xaxis, categories: this.dashboard.status.hourlyLabels, labels: { ...chartTheme.xaxis.labels, style: { ...chartTheme.xaxis.labels.style, fontSize: '11px' } }, axisBorder: { show: false } },
-                    yaxis: { ...chartTheme.yaxis, labels: { ...chartTheme.yaxis.labels, style: { ...chartTheme.yaxis.labels.style, fontSize: '11px' } }, min: 0 },
-                    grid: { ...chartTheme.grid, strokeDashArray: 3 },
-                    tooltip: { ...chartTheme.tooltip },
+                    stroke: { curve: 'smooth', width: 2 },
+                    xaxis: { categories: this.dashboard.status.hourlyLabels, labels: { style: { colors: textColor, fontSize: '11px' } }, axisBorder: { show: false } },
+                    yaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
+                    grid: { borderColor: gridColor, strokeDashArray: 3 },
+                    tooltip: { theme: isDark ? 'dark' : 'light' },
                     dataLabels: { enabled: false },
+                    theme: { mode: isDark ? 'dark' : 'light' },
                 });
                 window.crmCharts?.register?.(CHART_GROUP, 'status-hourly', chart);
                 await chart.render();
@@ -865,13 +867,12 @@ window.telephonyReports = function () {
 
             if (statusMixEl && this.dashboard.status.statusLabels.length) {
                 const chart = new ApexCharts(statusMixEl, {
-                    ...chartTheme,
                     series: this.dashboard.status.statusValues,
-                    chart: { ...chartTheme.chart, type: 'donut', height: 280 },
+                    chart: { type: 'donut', height: 280, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
                     labels: this.dashboard.status.statusLabels,
-                    colors: [chartTheme.colors[4], chartTheme.colors[1], chartTheme.colors[2], chartTheme.colors[3], chartTheme.colors[0], chartTheme.colors[5]],
+                    colors: ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#14b8a6'],
                     dataLabels: { enabled: false },
-                    legend: { ...chartTheme.legend, position: 'bottom' },
+                    legend: { position: 'bottom', labels: { colors: textColor } },
                     plotOptions: {
                         pie: {
                             donut: {
@@ -879,7 +880,8 @@ window.telephonyReports = function () {
                             },
                         },
                     },
-                    tooltip: { ...chartTheme.tooltip },
+                    tooltip: { theme: isDark ? 'dark' : 'light' },
+                    theme: { mode: isDark ? 'dark' : 'light' },
                 });
                 window.crmCharts?.register?.(CHART_GROUP, 'status-mix', chart);
                 await chart.render();
@@ -887,16 +889,16 @@ window.telephonyReports = function () {
 
             if (agentCallsEl && this.dashboard.agents.callsLabels.length) {
                 const chart = new ApexCharts(agentCallsEl, {
-                    ...chartTheme,
                     series: [{ name: 'Calls', data: this.dashboard.agents.callsValues }],
-                    chart: { ...chartTheme.chart, type: 'bar', height: 280 },
-                    colors: [chartTheme.colors[4]],
+                    chart: { type: 'bar', height: 280, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
+                    colors: ['#3b82f6'],
                     plotOptions: { bar: { horizontal: true, borderRadius: 5, barHeight: '55%' } },
-                    xaxis: { ...chartTheme.xaxis, categories: this.dashboard.agents.callsLabels, labels: { ...chartTheme.xaxis.labels, style: { ...chartTheme.xaxis.labels.style, fontSize: '11px' } } },
-                    yaxis: { ...chartTheme.yaxis, labels: { ...chartTheme.yaxis.labels, style: { ...chartTheme.yaxis.labels.style }, maxWidth: 160 } },
-                    grid: { ...chartTheme.grid, strokeDashArray: 3 },
-                    tooltip: { ...chartTheme.tooltip },
+                    xaxis: { categories: this.dashboard.agents.callsLabels, labels: { style: { colors: textColor, fontSize: '11px' } } },
+                    yaxis: { labels: { style: { colors: textColor, fontSize: '11px' }, maxWidth: 160 } },
+                    grid: { borderColor: gridColor, strokeDashArray: 3 },
+                    tooltip: { theme: isDark ? 'dark' : 'light' },
                     dataLabels: { enabled: false },
+                    theme: { mode: isDark ? 'dark' : 'light' },
                 });
                 window.crmCharts?.register?.(CHART_GROUP, 'agent-calls', chart);
                 await chart.render();
@@ -904,13 +906,12 @@ window.telephonyReports = function () {
 
             if (dispoEl && this.dashboard.dispo.labels.length) {
                 const chart = new ApexCharts(dispoEl, {
-                    ...chartTheme,
                     series: this.dashboard.dispo.values,
-                    chart: { ...chartTheme.chart, type: 'donut', height: 280 },
+                    chart: { type: 'donut', height: 280, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
                     labels: this.dashboard.dispo.labels,
-                    colors: [chartTheme.colors[1], chartTheme.colors[4], chartTheme.colors[2], chartTheme.colors[3], chartTheme.colors[0], chartTheme.colors[5], chartTheme.colors[2], chartTheme.colors[4]],
+                    colors: ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#a855f7', '#14b8a6', '#f97316', '#ec4899'],
                     dataLabels: { enabled: false },
-                    legend: { ...chartTheme.legend, position: 'bottom' },
+                    legend: { position: 'bottom', labels: { colors: textColor } },
                     plotOptions: {
                         pie: {
                             donut: {
@@ -918,7 +919,8 @@ window.telephonyReports = function () {
                             },
                         },
                     },
-                    tooltip: { ...chartTheme.tooltip },
+                    tooltip: { theme: isDark ? 'dark' : 'light' },
+                    theme: { mode: isDark ? 'dark' : 'light' },
                 });
                 window.crmCharts?.register?.(CHART_GROUP, 'dispo-breakdown', chart);
                 await chart.render();
