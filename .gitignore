@@ -62,3 +62,7 @@ composer.lock
 composer.json
 /.codex
 /.cursor
+/.agents
+/.claude
+/.gemini
+/.github
