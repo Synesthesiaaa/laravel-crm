@@ -5,6 +5,7 @@ namespace Tests\Unit\Services;
 use App\Models\CampaignDispositionRecord;
 use App\Models\Form;
 use App\Models\FormField;
+use App\Services\DashboardLayoutService;
 use App\Services\DashboardStatsService;
 use Carbon\Carbon;
 use Database\Seeders\CampaignSeeder;
@@ -599,6 +600,136 @@ class DashboardStatsServiceTest extends TestCase
         $this->assertSame(1, $kpis['sales']);
         $this->assertSame(100.0, $kpis['sales_amount']);
         $this->assertSame('Alice', $kpis['top_agent']);
+    }
+
+    public function test_selected_range_sales_use_custom_tag_rules_once_per_submission(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        $this->seed(CampaignSeeder::class);
+        Schema::create('rule_probe', function ($table): void {
+            $table->id();
+            $table->date('date');
+            $table->string('agent')->nullable();
+            $table->string('tag_one')->nullable();
+            $table->string('tag_two')->nullable();
+            $table->decimal('amount', 12, 2)->nullable();
+            $table->timestamps();
+        });
+        Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'rule_probe',
+            'name' => 'Rule Probe',
+            'table_name' => 'rule_probe',
+            'display_order' => 4,
+            'is_active' => true,
+        ]);
+        FormField::query()->insert([
+            [
+                'campaign_code' => 'mbsales',
+                'form_type' => 'rule_probe',
+                'field_name' => 'tag_one',
+                'field_label' => 'Tag One',
+                'field_type' => 'text',
+                'is_required' => false,
+                'field_order' => 1,
+            ],
+            [
+                'campaign_code' => 'mbsales',
+                'form_type' => 'rule_probe',
+                'field_name' => 'tag_two',
+                'field_label' => 'Tag Two',
+                'field_type' => 'text',
+                'is_required' => false,
+                'field_order' => 2,
+            ],
+            [
+                'campaign_code' => 'mbsales',
+                'form_type' => 'rule_probe',
+                'field_name' => 'amount',
+                'field_label' => 'Amount',
+                'field_type' => 'number',
+                'is_required' => false,
+                'field_order' => 3,
+            ],
+        ]);
+        app(DashboardLayoutService::class)->saveForCampaign(
+            'mbsales',
+            array_keys(app(DashboardLayoutService::class)->defaultLayout()['sections']),
+            array_keys(app(DashboardLayoutService::class)->defaultLayout()['sections']),
+            [
+                'mode' => 'custom',
+                'forms' => [[
+                    'form_code' => 'rule_probe',
+                    'amount_field' => 'amount',
+                    'conditions' => [
+                        ['field_name' => 'tag_one', 'accepted_values' => ['Yes']],
+                        ['field_name' => 'tag_two', 'accepted_values' => ['Approved']],
+                    ],
+                ]],
+            ],
+        );
+
+        DB::table('rule_probe')->insert([
+            [
+                'date' => '2026-05-15',
+                'agent' => 'Alice',
+                'tag_one' => ' yes ',
+                'tag_two' => 'Approved',
+                'amount' => 100,
+                'created_at' => '2026-05-15 10:00:00',
+                'updated_at' => '2026-05-15 10:00:00',
+            ],
+            [
+                'date' => '2026-05-15',
+                'agent' => 'Bob',
+                'tag_one' => 'No',
+                'tag_two' => 'approved',
+                'amount' => 50,
+                'created_at' => '2026-05-15 11:00:00',
+                'updated_at' => '2026-05-15 11:00:00',
+            ],
+            [
+                'date' => '2026-05-15',
+                'agent' => 'Ignored',
+                'tag_one' => 'No',
+                'tag_two' => 'No',
+                'amount' => 900,
+                'created_at' => '2026-05-15 12:00:00',
+                'updated_at' => '2026-05-15 12:00:00',
+            ],
+            [
+                'date' => '2026-05-15',
+                'agent' => 'Outside',
+                'tag_one' => 'Yes',
+                'tag_two' => 'No',
+                'amount' => 1000,
+                'created_at' => '2026-05-15 18:00:00',
+                'updated_at' => '2026-05-15 18:00:00',
+            ],
+        ]);
+
+        $kpis = app(DashboardStatsService::class)->getSalesKpisForCampaign(
+            'mbsales',
+            Carbon::parse('2026-05-15 06:00:00'),
+            Carbon::parse('2026-05-15 18:00:00'),
+        );
+
+        $this->assertSame(2, $kpis['sales']);
+        $this->assertSame(150.0, $kpis['sales_amount']);
+        $this->assertSame(['Alice', 'Bob'], array_column($kpis['agent_leaderboard'], 'agent'));
+        $this->assertSame(2, $kpis['sales_by_form'][0]['sales']);
+        $this->assertSame(150.0, $kpis['sales_by_form'][0]['sales_amount']);
+
+        $leaderboard = app(DashboardStatsService::class)->getAgentLeaderboard('mbsales');
+        $salesByAgent = collect($leaderboard)->keyBy('agent');
+        $this->assertSame(1, $salesByAgent['Alice']['sales_count']);
+        $this->assertSame(100.0, $salesByAgent['Alice']['sales_amount']);
+        $this->assertSame(1, $salesByAgent['Bob']['sales_count']);
+
+        $rolling = app(DashboardStatsService::class)->getKpisForCampaign('mbsales');
+        $this->assertSame(2, $rolling['sales']);
+        $this->assertSame(150.0, $rolling['sales_amount']);
+        $this->assertSame('Alice', $rolling['top_agent']);
     }
 
     private function insertEzycashRow(string $dateYmd): void

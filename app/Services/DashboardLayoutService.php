@@ -23,7 +23,7 @@ class DashboardLayoutService
         return self::SECTION_DEFINITIONS;
     }
 
-    /** @return array{sections: array<string, array{visible: bool, order: int}>} */
+    /** @return array{sections: array<string, array{visible: bool, order: int}>, sales?: array<string, mixed>} */
     public function defaultLayout(): array
     {
         return $this->buildLayout(array_keys(self::SECTION_DEFINITIONS), array_keys(self::SECTION_DEFINITIONS));
@@ -58,17 +58,39 @@ class DashboardLayoutService
             static fn (mixed $section): bool => is_array($section) && ($section['visible'] ?? false) === true,
         ));
 
-        return $this->buildLayout($sectionOrder, $visibleSections);
+        $layout = $this->buildLayout($sectionOrder, $visibleSections);
+        if (is_array($record->layout['sales'] ?? null)) {
+            $layout['sales'] = $record->layout['sales'];
+        }
+
+        return $layout;
     }
 
     /**
      * @param  array<int, string>  $sectionOrder
      * @param  array<int, string>  $visibleSections
-     * @return array{sections: array<string, array{visible: bool, order: int}>}
+     * @param  array<string, mixed>|null  $salesConfig
+     * @return array{sections: array<string, array{visible: bool, order: int}>, sales?: array<string, mixed>}
      */
-    public function saveForCampaign(string $campaignCode, array $sectionOrder, array $visibleSections): array
-    {
+    public function saveForCampaign(
+        string $campaignCode,
+        array $sectionOrder,
+        array $visibleSections,
+        ?array $salesConfig = null,
+        bool $replaceSalesConfig = false,
+    ): array {
         $layout = $this->buildLayout($sectionOrder, $visibleSections);
+        $record = DashboardLayout::query()
+            ->where('campaign_code', $campaignCode)
+            ->first();
+
+        if ($replaceSalesConfig && $salesConfig === null) {
+            unset($layout['sales']);
+        } elseif ($salesConfig !== null) {
+            $layout['sales'] = $salesConfig;
+        } elseif (is_array($record?->layout['sales'] ?? null)) {
+            $layout['sales'] = $record->layout['sales'];
+        }
 
         DashboardLayout::query()->updateOrCreate(
             ['campaign_code' => $campaignCode],

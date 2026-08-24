@@ -29,6 +29,18 @@
                 @endif
             </div>
         </div>
+        <form method="GET" action="{{ route('admin.dashboard') }}" class="mt-5 flex flex-wrap items-end gap-3">
+            <div class="min-w-[15rem] flex-1 max-w-md">
+                <label for="admin-dashboard-campaign" class="form-label">Customize campaign</label>
+                <select id="admin-dashboard-campaign" name="campaign" class="form-select w-full" onchange="this.form.submit()">
+                    @foreach($campaigns as $campaignCode => $campaignConfig)
+                        <option value="{{ $campaignCode }}" @selected($campaignCode === $campaign)>{{ $campaignConfig['name'] ?? $campaignCode }}</option>
+                    @endforeach
+                </select>
+                <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">This selector only changes the dashboard being edited; it does not change an agent's active campaign.</p>
+            </div>
+            <noscript><button type="submit" class="btn-secondary">Load campaign</button></noscript>
+        </form>
     </div>
 
     @if($user->isAdmin())
@@ -43,17 +55,90 @@
                 ->keys()
                 ->values()
                 ->all();
+            $storedSales = is_array($dashboardLayout['sales'] ?? null) ? $dashboardLayout['sales'] : [];
+            $salesRulesSource = old('sales_forms', $storedSales['forms'] ?? []);
+            $storedSalesRules = collect($salesRulesSource)
+                ->filter(fn ($rule) => is_array($rule))
+                ->map(function ($rule) {
+                    return [
+                        'form_code' => (string) ($rule['form_code'] ?? ''),
+                        'amount_field' => (string) ($rule['amount_field'] ?? ''),
+                        'conditions' => collect($rule['conditions'] ?? [])
+                            ->filter(fn ($condition) => is_array($condition))
+                            ->map(fn ($condition) => [
+                                'field_name' => (string) ($condition['field_name'] ?? ''),
+                                'accepted_values' => array_values(array_filter(
+                                    array_map('strval', (array) ($condition['accepted_values'] ?? [])),
+                                    fn ($value) => trim($value) !== '',
+                                )),
+                            ])
+                            ->values()
+                            ->all(),
+                    ];
+                })
+                ->values()
+                ->all();
         @endphp
         <div class="md-card" x-data="{
             sections: @js($savedDashboardSections),
             visible: @js($visibleDashboardSections),
             labels: @js($dashboardSections),
+            salesMode: @js(old('sales_mode', $storedSales['mode'] ?? 'legacy')),
+            salesRules: @js($storedSalesRules),
+            formOptions: @js($salesEditorForms),
             move(index, direction) {
                 const next = index + direction;
                 if (next < 0 || next >= this.sections.length) return;
                 const current = this.sections[index];
                 this.sections[index] = this.sections[next];
                 this.sections[next] = current;
+            },
+            formByCode(code) {
+                return this.formOptions.find((form) => form.code === code) || null;
+            },
+            tagFields(code) {
+                return (this.formByCode(code)?.fields || []).filter((field) => field.is_tag);
+            },
+            tagForms() {
+                return this.formOptions.filter((form) => form.fields.some((field) => field.is_tag));
+            },
+            amountFields(code) {
+                return (this.formByCode(code)?.fields || []).filter((field) => field.is_amount);
+            },
+            addRule() {
+                const form = this.tagForms()[0];
+                if (!form) return;
+                const tag = form.fields.find((field) => field.is_tag);
+                this.salesRules.push({
+                    form_code: form.code,
+                    amount_field: '',
+                    conditions: [{ field_name: tag?.name || '', accepted_values: [''] }],
+                });
+            },
+            removeRule(index) {
+                this.salesRules.splice(index, 1);
+            },
+            addCondition(rule) {
+                const tag = this.tagFields(rule.form_code)[0];
+                rule.conditions.push({ field_name: tag?.name || '', accepted_values: [''] });
+            },
+            removeCondition(rule, index) {
+                rule.conditions.splice(index, 1);
+            },
+            addAcceptedValue(condition) {
+                condition.accepted_values.push('');
+            },
+            removeAcceptedValue(condition, index) {
+                if (condition.accepted_values.length === 1) {
+                    condition.accepted_values[0] = '';
+                    return;
+                }
+                condition.accepted_values.splice(index, 1);
+            },
+            changeRuleForm(rule) {
+                const tag = this.tagFields(rule.form_code)[0];
+                rule.amount_field = '';
+                rule.conditions = [{ field_name: tag?.name || '', accepted_values: [''] }];
             },
         }">
             <div class="p-5 border-b border-[var(--color-border)]">
@@ -65,8 +150,9 @@
                     <x-badge type="info">Admin controlled</x-badge>
                 </div>
             </div>
-            <form method="POST" action="{{ route('admin.dashboard-layout.update') }}" class="p-5 space-y-3">
+            <form method="POST" action="{{ route('admin.dashboard-layout.update') }}" class="p-5 space-y-6">
                 @csrf
+                <input type="hidden" name="campaign_code" value="{{ $campaign }}">
                 <div class="space-y-2">
                     <template x-for="(section, index) in sections" :key="section">
                         <div class="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2">
@@ -80,9 +166,136 @@
                         </div>
                     </template>
                 </div>
+
+                <div class="border-t border-[var(--color-border)] pt-5 space-y-4">
+                    <div class="flex items-start justify-between gap-4 flex-wrap">
+                        <div>
+                            <h4 class="text-sm font-semibold text-[var(--color-on-surface)]">Sales attribution</h4>
+                            <p class="text-xs text-[var(--color-on-surface-dim)] mt-1 max-w-2xl">Choose how this campaign counts sales. Custom rules match trimmed, case-insensitive tag values and count each submission once when any condition matches.</p>
+                        </div>
+                        <div class="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1" role="group" aria-label="Sales attribution mode">
+                            <label class="cursor-pointer rounded-md px-3 py-1.5 text-xs transition" :class="salesMode === 'legacy' ? 'bg-[var(--color-surface)] text-[var(--color-on-surface)] shadow-sm' : 'text-[var(--color-on-surface-dim)]'">
+                                <input type="radio" name="sales_mode" value="legacy" x-model="salesMode" class="sr-only"> Legacy
+                            </label>
+                            <label class="cursor-pointer rounded-md px-3 py-1.5 text-xs transition" :class="salesMode === 'custom' ? 'bg-[var(--color-primary-muted)] text-[var(--color-primary)] shadow-sm' : 'text-[var(--color-on-surface-dim)]'">
+                                <input type="radio" name="sales_mode" value="custom" x-model="salesMode" class="sr-only"> Custom rules
+                            </label>
+                        </div>
+                    </div>
+
+                    <div x-show="salesMode === 'legacy'" x-cloak class="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4 text-xs text-[var(--color-on-surface-muted)]">
+                        Legacy mode uses the existing numeric fields marked as sale amounts. Use custom rules when this campaign's sale tag or amount field is different.
+                    </div>
+
+                    <div x-show="salesMode === 'custom'" x-cloak class="space-y-4">
+                        @if($salesConfiguration['warnings'] ?? [])
+                            <div class="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-warning-muted)] p-3 text-xs text-[var(--color-warning-fg)]" role="status">
+                                <p class="font-semibold">Some saved references need attention</p>
+                                <ul class="mt-1 list-disc pl-4 space-y-0.5">
+                                    @foreach($salesConfiguration['warnings'] as $warning)
+                                        <li>{{ $warning }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
+
+                        <div class="flex items-center justify-between gap-3 flex-wrap">
+                            <div>
+                                <p class="text-xs font-semibold text-[var(--color-on-surface)]">Rules by form</p>
+                                <p class="text-[11px] text-[var(--color-on-surface-dim)]">Conditions within a form use OR logic. A matching submission is counted once.</p>
+                            </div>
+                            <button type="button" class="btn-secondary text-xs" @click="addRule()" :disabled="tagForms().length === 0">Add form rule</button>
+                        </div>
+
+                        <div x-show="formOptions.length === 0" class="rounded-lg border border-dashed border-[var(--color-border)] p-4 text-xs text-[var(--color-on-surface-dim)]">No active forms with registered tables are available for this campaign.</div>
+                        <div x-show="formOptions.length > 0 && tagForms().length === 0" class="rounded-lg border border-dashed border-[var(--color-border)] p-4 text-xs text-[var(--color-on-surface-dim)]">No active form has a text or select field available for sale tags.</div>
+                        <div x-show="salesRules.length === 0 && tagForms().length > 0" class="rounded-lg border border-dashed border-[var(--color-border)] p-4 text-xs text-[var(--color-on-surface-dim)]">Add a form rule to enable custom sales counting.</div>
+
+                        <div class="space-y-4">
+                            <template x-for="(rule, ruleIndex) in salesRules" :key="ruleIndex">
+                                <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4 space-y-4">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
+                                            <div>
+                                                <label class="form-label" :for="'sales-form-' + ruleIndex">Form</label>
+                                                <select class="form-select w-full" :id="'sales-form-' + ruleIndex" :name="'sales_forms[' + ruleIndex + '][form_code]'" x-model="rule.form_code" @change="changeRuleForm(rule)">
+                                                    <template x-for="form in tagForms()" :key="form.code">
+                                                        <option :value="form.code" x-text="form.name"></option>
+                                                    </template>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="form-label" :for="'sales-amount-' + ruleIndex">Amount field <span class="font-normal text-[var(--color-on-surface-dim)]">(optional)</span></label>
+                                                <select class="form-select w-full" :id="'sales-amount-' + ruleIndex" :name="'sales_forms[' + ruleIndex + '][amount_field]'" x-model="rule.amount_field">
+                                                    <option value="">Count only</option>
+                                                    <template x-for="field in amountFields(rule.form_code)" :key="field.name">
+                                                        <option :value="field.name" x-text="field.label"></option>
+                                                    </template>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="btn-icon text-[var(--color-danger-fg)]" @click="removeRule(ruleIndex)" aria-label="Remove form sales rule">&times;</button>
+                                    </div>
+
+                                    <div class="space-y-3">
+                                        <template x-for="(condition, conditionIndex) in rule.conditions" :key="conditionIndex">
+                                            <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 space-y-3">
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <p class="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]" x-text="'Condition ' + (conditionIndex + 1)"></p>
+                                                    <button type="button" class="text-[11px] text-[var(--color-danger-fg)] hover:underline" @click="removeCondition(rule, conditionIndex)">Remove</button>
+                                                </div>
+                                                <div>
+                                                    <label class="form-label" :for="'sales-condition-field-' + ruleIndex + '-' + conditionIndex">Tag field</label>
+                                                    <select class="form-select w-full" :id="'sales-condition-field-' + ruleIndex + '-' + conditionIndex" :name="'sales_forms[' + ruleIndex + '][conditions][' + conditionIndex + '][field_name]'" x-model="condition.field_name">
+                                                        <template x-for="field in tagFields(rule.form_code)" :key="field.name">
+                                                            <option :value="field.name" x-text="field.label"></option>
+                                                        </template>
+                                                    </select>
+                                                </div>
+                                                <div class="space-y-2">
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <label class="form-label mb-0">Accepted values</label>
+                                                        <button type="button" class="text-[11px] text-[var(--color-primary)] hover:underline" @click="addAcceptedValue(condition)">Add value</button>
+                                                    </div>
+                                                    <template x-for="(value, valueIndex) in condition.accepted_values" :key="valueIndex">
+                                                        <div class="flex items-center gap-2">
+                                                            <input type="text" class="form-input flex-1" :name="'sales_forms[' + ruleIndex + '][conditions][' + conditionIndex + '][accepted_values][]'" x-model="condition.accepted_values[valueIndex]" placeholder="e.g. Yes">
+                                                            <button type="button" class="btn-icon" @click="removeAcceptedValue(condition, valueIndex)" :aria-label="'Remove accepted value ' + (valueIndex + 1)">&times;</button>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <button type="button" class="btn-ghost text-xs" @click="addCondition(rule)">+ Add OR condition</button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3 text-xs text-[var(--color-on-surface-muted)]">
+                            <span class="font-semibold text-[var(--color-on-surface)]">Preview:</span>
+                            <span x-text="salesRules.length + ' form rule' + (salesRules.length === 1 ? '' : 's') + ' • ' + salesRules.reduce((total, rule) => total + rule.conditions.length, 0) + ' OR condition' + (salesRules.reduce((total, rule) => total + rule.conditions.length, 0) === 1 ? '' : 's')"></span>
+                        </div>
+                    </div>
+                </div>
+
+                @if($errors->any())
+                    <div class="rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger-muted)] p-3 text-xs text-[var(--color-danger-fg)]" role="alert">
+                        <p class="font-semibold">Review the dashboard settings</p>
+                        <ul class="mt-1 list-disc pl-4 space-y-0.5">
+                            @foreach($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+
                 <div class="flex items-center justify-between gap-3 flex-wrap pt-2">
-                    <p class="text-xs text-[var(--color-on-surface-dim)]">Changes apply to users viewing this campaign.</p>
-                    <button type="submit" class="btn-primary">Apply dashboard layout</button>
+                    <p class="text-xs text-[var(--color-on-surface-dim)]">Changes apply to users viewing {{ $campaignName }}.</p>
+                    <div class="flex items-center gap-2">
+                        <button type="button" class="btn-ghost text-xs" @click="if (window.confirm('Reset this campaign to legacy sale fields?')) salesMode = 'legacy'">Reset sales to legacy</button>
+                        <button type="submit" class="btn-primary">Apply dashboard layout</button>
+                    </div>
                 </div>
             </form>
         </div>

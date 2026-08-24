@@ -13,6 +13,10 @@
     $leaderboardTotalSales = collect($agentLeaderboard ?? [])->sum('sales_count');
     $leaderboardTotalAmount = collect($agentLeaderboard ?? [])->sum('sales_amount');
     $salesRangeLabel = $salesFilter['from']->format('M j, Y').' · '.$salesFilter['from']->format('g:i A').'–'.$salesFilter['until']->format('g:i A');
+    $salesMode = ($salesMode ?? 'legacy') === 'custom' ? 'custom' : 'legacy';
+    $salesAttributionLabel = $salesMode === 'custom'
+        ? 'Amounts follow this campaign’s custom tag rules.'
+        : 'Amounts come only from numeric form fields marked as sale amounts.';
 @endphp
 <div class="space-y-8 flex flex-col">
 
@@ -123,7 +127,7 @@
                 </div>
             </form>
 
-            <p class="mt-5 text-sm text-[var(--color-on-surface-muted)]">{{ $salesRangeLabel }}. Amounts come only from numeric form fields marked as sale amounts.</p>
+            <p class="mt-5 text-sm text-[var(--color-on-surface-muted)]">{{ $salesRangeLabel }}. {{ $salesAttributionLabel }}</p>
 
             <div class="md-table-wrap mt-4">
                 @if(!empty($kpis['sales_by_form']))
@@ -146,7 +150,7 @@
                         </tbody>
                     </table>
                 @else
-                    <p class="table-empty py-8 text-center text-sm text-[var(--color-on-surface-dim)]">No marked form sale fields are available for this campaign.</p>
+                    <p class="table-empty py-8 text-center text-sm text-[var(--color-on-surface-dim)]">{{ $salesMode === 'custom' ? 'No custom sales rules matched this range.' : 'No marked form sale fields are available for this campaign.' }}</p>
                 @endif
             </div>
         </x-modal>
@@ -288,15 +292,15 @@
         $reportForms = $report['forms'] ?? [];
         $reportTables = [
             [
-                'title' => 'Daily amounts',
-                'subtitle' => 'Submitted amounts by form for '.($report['date'] ?? now()->toDateString()),
+                'title' => $salesMode === 'custom' ? 'Daily attributed amounts' : 'Daily amounts',
+                'subtitle' => ($salesMode === 'custom' ? 'Attributed amounts by form for ' : 'Submitted amounts by form for ').($report['date'] ?? now()->toDateString()),
                 'rows' => $report['daily'] ?? [],
                 'totals' => $report['totals']['daily'] ?? ['counts' => [], 'amounts' => [], 'total_count' => 0, 'total_amount' => 0],
                 'mode' => 'amounts',
             ],
             [
-                'title' => 'Month to date submitted amounts',
-                'subtitle' => 'Submitted amounts by form since '.now()->startOfMonth()->format('M j, Y'),
+                'title' => $salesMode === 'custom' ? 'Month to date attributed amounts' : 'Month to date submitted amounts',
+                'subtitle' => ($salesMode === 'custom' ? 'Attributed amounts by form since ' : 'Submitted amounts by form since ').now()->startOfMonth()->format('M j, Y'),
                 'rows' => $report['month_to_date'] ?? [],
                 'totals' => $report['totals']['month_to_date'] ?? ['counts' => [], 'amounts' => [], 'total_count' => 0, 'total_amount' => 0],
                 'mode' => 'amounts',

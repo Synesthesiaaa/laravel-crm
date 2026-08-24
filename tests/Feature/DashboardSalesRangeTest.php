@@ -241,6 +241,88 @@ class DashboardSalesRangeTest extends TestCase
         $this->assertSame(1145.0, $report['totals']['month_to_date']['total_amount']);
     }
 
+    public function test_daily_campaign_report_uses_custom_sales_rules_once_per_submission(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        Cache::flush();
+        Schema::create('custom_daily', function (Blueprint $table): void {
+            $table->id();
+            $table->date('date');
+            $table->string('agent')->nullable();
+            $table->string('tag_one')->nullable();
+            $table->string('tag_two')->nullable();
+            $table->decimal('amount', 12, 2)->nullable();
+            $table->timestamps();
+        });
+        Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'custom_daily',
+            'name' => 'Custom Daily',
+            'table_name' => 'custom_daily',
+            'display_order' => 1,
+            'is_active' => true,
+        ]);
+        FormField::query()->insert([
+            [
+                'campaign_code' => 'mbsales',
+                'form_type' => 'custom_daily',
+                'field_name' => 'tag_one',
+                'field_label' => 'Tag one',
+                'field_type' => 'text',
+                'field_order' => 1,
+            ],
+            [
+                'campaign_code' => 'mbsales',
+                'form_type' => 'custom_daily',
+                'field_name' => 'tag_two',
+                'field_label' => 'Tag two',
+                'field_type' => 'text',
+                'field_order' => 2,
+            ],
+            [
+                'campaign_code' => 'mbsales',
+                'form_type' => 'custom_daily',
+                'field_name' => 'amount',
+                'field_label' => 'Amount',
+                'field_type' => 'number',
+                'field_order' => 3,
+            ],
+        ]);
+        app(\App\Services\DashboardLayoutService::class)->saveForCampaign(
+            'mbsales',
+            array_keys(\App\Services\DashboardLayoutService::sectionDefinitions()),
+            ['welcome'],
+            [
+                'mode' => 'custom',
+                'forms' => [[
+                    'form_code' => 'custom_daily',
+                    'amount_field' => 'amount',
+                    'conditions' => [
+                        ['field_name' => 'tag_one', 'accepted_values' => ['yes']],
+                        ['field_name' => 'tag_two', 'accepted_values' => ['approved']],
+                    ],
+                ]],
+            ],
+            true,
+        );
+        DB::table('custom_daily')->insert([
+            ['date' => '2026-05-15', 'agent' => 'Alice', 'tag_one' => ' yes ', 'tag_two' => 'approved', 'amount' => 100, 'created_at' => '2026-05-15 07:00:00', 'updated_at' => '2026-05-15 07:00:00'],
+            ['date' => '2026-05-15', 'agent' => 'Bob', 'tag_one' => 'No', 'tag_two' => ' APPROVED ', 'amount' => 50, 'created_at' => '2026-05-15 08:00:00', 'updated_at' => '2026-05-15 08:00:00'],
+            ['date' => '2026-05-14', 'agent' => 'Alice', 'tag_one' => 'No', 'tag_two' => 'No', 'amount' => 900, 'created_at' => '2026-05-14 08:00:00', 'updated_at' => '2026-05-14 08:00:00'],
+        ]);
+
+        $report = app(DashboardStatsService::class)->getDailyCampaignReport('mbsales', Carbon::parse('2026-05-15'));
+
+        $this->assertSame([['code' => 'custom_daily', 'name' => 'Custom Daily']], $report['forms']);
+        $daily = collect($report['daily'])->keyBy('agent');
+        $this->assertSame(1, $daily['Alice']['total_count']);
+        $this->assertSame(100.0, $daily['Alice']['total_amount']);
+        $this->assertSame(1, $daily['Bob']['total_count']);
+        $this->assertSame(50.0, $daily['Bob']['total_amount']);
+        $this->assertSame(2, $report['totals']['daily']['total_count']);
+        $this->assertSame(2, $report['totals']['month_to_date']['total_count']);
+    }
+
     public function test_daily_campaign_report_returns_a_stable_empty_shape_without_valid_forms(): void
     {
         Carbon::setTestNow('2026-05-15 12:00:00');

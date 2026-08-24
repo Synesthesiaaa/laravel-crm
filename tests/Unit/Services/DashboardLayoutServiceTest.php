@@ -53,4 +53,34 @@ class DashboardLayoutServiceTest extends TestCase
         $this->assertTrue($service->getForCampaign('other')['sections']['welcome']['visible']);
         $this->assertDatabaseMissing('dashboard_layouts', ['campaign_code' => 'other']);
     }
+
+    public function test_save_persists_custom_sales_rules_with_campaign_layout(): void
+    {
+        $service = app(DashboardLayoutService::class);
+        $sales = [
+            'mode' => 'custom',
+            'forms' => [
+                [
+                    'form_code' => 'ezycash',
+                    'amount_field' => 'ezycash_amount',
+                    'conditions' => [
+                        [
+                            'field_name' => 'amenable',
+                            'accepted_values' => ['Yes', 'Approved'],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $layout = $service->saveForCampaign(
+            'mbsales',
+            ['welcome', 'kpis', 'activity', 'leaderboard', 'campaign_report', 'forms', 'quick_links'],
+            ['welcome', 'kpis', 'activity', 'leaderboard', 'campaign_report', 'forms', 'quick_links'],
+            $sales,
+        );
+
+        $this->assertSame($sales, $layout['sales']);
+        $this->assertSame($sales, $service->getForCampaign('mbsales')['sales']);
+    }
 }

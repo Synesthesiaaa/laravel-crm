@@ -4,6 +4,8 @@ namespace Tests\Feature\Admin;
 
 use App\Events\DashboardLayoutUpdated;
 use App\Models\Campaign;
+use App\Models\Form;
+use App\Models\FormField;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -72,5 +74,151 @@ class AdminDashboardLayoutTest extends TestCase
         $response->assertOk()
             ->assertSee('data-dashboard-section="forms"', false)
             ->assertDontSee('data-dashboard-section="activity"', false);
+    }
+
+    public function test_admin_can_select_a_campaign_without_changing_the_active_campaign_session(): void
+    {
+        Campaign::factory()->create([
+            'code' => 'pjli',
+            'name' => 'PJLI',
+            'display_order' => 1,
+        ]);
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $response = $this->actingAs($admin)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('admin.dashboard', ['campaign' => 'pjli']));
+
+        $response->assertOk()
+            ->assertSee('Campaign: <span class="font-semibold text-[var(--color-primary)]">PJLI</span>', false);
+        $this->assertSame('mbsales', session('campaign'));
+    }
+
+    public function test_admin_can_save_custom_sales_rules_for_the_selected_campaign(): void
+    {
+        Event::fake([DashboardLayoutUpdated::class]);
+        Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'ezycash',
+            'name' => 'EzyCash',
+            'table_name' => 'ezycash',
+            'display_order' => 1,
+            'is_active' => true,
+        ]);
+        FormField::query()->insert([
+            [
+                'campaign_code' => 'mbsales',
+                'form_type' => 'ezycash',
+                'field_name' => 'amenable',
+                'field_label' => 'Amenable',
+                'field_type' => 'text',
+                'is_required' => false,
+                'field_order' => 1,
+            ],
+            [
+                'campaign_code' => 'mbsales',
+                'form_type' => 'ezycash',
+                'field_name' => 'ezycash_amount',
+                'field_label' => 'EzyCash Amount',
+                'field_type' => 'number',
+                'is_required' => false,
+                'field_order' => 2,
+            ],
+        ]);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $response = $this->actingAs($admin)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->post(route('admin.dashboard-layout.update'), [
+                'campaign_code' => 'mbsales',
+                'section_order' => ['welcome', 'kpis', 'activity', 'leaderboard', 'campaign_report', 'forms', 'quick_links'],
+                'visible_sections' => ['welcome', 'kpis'],
+                'sales_mode' => 'custom',
+                'sales_forms' => [[
+                    'form_code' => 'ezycash',
+                    'amount_field' => 'ezycash_amount',
+                    'conditions' => [[
+                        'field_name' => 'amenable',
+                        'accepted_values' => ['Yes', 'Approved'],
+                    ]],
+                ]],
+            ]);
+
+        $response->assertRedirect(route('admin.dashboard', ['campaign' => 'mbsales']))
+            ->assertSessionHas('success', 'Dashboard layout applied.');
+        $this->assertSame('mbsales', session('campaign'));
+        $this->assertSame(
+            'custom',
+            data_get(\App\Models\DashboardLayout::query()->where('campaign_code', 'mbsales')->first()->layout, 'sales.mode'),
+        );
+        Event::assertDispatched(DashboardLayoutUpdated::class);
+    }
+
+    public function test_custom_sales_rules_require_a_complete_tag_condition(): void
+    {
+        Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'ezycash',
+            'name' => 'EzyCash',
+            'table_name' => 'ezycash',
+            'display_order' => 1,
+            'is_active' => true,
+        ]);
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'amount',
+            'field_label' => 'Amount',
+            'field_type' => 'number',
+            'is_required' => false,
+            'field_order' => 1,
+        ]);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)
+            ->withSession(['campaign' => 'mbsales'])
+            ->post(route('admin.dashboard-layout.update'), [
+                'campaign_code' => 'mbsales',
+                'section_order' => array_keys(
+                    \App\Services\DashboardLayoutService::sectionDefinitions(),
+                ),
+                'visible_sections' => ['welcome'],
+                'sales_mode' => 'custom',
+                'sales_forms' => [[
+                    'form_code' => 'ezycash',
+                    'amount_field' => 'amount',
+                    'conditions' => [[
+                        'field_name' => 'amount',
+                        'accepted_values' => ['Yes'],
+                    ]],
+                ]],
+            ])
+            ->assertSessionHasErrors('sales_forms.0.conditions.0.field_name');
+    }
+
+    public function test_admin_can_reset_custom_sales_rules_to_legacy_mode(): void
+    {
+        app(\App\Services\DashboardLayoutService::class)->saveForCampaign(
+            'mbsales',
+            array_keys(\App\Services\DashboardLayoutService::sectionDefinitions()),
+            ['welcome'],
+            ['mode' => 'custom', 'forms' => []],
+            true,
+        );
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)
+            ->withSession(['campaign' => 'mbsales'])
+            ->post(route('admin.dashboard-layout.update'), [
+                'campaign_code' => 'mbsales',
+                'section_order' => array_keys(\App\Services\DashboardLayoutService::sectionDefinitions()),
+                'visible_sections' => ['welcome'],
+                'sales_mode' => 'legacy',
+            ])
+            ->assertRedirect(route('admin.dashboard', ['campaign' => 'mbsales']));
+
+        $layout = \App\Models\DashboardLayout::query()->where('campaign_code', 'mbsales')->firstOrFail()->layout;
+        $this->assertArrayNotHasKey('sales', $layout);
     }
 }
