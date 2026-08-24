@@ -194,11 +194,11 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div class="chart-container">
                 <p class="chart-title">Agent Performance — Today</p>
-                <div id="chart-agent-perf" style="min-height: 260px;"></div>
+                <div id="chart-agent-perf" class="chart-host" style="min-height: 260px;"></div>
             </div>
             <div class="chart-container">
                 <p class="chart-title">Call Volume — Hourly</p>
-                <div id="chart-hourly" style="min-height: 260px;"></div>
+                <div id="chart-hourly" class="chart-host" style="min-height: 260px;"></div>
             </div>
         </div>
         <div class="mt-6">
@@ -266,7 +266,7 @@
         </div>
         <div class="chart-container">
             <p class="chart-title">Real-time Call Volume</p>
-            <div id="chart-realtime" style="min-height: 200px;"></div>
+            <div id="chart-realtime" class="chart-host" style="min-height: 200px;"></div>
         </div>
     </div>
 
@@ -399,9 +399,7 @@ window.supervisorDashboard = function() {
             const ApexCharts = await window.ApexChartsLoader?.() ?? null;
             if (!ApexCharts) return;
 
-            const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-            const textColor = isDark ? '#a1a1aa' : '#52525b';
-            const gridColor = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
+            const chartTheme = window.crmChartTheme?.() ?? {};
 
             const names   = this.agents.filter(a => a.status !== 'offline').map(a => a.name.split(' ')[0]);
             const callsArr= this.agents.filter(a => a.status !== 'offline').map(a => a.calls_today);
@@ -412,33 +410,33 @@ window.supervisorDashboard = function() {
             if (this.tab === 'performance' && document.getElementById('chart-agent-perf')) {
                 document.getElementById('chart-agent-perf').innerHTML = '';
                 const perfChart = new ApexCharts(document.getElementById('chart-agent-perf'), {
+                    ...chartTheme,
                     series: [{ name: 'Calls Today', data: callsArr }],
-                    chart: { type: 'bar', height: 260, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
-                    colors: ['#e91e8c'],
+                    chart: { ...chartTheme.chart, type: 'bar', height: 260 },
+                    colors: [chartTheme.colors[0]],
                     plotOptions: { bar: { borderRadius: 5, columnWidth: '50%' } },
-                    xaxis: { categories: names, labels: { style: { colors: textColor, fontSize: '11px' } }, axisBorder: { show: false } },
-                    yaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
-                    grid: { borderColor: gridColor, strokeDashArray: 3 },
-                    tooltip: { theme: isDark ? 'dark' : 'light' },
+                    xaxis: { ...chartTheme.xaxis, categories: names, labels: { ...chartTheme.xaxis.labels, style: { ...chartTheme.xaxis.labels.style, fontSize: '11px' } }, axisBorder: { show: false } },
+                    yaxis: { ...chartTheme.yaxis, labels: { ...chartTheme.yaxis.labels, style: { ...chartTheme.yaxis.labels.style, fontSize: '11px' } }, min: 0 },
+                    grid: { ...chartTheme.grid, strokeDashArray: 3 },
+                    tooltip: { ...chartTheme.tooltip },
                     dataLabels: { enabled: false },
-                    theme: { mode: isDark ? 'dark' : 'light' },
                 });
                 window.crmCharts?.register?.(SUPERVISOR_CHART_GROUP, 'agent-perf', perfChart);
                 await perfChart.render();
 
                 document.getElementById('chart-hourly').innerHTML = '';
                 const hourlyChart = new ApexCharts(document.getElementById('chart-hourly'), {
+                    ...chartTheme,
                     series: [{ name: 'Calls', data: hourlyData }],
-                    chart: { type: 'area', height: 260, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
-                    colors: ['#3b82f6'],
+                    chart: { ...chartTheme.chart, type: 'area', height: 260 },
+                    colors: [chartTheme.colors[4]],
                     fill: { type: 'gradient', gradient: { opacityFrom: .3, opacityTo: .03 } },
-                    stroke: { curve: 'smooth', width: 2 },
-                    xaxis: { categories: hourlyLabels, labels: { style: { colors: textColor, fontSize: '11px' } }, axisBorder: { show: false } },
-                    yaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
-                    grid: { borderColor: gridColor, strokeDashArray: 3 },
-                    tooltip: { theme: isDark ? 'dark' : 'light' },
+                    stroke: { ...chartTheme.stroke, curve: 'smooth', width: 2 },
+                    xaxis: { ...chartTheme.xaxis, categories: hourlyLabels, labels: { ...chartTheme.xaxis.labels, style: { ...chartTheme.xaxis.labels.style, fontSize: '11px' } }, axisBorder: { show: false } },
+                    yaxis: { ...chartTheme.yaxis, labels: { ...chartTheme.yaxis.labels, style: { ...chartTheme.yaxis.labels.style, fontSize: '11px' } }, min: 0 },
+                    grid: { ...chartTheme.grid, strokeDashArray: 3 },
+                    tooltip: { ...chartTheme.tooltip },
                     dataLabels: { enabled: false },
-                    theme: { mode: isDark ? 'dark' : 'light' },
                 });
                 window.crmCharts?.register?.(SUPERVISOR_CHART_GROUP, 'hourly', hourlyChart);
                 await hourlyChart.render();
@@ -448,16 +446,16 @@ window.supervisorDashboard = function() {
                 document.getElementById('chart-realtime').innerHTML = '';
                 const sparkData = Array.from({length:20}, (_, i) => i === 19 ? Number(this.stats.callsActive || 0) : 0);
                 const realtimeChart = new ApexCharts(document.getElementById('chart-realtime'), {
+                    ...chartTheme,
                     series: [{ name: 'Calls/min', data: sparkData }],
-                    chart: { type: 'line', height: 200, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif', animations: { enabled: true, dynamicAnimation: { speed: 350 } } },
-                    colors: ['#22c55e'],
+                    chart: { ...chartTheme.chart, type: 'line', height: 200, animations: { ...chartTheme.chart.animations, dynamicAnimation: { speed: 350 } } },
+                    colors: [chartTheme.colors[1]],
                     stroke: { curve: 'smooth', width: 3 },
                     xaxis: { labels: { show: false }, axisBorder: { show: false }, axisTicks: { show: false } },
-                    yaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
-                    grid: { borderColor: gridColor, strokeDashArray: 3 },
-                    tooltip: { theme: isDark ? 'dark' : 'light' },
+                    yaxis: { ...chartTheme.yaxis, labels: { ...chartTheme.yaxis.labels, style: { ...chartTheme.yaxis.labels.style, fontSize: '11px' } }, min: 0 },
+                    grid: { ...chartTheme.grid, strokeDashArray: 3 },
+                    tooltip: { ...chartTheme.tooltip },
                     dataLabels: { enabled: false },
-                    theme: { mode: isDark ? 'dark' : 'light' },
                 });
                 window.crmCharts?.register?.(SUPERVISOR_CHART_GROUP, 'realtime', realtimeChart);
                 await realtimeChart.render();

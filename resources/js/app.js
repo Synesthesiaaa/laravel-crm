@@ -10,6 +10,7 @@ import './form-visibility';
 import './agent-capture-webform';
 import './telephony-media-path';
 import TelephonyCore from './telephony-core';
+import { createCrmChartTheme } from './chart-theme';
 
 function reportClientWarning(error, context) {
     if (window.axios?.isCancel?.(error) || error?.__crmPollBackoff) {
@@ -21,6 +22,35 @@ function reportClientWarning(error, context) {
 
 // Make ApexCharts available for dynamic import in views
 window.ApexChartsLoader = () => import('apexcharts').then(m => m.default);
+
+function readChartTokens() {
+    const styles = getComputedStyle(document.documentElement);
+    const read = (name) => styles.getPropertyValue(name).trim();
+
+    return {
+        colorScheme: document.documentElement.dataset.theme || 'dark',
+        primary: read('--color-primary'),
+        success: read('--color-success'),
+        warning: read('--color-warning'),
+        danger: read('--color-danger'),
+        info: read('--color-info'),
+        onSurface: read('--color-on-surface'),
+        onSurfaceMuted: read('--color-on-surface-muted'),
+        onSurfaceDim: read('--color-on-surface-dim'),
+        border: read('--color-border'),
+        surfaceCard: read('--color-surface-card'),
+        fontFamily: read('--font-sans'),
+    };
+}
+
+window.crmChartTheme = function crmChartTheme(overrides = {}) {
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
+    return createCrmChartTheme(readChartTokens(), {
+        reducedMotion,
+        ...overrides,
+    });
+};
 
 const crmChartGroups = new Map();
 
@@ -91,7 +121,34 @@ window.crmCharts = {
             }
         });
     },
+    refreshTheme() {
+        const theme = window.crmChartTheme?.();
+        if (!theme) {
+            return;
+        }
+
+        crmChartGroups.forEach((chartGroup) => {
+            chartGroup.forEach((chart) => {
+                try {
+                    chart.updateOptions({
+                        chart: theme.chart,
+                        grid: theme.grid,
+                        legend: theme.legend,
+                        tooltip: theme.tooltip,
+                        xaxis: theme.xaxis,
+                        yaxis: theme.yaxis,
+                    }, false, true, false);
+                } catch (_) {
+                    /* noop */
+                }
+            });
+        });
+    },
 };
+
+window.addEventListener('crm-theme-changed', () => {
+    window.crmCharts?.refreshTheme?.();
+});
 
 /** ApexCharts need a resize after layout is stable (full page load, sidebar transition, soft-nav). */
 window.resizeCrmDashboardCharts = function resizeCrmDashboardCharts() {
