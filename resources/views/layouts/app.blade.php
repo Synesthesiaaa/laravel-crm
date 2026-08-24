@@ -34,8 +34,6 @@
       data-telephony-campaign="{{ $layoutTelephonyCampaign }}"
       data-user-id="{{ auth()->id() }}">
 
-    <a href="#main-content" class="skip-link">Skip to main content</a>
-
     {{-- Mobile sidebar overlay --}}
     <div x-show="$store.sidebar.mobileOpen"
          x-transition:enter="transition-opacity ease-out duration-200"
@@ -63,18 +61,14 @@
                 <button type="button"
                         class="lg:hidden btn-icon mr-1"
                         @click="$store.sidebar.openMobile()"
-                        aria-label="Open navigation"
-                        aria-controls="sidebar"
-                        :aria-expanded="$store.sidebar.mobileOpen">
+                        aria-label="Open navigation">
                     <x-icon name="bars-3" class="w-5 h-5" />
                 </button>
                 {{-- Desktop sidebar toggle --}}
                 <button type="button"
                         class="hidden lg:inline-flex btn-icon"
                         @click="$store.sidebar.toggle()"
-                        aria-label="Toggle sidebar"
-                        aria-controls="sidebar"
-                        :aria-expanded="!$store.sidebar.collapsed">
+                        aria-label="Toggle sidebar">
                     <x-icon name="bars-3" class="w-5 h-5" />
                 </button>
                 <h1 class="text-base font-semibold tracking-tight flex items-center gap-2 text-[var(--color-on-surface)] truncate">
@@ -184,9 +178,7 @@
                 <div class="relative" x-data="{ open: false }">
                     <button type="button"
                             class="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-[var(--color-surface-3)] transition-colors text-sm"
-                            @click="open = !open"
-                            :aria-expanded="open"
-                            aria-haspopup="menu">
+                            @click="open = !open">
                         <div class="w-7 h-7 rounded-full bg-[var(--color-primary-muted)] border border-[var(--color-primary)] flex items-center justify-center text-[var(--color-primary)] font-bold text-xs uppercase">
                             {{ substr($user->full_name ?? $user->username ?? 'U', 0, 1) }}
                         </div>
@@ -228,7 +220,7 @@
         </header>
 
         {{-- Page content --}}
-        <main class="content-padding flex-1" id="main-content" tabindex="-1">
+        <main class="content-padding flex-1 p-6 lg:p-8" id="main-content">
             @yield('content')
         </main>
     </div>

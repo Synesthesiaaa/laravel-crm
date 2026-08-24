@@ -12,21 +12,18 @@
         initialEntries: @js($entries->values()->all()),
         historyUrl: @js(route('admin.activity-log.entries')),
     })" class="activity-log-page space-y-4">
-    <div class="md-card activity-log-filter-card p-4">
+    <div class="md-card p-4">
         <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div>
                 <p class="text-xs font-semibold tracking-[0.18em] text-[var(--color-primary)]">LIVE ACTIVITY STREAM</p>
-                <p class="text-sm text-[var(--color-on-surface-muted)] mt-1">Filter the audit trail by actor, action, resource, or date.</p>
             </div>
-            <div class="activity-log-connection-status flex items-center gap-2 text-xs font-mono" role="status" aria-live="polite">
+            <div class="flex items-center gap-2 text-xs font-mono" aria-live="polite">
                 <span class="activity-log-connection-dot" :class="connectionClass()"></span>
                 <span x-text="connectionLabel()">Polling</span>
             </div>
         </div>
 
-        <form class="activity-log-filters grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3 items-end"
-              @submit.prevent="load()"
-              :aria-busy="loading">
+        <form class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3 items-end" @submit.prevent="load()">
             <div class="form-field xl:col-span-2">
                 <label class="form-label" for="activity-search">Search</label>
                 <input id="activity-search" type="search" class="form-input" maxlength="120"
@@ -62,7 +59,7 @@
                 <label class="form-label" for="activity-to">To</label>
                 <input id="activity-to" type="date" class="form-input" x-model="filters.to">
             </div>
-            <div class="activity-log-filter-actions flex gap-2 sm:col-span-2 xl:col-span-6">
+            <div class="flex gap-2 sm:col-span-2 xl:col-span-6">
                 <button type="submit" class="btn-primary" :disabled="loading">
                     <x-icon name="funnel" class="w-4 h-4" />
                     <span x-text="loading ? 'Loading...' : 'Apply filters'">Apply filters</span>
@@ -73,7 +70,7 @@
     </div>
 
     <section class="activity-terminal" aria-labelledby="activity-terminal-heading">
-        <div class="activity-terminal-toolbar" aria-label="Activity stream controls">
+        <div class="activity-terminal-toolbar">
             <div class="flex items-center gap-2 min-w-0">
                 <span class="activity-terminal-prompt">Shell</span>
                 <span class="text-[var(--color-on-surface-dim)]">$</span>
@@ -96,20 +93,14 @@
             </template>
             <template x-for="entry in entries" :key="entry.id">
                 <article class="activity-terminal-entry" :class="`activity-terminal-entry--${entry.severity}`">
-                    <button type="button" class="activity-terminal-line"
-                            @click="toggle(entry.id)"
-                            :aria-expanded="isExpanded(entry.id)"
-                            :aria-controls="`activity-details-${entry.id}`"
-                            :aria-label="`${isExpanded(entry.id) ? 'Collapse' : 'Expand'} details for ${entry.description}`">
-                        <span class="activity-terminal-entry__meta">
-                            <span class="activity-terminal-time" x-text="formatTime(entry.timestamp)"></span>
-                        <span class="activity-terminal-mark" aria-hidden="true"></span>
+                    <button type="button" class="activity-terminal-line" @click="toggle(entry.id)" :aria-expanded="isExpanded(entry.id)">
+                        <span class="activity-terminal-time" x-text="formatTime(entry.timestamp)"></span>
+                        <span class="activity-terminal-mark" aria-hidden="true">●</span>
                         <span class="activity-terminal-action" x-text="entry.action"></span>
-                        </span>
                         <span class="activity-terminal-description" x-text="entry.description"></span>
                         <span class="activity-terminal-actor" x-text="`[${entry.actor}]`"></span>
                     </button>
-                    <div x-show="isExpanded(entry.id)" x-cloak :id="`activity-details-${entry.id}`" class="activity-terminal-details">
+                    <div x-show="isExpanded(entry.id)" x-cloak class="activity-terminal-details">
                         <div class="activity-terminal-section-title">Audit context</div>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                             <div><span class="activity-terminal-key">Actor</span><span x-text="entry.actor"></span></div>
@@ -159,7 +150,7 @@
                 </article>
             </template>
         </div>
-        <div class="activity-terminal-footer" role="status" aria-live="polite">
+        <div class="activity-terminal-footer">
             <span><span x-text="entries.length">0</span> visible entries</span>
             <span class="font-mono">RETENTION: 90D</span>
         </div>
@@ -169,61 +160,47 @@
 
 @push('styles')
 <style>
-    .activity-log-page { min-width: 0; }
-    .activity-log-connection-status { min-height: 2.75rem; padding: .35rem .7rem; border: 1px solid var(--color-border); border-radius: 999px; color: var(--color-on-surface-muted); }
     .activity-log-connection-dot { width: .5rem; height: .5rem; border-radius: 999px; background: var(--color-on-surface-dim); }
     .activity-log-connection-dot--connected { background: var(--color-success); box-shadow: 0 0 0 .2rem var(--color-success-muted); }
     .activity-log-connection-dot--polling { background: var(--color-warning); box-shadow: 0 0 0 .2rem var(--color-warning-muted); }
     .activity-log-connection-dot--offline { background: var(--color-danger); box-shadow: 0 0 0 .2rem var(--color-danger-muted); }
-    .activity-log-filter-actions { flex-wrap: wrap; }
-    .activity-terminal { --activity-bg: #08111f; --activity-surface: #101d2d; --activity-border: rgba(148,163,184,.22); --activity-muted: #9fb0c4; --activity-text: #e8f0f7; overflow: hidden; border: 1px solid var(--activity-border); border-radius: .875rem; background: var(--activity-bg); color: var(--activity-text); box-shadow: 0 18px 55px rgba(0, 0, 0, .28); }
+    .activity-terminal { overflow: hidden; border: 1px solid rgba(90, 100, 120, .45); border-radius: .75rem; background: #090c10; color: #d4d7dc; box-shadow: 0 18px 55px rgba(0, 0, 0, .28); }
     .activity-terminal-toolbar, .activity-terminal-footer { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .8rem 1rem; font: 600 .72rem/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    .activity-terminal-toolbar { border-bottom: 1px solid var(--activity-border); background: var(--activity-surface); }
-    .activity-terminal-footer { border-top: 1px solid var(--activity-border); color: var(--activity-muted); }
-    .activity-terminal-prompt { color: #7dd3fc; }
-    .activity-terminal-button { min-height: 2.75rem; border: 1px solid var(--activity-border); border-radius: .5rem; padding: .45rem .7rem; color: var(--activity-muted); background: rgba(255,255,255,.04); transition: background .15s, color .15s; }
+    .activity-terminal-toolbar { border-bottom: 1px solid rgba(120, 140, 160, .2); background: #11161d; }
+    .activity-terminal-footer { border-top: 1px solid rgba(120, 140, 160, .2); color: #687585; }
+    .activity-terminal-prompt { color: #66e3a2; }
+    .activity-terminal-button { border: 1px solid rgba(120, 140, 160, .3); border-radius: .35rem; padding: .35rem .55rem; color: #b8c2cf; background: rgba(255,255,255,.03); transition: background .15s, color .15s; }
     .activity-terminal-button:hover { color: #fff; background: rgba(255,255,255,.1); }
     .activity-terminal-output { max-height: min(65vh, 42rem); overflow: auto; padding: .8rem 0; font: 500 .78rem/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; scrollbar-color: #3d4b5a #0b0f14; }
-    .activity-terminal-entry { border-left: 3px solid transparent; }
-    .activity-terminal-entry:hover { background: rgba(255,255,255,.035); }
-    .activity-terminal-entry--success { border-left-color: #4ade80; }
-    .activity-terminal-entry--warning { border-left-color: #fbbf24; }
-    .activity-terminal-entry--error { border-left-color: #fb7185; }
-    .activity-terminal-line { display: grid; grid-template-columns: minmax(13.5rem, auto) minmax(0, 1fr) minmax(8rem, auto); align-items: start; gap: .75rem; width: 100%; min-height: 2.75rem; padding: .45rem 1rem; text-align: left; color: inherit; }
-    .activity-terminal-entry__meta { display: grid; grid-template-columns: auto 1rem minmax(0, auto); align-items: center; gap: .55rem; min-width: 0; }
-    .activity-terminal-time, .activity-terminal-actor { color: var(--activity-muted); }
-    .activity-terminal-mark { width: .55rem; height: .55rem; border-radius: 999px; background: #7dd3fc; box-shadow: 0 0 0 .18rem rgba(125,211,252,.15); }
-    .activity-terminal-action { color: #bae6fd; text-transform: uppercase; }
-    .activity-terminal-entry--warning .activity-terminal-mark { background: #fcd34d; }
-    .activity-terminal-entry--warning .activity-terminal-action { color: #fcd34d; }
-    .activity-terminal-entry--error .activity-terminal-mark { background: #fda4af; }
-    .activity-terminal-entry--error .activity-terminal-action { color: #fda4af; }
-    .activity-terminal-description, .activity-terminal-actor { min-width: 0; overflow-wrap: anywhere; }
-    .activity-terminal-description { color: var(--activity-text); }
-    .activity-terminal-details { margin: .15rem 1rem .75rem 14.25rem; border-left: 1px solid var(--activity-border); padding: .65rem .85rem; color: var(--activity-muted); overflow-wrap: anywhere; }
-    .activity-terminal-details .grid > div { min-width: 0; overflow-wrap: anywhere; }
+    .activity-terminal-entry { border-left: 2px solid transparent; }
+    .activity-terminal-entry:hover { background: rgba(255,255,255,.025); }
+    .activity-terminal-entry--success { border-left-color: #3adf91; }
+    .activity-terminal-entry--warning { border-left-color: #f7c75f; }
+    .activity-terminal-entry--error { border-left-color: #ff6d7e; }
+    .activity-terminal-line { display: grid; grid-template-columns: 10.5rem 1rem 6.5rem minmax(0, 1fr) auto; gap: .55rem; width: 100%; padding: .2rem 1rem; text-align: left; color: inherit; }
+    .activity-terminal-time, .activity-terminal-actor { color: #718096; }
+    .activity-terminal-mark { color: #66e3a2; }
+    .activity-terminal-action { color: #8cc8ff; text-transform: uppercase; }
+    .activity-terminal-entry--warning .activity-terminal-mark, .activity-terminal-entry--warning .activity-terminal-action { color: #f7c75f; }
+    .activity-terminal-entry--error .activity-terminal-mark, .activity-terminal-entry--error .activity-terminal-action { color: #ff6d7e; }
+    .activity-terminal-description { overflow: hidden; color: #e6e9ee; text-overflow: ellipsis; white-space: nowrap; }
+    .activity-terminal-details { margin: .15rem 1rem .65rem 18.2rem; border-left: 1px solid rgba(120, 140, 160, .3); padding: .45rem .75rem; color: #aab5c2; }
     .activity-terminal-detail-section { margin-top: .85rem; }
-    .activity-terminal-section-title { margin-bottom: .4rem; color: #7dd3fc; font-size: .68rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-    .activity-terminal-key { display: inline-block; min-width: 5.5rem; margin-right: .3rem; color: var(--activity-muted); }
+    .activity-terminal-section-title { margin-bottom: .4rem; color: #66e3a2; font-size: .68rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    .activity-terminal-key { display: inline-block; width: 5.5rem; color: #687585; }
     .activity-terminal-diff { display: grid; gap: .35rem; }
-    .activity-terminal-diff-row { display: grid; grid-template-columns: minmax(7rem, .7fr) minmax(0, 1fr) minmax(0, 1fr); gap: .65rem; border-top: 1px solid rgba(148,163,184,.16); padding-top: .35rem; }
-    .activity-terminal-diff-field { color: #bae6fd; overflow-wrap: anywhere; }
-    .activity-terminal-json { max-width: 100%; margin-top: .65rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: #bbf7d0; }
-    .activity-terminal-empty { padding: 2.5rem 1rem; text-align: center; color: var(--activity-muted); }
+    .activity-terminal-diff-row { display: grid; grid-template-columns: minmax(7rem, .7fr) minmax(0, 1fr) minmax(0, 1fr); gap: .65rem; border-top: 1px solid rgba(120, 140, 160, .16); padding-top: .35rem; }
+    .activity-terminal-diff-field { color: #8cc8ff; }
+    .activity-terminal-json { margin-top: .65rem; overflow-x: auto; color: #a9e8c3; }
+    .activity-terminal-empty { padding: 2.5rem 1rem; text-align: center; color: #687585; }
     @media (max-width: 720px) {
-        .activity-log-connection-status { width: 100%; justify-content: center; }
-        .activity-log-filter-actions > * { flex: 1 1 9rem; }
-        .activity-terminal-toolbar { align-items: stretch; flex-wrap: wrap; padding: .75rem; }
-        .activity-terminal-toolbar > .flex:last-child { width: 100%; flex-wrap: wrap; }
-        .activity-terminal-button { flex: 1 1 6rem; }
-        .activity-terminal-line { grid-template-columns: minmax(0, 1fr); gap: .4rem; padding: .65rem .75rem; }
-        .activity-terminal-entry__meta { grid-template-columns: auto 1rem minmax(0, 1fr); }
-        .activity-terminal-description { line-height: 1.5; }
-        .activity-terminal-actor { font-size: .72rem; }
-        .activity-terminal-details { margin: .15rem .75rem .65rem; padding: .6rem .7rem; }
-        .activity-terminal-key { display: block; min-width: 0; margin: 0 0 .15rem; }
-        .activity-terminal-diff-row { grid-template-columns: 1fr; gap: .45rem; }
-        .activity-terminal-footer { align-items: flex-start; flex-direction: column; }
+        .activity-terminal-line { grid-template-columns: 7.5rem 1rem minmax(0, 1fr); gap: .35rem; padding-inline: .7rem; }
+        .activity-terminal-action { grid-column: 3; }
+        .activity-terminal-description { grid-column: 3; }
+        .activity-terminal-actor { display: none; }
+        .activity-terminal-details { margin-left: .7rem; margin-right: .7rem; }
+        .activity-terminal-diff-row { grid-template-columns: 1fr; gap: .2rem; }
+        .activity-terminal-toolbar { align-items: flex-start; flex-direction: column; }
     }
 </style>
 @endpush
@@ -244,7 +221,6 @@ window.activityLogTerminal = function (config) {
         _unsubscribe: null,
         _pollTimer: null,
         init() {
-            if (this._pollTimer || this._unsubscribe) return;
             this.updateLastId();
             this.bindRealtime();
             this.startPolling();
@@ -264,7 +240,6 @@ window.activityLogTerminal = function (config) {
             }) || null;
         },
         startPolling() {
-            if (this._pollTimer) return;
             this._pollTimer = window.setInterval(() => this.poll(), 5000);
             this.poll();
         },
