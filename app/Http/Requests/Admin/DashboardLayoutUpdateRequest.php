@@ -39,7 +39,7 @@ class DashboardLayoutUpdateRequest extends FormRequest
             'sales_forms.*' => ['array:form_code,amount_field,conditions'],
             'sales_forms.*.form_code' => ['required', 'string', 'max:50'],
             'sales_forms.*.amount_field' => ['nullable', 'string', 'max:100'],
-            'sales_forms.*.conditions' => ['required', 'array', 'min:1', 'max:25'],
+            'sales_forms.*.conditions' => ['present', 'array', 'max:25'],
             'sales_forms.*.conditions.*' => ['array:field_name,accepted_values'],
             'sales_forms.*.conditions.*.field_name' => ['required', 'string', 'max:100'],
             'sales_forms.*.conditions.*.accepted_values' => ['required', 'array', 'min:1', 'max:20'],

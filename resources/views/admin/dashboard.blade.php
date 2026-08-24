@@ -99,20 +99,32 @@
             tagFields(code) {
                 return (this.formByCode(code)?.fields || []).filter((field) => field.is_tag);
             },
+            markedAmountFields(code) {
+                return (this.formByCode(code)?.fields || []).filter((field) => field.is_sale_amount);
+            },
             tagForms() {
-                return this.formOptions.filter((form) => form.fields.some((field) => field.is_tag));
+                return this.formOptions.filter((form) => form.fields.some((field) => field.is_tag || field.is_sale_amount));
             },
             amountFields(code) {
                 return (this.formByCode(code)?.fields || []).filter((field) => field.is_amount);
+            },
+            ruleUsesMarkedAmount(rule) {
+                return rule.conditions.length === 0 && this.markedAmountFields(rule.form_code).length > 0;
+            },
+            ruleAmountFields(rule) {
+                return this.ruleUsesMarkedAmount(rule)
+                    ? this.markedAmountFields(rule.form_code)
+                    : this.amountFields(rule.form_code);
             },
             addRule() {
                 const form = this.tagForms()[0];
                 if (!form) return;
                 const tag = form.fields.find((field) => field.is_tag);
+                const marker = form.fields.find((field) => field.is_sale_amount);
                 this.salesRules.push({
                     form_code: form.code,
-                    amount_field: '',
-                    conditions: [{ field_name: tag?.name || '', accepted_values: [''] }],
+                    amount_field: tag ? '' : (marker?.name || ''),
+                    conditions: tag ? [{ field_name: tag.name, accepted_values: [''] }] : [],
                 });
             },
             removeRule(index) {
@@ -124,6 +136,9 @@
             },
             removeCondition(rule, index) {
                 rule.conditions.splice(index, 1);
+                if (rule.conditions.length === 0 && !this.markedAmountFields(rule.form_code).some((field) => field.name === rule.amount_field)) {
+                    rule.amount_field = this.markedAmountFields(rule.form_code)[0]?.name || '';
+                }
             },
             addAcceptedValue(condition) {
                 condition.accepted_values.push('');
@@ -137,8 +152,15 @@
             },
             changeRuleForm(rule) {
                 const tag = this.tagFields(rule.form_code)[0];
+                const marker = this.markedAmountFields(rule.form_code)[0];
+                rule.amount_field = tag ? '' : (marker?.name || '');
+                rule.conditions = tag ? [{ field_name: tag.name, accepted_values: [''] }] : [];
+            },
+            switchToTagRule(rule) {
+                const tag = this.tagFields(rule.form_code)[0];
+                if (!tag) return;
                 rule.amount_field = '';
-                rule.conditions = [{ field_name: tag?.name || '', accepted_values: [''] }];
+                rule.conditions = [{ field_name: tag.name, accepted_values: [''] }];
             },
         }">
             <div class="p-5 border-b border-[var(--color-border)]">
@@ -171,7 +193,7 @@
                     <div class="flex items-start justify-between gap-4 flex-wrap">
                         <div>
                             <h4 class="text-sm font-semibold text-[var(--color-on-surface)]">Sales attribution</h4>
-                            <p class="text-xs text-[var(--color-on-surface-dim)] mt-1 max-w-2xl">Choose how this campaign counts sales. Custom rules match trimmed, case-insensitive tag values and count each submission once when any condition matches.</p>
+                            <p class="text-xs text-[var(--color-on-surface-dim)] mt-1 max-w-2xl">Choose how this campaign counts sales. Custom rules match trimmed, case-insensitive tag values, or use a numeric field marked as a sale amount when no tag field exists.</p>
                         </div>
                         <div class="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1" role="group" aria-label="Sales attribution mode">
                             <label class="cursor-pointer rounded-md px-3 py-1.5 text-xs transition" :class="salesMode === 'legacy' ? 'bg-[var(--color-surface)] text-[var(--color-on-surface)] shadow-sm' : 'text-[var(--color-on-surface-dim)]'">
@@ -208,7 +230,10 @@
                         </div>
 
                         <div x-show="formOptions.length === 0" class="rounded-lg border border-dashed border-[var(--color-border)] p-4 text-xs text-[var(--color-on-surface-dim)]">No active forms with registered tables are available for this campaign.</div>
-                        <div x-show="formOptions.length > 0 && tagForms().length === 0" class="rounded-lg border border-dashed border-[var(--color-border)] p-4 text-xs text-[var(--color-on-surface-dim)]">No active form has a text or select field available for sale tags.</div>
+                        <div x-show="formOptions.length > 0 && tagForms().length === 0" class="rounded-lg border border-dashed border-[var(--color-border)] p-4 text-xs text-[var(--color-on-surface-dim)]">
+                            <p>No active form has a text/select field or numeric field marked as a sale amount available for sales attribution.</p>
+                            <p class="mt-1">To use the existing marker, enable <span class="font-semibold">Is sale amount</span> on a numeric field in <a href="{{ route('admin.field-logic.index', ['campaign' => $campaign]) }}" class="link-primary">Field Logic</a>.</p>
+                        </div>
                         <div x-show="salesRules.length === 0 && tagForms().length > 0" class="rounded-lg border border-dashed border-[var(--color-border)] p-4 text-xs text-[var(--color-on-surface-dim)]">Add a form rule to enable custom sales counting.</div>
 
                         <div class="space-y-4">
@@ -225,10 +250,10 @@
                                                 </select>
                                             </div>
                                             <div>
-                                                <label class="form-label" :for="'sales-amount-' + ruleIndex">Amount field <span class="font-normal text-[var(--color-on-surface-dim)]">(optional)</span></label>
+                                                <label class="form-label" :for="'sales-amount-' + ruleIndex" x-text="ruleUsesMarkedAmount(rule) ? 'Marked sale amount field' : 'Amount field (optional)'"></label>
                                                 <select class="form-select w-full" :id="'sales-amount-' + ruleIndex" :name="'sales_forms[' + ruleIndex + '][amount_field]'" x-model="rule.amount_field">
-                                                    <option value="">Count only</option>
-                                                    <template x-for="field in amountFields(rule.form_code)" :key="field.name">
+                                                    <option value="" x-show="!ruleUsesMarkedAmount(rule)">Count only</option>
+                                                    <template x-for="field in ruleAmountFields(rule)" :key="field.name">
                                                         <option :value="field.name" x-text="field.label"></option>
                                                     </template>
                                                 </select>
@@ -237,7 +262,13 @@
                                         <button type="button" class="btn-icon text-[var(--color-danger-fg)]" @click="removeRule(ruleIndex)" aria-label="Remove form sales rule">&times;</button>
                                     </div>
 
-                                    <div class="space-y-3">
+                                    <div x-show="ruleUsesMarkedAmount(rule)" x-cloak class="rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-primary-muted)] p-3 text-xs text-[var(--color-on-surface-muted)]">
+                                        <p class="font-semibold text-[var(--color-primary)]">Marked sale-amount trigger</p>
+                                        <p class="mt-1">A submission qualifies when this marked numeric field contains a value. The submission is counted once and the field value is added to the sales amount.</p>
+                                        <button type="button" class="mt-2 text-[11px] text-[var(--color-primary)] hover:underline" x-show="tagFields(rule.form_code).length > 0" @click="switchToTagRule(rule)">Use a text/select tag condition instead</button>
+                                    </div>
+
+                                    <div x-show="!ruleUsesMarkedAmount(rule)" x-cloak class="space-y-3">
                                         <template x-for="(condition, conditionIndex) in rule.conditions" :key="conditionIndex">
                                             <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 space-y-3">
                                                 <div class="flex items-center justify-between gap-2">
@@ -292,7 +323,7 @@
 
                 <div class="flex items-center justify-between gap-3 flex-wrap pt-2">
                     <p class="text-xs text-[var(--color-on-surface-dim)]">Changes apply to users viewing {{ $campaignName }}.</p>
-                    <div class="flex items-center gap-2">
+                    <div class="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center">
                         <button type="button" class="btn-ghost text-xs" @click="if (window.confirm('Reset this campaign to legacy sale fields?')) salesMode = 'legacy'">Reset sales to legacy</button>
                         <button type="submit" class="btn-primary">Apply dashboard layout</button>
                     </div>

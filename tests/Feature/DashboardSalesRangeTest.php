@@ -119,6 +119,58 @@ class DashboardSalesRangeTest extends TestCase
         $this->assertSame([], $kpis['sales_by_form']);
     }
 
+    public function test_marker_only_custom_rules_drive_selected_range_rolling_kpis_and_daily_report(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        $this->registerSalesForm('cash', 'Cash Sale', 'cash_sales');
+        app(\App\Services\DashboardLayoutService::class)->saveForCampaign(
+            'mbsales',
+            array_keys(\App\Services\DashboardLayoutService::sectionDefinitions()),
+            ['welcome'],
+            [
+                'mode' => 'custom',
+                'forms' => [[
+                    'form_code' => 'cash',
+                    'amount_field' => 'amount',
+                    'conditions' => [],
+                ]],
+            ],
+        );
+
+        $this->insertSale('cash_sales', 'Alice', 100.00, '2026-05-15 10:00:00');
+        $this->insertSale('cash_sales', 'Bob', 0.00, '2026-05-15 11:00:00');
+        DB::table('cash_sales')->insert([
+            'date' => '2026-05-15',
+            'request_id' => 'empty_'.uniqid(),
+            'agent' => 'Ignored',
+            'amount' => null,
+            'created_at' => '2026-05-15 11:30:00',
+            'updated_at' => '2026-05-15 11:30:00',
+        ]);
+
+        $range = app(DashboardStatsService::class)->getSalesKpisForCampaign(
+            'mbsales',
+            Carbon::parse('2026-05-15 06:00:00'),
+            Carbon::parse('2026-05-15 12:00:00'),
+        );
+
+        $this->assertSame(2, $range['sales']);
+        $this->assertSame(100.0, $range['sales_amount']);
+        $this->assertSame(['Alice', 'Bob'], array_column($range['agent_leaderboard'], 'agent'));
+
+        config(['dashboard.sales_kpi_window_hours' => 6]);
+        $rolling = app(DashboardStatsService::class)->getKpisForCampaign('mbsales');
+        $this->assertSame(2, $rolling['sales']);
+        $this->assertSame(100.0, $rolling['sales_amount']);
+
+        $report = app(DashboardStatsService::class)->getDailyCampaignReport(
+            'mbsales',
+            Carbon::parse('2026-05-15'),
+        );
+        $this->assertSame(2, $report['totals']['daily']['total_count']);
+        $this->assertSame(100.0, $report['totals']['daily']['total_amount']);
+    }
+
     public function test_dashboard_defaults_the_sales_filter_to_the_current_business_day(): void
     {
         Carbon::setTestNow('2026-05-15 12:00:00');

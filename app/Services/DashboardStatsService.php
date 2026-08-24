@@ -604,7 +604,7 @@ class DashboardStatsService
                     $date,
                 ): void {
                     foreach ($rows as $row) {
-                        if (! $this->matchesCustomConditions($row, $form['conditions'])) {
+                        if (! $this->matchesCustomConditions($row, $form['conditions'], $form['amount_field'])) {
                             continue;
                         }
 
@@ -1145,7 +1145,7 @@ class DashboardStatsService
                 ->orderBy('id')
                 ->chunk(1000, function ($rows) use (&$sales, &$amount, &$counts, &$amounts, &$salesByForm, $tableName, $form): void {
                     foreach ($rows as $row) {
-                        if (! $this->matchesCustomConditions($row, $form['conditions'])) {
+                        if (! $this->matchesCustomConditions($row, $form['conditions'], $form['amount_field'])) {
                             continue;
                         }
 
@@ -1209,7 +1209,7 @@ class DashboardStatsService
                 ->orderBy('id')
                 ->chunk(1000, function ($rows) use (&$sales, &$amount, &$counts, &$amounts, $form): void {
                     foreach ($rows as $row) {
-                        if (! $this->matchesCustomConditions($row, $form['conditions'])) {
+                        if (! $this->matchesCustomConditions($row, $form['conditions'], $form['amount_field'])) {
                             continue;
                         }
 
@@ -1263,7 +1263,7 @@ class DashboardStatsService
                 ->orderBy('id')
                 ->chunk(1000, function ($rows) use (&$sales, &$amount, &$counts, &$amounts, $form): void {
                     foreach ($rows as $row) {
-                        if (! $this->matchesCustomConditions($row, $form['conditions'])) {
+                        if (! $this->matchesCustomConditions($row, $form['conditions'], $form['amount_field'])) {
                             continue;
                         }
 
@@ -1292,8 +1292,12 @@ class DashboardStatsService
     /**
      * @param  list<array{field_name: string, accepted_values: list<string>}>  $conditions
      */
-    private function matchesCustomConditions(object $row, array $conditions): bool
+    private function matchesCustomConditions(object $row, array $conditions, ?string $markerField = null): bool
     {
+        if ($conditions === []) {
+            return $markerField !== null && $this->hasNumericValue($row->{$markerField} ?? null);
+        }
+
         foreach ($conditions as $condition) {
             $value = $row->{$condition['field_name']} ?? null;
             if ($value === null) {
@@ -1321,6 +1325,13 @@ class DashboardStatsService
         }
 
         return (float) $value;
+    }
+
+    private function hasNumericValue(mixed $value): bool
+    {
+        return $value !== null
+            && (! is_string($value) || trim($value) !== '')
+            && is_numeric($value);
     }
 
     private function normalizeSalesTagValue(string $value): string

@@ -74,7 +74,7 @@ class DashboardSalesRuleService
             $fields = FormField::query()
                 ->where('campaign_code', $campaignCode)
                 ->where('form_type', $formCode)
-                ->get(['field_name', 'field_label', 'field_type']);
+                ->get(['field_name', 'field_label', 'field_type', 'is_sale_amount']);
             $fieldsByName = $fields->keyBy(static fn (FormField $field): string => (string) $field->field_name);
 
             $amountField = $this->resolveAmountField(
@@ -92,8 +92,16 @@ class DashboardSalesRuleService
                 $warnings,
             );
 
-            if ($conditions === []) {
-                $warnings[] = "Sales form '{$formCode}' has no valid tag conditions.";
+            $rawConditions = $formGroup['conditions'] ?? null;
+            $markerOnlyRule = $conditions === []
+                && is_array($rawConditions)
+                && $rawConditions === []
+                && $this->isMarkedSaleAmountField($amountField, $fieldsByName);
+
+            if ($conditions === [] && ! $markerOnlyRule) {
+                $warnings[] = is_array($rawConditions) && $rawConditions === []
+                    ? "Sales form '{$formCode}' needs a text/select tag condition or a numeric field marked as a sale amount."
+                    : "Sales form '{$formCode}' has no valid tag conditions.";
 
                 continue;
             }
@@ -117,7 +125,7 @@ class DashboardSalesRuleService
     /**
      * Return the active campaign fields that are safe to expose in the rule editor.
      *
-     * @return list<array{code: string, name: string, fields: list<array{name: string, label: string, type: string, options: list<string>, is_amount: bool, is_tag: bool}>}>
+     * @return list<array{code: string, name: string, fields: list<array{name: string, label: string, type: string, options: list<string>, is_amount: bool, is_sale_amount: bool, is_tag: bool}>}>
      */
     public function editorData(string $campaignCode): array
     {
@@ -137,7 +145,7 @@ class DashboardSalesRuleService
                 ->where('form_type', (string) $formCode)
                 ->orderBy('field_order')
                 ->orderBy('id')
-                ->get(['field_name', 'field_label', 'field_type', 'options'])
+                ->get(['field_name', 'field_label', 'field_type', 'options', 'is_sale_amount'])
                 ->filter(fn (FormField $field): bool => Schema::hasColumn($tableName, (string) $field->field_name))
                 ->map(fn (FormField $field): array => [
                     'name' => (string) $field->field_name,
@@ -145,6 +153,7 @@ class DashboardSalesRuleService
                     'type' => (string) $field->field_type,
                     'options' => $field->optionValues(),
                     'is_amount' => $field->field_type === 'number',
+                    'is_sale_amount' => (bool) $field->is_sale_amount,
                     'is_tag' => in_array((string) $field->field_type, self::TAG_FIELD_TYPES, true),
                 ])
                 ->values()
@@ -201,8 +210,16 @@ class DashboardSalesRuleService
             }
 
             $conditions = $formGroup['conditions'] ?? null;
-            if (! is_array($conditions) || $conditions === []) {
-                $errors[] = ['key' => $prefix.'.conditions', 'message' => 'Add at least one tag condition.'];
+            if (! is_array($conditions)) {
+                $errors[] = ['key' => $prefix.'.conditions', 'message' => 'Add a tag condition or select a marked sale amount field.'];
+
+                continue;
+            }
+
+            if ($conditions === []) {
+                if ($amountField === '' || ! ($form['fields'][$amountField]['is_sale_amount'] ?? false)) {
+                    $errors[] = ['key' => $prefix.'.conditions', 'message' => 'Select a marked sale amount field when no tag condition is configured.'];
+                }
 
                 continue;
             }
@@ -305,10 +322,11 @@ class DashboardSalesRuleService
             $fields = FormField::query()
                 ->where('campaign_code', $campaignCode)
                 ->where('form_type', (string) $formCode)
-                ->get(['field_name', 'field_type'])
+                ->get(['field_name', 'field_type', 'is_sale_amount'])
                 ->filter(fn (FormField $field): bool => Schema::hasColumn($tableName, (string) $field->field_name))
                 ->mapWithKeys(fn (FormField $field): array => [(string) $field->field_name => [
                     'type' => (string) $field->field_type,
+                    'is_sale_amount' => (bool) $field->is_sale_amount,
                     'is_tag' => in_array((string) $field->field_type, self::TAG_FIELD_TYPES, true),
                 ]])
                 ->all();
@@ -430,5 +448,23 @@ class DashboardSalesRuleService
         return function_exists('mb_strtolower')
             ? mb_strtolower($value, 'UTF-8')
             : strtolower($value);
+    }
+
+    /**
+     * Determine whether a selected amount field may act as a marker-only rule.
+     *
+     * @param  Collection<string, FormField>  $fieldsByName
+     */
+    private function isMarkedSaleAmountField(?string $fieldName, Collection $fieldsByName): bool
+    {
+        if ($fieldName === null || $fieldName === '') {
+            return false;
+        }
+
+        $field = $fieldsByName->get($fieldName);
+
+        return $field instanceof FormField
+            && $field->field_type === 'number'
+            && (bool) $field->is_sale_amount;
     }
 }
