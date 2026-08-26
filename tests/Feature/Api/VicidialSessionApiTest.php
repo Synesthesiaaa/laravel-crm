@@ -239,7 +239,7 @@ class VicidialSessionApiTest extends TestCase
         $this->assertSame('softcamp', session('vicidial_campaign'));
     }
 
-    public function test_login_uses_fallback_vicidial_server_for_unregistered_campaign_without_touching_crm_session(): void
+    public function test_login_does_not_use_another_campaign_server_for_unregistered_campaign(): void
     {
         $agentApi = Mockery::mock(VicidialProxyService::class);
         $agentApi->shouldReceive('execute')
@@ -275,10 +275,9 @@ class VicidialSessionApiTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.iframe_alignment.vd_campaign', 'softcamp');
+            ->assertJsonPath('data.iframe_alignment.vd_campaign', 'softcamp')
+            ->assertJsonPath('iframe_url', null);
 
-        $this->assertNotNull($response->json('iframe_url'));
-        $this->assertStringContainsString('VD_campaign=softcamp', (string) $response->json('iframe_url'));
         $this->assertFalse(session()->has('campaign'));
         $this->assertFalse(session()->has('campaign_name'));
         $this->assertSame('softcamp', session('vicidial_campaign'));

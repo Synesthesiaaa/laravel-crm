@@ -19,6 +19,11 @@ class SupervisorDashboardTest extends TestCase
             ->get(route('admin.supervisor'))
             ->assertOk()
             ->assertSee('Live supervisor data unavailable')
+            ->assertSee('VICIdial Routing')
+            ->assertSee('routing.configured')
+            ->assertSee('actionPending')
+            ->assertSee('notificationPending')
+            ->assertSee('campaign: this.routing.campaign_code')
             ->assertDontSee('Maria Santos')
             ->assertDontSee('Juan Cruz');
     }

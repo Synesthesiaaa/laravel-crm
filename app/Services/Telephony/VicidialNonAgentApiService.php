@@ -88,25 +88,20 @@ class VicidialNonAgentApiService
 
     protected function resolveNonAgentUrl(string $apiUrl): string
     {
-        $configured = trim((string) config('vicidial.non_agent_api_url', ''));
-        if ($configured !== '') {
-            return $configured;
-        }
-
         $apiUrl = trim($apiUrl);
-        if ($apiUrl === '') {
-            return '';
+        if ($apiUrl !== '') {
+            if (str_contains($apiUrl, 'non_agent_api.php')) {
+                return $apiUrl;
+            }
+
+            if (str_contains($apiUrl, 'agc/api.php')) {
+                return preg_replace('#agc/api\.php.*$#', 'non_agent_api.php', $apiUrl) ?: '';
+            }
+
+            return rtrim($apiUrl, '/').'/non_agent_api.php';
         }
 
-        if (str_contains($apiUrl, 'non_agent_api.php')) {
-            return $apiUrl;
-        }
-
-        if (str_contains($apiUrl, 'agc/api.php')) {
-            return preg_replace('#agc/api\.php.*$#', 'non_agent_api.php', $apiUrl) ?: '';
-        }
-
-        return rtrim($apiUrl, '/').'/non_agent_api.php';
+        return trim((string) config('vicidial.non_agent_api_url', ''));
     }
 
     /**

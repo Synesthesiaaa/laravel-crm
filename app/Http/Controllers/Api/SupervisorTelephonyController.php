@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Notifications\SupervisorUserNotification;
-use App\Services\Telephony\TelephonyCampaignResolver;
 use App\Services\Telephony\VicidialProxyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -41,15 +40,12 @@ class SupervisorTelephonyController extends Controller
         $validated = $request->validate([
             'recipient_type' => ['required', 'string', 'in:USER,USER_GROUP,CAMPAIGN'],
             'recipient' => ['required', 'string', 'max:50'],
+            'campaign' => ['nullable', 'string', 'max:50'],
             'notification_text' => ['nullable', 'string', 'max:255'],
             'show_confetti' => ['nullable', 'boolean'],
         ]);
 
-        $explicit = $request->input('campaign');
-        $campaign = TelephonyCampaignResolver::resolve(
-            $request,
-            is_string($explicit) && $explicit !== '' ? (string) $explicit : null,
-        );
+        $campaign = $this->resolveSupervisorCampaign($request, $validated['campaign'] ?? null);
         $payload = [
             'recipient_type' => $validated['recipient_type'],
             'recipient' => $validated['recipient'],
@@ -118,7 +114,7 @@ class SupervisorTelephonyController extends Controller
             'server_ip' => ['nullable', 'string', 'max:20'],
         ]);
 
-        $campaign = TelephonyCampaignResolver::resolve($request, $validated['campaign'] ?? null);
+        $campaign = $this->resolveSupervisorCampaign($request, $validated['campaign'] ?? null);
         $agent = User::findOrFail((int) $validated['agent_user_id']);
 
         $query = array_merge([
@@ -138,5 +134,16 @@ class SupervisorTelephonyController extends Controller
             'message' => $result['message'],
             'raw_response' => $result['raw_response'],
         ], $result['success'] ? 200 : 422);
+    }
+
+    private function resolveSupervisorCampaign(Request $request, ?string $explicit): string
+    {
+        $explicit = trim((string) $explicit);
+        if ($explicit !== '') {
+            return $explicit;
+        }
+
+        return trim((string) $request->session()->get('campaign', ''))
+            ?: (string) ($request->user()?->default_campaign ?? config('vicidial.default_campaign', 'mbsales'));
     }
 }

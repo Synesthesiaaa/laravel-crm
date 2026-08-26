@@ -81,17 +81,6 @@ The system SHALL mark the softphone session ready when Vicidial confirms a live 
 - **WHEN** verification fails because Vicidial does not report a live agent session
 - **THEN** the response SHALL focus on agent login alignment and live-agent state and SHALL NOT require CRM and Vicidial campaign equality as a readiness condition
 
-### Requirement: Vicidial session requests fall back to an active server
-The system SHALL resolve Vicidial session login and recovery requests against the campaign-specific Vicidial server when a matching server exists and SHALL fall back to the active default Vicidial server when the requested campaign is not registered in CRM. The system SHALL only fail when no active Vicidial server is available or when the active server itself rejects the request.
-
-#### Scenario: Off-CRM campaign uses fallback server
-- **WHEN** a user opens the softphone on a Vicidial campaign that is not registered in the CRM campaign catalog
-- **THEN** the login and iframe recovery requests SHALL use an active Vicidial server and SHALL continue instead of failing because the campaign has no direct CRM mapping
-
-#### Scenario: No active server still fails
-- **WHEN** there is no active Vicidial server available for the request
-- **THEN** the softphone SHALL fail with an actionable configuration error rather than timing out as if the campaign mismatch were the problem
-
 ### Requirement: Single telephony media owner
 The system SHALL allow only one active browser media path per authenticated session and SHALL honor the configured media path without double-registering the same extension.
 

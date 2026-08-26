@@ -30,7 +30,7 @@ class VicidialServerRepository implements VicidialServerRepositoryInterface
             return $campaignServer;
         }
 
-        return $this->getFallbackActiveServer();
+        return null;
     }
 
     public function getAllForCampaign(string $campaignCode): Collection
@@ -64,22 +64,6 @@ class VicidialServerRepository implements VicidialServerRepositoryInterface
             ->whereNotNull('db_username')
             ->where('db_username', '!=', '')
             ->orderByDesc('priority')
-            ->orderBy('id')
-            ->first();
-    }
-
-    private function getFallbackActiveServer(): ?VicidialServer
-    {
-        return VicidialServer::query()
-            ->where('is_active', true)
-            ->whereNotNull('api_url')
-            ->where('api_url', '!=', '')
-            ->whereNotNull('api_user')
-            ->where('api_user', '!=', '')
-            ->whereNotNull('api_pass')
-            ->where('api_pass', '!=', '')
-            ->orderByDesc('is_default')
-            ->orderBy('priority')
             ->orderBy('id')
             ->first();
     }

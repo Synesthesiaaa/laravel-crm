@@ -17,6 +17,28 @@
     <x-page-header title="Supervisor Dashboard" description="Real-time agent monitoring."
         :breadcrumbs="['Admin' => route('admin.dashboard'), 'Supervisor' => null]" />
 
+    <section class="md-card p-4" aria-labelledby="supervisor-routing-title">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <p id="supervisor-routing-title" class="text-xs font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]">
+                    VICIdial Routing
+                </p>
+                <p class="text-sm font-medium text-[var(--color-on-surface)] mt-1"
+                   x-text="routing.campaign_name ? routing.campaign_name + ' (' + routing.campaign_code + ')' : 'Loading campaign…'"></p>
+            </div>
+            <span x-show="routing.configured"
+                  class="badge badge-active"
+                  x-text="'Server: ' + (routing.server_name || 'Configured')"></span>
+            <span x-show="!routing.configured && routing.campaign_code"
+                  class="badge badge-warning">Server not configured</span>
+        </div>
+        <p x-show="routing.message"
+           role="alert"
+           aria-live="polite"
+           class="text-xs text-[var(--color-danger)] mt-2"
+           x-text="routing.message"></p>
+    </section>
+
     <div x-show="errorMessage"
          x-transition.opacity
          class="rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/5 px-4 py-3">
@@ -80,7 +102,9 @@
                     <input type="checkbox" x-model="notification.confetti" />
                     Confetti
                 </label>
-                <button class="btn-secondary w-full text-xs" @click="sendNotification()">Send</button>
+                <button class="btn-secondary w-full text-xs"
+                        :disabled="!routing.configured || notificationPending"
+                        @click="sendNotification()">Send</button>
             </div>
         </div>
     </div>
@@ -161,19 +185,27 @@
                     <div class="text-[11px] text-[var(--color-on-surface-dim)] mt-1" x-text="'Vici: ' + (agent.vici_status || 'unknown') + ' · Queue: ' + (agent.queue_count ?? 0)"></div>
                     {{-- Supervisor controls --}}
                     <div class="flex gap-1.5 mt-2 flex-wrap">
-                        <button class="btn-ghost text-xs px-2 py-1" @click="monitorAgent(agent)" title="Monitor (listen only)">
+                         <button class="btn-ghost text-xs px-2 py-1"
+                                 :disabled="!routing.configured || isActionPending(agent, 'monitor')"
+                                 @click="monitorAgent(agent)" title="Monitor (listen only)">
                             <x-icon name="eye" class="w-3 h-3" />
                             Monitor
                         </button>
-                        <button class="btn-ghost text-xs px-2 py-1" @click="whisperAgent(agent)" title="Whisper (agent only)">
+                         <button class="btn-ghost text-xs px-2 py-1"
+                                 :disabled="!routing.configured || isActionPending(agent, 'whisper')"
+                                 @click="whisperAgent(agent)" title="Whisper (agent only)">
                             <x-icon name="microphone" class="w-3 h-3" />
                             Whisper
                         </button>
-                        <button class="btn-ghost text-xs px-2 py-1" @click="forcePause(agent)" title="Force pause agent">
+                         <button class="btn-ghost text-xs px-2 py-1"
+                                 :disabled="!routing.configured || isActionPending(agent, 'pause')"
+                                 @click="forcePause(agent)" title="Force pause agent">
                             <x-icon name="pause" class="w-3 h-3" />
                             Pause
                         </button>
-                        <button class="btn-ghost text-xs px-2 py-1" @click="forceLogout(agent)" title="Force logout agent">
+                         <button class="btn-ghost text-xs px-2 py-1"
+                                 :disabled="!routing.configured || isActionPending(agent, 'logout')"
+                                 @click="forceLogout(agent)" title="Force logout agent">
                             <x-icon name="arrow-right-on-rectangle" class="w-3 h-3" />
                             Logout
                         </button>
@@ -286,6 +318,15 @@ window.supervisorDashboard = function() {
         tab: 'agents',
         loading: false,
         agents: [],
+        routing: {
+            campaign_code: '',
+            campaign_name: '',
+            configured: false,
+            server_name: '',
+            message: '',
+        },
+        actionPending: {},
+        notificationPending: false,
         stats: {
             agentsOnline: 0, callsWaiting: 0, callsActive: 0,
             avgWaitTime: 0, todayTotal: 0, slaPercent: 0,
@@ -340,6 +381,7 @@ window.supervisorDashboard = function() {
             try {
                 const res = await window.axios.get('/api/supervisor/agents');
                 this.agents = res.data.agents ?? [];
+                this.routing = res.data.routing ?? this.routing;
                 this.stats  = res.data.stats  ?? {
                     agentsOnline: 0, callsWaiting: 0, callsActive: 0,
                     avgWaitTime: 0, todayTotal: 0, slaPercent: 0,
@@ -357,40 +399,78 @@ window.supervisorDashboard = function() {
             }
         },
 
+        actionKey(agent, action) {
+            return `${agent.id}:${action}`;
+        },
+
+        isActionPending(agent, action) {
+            return this.actionPending[this.actionKey(agent, action)] === true;
+        },
+
+        async runAgentAction(agent, action, url, successMessage) {
+            if (!this.routing.configured) {
+                Alpine.store('toast').error(this.routing.message || 'No VICIdial server is configured for this campaign.');
+                return;
+            }
+
+            const key = this.actionKey(agent, action);
+            this.actionPending[key] = true;
+            try {
+                const res = await window.axios.post(url, {
+                    agent_user_id: agent.id,
+                    campaign: agent.campaign_code || this.routing.campaign_code,
+                });
+                if (res.data?.success === false) {
+                    throw new Error(res.data?.message || 'VICIdial action failed.');
+                }
+                Alpine.store('toast').info(`${successMessage} ${agent.name}`);
+            } catch (e) {
+                Alpine.store('toast').error(e.response?.data?.message || e.message || 'VICIdial action failed.');
+            } finally {
+                delete this.actionPending[key];
+            }
+        },
+
         async monitorAgent(agent) {
-            await window.axios.post('/api/supervisor/monitor', { agent_user_id: agent.id })
-                .catch(() => {});
-            Alpine.store('toast').info(`Monitoring ${agent.name}`);
+            await this.runAgentAction(agent, 'monitor', '/api/supervisor/monitor', 'Monitoring');
         },
 
         async whisperAgent(agent) {
-            await window.axios.post('/api/supervisor/whisper', { agent_user_id: agent.id })
-                .catch(() => {});
-            Alpine.store('toast').info(`Whispering to ${agent.name}`);
+            await this.runAgentAction(agent, 'whisper', '/api/supervisor/whisper', 'Whispering to');
         },
 
         async forcePause(agent) {
-            await window.axios.post('/api/supervisor/force-pause', { agent_user_id: agent.id }).catch(() => {});
-            Alpine.store('toast').warning(`Pause command sent to ${agent.name}`);
+            await this.runAgentAction(agent, 'pause', '/api/supervisor/force-pause', 'Pause command sent to');
         },
 
         async forceLogout(agent) {
-            await window.axios.post('/api/supervisor/force-logout', { agent_user_id: agent.id }).catch(() => {});
-            Alpine.store('toast').warning(`Logout command sent to ${agent.name}`);
+            await this.runAgentAction(agent, 'logout', '/api/supervisor/force-logout', 'Logout command sent to');
         },
 
         async sendNotification() {
             if (!this.notification.recipient) return;
-            await window.axios.post('/api/supervisor/send-notification', {
-                recipient_type: this.notification.recipient_type,
-                recipient: this.notification.recipient,
-                notification_text: this.notification.text,
-                show_confetti: this.notification.confetti,
-            }).then(() => {
+            if (!this.routing.configured) {
+                Alpine.store('toast').error(this.routing.message || 'No VICIdial server is configured for this campaign.');
+                return;
+            }
+            this.notificationPending = true;
+            try {
+                const res = await window.axios.post('/api/supervisor/send-notification', {
+                    recipient_type: this.notification.recipient_type,
+                    recipient: this.notification.recipient,
+                    campaign: this.routing.campaign_code,
+                    notification_text: this.notification.text,
+                    show_confetti: this.notification.confetti,
+                });
+                if (res.data?.success === false) {
+                    throw new Error(res.data?.message || 'Failed to send notification.');
+                }
                 Alpine.store('toast').success('Notification sent.');
-            }).catch((e) => {
+            } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Failed to send notification.');
-            });
+            } finally {
+                this.notificationPending = false;
+            }
         },
 
         async renderCharts() {
