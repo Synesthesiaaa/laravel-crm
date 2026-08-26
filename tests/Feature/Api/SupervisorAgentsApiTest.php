@@ -261,6 +261,7 @@ class SupervisorAgentsApiTest extends TestCase
                 'campaign_code' => 'campaign-a',
                 'server_name' => 'Campaign A VICIdial',
                 'api_url' => 'https://campaign-a.example/agc/api.php',
+                'non_agent_api_url' => 'https://reports-a.example/vicidial/non_agent_api.php',
                 'api_user' => 'campaign-a-user',
                 'api_pass' => 'campaign-a-pass',
             ]);
@@ -281,7 +282,7 @@ class SupervisorAgentsApiTest extends TestCase
                 'default_campaign' => 'another-vicidial-campaign',
             ]);
             Http::fake(function ($request) {
-                if (! str_starts_with($request->url(), 'https://campaign-a.example/non_agent_api.php')) {
+                if (! str_starts_with($request->url(), 'https://reports-a.example/vicidial/non_agent_api.php')) {
                     return Http::response('ERROR: wrong server', 500);
                 }
 
@@ -337,7 +338,7 @@ class SupervisorAgentsApiTest extends TestCase
 
             Http::assertSentCount(4);
             Http::assertSent(function ($request): bool {
-                return str_starts_with($request->url(), 'https://campaign-a.example/non_agent_api.php')
+                return str_starts_with($request->url(), 'https://reports-a.example/vicidial/non_agent_api.php')
                     && ($request->data()['function'] ?? null) === 'agent_stats_export'
                     && ($request->data()['group_by_campaign'] ?? null) === 'NO'
                     && ($request->data()['time_format'] ?? null) === 'S'
@@ -348,6 +349,7 @@ class SupervisorAgentsApiTest extends TestCase
                     && ($request->data()['user_groups'] ?? null) === 'SALES';
             });
             Http::assertNotSent(fn ($request): bool => str_starts_with($request->url(), 'https://campaign-b.example/'));
+            Http::assertNotSent(fn ($request): bool => str_starts_with($request->url(), 'https://campaign-a.example/'));
         } finally {
             Carbon::setTestNow();
         }

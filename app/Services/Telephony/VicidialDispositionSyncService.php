@@ -118,6 +118,11 @@ class VicidialDispositionSyncService
 
     protected function getNonAgentApiUrl(VicidialServer $server): string
     {
+        $configuredUrl = trim((string) ($server->non_agent_api_url ?? ''));
+        if ($configuredUrl !== '') {
+            return $configuredUrl;
+        }
+
         $apiUrl = rtrim($server->api_url ?? '', '/');
         if ($apiUrl === '') {
             return '';

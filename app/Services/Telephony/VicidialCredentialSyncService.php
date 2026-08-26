@@ -79,6 +79,11 @@ class VicidialCredentialSyncService
 
     private function nonAgentApiUrl(VicidialServer $server): string
     {
+        $configuredUrl = trim((string) ($server->non_agent_api_url ?? ''));
+        if ($configuredUrl !== '') {
+            return $configuredUrl;
+        }
+
         $agentUrl = trim((string) $server->api_url);
         if ($agentUrl !== '') {
             if (str_contains($agentUrl, 'non_agent_api.php')) {

@@ -21,6 +21,7 @@ class VicidialCredentialSyncServiceTest extends TestCase
         VicidialServer::factory()->create([
             'campaign_code' => 'campaign-a',
             'api_url' => 'https://campaign-a.example/agc/api.php',
+            'non_agent_api_url' => 'https://reports-a.example/non_agent_api.php',
             'api_user' => 'campaign-a-user',
             'api_pass' => 'campaign-a-pass',
         ]);
@@ -40,7 +41,7 @@ class VicidialCredentialSyncServiceTest extends TestCase
         ]));
 
         Http::assertSent(function ($request): bool {
-            return str_starts_with($request->url(), 'https://campaign-a.example/non_agent_api.php');
+            return str_starts_with($request->url(), 'https://reports-a.example/non_agent_api.php');
         });
         Http::assertSent(function ($request): bool {
             return str_starts_with($request->url(), 'https://campaign-b.example/non_agent_api.php');

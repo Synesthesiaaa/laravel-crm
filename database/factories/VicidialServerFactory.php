@@ -15,6 +15,7 @@ class VicidialServerFactory extends Factory
             'campaign_code' => 'testcamp',
             'server_name' => fake()->words(3, true),
             'api_url' => 'http://'.fake()->ipv4().'/agc/api.php',
+            'non_agent_api_url' => null,
             'db_host' => fake()->ipv4(),
             'db_username' => 'cron',
             'db_password' => fake()->password(8),

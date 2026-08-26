@@ -43,6 +43,30 @@ class VicidialNonAgentApiServiceTest extends TestCase
         });
     }
 
+    public function test_it_prefers_a_campaign_servers_explicit_non_agent_endpoint(): void
+    {
+        VicidialServer::factory()->create([
+            'campaign_code' => 'campaign-a',
+            'api_url' => 'https://agent-a.example/agc/api.php',
+            'non_agent_api_url' => 'https://reports-a.example/vicidial/non_agent_api.php',
+            'api_user' => 'campaign-a-user',
+            'api_pass' => 'campaign-a-pass',
+            'is_default' => true,
+        ]);
+        Http::fake(['*' => Http::response('SUCCESS', 200)]);
+
+        $service = new VicidialNonAgentApiService(
+            app(VicidialServerRepository::class),
+            Mockery::mock(TelephonyLogger::class),
+        );
+
+        $result = $service->execute(User::factory()->make(), 'campaign-a', 'agent_status');
+
+        $this->assertTrue($result->success);
+        Http::assertSent(fn ($request): bool => str_starts_with($request->url(), 'https://reports-a.example/vicidial/non_agent_api.php'));
+        Http::assertNotSent(fn ($request): bool => str_starts_with($request->url(), 'https://agent-a.example/'));
+    }
+
     public function test_it_batches_named_reports_on_one_campaign_server_and_preserves_independent_failures(): void
     {
         VicidialServer::factory()->create([

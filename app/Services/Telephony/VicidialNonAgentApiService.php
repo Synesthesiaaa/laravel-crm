@@ -30,7 +30,7 @@ class VicidialNonAgentApiService
             return OperationResult::failure('No VICIdial server configured for this campaign.');
         }
 
-        $baseUrl = $this->resolveNonAgentUrl((string) ($server->api_url ?? ''));
+        $baseUrl = $this->resolveServerNonAgentUrl($server);
         if ($baseUrl === '') {
             return OperationResult::failure('Non-Agent API URL is not configured.');
         }
@@ -95,7 +95,7 @@ class VicidialNonAgentApiService
             return $this->failedBatch($requests, 'No VICIdial server configured for this campaign.');
         }
 
-        $baseUrl = $this->resolveNonAgentUrl((string) ($server->api_url ?? ''));
+        $baseUrl = $this->resolveServerNonAgentUrl($server);
         if ($baseUrl === '') {
             return $this->failedBatch($requests, 'Non-Agent API URL is not configured.');
         }
@@ -249,6 +249,13 @@ class VicidialNonAgentApiService
         }
 
         return trim((string) config('vicidial.non_agent_api_url', ''));
+    }
+
+    protected function resolveServerNonAgentUrl(\App\Models\VicidialServer $server): string
+    {
+        $configuredUrl = trim((string) ($server->non_agent_api_url ?? ''));
+
+        return $this->resolveNonAgentUrl($configuredUrl !== '' ? $configuredUrl : (string) ($server->api_url ?? ''));
     }
 
     /**

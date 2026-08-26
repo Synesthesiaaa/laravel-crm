@@ -47,7 +47,9 @@ class VicidialServerAdminTest extends TestCase
             ->assertOk()
             ->assertSee('CRM Campaign')
             ->assertSee('Assign this server to a CRM campaign.', false)
-            ->assertSee("never the agent's VICIdial campaign.", false);
+            ->assertSee("never the agent's VICIdial campaign.", false)
+            ->assertSee('Non-Agent API URL')
+            ->assertSee('Used for Supervisor reports.', false);
     }
 
     // ── Store ─────────────────────────────────────────────────────────────────
@@ -60,6 +62,7 @@ class VicidialServerAdminTest extends TestCase
                 'campaign_code' => 'mbsales',
                 'server_name' => 'Main ViciDial',
                 'api_url' => 'http://10.10.88.138/agc/api.php',
+                'non_agent_api_url' => 'http://10.10.88.138/non_agent_api.php',
                 'db_host' => '10.10.88.138',
                 'db_username' => 'cron',
                 'db_password' => 'secret',
@@ -77,6 +80,7 @@ class VicidialServerAdminTest extends TestCase
         $this->assertDatabaseHas('vicidial_servers', [
             'campaign_code' => 'mbsales',
             'server_name' => 'Main ViciDial',
+            'non_agent_api_url' => 'http://10.10.88.138/non_agent_api.php',
             'api_user' => 'admin',
             'source' => 'crm_tracker',
             'is_active' => true,
@@ -112,6 +116,21 @@ class VicidialServerAdminTest extends TestCase
             ->assertSessionHasErrors('api_url');
     }
 
+    public function test_store_rejects_an_invalid_non_agent_api_url(): void
+    {
+        $this->actingAs($this->superAdmin)
+            ->withSession($this->campaignSession())
+            ->post(route('admin.vicidial-servers.store'), [
+                'campaign_code' => 'mbsales',
+                'server_name' => 'Bad Non-Agent URL',
+                'api_url' => 'http://10.0.0.1/agc/api.php',
+                'non_agent_api_url' => 'not-a-url',
+                'db_host' => '10.0.0.1',
+                'db_username' => 'cron',
+            ])
+            ->assertSessionHasErrors('non_agent_api_url');
+    }
+
     // ── Update ────────────────────────────────────────────────────────────────
 
     public function test_update_persists_api_credentials(): void
@@ -128,6 +147,7 @@ class VicidialServerAdminTest extends TestCase
                 'campaign_code' => 'mbsales',
                 'server_name' => $server->server_name,
                 'api_url' => $server->api_url,
+                'non_agent_api_url' => 'https://reports.example/non_agent_api.php',
                 'db_host' => $server->db_host,
                 'db_username' => $server->db_username,
                 'api_user' => 'non_agent_user',
@@ -141,6 +161,7 @@ class VicidialServerAdminTest extends TestCase
 
         $server->refresh();
         $this->assertSame('non_agent_user', $server->api_user);
+        $this->assertSame('https://reports.example/non_agent_api.php', $server->non_agent_api_url);
         $this->assertSame('crm', $server->source);
     }
 

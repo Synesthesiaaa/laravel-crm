@@ -17,7 +17,7 @@ class VicidialServer extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['campaign_code', 'server_name', 'api_url', 'db_host', 'is_active', 'is_default'])
+            ->logOnly(['campaign_code', 'server_name', 'api_url', 'non_agent_api_url', 'db_host', 'is_active', 'is_default'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -26,6 +26,7 @@ class VicidialServer extends Model
         'campaign_code',
         'server_name',
         'api_url',
+        'non_agent_api_url',
         'db_host',
         'db_username',
         'db_password',

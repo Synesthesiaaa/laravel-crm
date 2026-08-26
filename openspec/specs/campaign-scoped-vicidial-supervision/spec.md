@@ -60,6 +60,30 @@ When the mapped server has Non-Agent API credentials, the Supervisor dashboard S
 - **THEN** the Supervisor card includes that user under `campaign-a`
 - **AND** the card reflects the remote VICIdial status without switching the server mapping to `softcamp`
 
+### Requirement: Campaign-scoped VICIdial reporting calls
+The system SHALL route every Supervisor reporting request through the VICIdial server mapped to the selected CRM campaign. For each request, it SHALL use the mapped server's explicitly configured Non-Agent API URL when present. When no explicit Non-Agent API URL is configured, it SHALL retain the existing derived Non-Agent endpoint behavior from that server's Agent API URL.
+
+#### Scenario: Reporting uses the mapped server's explicit Non-Agent API URL
+- **WHEN** a supervisor requests metrics for a CRM campaign whose mapped server has a `non_agent_api_url`
+- **THEN** the system sends the VICIdial reporting request to that URL
+- **AND** it does not send the reporting request to the mapped server's Agent API URL
+
+#### Scenario: Existing mapping omits a Non-Agent API URL
+- **WHEN** a supervisor requests metrics for a CRM campaign whose mapped server has no `non_agent_api_url`
+- **THEN** the system derives the Non-Agent endpoint from that server's Agent API URL using the existing compatibility behavior
+
+### Requirement: Per-server Non-Agent API endpoint configuration
+The system SHALL allow an administrator to optionally configure a valid complete Non-Agent API URL for each VICIdial server mapping. The configuration interface SHALL identify the field as the endpoint used by Supervisor reports and explain the derived-endpoint fallback when it is left blank.
+
+#### Scenario: Administrator saves a dedicated endpoint
+- **WHEN** an authorized administrator creates or updates a VICIdial server mapping with a valid `non_agent_api_url`
+- **THEN** the system persists that endpoint with the server mapping
+
+#### Scenario: Administrator enters an invalid endpoint
+- **WHEN** an authorized administrator submits a malformed Non-Agent API URL
+- **THEN** the system rejects the request with validation feedback
+- **AND** it does not persist the malformed endpoint
+
 ### Requirement: Supervisor wallboard reports derived, near-real-time KPIs
 The Supervisor API SHALL obtain current operational agent and queue counts from supported Non-Agent API reports on the VICIdial server mapped to the selected CRM campaign. It SHALL request agent state across all VICIdial campaigns on that server, MUST NOT use a VICIdial campaign ID as the CRM server-routing key, and SHALL fall back per metric family to campaign-scoped CRM lifecycle data when a remote function is unavailable or unparseable. The dashboard SHALL refresh without overlapping requests and SHALL retain the last known values when a transient refresh fails.
 
