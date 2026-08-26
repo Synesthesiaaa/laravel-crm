@@ -41,4 +41,54 @@ class VicidialNonAgentApiServiceTest extends TestCase
             return str_starts_with($request->url(), 'https://campaign-a.example/non_agent_api.php');
         });
     }
+
+    public function test_it_batches_named_reports_on_one_campaign_server_and_preserves_independent_failures(): void
+    {
+        VicidialServer::factory()->create([
+            'campaign_code' => 'campaign-a',
+            'api_url' => 'https://campaign-a.example/agc/api.php',
+            'api_user' => 'campaign-a-user',
+            'api_pass' => 'campaign-a-pass',
+            'is_default' => true,
+        ]);
+        VicidialServer::factory()->create([
+            'campaign_code' => 'campaign-b',
+            'api_url' => 'https://campaign-b.example/agc/api.php',
+            'api_user' => 'campaign-b-user',
+            'api_pass' => 'campaign-b-pass',
+            'is_default' => true,
+        ]);
+        Http::fake(function ($request) {
+            return ($request->data()['function'] ?? null) === 'call_status_stats'
+                ? Http::response('ERROR: report access denied', 200)
+                : Http::response("user|status\nagent-a|READY", 200);
+        });
+
+        $service = new VicidialNonAgentApiService(
+            app(VicidialServerRepository::class),
+            Mockery::mock(TelephonyLogger::class)->shouldIgnoreMissing(),
+        );
+
+        $results = $service->executeBatch(User::factory()->make(), 'campaign-a', [
+            'agents' => [
+                'function' => 'logged_in_agents',
+                'params' => ['header' => 'YES'],
+            ],
+            'totals' => [
+                'function' => 'call_status_stats',
+                'params' => ['campaigns' => '---ALL---'],
+            ],
+        ], true, ['connect_timeout' => 1, 'timeout' => 3, 'retry_times' => 0]);
+
+        $this->assertTrue($results['agents']->success);
+        $this->assertFalse($results['totals']->success);
+        $this->assertSame('agent-a', $results['agents']->data['rows'][1][0]);
+        Http::assertSentCount(2);
+        Http::assertSent(function ($request): bool {
+            return str_starts_with($request->url(), 'https://campaign-a.example/non_agent_api.php')
+                && ($request->data()['user'] ?? null) === 'campaign-a-user'
+                && ($request->data()['pass'] ?? null) === 'campaign-a-pass';
+        });
+        Http::assertNotSent(fn ($request): bool => str_starts_with($request->url(), 'https://campaign-b.example/'));
+    }
 }

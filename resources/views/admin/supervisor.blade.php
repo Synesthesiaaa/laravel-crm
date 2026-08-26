@@ -95,7 +95,8 @@
         </div>
         <div class="wallboard-metric">
             <div class="wallboard-value" x-text="stats.avgHandleTime">0</div>
-            <div class="wallboard-label">Avg Handle (s)</div>
+            <div class="wallboard-label"
+                 x-text="stats.performanceSource === 'vicidial' ? 'Avg Talk (s)' : (stats.performanceSource === 'mixed' ? 'Avg Talk / Handle (s)' : 'Avg Handle (s)')"></div>
         </div>
         <div class="wallboard-metric">
             <div class="wallboard-value" x-text="stats.todayTotal">—</div>
@@ -106,11 +107,24 @@
             <div class="wallboard-label">Answer Rate</div>
         </div>
     </div>
-    <p class="text-xs text-[var(--color-on-surface-dim)] -mt-4" role="status" aria-live="polite">
-        Call totals from
-        <span class="font-medium text-[var(--color-on-surface-muted)]"
-              x-text="stats.callSource === 'vicidial' ? 'VICIdial daily report' : 'CRM call sessions (fallback)'"></span>
-        · refreshed with the live supervisor feed
+    <p class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--color-on-surface-dim)] -mt-4"
+       role="status" aria-live="polite" aria-label="Supervisor metric data sources">
+        <span>
+            Live state:
+            <span class="font-medium text-[var(--color-on-surface-muted)]"
+                  x-text="stats.realtimeSource === 'vicidial' ? 'VICIdial real-time report' : (stats.realtimeSource === 'mixed' ? 'VICIdial with CRM fallback' : 'CRM session fallback')"></span>
+        </span>
+        <span>
+            Agent timing:
+            <span class="font-medium text-[var(--color-on-surface-muted)]"
+                  x-text="stats.performanceSource === 'vicidial' ? 'VICIdial agent stats' : (stats.performanceSource === 'mixed' ? 'VICIdial with CRM fallback' : 'CRM call-session fallback')"></span>
+        </span>
+        <span>
+            Call totals:
+            <span class="font-medium text-[var(--color-on-surface-muted)]"
+                  x-text="stats.callSource === 'vicidial' ? 'VICIdial daily report' : 'CRM call-session fallback'"></span>
+        </span>
+        <span x-show="lastRefreshAt" x-text="'Updated ' + lastRefreshAt"></span>
     </p>
 
     <div class="md-card p-4">
@@ -246,7 +260,7 @@
                     ['label' => 'Agent'],
                     ['label' => 'Status'],
                     ['label' => 'Calls Today', 'align' => 'right'],
-                    ['label' => 'Avg Handle (s)', 'align' => 'right'],
+                    ['label' => 'Avg Talk / Handle (s)', 'align' => 'right'],
                     ['label' => 'Dispositions', 'align' => 'right'],
                     ['label' => 'Since'],
                 ]" />
@@ -308,7 +322,8 @@
             </div>
             <div class="wallboard-metric">
                 <div class="wallboard-value text-4xl" x-text="stats.avgHandleTime + 's'">0s</div>
-                <div class="wallboard-label">Avg Handle</div>
+                <div class="wallboard-label"
+                     x-text="stats.performanceSource === 'vicidial' ? 'Avg Talk' : (stats.performanceSource === 'mixed' ? 'Avg Talk / Handle' : 'Avg Handle')"></div>
             </div>
             <div class="wallboard-metric">
                 <div class="wallboard-value text-4xl" x-text="stats.answerRate + '%'">0%</div>
@@ -316,9 +331,15 @@
             </div>
         </div>
         <p class="text-xs text-[var(--color-on-surface-dim)] -mt-2 mb-4" role="status" aria-live="polite">
-            Call totals from
+            Live state from
             <span class="font-medium text-[var(--color-on-surface-muted)]"
-                  x-text="stats.callSource === 'vicidial' ? 'VICIdial daily report' : 'CRM call sessions (fallback)'"></span>
+                  x-text="stats.realtimeSource === 'vicidial' ? 'VICIdial real-time report' : (stats.realtimeSource === 'mixed' ? 'VICIdial with CRM fallback' : 'CRM session fallback')"></span>
+            · agent timing from
+            <span class="font-medium text-[var(--color-on-surface-muted)]"
+                  x-text="stats.performanceSource === 'vicidial' ? 'VICIdial agent stats' : (stats.performanceSource === 'mixed' ? 'VICIdial with CRM fallback' : 'CRM call-session fallback')"></span>
+            · call totals from
+            <span class="font-medium text-[var(--color-on-surface-muted)]"
+                  x-text="stats.callSource === 'vicidial' ? 'VICIdial daily report' : 'CRM call-session fallback'"></span>
         </p>
         <div class="chart-container">
             <p class="chart-title">Real-time Call Volume</p>
@@ -357,7 +378,8 @@ window.supervisorDashboard = function(initialCampaign = '') {
             agentsOnline: 0, callsWaiting: 0, callsActive: 0,
             agentsAvailable: 0, agentsOnCall: 0, agentsPaused: 0,
             avgWaitTime: 0, avgHandleTime: 0, todayTotal: 0,
-            callsAnswered: 0, answerRate: 0, slaPercent: 0, callsByHour: {}, callSource: 'crm',
+            callsAnswered: 0, answerRate: 0, slaPercent: 0, callsByHour: {},
+            callSource: 'crm', realtimeSource: 'crm', performanceSource: 'crm',
         },
         pollInterval: null,
         _echoUnsubscribe: null,
@@ -381,7 +403,7 @@ window.supervisorDashboard = function(initialCampaign = '') {
                 );
                 this.pollInterval = setInterval(() => this.refresh(), 15000);
             } else {
-                this.pollInterval = setInterval(() => this.refresh(), 5000);
+                this.pollInterval = setInterval(() => this.refresh(), 15000);
             }
             this.$watch('tab', (t) => {
                 if (t === 'performance' || t === 'wallboard') this.renderCharts();
@@ -420,7 +442,8 @@ window.supervisorDashboard = function(initialCampaign = '') {
                     agentsOnline: 0, callsWaiting: 0, callsActive: 0,
                     agentsAvailable: 0, agentsOnCall: 0, agentsPaused: 0,
                     avgWaitTime: 0, avgHandleTime: 0, todayTotal: 0,
-                    callsAnswered: 0, answerRate: 0, slaPercent: 0, callsByHour: {}, callSource: 'crm',
+                    callsAnswered: 0, answerRate: 0, slaPercent: 0, callsByHour: {},
+                    callSource: 'crm', realtimeSource: 'crm', performanceSource: 'crm',
                 };
                 this.activeCallHistory = [
                     ...this.activeCallHistory,
@@ -484,8 +507,10 @@ window.supervisorDashboard = function(initialCampaign = '') {
             const textColor = isDark ? '#a1a1aa' : '#52525b';
             const gridColor = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
 
-            const names   = this.agents.filter(a => a.status !== 'offline').map(a => a.name.split(' ')[0]);
-            const callsArr= this.agents.filter(a => a.status !== 'offline').map(a => a.calls_today);
+            const performanceAgents = this.agents.filter(a => a.status !== 'offline' || Number(a.calls_today || 0) > 0);
+            const names = performanceAgents.map(a => a.name.split(' ')[0]);
+            const callsArr = performanceAgents.map(a => a.calls_today);
+            const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
             const currentHour = new Date().getHours();
             const hourlyLabels = Array.from({ length: 12 }, (_, i) => String((currentHour - 11 + i + 24) % 24).padStart(2, '0'));
             const hourlyData = hourlyLabels.map((hour) => Number(this.stats.callsByHour?.[hour] || 0));
@@ -533,7 +558,7 @@ window.supervisorDashboard = function(initialCampaign = '') {
                 ];
                 const realtimeChart = new ApexCharts(document.getElementById('chart-realtime'), {
                     series: [{ name: 'Calls/min', data: sparkData }],
-                    chart: { type: 'line', height: 200, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif', animations: { enabled: true, dynamicAnimation: { speed: 350 } } },
+                    chart: { type: 'line', height: 200, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif', animations: { enabled: !reduceMotion, dynamicAnimation: { speed: 350 } } },
                     colors: ['#22c55e'],
                     stroke: { curve: 'smooth', width: 3 },
                     xaxis: { labels: { show: false }, axisBorder: { show: false }, axisTicks: { show: false } },

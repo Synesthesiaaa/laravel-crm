@@ -11,6 +11,7 @@ use App\Models\VicidialServer;
 use App\Repositories\VicidialServerRepository;
 use App\Services\CampaignService;
 use App\Services\Telephony\ReportingService;
+use App\Support\OperationResult;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -32,6 +33,9 @@ class SupervisorAgentsController extends Controller
         $campaign = $this->resolveCampaign($request, $campaigns);
         $campaignConfig = $this->campaignService->getCampaign($campaign);
         $server = $campaign !== '' ? $this->serverRepository->getForCampaign($campaign) : null;
+        $remoteSnapshot = $this->fetchRemoteSnapshot($request, $campaign, $server, $today);
+        $remoteAgents = $remoteSnapshot['agents'];
+        $remoteAgentMetrics = $remoteSnapshot['agent_metrics'];
 
         $users = User::whereIn('role', ['Agent', 'Team Leader'])
             ->where(function ($query) use ($campaign, $today): void {
@@ -53,9 +57,11 @@ class SupervisorAgentsController extends Controller
         // mapped server exposes the Non-Agent API, use its logged-in agent list
         // to add matching CRM users from that server without filtering on the
         // VICIdial campaign code.
-        $remoteAgents = $this->fetchRemoteAgents($request, $campaign, $server);
-        if ($remoteAgents !== []) {
-            $remoteUserIds = array_keys($remoteAgents);
+        if ($remoteAgents !== [] || $remoteAgentMetrics !== []) {
+            $remoteUserIds = array_values(array_unique([
+                ...array_keys($remoteAgents),
+                ...array_keys($remoteAgentMetrics),
+            ]));
             $users = User::whereIn('role', ['Agent', 'Team Leader'])
                 ->whereIn('id', array_values(array_unique([
                     ...$users->pluck('id')->all(),
@@ -103,19 +109,20 @@ class SupervisorAgentsController extends Controller
             ->get()
             ->keyBy('user_id');
 
-        $remoteCallStats = $this->fetchRemoteCallStats($request, $campaign, $server, $today);
+        $remoteCallStats = $remoteSnapshot['call_stats'];
 
-        $agents = $users->map(function (User $user) use ($campaign, $activeCalls, $todayCallMetrics, $todaysDispositions, $agentNames, $viciSessions, $remoteAgents) {
+        $agents = $users->map(function (User $user) use ($campaign, $activeCalls, $todayCallMetrics, $todaysDispositions, $agentNames, $viciSessions, $remoteAgents, $remoteAgentMetrics) {
             $latestLog = $user->attendanceLogs->first();
             $isOnline = $latestLog?->event_type === 'login';
             $currentCall = $activeCalls->get($user->id);
             $agentName = $agentNames[$user->id] ?? $user->username;
             $dispositions = $todaysDispositions->get($agentName, 0);
             $remote = $remoteAgents[$user->id] ?? null;
+            $remoteMetrics = $remoteAgentMetrics[$user->id] ?? null;
 
             $status = 'offline';
             if ($remote !== null) {
-                $status = $this->statusFromRemoteAgent($remote['status']);
+                $status = $this->statusFromRemoteAgent($remote['status'], $remote['sub_status']);
             } elseif ($currentCall) {
                 $status = 'oncall';
             } elseif ($isOnline) {
@@ -132,10 +139,16 @@ class SupervisorAgentsController extends Controller
                 'handle_seconds' => 0,
                 'handle_samples' => 0,
             ]);
-            $averageHandle = $callMetrics['handle_samples'] > 0
+            $crmAverageHandle = $callMetrics['handle_samples'] > 0
                 ? round($callMetrics['handle_seconds'] / $callMetrics['handle_samples'], 1)
                 : 0;
-            $callsToday = $remote['calls_today'] ?? $callMetrics['terminal'];
+            $callsToday = $remote['calls_today'] ?? $remoteMetrics['calls_today'] ?? $callMetrics['terminal'];
+            $averageHandle = $remoteMetrics['avg_handle'] ?? $crmAverageHandle;
+            $averageWait = $remoteMetrics['avg_wait'] ?? (
+                $callMetrics['wait_samples'] > 0
+                    ? round($callMetrics['wait_seconds'] / $callMetrics['wait_samples'], 1)
+                    : 0
+            );
 
             return [
                 'id' => $user->id,
@@ -145,6 +158,7 @@ class SupervisorAgentsController extends Controller
                 'status_label' => $this->statusLabel($status),
                 'calls_today' => $callsToday,
                 'avg_handle' => $averageHandle,
+                'avg_wait' => $averageWait,
                 'dispositions' => $dispositions,
                 'since' => $latestLog?->event_time?->format('H:i') ?? '—',
                 'current_call' => $currentCall ? [
@@ -174,21 +188,25 @@ class SupervisorAgentsController extends Controller
         $answeredToday = $remoteCallStats['answered'] ?? $crmAnsweredToday;
         $answerRate = $remoteCallStats['answer_rate'] ?? $crmAnswerRate;
         $callsByHour = $remoteCallStats['calls_by_hour'] ?? $crmCallsByHour;
+        $remoteRealtimeStats = $remoteSnapshot['realtime_stats'];
+        $remotePerformanceStats = $remoteSnapshot['performance_stats'];
 
         $stats = [
-            'agentsOnline' => $agents->whereIn('status', ['available', 'oncall', 'break', 'wrapup'])->count(),
-            'agentsAvailable' => $agents->where('status', 'available')->count(),
-            'agentsOnCall' => $remoteOnCallCount,
-            'agentsPaused' => $agents->where('status', 'break')->count(),
-            'callsWaiting' => (int) ($agents->max('queue_count') ?? 0),
-            'callsActive' => max($activeCallRecords->count(), $remoteOnCallCount),
-            'avgWaitTime' => $waitSamples > 0 ? round($waitSeconds / $waitSamples, 1) : 0,
-            'avgHandleTime' => $handleSamples > 0 ? round($handleSeconds / $handleSamples, 1) : 0,
+            'agentsOnline' => $remoteRealtimeStats['agents_online'] ?? $agents->whereIn('status', ['available', 'oncall', 'break', 'wrapup'])->count(),
+            'agentsAvailable' => $remoteRealtimeStats['agents_available'] ?? $agents->where('status', 'available')->count(),
+            'agentsOnCall' => $remoteRealtimeStats['agents_in_calls'] ?? $remoteOnCallCount,
+            'agentsPaused' => $remoteRealtimeStats['agents_paused'] ?? $agents->where('status', 'break')->count(),
+            'callsWaiting' => $remoteRealtimeStats['calls_waiting'] ?? (int) ($agents->max('queue_count') ?? 0),
+            'callsActive' => $remoteRealtimeStats['agents_in_calls'] ?? max($activeCallRecords->count(), $remoteOnCallCount),
+            'avgWaitTime' => $remotePerformanceStats['avg_wait'] ?? ($waitSamples > 0 ? round($waitSeconds / $waitSamples, 1) : 0),
+            'avgHandleTime' => $remotePerformanceStats['avg_handle'] ?? ($handleSamples > 0 ? round($handleSeconds / $handleSamples, 1) : 0),
             'todayTotal' => $totalToday,
             'callsAnswered' => $answeredToday,
             'answerRate' => $answerRate,
             'callsByHour' => $callsByHour,
             'callSource' => $remoteCallStats !== null ? 'vicidial' : 'crm',
+            'realtimeSource' => $remoteSnapshot['realtime_source'],
+            'performanceSource' => $remoteSnapshot['performance_source'],
             // Keep the legacy key for API consumers while the UI uses the
             // more precise answer-rate label.
             'slaPercent' => $answerRate,
@@ -232,16 +250,33 @@ class SupervisorAgentsController extends Controller
     }
 
     /**
-     * Read logged-in agents from the server assigned to the CRM campaign.
-     * The request deliberately asks for all VICIdial campaigns on that server;
-     * CRM campaign-to-server mapping is the only routing boundary.
+     * Build a server-scoped snapshot using supported VICIdial Non-Agent API
+     * reports. VICIdial campaign IDs are deliberately not used for routing.
      *
-     * @return array<int, array{status: string, queue_count: int, calls_today: int|null}>
+     * @return array{
+     *     agents: array<int, array{status: string, sub_status: string, user_group: string, queue_count: int, calls_today: int|null}>,
+     *     agent_metrics: array<int, array{calls_today: int, avg_handle: float|int|null, avg_wait: float|int|null}>,
+     *     call_stats: array{total: int, answered: int, answer_rate: float|int, calls_by_hour: array<string, int>}|null,
+     *     realtime_stats: array<string, int>|null,
+     *     performance_stats: array{avg_handle?: float|int, avg_wait?: float|int}|null,
+     *     realtime_source: string,
+     *     performance_source: string
+     * }
      */
-    private function fetchRemoteAgents(Request $request, string $campaign, ?VicidialServer $server): array
+    private function fetchRemoteSnapshot(Request $request, string $campaign, ?VicidialServer $server, Carbon $today): array
     {
+        $empty = [
+            'agents' => [],
+            'agent_metrics' => [],
+            'call_stats' => null,
+            'realtime_stats' => null,
+            'performance_stats' => null,
+            'realtime_source' => 'crm',
+            'performance_source' => 'crm',
+        ];
+
         if ($server === null || trim((string) $server->api_user) === '' || trim((string) $server->api_pass) === '') {
-            return [];
+            return $empty;
         }
 
         $candidates = User::query()
@@ -249,68 +284,363 @@ class SupervisorAgentsController extends Controller
             ->whereNotNull('vici_user')
             ->where('vici_user', '!=', '')
             ->get();
-        if ($candidates->isEmpty()) {
-            return [];
-        }
 
-        $result = $this->reportingService->loggedInAgents(
+        $httpOptions = [
+            // Supervisor polling must fail fast when a mapped server is
+            // offline; local CRM metrics should remain available.
+            'connect_timeout' => 1,
+            'timeout' => 3,
+            'retry_times' => 0,
+        ];
+        $reports = $this->reportingService->supervisorSnapshot(
             $request->user(),
             $campaign,
-            [
-                'campaigns' => '---ALL---',
-                'show_sub_status' => 'YES',
-                'stage' => 'pipe',
-                'header' => 'YES',
-            ],
-            [
-                // Supervisor polling must fail fast when a mapped server is
-                // offline; local CRM metrics should remain available.
-                'connect_timeout' => 1,
-                'timeout' => 3,
-                'retry_times' => 0,
-            ],
+            $today->format('Y-m-d'),
+            $httpOptions,
         );
-        if (! $result->success) {
-            return [];
+
+        $loggedAgents = $this->parseLoggedAgentReport($reports['logged_agents'] ?? null, $candidates);
+        $agentPerformance = $this->parseAgentPerformanceReport($reports['agent_performance'] ?? null, $candidates);
+        $groups = array_values(array_unique(array_filter([
+            ...$loggedAgents['user_groups'],
+            ...$agentPerformance['user_groups'],
+        ], static fn (string $group): bool => $group !== '')));
+
+        $realtimeStats = $loggedAgents['stats'];
+        $realtimeSource = $loggedAgents['available']
+            ? ($this->hasCompleteRealtimeStats($realtimeStats) ? 'vicidial' : 'mixed')
+            : 'crm';
+        if ($groups !== []) {
+            $groupResult = $this->reportingService->userGroupStatus(
+                $request->user(),
+                $campaign,
+                implode('|', $groups),
+                $httpOptions,
+            );
+            $groupStats = $this->parseUserGroupStatus($groupResult);
+            if ($groupStats !== null) {
+                $realtimeStats = array_merge($realtimeStats ?? [], $groupStats);
+                $realtimeSource = $this->hasCompleteRealtimeStats($realtimeStats) ? 'vicidial' : 'mixed';
+            }
         }
 
-        $rows = array_values(array_filter((array) ($result->data['rows'] ?? []), 'is_array'));
-        if (count($rows) < 2) {
-            return [];
+        return [
+            'agents' => $loggedAgents['agents'],
+            'agent_metrics' => $agentPerformance['agents'],
+            'call_stats' => $this->parseRemoteCallStats($reports['call_totals'] ?? null),
+            'realtime_stats' => $realtimeStats,
+            'performance_stats' => $agentPerformance['stats'],
+            'realtime_source' => $realtimeSource,
+            'performance_source' => $this->performanceSource($agentPerformance['stats']),
+        ];
+    }
+
+    /**
+     * @param  array{avg_handle?: float|int, avg_wait?: float|int}|null  $stats
+     */
+    private function performanceSource(?array $stats): string
+    {
+        if ($stats === null) {
+            return 'crm';
         }
 
-        $headers = array_map(fn ($header): string => $this->normalizeRemoteHeader($header), $rows[0]);
-        $headerMap = array_flip($headers);
-        $userIndex = $this->firstHeaderIndex($headerMap, ['user', 'agent_user', 'username']);
-        if ($userIndex === null) {
-            return [];
+        return isset($stats['avg_handle'], $stats['avg_wait']) ? 'vicidial' : 'mixed';
+    }
+
+    /**
+     * @param  Collection<int, User>  $candidates
+     * @return array{
+     *     available: bool,
+     *     agents: array<int, array{status: string, sub_status: string, user_group: string, queue_count: int, calls_today: int|null}>,
+     *     user_groups: array<int, string>,
+     *     stats: array<string, int>|null
+     * }
+     */
+    private function parseLoggedAgentReport(?OperationResult $result, Collection $candidates): array
+    {
+        $table = $this->parseRemoteTable($result);
+        $empty = ['available' => false, 'agents' => [], 'user_groups' => [], 'stats' => null];
+        if ($table === null || ! $this->remoteTableHasAnyHeader($table, ['user', 'agent_user', 'username'])) {
+            return $empty;
         }
 
-        $statusIndex = $this->firstHeaderIndex($headerMap, ['status', 'agent_status', 'state']);
-        $queueIndex = $this->firstHeaderIndex($headerMap, ['queue_count', 'calls_waiting', 'queue']);
-        $callsTodayIndex = $this->firstHeaderIndex($headerMap, ['calls_today', 'calls', 'total_calls']);
         $candidatesByViciUser = $candidates->keyBy(fn (User $user): string => strtolower(trim((string) $user->vici_user)));
         $remoteAgents = [];
+        $userGroups = [];
+        $stats = [
+            'agents_online' => 0,
+            'agents_available' => 0,
+            'agents_in_calls' => 0,
+            'agents_paused' => 0,
+        ];
+        $hasQueueCount = $this->remoteTableHasAnyHeader($table, ['queue_count', 'calls_waiting', 'queue']);
+        if ($hasQueueCount) {
+            $stats['calls_waiting'] = 0;
+        }
 
-        foreach (array_slice($rows, 1) as $row) {
-            $viciUser = strtolower(trim((string) ($row[$userIndex] ?? '')));
+        foreach ($table['rows'] as $row) {
+            $status = trim((string) $this->remoteRowValue($row, ['status', 'agent_status', 'state']));
+            $subStatus = trim((string) $this->remoteRowValue($row, ['sub_status', 'real_time_sub_status']));
+            $userGroup = trim((string) $this->remoteRowValue($row, ['user_group', 'group']));
+            if ($userGroup !== '') {
+                $userGroups[] = $userGroup;
+            }
+
+            $stats['agents_online']++;
+            $normalizedStatus = $this->statusFromRemoteAgent($status, $subStatus);
+            if ($normalizedStatus === 'available') {
+                $stats['agents_available']++;
+            } elseif ($normalizedStatus === 'oncall') {
+                $stats['agents_in_calls']++;
+            } elseif ($normalizedStatus === 'break') {
+                $stats['agents_paused']++;
+            }
+
+            $queueCount = $this->nonNegativeInteger($this->remoteRowValue($row, ['queue_count', 'calls_waiting', 'queue'])) ?? 0;
+            if ($hasQueueCount) {
+                $stats['calls_waiting'] = max($stats['calls_waiting'], $queueCount);
+            }
+
+            $viciUser = strtolower(trim((string) $this->remoteRowValue($row, ['user', 'agent_user', 'username'])));
             $user = $candidatesByViciUser->get($viciUser);
             if (! $user) {
                 continue;
             }
 
             $remoteAgents[$user->id] = [
-                'status' => trim((string) ($statusIndex !== null ? ($row[$statusIndex] ?? '') : '')),
-                'queue_count' => $queueIndex !== null && is_numeric($row[$queueIndex] ?? null)
-                    ? (int) $row[$queueIndex]
-                    : 0,
-                'calls_today' => $callsTodayIndex !== null && is_numeric($row[$callsTodayIndex] ?? null)
-                    ? max(0, (int) $row[$callsTodayIndex])
-                    : null,
+                'status' => $status,
+                'sub_status' => $subStatus,
+                'user_group' => $userGroup,
+                'queue_count' => $queueCount,
+                'calls_today' => $this->nonNegativeInteger($this->remoteRowValue($row, ['calls_today', 'calls', 'total_calls'])),
             ];
         }
 
-        return $remoteAgents;
+        return [
+            'available' => true,
+            'agents' => $remoteAgents,
+            'user_groups' => array_values(array_unique($userGroups)),
+            'stats' => $stats,
+        ];
+    }
+
+    /**
+     * @param  Collection<int, User>  $candidates
+     * @return array{
+     *     agents: array<int, array{calls_today: int, avg_handle: float|int|null, avg_wait: float|int|null}>,
+     *     user_groups: array<int, string>,
+     *     stats: array{avg_handle?: float|int, avg_wait?: float|int}|null
+     * }
+     */
+    private function parseAgentPerformanceReport(?OperationResult $result, Collection $candidates): array
+    {
+        $table = $this->parseRemoteTable($result);
+        if ($table === null || ! $this->remoteTableHasAnyHeader($table, ['user', 'agent_user', 'username'])) {
+            return ['agents' => [], 'user_groups' => [], 'stats' => null];
+        }
+
+        $candidatesByViciUser = $candidates->keyBy(fn (User $user): string => strtolower(trim((string) $user->vici_user)));
+        $remoteAgents = [];
+        $userGroups = [];
+        $totalTalkSeconds = 0;
+        $totalWaitSeconds = 0;
+        $talkSamples = 0;
+        $waitSamples = 0;
+
+        foreach ($table['rows'] as $row) {
+            $calls = $this->nonNegativeInteger($this->remoteRowValue($row, ['calls', 'calls_today', 'total_calls']));
+            if ($calls === null) {
+                continue;
+            }
+
+            $userGroup = trim((string) $this->remoteRowValue($row, ['user_group', 'group']));
+            if ($userGroup !== '') {
+                $userGroups[] = $userGroup;
+            }
+
+            $averageTalk = $this->parseRemoteSeconds($this->remoteRowValue($row, ['avg_talk_time', 'average_talk_time']));
+            $averageWait = $this->parseRemoteSeconds($this->remoteRowValue($row, ['avg_wait_time', 'average_wait_time']));
+            $totalTalk = $this->parseRemoteSeconds($this->remoteRowValue($row, ['total_talk_time', 'talk_time']));
+            $totalWait = $this->parseRemoteSeconds($this->remoteRowValue($row, ['total_wait_time', 'wait_time']));
+
+            if ($calls > 0 && ($totalTalk !== null || $averageTalk !== null)) {
+                $totalTalkSeconds += $totalTalk ?? ($averageTalk * $calls);
+                $talkSamples += $calls;
+            }
+            if ($calls > 0 && ($totalWait !== null || $averageWait !== null)) {
+                $totalWaitSeconds += $totalWait ?? ($averageWait * $calls);
+                $waitSamples += $calls;
+            }
+
+            $viciUser = strtolower(trim((string) $this->remoteRowValue($row, ['user', 'agent_user', 'username'])));
+            $user = $candidatesByViciUser->get($viciUser);
+            if (! $user) {
+                continue;
+            }
+
+            $remoteAgents[$user->id] = [
+                'calls_today' => $calls,
+                'avg_handle' => $averageTalk,
+                'avg_wait' => $averageWait,
+            ];
+        }
+
+        $stats = [];
+        if ($talkSamples > 0) {
+            $stats['avg_handle'] = round($totalTalkSeconds / $talkSamples, 1);
+        }
+        if ($waitSamples > 0) {
+            $stats['avg_wait'] = round($totalWaitSeconds / $waitSamples, 1);
+        }
+
+        return [
+            'agents' => $remoteAgents,
+            'user_groups' => array_values(array_unique($userGroups)),
+            'stats' => $stats !== [] ? $stats : null,
+        ];
+    }
+
+    /**
+     * @return array<string, int>|null
+     */
+    private function parseUserGroupStatus(OperationResult $result): ?array
+    {
+        $table = $this->parseRemoteTable($result);
+        if ($table === null || $table['rows'] === []) {
+            return null;
+        }
+
+        $fieldMap = [
+            'agents_online' => ['agents_logged_in', 'agents_online'],
+            'agents_available' => ['agents_waiting', 'agents_available'],
+            'agents_in_calls' => ['agents_in_calls', 'agents_on_call'],
+            'agents_paused' => ['agents_paused'],
+            'calls_waiting' => ['calls_waiting', 'queue_count'],
+        ];
+        $stats = [];
+        $validRows = 0;
+
+        foreach ($table['rows'] as $row) {
+            $rowIsValid = false;
+            foreach ($fieldMap as $target => $sourceHeaders) {
+                $value = $this->nonNegativeInteger($this->remoteRowValue($row, $sourceHeaders));
+                if ($value === null) {
+                    continue;
+                }
+
+                $stats[$target] = ($stats[$target] ?? 0) + $value;
+                $rowIsValid = true;
+            }
+            if ($rowIsValid) {
+                $validRows++;
+            }
+        }
+
+        return $validRows > 0 ? $stats : null;
+    }
+
+    /**
+     * @param  array<string, int>|null  $stats
+     */
+    private function hasCompleteRealtimeStats(?array $stats): bool
+    {
+        if ($stats === null) {
+            return false;
+        }
+
+        foreach (['agents_online', 'agents_available', 'agents_in_calls', 'agents_paused', 'calls_waiting'] as $key) {
+            if (! array_key_exists($key, $stats)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @return array{headers: array<int, string>, rows: array<int, array<string, string>>}|null
+     */
+    private function parseRemoteTable(?OperationResult $result): ?array
+    {
+        if ($result === null || ! $result->success) {
+            return null;
+        }
+
+        $rows = array_values(array_filter((array) ($result->data['rows'] ?? []), 'is_array'));
+        if ($rows === []) {
+            return null;
+        }
+
+        $headers = array_map(fn ($header): string => $this->normalizeRemoteHeader($header), $rows[0]);
+        if (! array_filter($headers, static fn (string $header): bool => $header !== '')) {
+            return null;
+        }
+
+        $dataRows = [];
+        foreach (array_slice($rows, 1) as $row) {
+            $data = [];
+            foreach ($headers as $index => $header) {
+                if ($header !== '') {
+                    $data[$header] = trim((string) ($row[$index] ?? ''));
+                }
+            }
+            $dataRows[] = $data;
+        }
+
+        return ['headers' => $headers, 'rows' => $dataRows];
+    }
+
+    /**
+     * @param  array{headers: array<int, string>, rows: array<int, array<string, string>>}  $table
+     * @param  array<int, string>  $headers
+     */
+    private function remoteTableHasAnyHeader(array $table, array $headers): bool
+    {
+        return (bool) array_intersect($headers, $table['headers']);
+    }
+
+    /**
+     * @param  array<string, string>  $row
+     * @param  array<int, string>  $headers
+     */
+    private function remoteRowValue(array $row, array $headers): mixed
+    {
+        foreach ($headers as $header) {
+            if (array_key_exists($header, $row)) {
+                return $row[$header];
+            }
+        }
+
+        return null;
+    }
+
+    private function nonNegativeInteger(mixed $value): ?int
+    {
+        if (! is_numeric($value) || (int) $value < 0) {
+            return null;
+        }
+
+        return (int) $value;
+    }
+
+    private function parseRemoteSeconds(mixed $value): ?int
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+        if (is_numeric($value)) {
+            return (float) $value >= 0 ? (int) round((float) $value) : null;
+        }
+
+        if (preg_match('/^(\d+):(\d{1,2}):(\d{1,2})$/', $value, $parts) === 1) {
+            return ((int) $parts[1] * 3600) + ((int) $parts[2] * 60) + (int) $parts[3];
+        }
+        if (preg_match('/^(\d+):(\d{1,2})$/', $value, $parts) === 1) {
+            return ((int) $parts[1] * 60) + (int) $parts[2];
+        }
+
+        return null;
     }
 
     private function normalizeRemoteHeader(mixed $header): string
@@ -320,29 +650,15 @@ class SupervisorAgentsController extends Controller
         return preg_replace('/[^a-z0-9]+/', '_', $normalized) ?: '';
     }
 
-    /**
-     * @param  array<string, int>  $headerMap
-     * @param  array<int, string>  $keys
-     */
-    private function firstHeaderIndex(array $headerMap, array $keys): ?int
+    private function statusFromRemoteAgent(string $status, string $subStatus = ''): string
     {
-        foreach ($keys as $key) {
-            if (isset($headerMap[$key])) {
-                return $headerMap[$key];
-            }
-        }
-
-        return null;
-    }
-
-    private function statusFromRemoteAgent(string $status): string
-    {
-        $normalized = strtolower(trim($status));
+        $normalized = strtolower(trim($status.' '.$subStatus));
 
         return match (true) {
-            str_contains($normalized, 'incall'), str_contains($normalized, 'in call'), str_contains($normalized, 'active') => 'oncall',
+            str_contains($normalized, 'dispo'), str_contains($normalized, 'dead') => 'wrapup',
+            str_contains($normalized, 'incall'), str_contains($normalized, 'in call'), str_contains($normalized, 'active'), str_contains($normalized, 'dial'), str_contains($normalized, 'ring'), str_contains($normalized, '3-way'), str_contains($normalized, 'park') => 'oncall',
             str_contains($normalized, 'pause'), str_contains($normalized, 'break') => 'break',
-            str_contains($normalized, 'ready'), str_contains($normalized, 'available'), str_contains($normalized, 'queue') => 'available',
+            str_contains($normalized, 'ready'), str_contains($normalized, 'available'), str_contains($normalized, 'queue'), str_contains($normalized, 'wait') => 'available',
             default => 'offline',
         };
     }
@@ -359,31 +675,14 @@ class SupervisorAgentsController extends Controller
     }
 
     /**
-     * Fetch the daily aggregate from the VICIdial server mapped to the CRM
-     * campaign. A null result means the CRM lifecycle data should be used.
+     * Parse the daily aggregate returned by the mapped VICIdial server. A null
+     * result means the CRM lifecycle data should be used.
      *
      * @return array{total: int, answered: int, answer_rate: float|int, calls_by_hour: array<string, int>}|null
      */
-    private function fetchRemoteCallStats(Request $request, string $campaign, ?VicidialServer $server, Carbon $today): ?array
+    private function parseRemoteCallStats(?OperationResult $result): ?array
     {
-        if ($server === null || trim((string) $server->api_user) === '' || trim((string) $server->api_pass) === '') {
-            return null;
-        }
-
-        $result = $this->reportingService->callStatusStats(
-            $request->user(),
-            $campaign,
-            [
-                'campaigns' => '---ALL---',
-                'query_date' => $today->format('Y-m-d'),
-            ],
-            [
-                'connect_timeout' => 1,
-                'timeout' => 3,
-                'retry_times' => 0,
-            ],
-        );
-        if (! $result->success) {
+        if ($result === null || ! $result->success) {
             return null;
         }
 

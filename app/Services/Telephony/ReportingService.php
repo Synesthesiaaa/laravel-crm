@@ -57,6 +57,46 @@ class ReportingService
         ], static fn ($v) => $v !== null && $v !== ''), true, $httpOptions);
     }
 
+    /**
+     * Fetch the independent Supervisor reports concurrently from the VICIdial
+     * server mapped to the selected CRM campaign.
+     *
+     * @param  array<string, int>  $httpOptions
+     * @return array<string, OperationResult>
+     */
+    public function supervisorSnapshot(User $user, string $campaign, string $queryDate, array $httpOptions = []): array
+    {
+        return $this->nonAgentApi->executeBatch($user, $campaign, [
+            'logged_agents' => [
+                'function' => 'logged_in_agents',
+                'params' => [
+                    'campaigns' => '---ALL---',
+                    'show_sub_status' => 'YES',
+                    'stage' => 'pipe',
+                    'header' => 'YES',
+                ],
+            ],
+            'agent_performance' => [
+                'function' => 'agent_stats_export',
+                'params' => [
+                    'datetime_start' => $queryDate.'+00:00:00',
+                    'datetime_end' => $queryDate.'+23:59:59',
+                    'group_by_campaign' => 'NO',
+                    'time_format' => 'S',
+                    'stage' => 'pipe',
+                    'header' => 'YES',
+                ],
+            ],
+            'call_totals' => [
+                'function' => 'call_status_stats',
+                'params' => [
+                    'campaigns' => '---ALL---',
+                    'query_date' => $queryDate,
+                ],
+            ],
+        ], true, $httpOptions);
+    }
+
     public function phoneNumberLog(User $user, string $campaign, string $numbers): OperationResult
     {
         return $this->nonAgentApi->execute($user, $campaign, 'phone_number_log', [
@@ -67,13 +107,13 @@ class ReportingService
         ], true);
     }
 
-    public function userGroupStatus(User $user, string $campaign, string $groups): OperationResult
+    public function userGroupStatus(User $user, string $campaign, string $groups, array $httpOptions = []): OperationResult
     {
         return $this->nonAgentApi->execute($user, $campaign, 'user_group_status', [
             'user_groups' => $groups,
             'stage' => 'pipe',
             'header' => 'YES',
-        ], true);
+        ], true, $httpOptions);
     }
 
     public function inGroupStatus(User $user, string $campaign, string $groups): OperationResult
