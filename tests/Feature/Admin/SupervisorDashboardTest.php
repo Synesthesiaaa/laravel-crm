@@ -28,6 +28,8 @@ class SupervisorDashboardTest extends TestCase
             ->assertDontSee('forcePause')
             ->assertDontSee('forceLogout')
             ->assertSee('Answer Rate')
+            ->assertSee('Call totals from')
+            ->assertSee('VICIdial daily report')
             ->assertSee('avgHandleTime')
             ->assertSee('refreshInFlight')
             ->assertSee('notificationPending')

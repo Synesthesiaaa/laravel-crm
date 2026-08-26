@@ -55,4 +55,42 @@ class ReportingServiceTest extends TestCase
 
         $this->assertTrue($result->success);
     }
+
+    public function test_call_status_stats_forwards_bounded_http_options(): void
+    {
+        Carbon::setTestNow('2026-08-26 12:00:00');
+
+        $user = User::factory()->make();
+        $nonAgentApi = Mockery::mock(VicidialNonAgentApiService::class);
+
+        $nonAgentApi->shouldReceive('execute')
+            ->once()
+            ->with(
+                $user,
+                'campaign-a',
+                'call_status_stats',
+                [
+                    'campaigns' => '---ALL---',
+                    'query_date' => '2026-08-26',
+                ],
+                true,
+                [
+                    'connect_timeout' => 1,
+                    'timeout' => 3,
+                    'retry_times' => 0,
+                ],
+            )
+            ->andReturn(OperationResult::success(['rows' => []]));
+
+        $service = new ReportingService($nonAgentApi);
+
+        $result = $service->callStatusStats(
+            $user,
+            'campaign-a',
+            ['campaigns' => '---ALL---', 'query_date' => '2026-08-26'],
+            ['connect_timeout' => 1, 'timeout' => 3, 'retry_times' => 0],
+        );
+
+        $this->assertTrue($result->success);
+    }
 }

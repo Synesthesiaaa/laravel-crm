@@ -185,6 +185,114 @@ class SupervisorAgentsApiTest extends TestCase
         });
     }
 
+    public function test_supervisor_prefers_mapped_vicidial_call_totals_when_crm_has_no_call_sessions(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-26 12:00:00'));
+
+        try {
+            Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+            VicidialServer::factory()->create([
+                'campaign_code' => 'campaign-a',
+                'server_name' => 'Campaign A VICIdial',
+                'api_url' => 'https://campaign-a.example/agc/api.php',
+                'api_user' => 'report-user',
+                'api_pass' => 'report-pass',
+            ]);
+            $this->app->make(CampaignService::class)->clearCampaignsCache();
+
+            $supervisor = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+            $remoteAgent = User::factory()->create([
+                'role' => User::ROLE_AGENT,
+                'full_name' => 'Remote Agent',
+                'vici_user' => 'remote-agent',
+                'default_campaign' => 'other-vicidial-campaign',
+            ]);
+            Http::fake(function ($request) {
+                return match ($request->data()['function'] ?? null) {
+                    'logged_in_agents' => Http::response(
+                        "user|status|calls_today\nremote-agent|READY|7",
+                        200,
+                    ),
+                    'call_status_stats' => Http::response(
+                        'campaign/ingroup|7|5|10-2,11-5|SALE-7',
+                        200,
+                    ),
+                    default => Http::response('', 200),
+                };
+            });
+
+            $response = $this->actingAs($supervisor)
+                ->withSession([
+                    'campaign' => 'campaign-a',
+                    'campaign_name' => 'Campaign A',
+                ])
+                ->getJson(route('api.supervisor.agents'));
+
+            $response->assertOk()
+                ->assertJsonPath('stats.todayTotal', 7)
+                ->assertJsonPath('stats.callsAnswered', 5)
+                ->assertJsonPath('stats.answerRate', 71.4)
+                ->assertJsonPath('stats.callsByHour.10', 2)
+                ->assertJsonPath('stats.callsByHour.11', 5)
+                ->assertJsonPath('stats.callSource', 'vicidial')
+                ->assertJsonPath('agents.0.id', $remoteAgent->id)
+                ->assertJsonPath('agents.0.calls_today', 7);
+
+            Http::assertSent(function ($request): bool {
+                return str_starts_with($request->url(), 'https://campaign-a.example/non_agent_api.php')
+                    && ($request->data()['function'] ?? null) === 'call_status_stats'
+                    && ($request->data()['campaigns'] ?? null) === '---ALL---'
+                    && ($request->data()['query_date'] ?? null) === '2026-08-26';
+            });
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_supervisor_falls_back_to_crm_totals_when_vicidial_call_report_fails(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-26 12:00:00'));
+
+        try {
+            Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+            VicidialServer::factory()->create([
+                'campaign_code' => 'campaign-a',
+                'server_name' => 'Campaign A VICIdial',
+                'api_url' => 'https://campaign-a.example/agc/api.php',
+                'api_user' => 'report-user',
+                'api_pass' => 'report-pass',
+            ]);
+            $this->app->make(CampaignService::class)->clearCampaignsCache();
+
+            $supervisor = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+            $agent = User::factory()->create([
+                'role' => User::ROLE_AGENT,
+                'default_campaign' => 'campaign-a',
+            ]);
+            CallSession::factory()->for($agent)->create([
+                'campaign_code' => 'campaign-a',
+                'status' => CallSession::STATUS_COMPLETED,
+                'dialed_at' => now()->subMinutes(10),
+            ]);
+            Http::fake(function ($request) {
+                return ($request->data()['function'] ?? null) === 'call_status_stats'
+                    ? Http::response('ERROR: report access denied', 200)
+                    : Http::response("user|status|calls_today\n", 200);
+            });
+
+            $response = $this->actingAs($supervisor)
+                ->withSession(['campaign' => 'campaign-a', 'campaign_name' => 'Campaign A'])
+                ->getJson(route('api.supervisor.agents'));
+
+            $response->assertOk()
+                ->assertJsonPath('stats.todayTotal', 1)
+                ->assertJsonPath('stats.callsAnswered', 0)
+                ->assertJsonPath('stats.callSource', 'crm');
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_supervisor_metrics_are_derived_from_the_current_campaign_call_lifecycle(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-26 12:00:00'));

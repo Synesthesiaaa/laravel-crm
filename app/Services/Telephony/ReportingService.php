@@ -9,14 +9,14 @@ class ReportingService
 {
     public function __construct(protected VicidialNonAgentApiService $nonAgentApi) {}
 
-    public function callStatusStats(User $user, string $campaign, array $params): OperationResult
+    public function callStatusStats(User $user, string $campaign, array $params, array $httpOptions = []): OperationResult
     {
         return $this->nonAgentApi->execute($user, $campaign, 'call_status_stats', array_filter([
             'campaigns' => $params['campaigns'] ?? '---ALL---',
             'query_date' => $params['query_date'] ?? now()->format('Y-m-d'),
             'ingroups' => $params['ingroups'] ?? null,
             'statuses' => $params['statuses'] ?? null,
-        ], static fn ($v) => $v !== null && $v !== ''), true);
+        ], static fn ($v) => $v !== null && $v !== ''), true, $httpOptions);
     }
 
     public function callDispoReport(User $user, string $campaign, array $params): OperationResult

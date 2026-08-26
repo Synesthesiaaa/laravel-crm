@@ -106,6 +106,12 @@
             <div class="wallboard-label">Answer Rate</div>
         </div>
     </div>
+    <p class="text-xs text-[var(--color-on-surface-dim)] -mt-4" role="status" aria-live="polite">
+        Call totals from
+        <span class="font-medium text-[var(--color-on-surface-muted)]"
+              x-text="stats.callSource === 'vicidial' ? 'VICIdial daily report' : 'CRM call sessions (fallback)'"></span>
+        · refreshed with the live supervisor feed
+    </p>
 
     <div class="md-card p-4">
         <div class="grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
@@ -309,6 +315,11 @@
                 <div class="wallboard-label">Answer Rate</div>
             </div>
         </div>
+        <p class="text-xs text-[var(--color-on-surface-dim)] -mt-2 mb-4" role="status" aria-live="polite">
+            Call totals from
+            <span class="font-medium text-[var(--color-on-surface-muted)]"
+                  x-text="stats.callSource === 'vicidial' ? 'VICIdial daily report' : 'CRM call sessions (fallback)'"></span>
+        </p>
         <div class="chart-container">
             <p class="chart-title">Real-time Call Volume</p>
             <div id="chart-realtime" style="min-height: 200px;"></div>
@@ -346,7 +357,7 @@ window.supervisorDashboard = function(initialCampaign = '') {
             agentsOnline: 0, callsWaiting: 0, callsActive: 0,
             agentsAvailable: 0, agentsOnCall: 0, agentsPaused: 0,
             avgWaitTime: 0, avgHandleTime: 0, todayTotal: 0,
-            callsAnswered: 0, answerRate: 0, slaPercent: 0, callsByHour: {},
+            callsAnswered: 0, answerRate: 0, slaPercent: 0, callsByHour: {}, callSource: 'crm',
         },
         pollInterval: null,
         _echoUnsubscribe: null,
@@ -409,7 +420,7 @@ window.supervisorDashboard = function(initialCampaign = '') {
                     agentsOnline: 0, callsWaiting: 0, callsActive: 0,
                     agentsAvailable: 0, agentsOnCall: 0, agentsPaused: 0,
                     avgWaitTime: 0, avgHandleTime: 0, todayTotal: 0,
-                    callsAnswered: 0, answerRate: 0, slaPercent: 0, callsByHour: {},
+                    callsAnswered: 0, answerRate: 0, slaPercent: 0, callsByHour: {}, callSource: 'crm',
                 };
                 this.activeCallHistory = [
                     ...this.activeCallHistory,

@@ -103,6 +103,8 @@ class SupervisorAgentsController extends Controller
             ->get()
             ->keyBy('user_id');
 
+        $remoteCallStats = $this->fetchRemoteCallStats($request, $campaign, $server, $today);
+
         $agents = $users->map(function (User $user) use ($campaign, $activeCalls, $todayCallMetrics, $todaysDispositions, $agentNames, $viciSessions, $remoteAgents) {
             $latestLog = $user->attendanceLogs->first();
             $isOnline = $latestLog?->event_type === 'login';
@@ -133,6 +135,7 @@ class SupervisorAgentsController extends Controller
             $averageHandle = $callMetrics['handle_samples'] > 0
                 ? round($callMetrics['handle_seconds'] / $callMetrics['handle_samples'], 1)
                 : 0;
+            $callsToday = $remote['calls_today'] ?? $callMetrics['terminal'];
 
             return [
                 'id' => $user->id,
@@ -140,7 +143,7 @@ class SupervisorAgentsController extends Controller
                 'campaign_code' => $campaign,
                 'status' => $status,
                 'status_label' => $this->statusLabel($status),
-                'calls_today' => $callMetrics['terminal'],
+                'calls_today' => $callsToday,
                 'avg_handle' => $averageHandle,
                 'dispositions' => $dispositions,
                 'since' => $latestLog?->event_time?->format('H:i') ?? '—',
@@ -154,19 +157,23 @@ class SupervisorAgentsController extends Controller
             ];
         });
 
-        $totalToday = (int) $todayCallMetrics->sum('terminal');
-        $answeredToday = (int) $todayCallMetrics->sum('answered_terminal');
+        $crmTotalToday = (int) $todayCallMetrics->sum('terminal');
+        $crmAnsweredToday = (int) $todayCallMetrics->sum('answered_terminal');
         $waitSamples = (int) $todayCallMetrics->sum('wait_samples');
         $waitSeconds = (int) $todayCallMetrics->sum('wait_seconds');
         $handleSamples = (int) $todayCallMetrics->sum('handle_samples');
         $handleSeconds = (int) $todayCallMetrics->sum('handle_seconds');
-        $answerRate = $totalToday > 0 ? round(($answeredToday / $totalToday) * 100, 1) : 0;
+        $crmAnswerRate = $crmTotalToday > 0 ? round(($crmAnsweredToday / $crmTotalToday) * 100, 1) : 0;
         $remoteOnCallCount = $agents->where('status', 'oncall')->count();
-        $callsByHour = $todayCalls
+        $crmCallsByHour = $todayCalls
             ->filter(fn (CallSession $call): bool => $call->dialed_at !== null)
             ->groupBy(fn (CallSession $call): string => $call->dialed_at->format('H'))
             ->map(fn (Collection $calls): int => $calls->count())
             ->all();
+        $totalToday = $remoteCallStats['total'] ?? $crmTotalToday;
+        $answeredToday = $remoteCallStats['answered'] ?? $crmAnsweredToday;
+        $answerRate = $remoteCallStats['answer_rate'] ?? $crmAnswerRate;
+        $callsByHour = $remoteCallStats['calls_by_hour'] ?? $crmCallsByHour;
 
         $stats = [
             'agentsOnline' => $agents->whereIn('status', ['available', 'oncall', 'break', 'wrapup'])->count(),
@@ -181,6 +188,7 @@ class SupervisorAgentsController extends Controller
             'callsAnswered' => $answeredToday,
             'answerRate' => $answerRate,
             'callsByHour' => $callsByHour,
+            'callSource' => $remoteCallStats !== null ? 'vicidial' : 'crm',
             // Keep the legacy key for API consumers while the UI uses the
             // more precise answer-rate label.
             'slaPercent' => $answerRate,
@@ -228,7 +236,7 @@ class SupervisorAgentsController extends Controller
      * The request deliberately asks for all VICIdial campaigns on that server;
      * CRM campaign-to-server mapping is the only routing boundary.
      *
-     * @return array<int, array{status: string, queue_count: int}>
+     * @return array<int, array{status: string, queue_count: int, calls_today: int|null}>
      */
     private function fetchRemoteAgents(Request $request, string $campaign, ?VicidialServer $server): array
     {
@@ -280,6 +288,7 @@ class SupervisorAgentsController extends Controller
 
         $statusIndex = $this->firstHeaderIndex($headerMap, ['status', 'agent_status', 'state']);
         $queueIndex = $this->firstHeaderIndex($headerMap, ['queue_count', 'calls_waiting', 'queue']);
+        $callsTodayIndex = $this->firstHeaderIndex($headerMap, ['calls_today', 'calls', 'total_calls']);
         $candidatesByViciUser = $candidates->keyBy(fn (User $user): string => strtolower(trim((string) $user->vici_user)));
         $remoteAgents = [];
 
@@ -295,6 +304,9 @@ class SupervisorAgentsController extends Controller
                 'queue_count' => $queueIndex !== null && is_numeric($row[$queueIndex] ?? null)
                     ? (int) $row[$queueIndex]
                     : 0,
+                'calls_today' => $callsTodayIndex !== null && is_numeric($row[$callsTodayIndex] ?? null)
+                    ? max(0, (int) $row[$callsTodayIndex])
+                    : null,
             ];
         }
 
@@ -344,6 +356,91 @@ class SupervisorAgentsController extends Controller
             'wrapup' => 'Wrap-up',
             default => 'Offline',
         };
+    }
+
+    /**
+     * Fetch the daily aggregate from the VICIdial server mapped to the CRM
+     * campaign. A null result means the CRM lifecycle data should be used.
+     *
+     * @return array{total: int, answered: int, answer_rate: float|int, calls_by_hour: array<string, int>}|null
+     */
+    private function fetchRemoteCallStats(Request $request, string $campaign, ?VicidialServer $server, Carbon $today): ?array
+    {
+        if ($server === null || trim((string) $server->api_user) === '' || trim((string) $server->api_pass) === '') {
+            return null;
+        }
+
+        $result = $this->reportingService->callStatusStats(
+            $request->user(),
+            $campaign,
+            [
+                'campaigns' => '---ALL---',
+                'query_date' => $today->format('Y-m-d'),
+            ],
+            [
+                'connect_timeout' => 1,
+                'timeout' => 3,
+                'retry_times' => 0,
+            ],
+        );
+        if (! $result->success) {
+            return null;
+        }
+
+        $total = 0;
+        $answered = 0;
+        $validRows = 0;
+        $callsByHour = [];
+        foreach (array_values(array_filter((array) ($result->data['rows'] ?? []), 'is_array')) as $row) {
+            if (! isset($row[1], $row[2]) || ! is_numeric($row[1]) || ! is_numeric($row[2])) {
+                continue;
+            }
+
+            $validRows++;
+            $total += max(0, (int) $row[1]);
+            $answered += max(0, (int) $row[2]);
+            foreach ($this->parseRemoteHourlyBreakdown((string) ($row[3] ?? '')) as $hour => $count) {
+                $callsByHour[$hour] = ($callsByHour[$hour] ?? 0) + $count;
+            }
+        }
+
+        if ($validRows === 0) {
+            return null;
+        }
+
+        return [
+            'total' => $total,
+            'answered' => $answered,
+            'answer_rate' => $total > 0 ? round(($answered / $total) * 100, 1) : 0,
+            'calls_by_hour' => $callsByHour,
+        ];
+    }
+
+    /**
+     * Parse VICIdial's comma-delimited HH-count hourly breakdown.
+     *
+     * @return array<string, int>
+     */
+    private function parseRemoteHourlyBreakdown(string $breakdown): array
+    {
+        $result = [];
+        foreach (explode(',', $breakdown) as $entry) {
+            $parts = explode('-', trim($entry), 2);
+            if (count($parts) !== 2 || ! preg_match('/^\d{1,2}$/', $parts[0]) || ! is_numeric($parts[1])) {
+                continue;
+            }
+
+            $hour = (int) $parts[0];
+            $count = (int) $parts[1];
+            if ($hour < 0 || $hour > 23 || $count < 0) {
+                continue;
+            }
+
+            $key = str_pad((string) $hour, 2, '0', STR_PAD_LEFT);
+            $result[$key] = ($result[$key] ?? 0) + $count;
+        }
+
+        return $result;
     }
 
     /**
