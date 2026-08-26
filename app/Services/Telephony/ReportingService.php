@@ -46,7 +46,7 @@ class ReportingService
         ], static fn ($v) => $v !== null && $v !== ''), true);
     }
 
-    public function loggedInAgents(User $user, string $campaign, array $params): OperationResult
+    public function loggedInAgents(User $user, string $campaign, array $params, array $httpOptions = []): OperationResult
     {
         return $this->nonAgentApi->execute($user, $campaign, 'logged_in_agents', array_filter([
             'campaigns' => $params['campaigns'] ?? null,
@@ -54,7 +54,7 @@ class ReportingService
             'show_sub_status' => $params['show_sub_status'] ?? 'YES',
             'stage' => $params['stage'] ?? 'pipe',
             'header' => $params['header'] ?? 'YES',
-        ], static fn ($v) => $v !== null && $v !== ''), true);
+        ], static fn ($v) => $v !== null && $v !== ''), true, $httpOptions);
     }
 
     public function phoneNumberLog(User $user, string $campaign, string $numbers): OperationResult

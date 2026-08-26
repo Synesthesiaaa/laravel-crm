@@ -20,6 +20,7 @@ class VicidialNonAgentApiService
         string $function,
         array $params = [],
         bool $useServerCredentials = true,
+        array $httpOptions = [],
     ): OperationResult {
         $server = $this->serverRepository->getForCampaign($campaign);
         if (! $server) {
@@ -47,11 +48,11 @@ class VicidialNonAgentApiService
 
         try {
             $response = Http::when(! config('vicidial.verify_ssl', true), fn ($h) => $h->withoutVerifying())
-                ->connectTimeout((int) config('vicidial.connect_timeout', 5))
-                ->timeout((int) config('vicidial.timeout', 10))
+                ->connectTimeout((int) ($httpOptions['connect_timeout'] ?? config('vicidial.connect_timeout', 5)))
+                ->timeout((int) ($httpOptions['timeout'] ?? config('vicidial.timeout', 10)))
                 ->retry(
-                    (int) config('vicidial.retry_times', 2),
-                    (int) config('vicidial.retry_sleep_ms', 500),
+                    (int) ($httpOptions['retry_times'] ?? config('vicidial.retry_times', 2)),
+                    (int) ($httpOptions['retry_sleep_ms'] ?? config('vicidial.retry_sleep_ms', 500)),
                 )
                 ->get($baseUrl, $query);
         } catch (\Throwable $e) {

@@ -45,7 +45,11 @@ class SupervisorTelephonyApiTest extends TestCase
         });
 
         $this->actingAs($supervisor)
-            ->withSession(['campaign' => 'campaign-b', 'campaign_name' => 'Campaign B'])
+            ->withSession([
+                'campaign' => 'campaign-b',
+                'campaign_name' => 'Campaign B',
+                'vicidial_campaign' => 'softcamp',
+            ])
             ->postJson(route('api.supervisor.monitor'), ['agent_user_id' => $agent->id])
             ->assertOk()
             ->assertJsonPath('success', true);

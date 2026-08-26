@@ -21,9 +21,12 @@
         <form method="POST" action="{{ route('admin.vicidial-servers.store') }}"
               x-data="{ submitting: false }" @submit="submitting = true">
             @csrf
+            <p class="text-xs text-[var(--color-on-surface-dim)] mb-4">
+                Assign this server to a CRM campaign. Supervisor monitoring and actions always use this CRM campaign mapping, never the agent's VICIdial campaign.
+            </p>
             <p class="text-xs font-semibold text-[var(--color-on-surface-muted)] mb-3 uppercase tracking-wider">Connection</p>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                <x-form.select name="campaign_code" label="Campaign" required
+                <x-form.select name="campaign_code" label="CRM Campaign" required
                     :options="collect($campaigns)->mapWithKeys(fn($v,$k) => [$k => $v['name'] ?? $k])->all()"
                     :empty="false" />
                 <x-form.input name="server_name" label="Server Name" required placeholder="e.g. Main ViciDial" />
@@ -72,7 +75,7 @@
 
 <x-table.index caption="ViciDial servers">
     <x-table.head :columns="[
-        ['label' => 'Campaign'],
+        ['label' => 'CRM Campaign'],
         ['label' => 'Server Name'],
         ['label' => 'Agent API URL'],
         ['label' => 'Non-Agent API User'],
@@ -143,7 +146,7 @@
                         <div>
                             <p class="text-xs font-semibold text-[var(--color-on-surface-muted)] mb-3 uppercase tracking-wider">Connection</p>
                             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                <x-form.select name="campaign_code" label="Campaign" required
+                                <x-form.select name="campaign_code" label="CRM Campaign" required
                                     :options="collect($campaigns)->mapWithKeys(fn($v,$k) => [$k => $v['name'] ?? $k])->all()"
                                     :selected="$s->campaign_code" :empty="false" />
                                 <x-form.input name="server_name" label="Server Name" :value="old('server_name', $s->server_name)" required />

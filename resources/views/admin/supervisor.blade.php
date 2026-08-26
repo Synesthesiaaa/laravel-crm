@@ -12,7 +12,7 @@
 @endsection
 
 @section('content')
-<div x-data="supervisorDashboard()" x-init="init()" class="space-y-6">
+<div x-data="supervisorDashboard(@js($supervisorCampaign ?? session('campaign', '')))" x-init="init()" class="space-y-6">
 
     <x-page-header title="Supervisor Dashboard" description="Real-time agent monitoring."
         :breadcrumbs="['Admin' => route('admin.dashboard'), 'Supervisor' => null]" />
@@ -32,6 +32,22 @@
             <span x-show="!routing.configured && routing.campaign_code"
                   class="badge badge-warning">Server not configured</span>
         </div>
+        @if(!empty($supervisorCampaigns))
+            <div class="mt-3 max-w-sm">
+                <label class="form-label" for="supervisor-campaign">CRM campaign</label>
+                <select id="supervisor-campaign"
+                        class="form-select"
+                        x-model="selectedCampaign"
+                        @change="changeCampaign()">
+                    @foreach($supervisorCampaigns as $code => $config)
+                        <option value="{{ $code }}">{{ $config['name'] ?? $code }} ({{ $code }})</option>
+                    @endforeach
+                </select>
+                <p class="text-[11px] text-[var(--color-on-surface-dim)] mt-1">
+                    This CRM campaign selects the VICIdial server. The agent's VICIdial campaign is not used for routing.
+                </p>
+            </div>
+        @endif
         <p x-show="routing.message"
            role="alert"
            aria-live="polite"
@@ -313,7 +329,7 @@ function destroySupervisorCharts() {
     window.crmCharts?.destroyGroup?.(SUPERVISOR_CHART_GROUP);
 }
 
-window.supervisorDashboard = function() {
+window.supervisorDashboard = function(initialCampaign = '') {
     return {
         tab: 'agents',
         loading: false,
@@ -327,6 +343,7 @@ window.supervisorDashboard = function() {
         },
         actionPending: {},
         notificationPending: false,
+        selectedCampaign: initialCampaign,
         stats: {
             agentsOnline: 0, callsWaiting: 0, callsActive: 0,
             avgWaitTime: 0, todayTotal: 0, slaPercent: 0,
@@ -379,9 +396,12 @@ window.supervisorDashboard = function() {
             this.loading = true;
             this.errorMessage = '';
             try {
-                const res = await window.axios.get('/api/supervisor/agents');
+                const res = await window.axios.get('/api/supervisor/agents', {
+                    params: { campaign: this.selectedCampaign || initialCampaign },
+                });
                 this.agents = res.data.agents ?? [];
                 this.routing = res.data.routing ?? this.routing;
+                this.selectedCampaign = this.routing.campaign_code || this.selectedCampaign;
                 this.stats  = res.data.stats  ?? {
                     agentsOnline: 0, callsWaiting: 0, callsActive: 0,
                     avgWaitTime: 0, todayTotal: 0, slaPercent: 0,
@@ -397,6 +417,14 @@ window.supervisorDashboard = function() {
             } finally {
                 this.loading = false;
             }
+        },
+
+        changeCampaign() {
+            const url = new URL(@json(route('admin.supervisor')), window.location.origin);
+            if (this.selectedCampaign) {
+                url.searchParams.set('campaign', this.selectedCampaign);
+            }
+            window.location.assign(url.toString());
         },
 
         actionKey(agent, action) {

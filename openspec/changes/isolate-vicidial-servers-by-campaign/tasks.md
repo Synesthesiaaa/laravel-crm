@@ -18,6 +18,7 @@
 - [x] 3.1 Update Supervisor dashboard response handling to display the active campaign/server identity and an actionable unmapped-campaign state without exposing connection details.
 - [x] 3.2 Send campaign context with monitor, whisper, pause, logout, and notification requests; disable unavailable/in-flight actions and report truthful success or failure feedback.
 - [x] 3.3 Add or update render-level tests for the campaign/server context and control states.
+- [x] 3.4 Add CRM campaign selection to Supervisor and use the mapped server's logged-in-agent feed without VICIdial campaign filtering.
 
 ## 4. Validation
 

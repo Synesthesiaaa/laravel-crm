@@ -44,7 +44,10 @@ class VicidialServerAdminTest extends TestCase
         $this->actingAs($this->superAdmin)
             ->withSession($this->campaignSession())
             ->get(route('admin.vicidial-servers.index'))
-            ->assertOk();
+            ->assertOk()
+            ->assertSee('CRM Campaign')
+            ->assertSee('Assign this server to a CRM campaign.', false)
+            ->assertSee("never the agent's VICIdial campaign.", false);
     }
 
     // ── Store ─────────────────────────────────────────────────────────────────

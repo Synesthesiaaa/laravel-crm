@@ -9,7 +9,7 @@ The current database illustrates the unsafe state: `mbsales` has the only active
 **Goals:**
 
 - Treat a campaign's VICIdial server set as an isolation boundary.
-- Route Supervisor reads and actions with the active CRM campaign.
+- Route Supervisor reads and actions with an explicitly selected CRM campaign (falling back to the active CRM session campaign).
 - Make the resolved campaign/server visible without exposing credentials or sensitive URLs.
 - Fail clearly when a campaign is missing a mapping.
 - Preserve the existing per-campaign default and priority rules.
@@ -32,9 +32,9 @@ Alternative considered: retain the cross-campaign default as a last resort. This
 
 ### Use the active CRM campaign for Supervisor scope
 
-`SupervisorAgentsController` will resolve the active CRM session campaign and scope session, call, disposition, and aggregate queries to it. The response will include a top-level routing context containing the campaign code/name, configured state, and non-sensitive server identity. Agent items will carry the same campaign code so the existing Alpine controls can submit it explicitly.
+`SupervisorAgentsController` will resolve the requested CRM campaign query parameter, then the active CRM session campaign, and scope session, call, disposition, and aggregate queries to it. The response will include a top-level routing context containing the campaign code/name, configured state, and non-sensitive server identity. Agent items will carry the same campaign code so the existing Alpine controls can submit it explicitly. When the selected server has Non-Agent credentials, its logged-in-agent feed is requested across all VICIdial campaigns and matched to known CRM users by VICIdial username, so a different VICIdial campaign does not hide an agent on the correctly mapped server.
 
-Alternative considered: combine agents from all campaigns in one response and route every card independently. This was deferred because the application already has a global campaign selector, and a combined wallboard would require additional filtering, aggregation, and interaction design beyond the requested fix.
+Alternative considered: combine agents from all CRM campaigns in one response and route every card independently. This was deferred because the Supervisor now has an explicit CRM campaign selector, and a combined wallboard would require additional filtering, aggregation, and interaction design beyond the requested fix.
 
 ### Require campaign context on Supervisor telephony actions
 
