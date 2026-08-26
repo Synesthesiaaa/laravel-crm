@@ -79,7 +79,7 @@
         </div>
     </div>
 
-    {{-- Wallboard KPIs --}}
+    {{-- Operational KPIs --}}
     <div class="wallboard animate-stagger">
         <div class="wallboard-metric">
             <div class="wallboard-value" x-text="stats.agentsOnline">—</div>
@@ -90,33 +90,24 @@
             <div class="wallboard-label">Available</div>
         </div>
         <div class="wallboard-metric">
-            <div class="wallboard-value" x-text="stats.agentsPaused">0</div>
-            <div class="wallboard-label">On Break</div>
+            <div class="wallboard-value" x-text="stats.agentsOnCall">0</div>
+            <div class="wallboard-label">On Call</div>
         </div>
-        <div class="wallboard-metric" :class="{ 'wallboard-alert': stats.callsWaiting > 5 }">
+        <div class="wallboard-metric">
+            <div class="wallboard-value" x-text="stats.agentsPaused">0</div>
+            <div class="wallboard-label">Paused</div>
+        </div>
+        <div class="wallboard-metric" :class="{ 'wallboard-alert': ['WARNING', 'CRITICAL'].includes(stats.queue?.health) }">
             <div class="wallboard-value" x-text="stats.callsWaiting">—</div>
             <div class="wallboard-label">Calls Waiting</div>
         </div>
         <div class="wallboard-metric">
-            <div class="wallboard-value" x-text="stats.callsActive">—</div>
-            <div class="wallboard-label">Active Calls</div>
+            <div class="wallboard-value" x-text="formatSeconds(stats.oldestWaitSeconds)">—</div>
+            <div class="wallboard-label">Oldest Wait</div>
         </div>
         <div class="wallboard-metric">
-            <div class="wallboard-value" x-text="stats.avgWaitTime">—</div>
-            <div class="wallboard-label">Avg Wait (s)</div>
-        </div>
-        <div class="wallboard-metric">
-            <div class="wallboard-value" x-text="stats.avgHandleTime">0</div>
-            <div class="wallboard-label"
-                 x-text="stats.performanceSource === 'vicidial' ? 'Avg Talk (s)' : (stats.performanceSource === 'mixed' ? 'Avg Talk / Handle (s)' : 'Avg Handle (s)')"></div>
-        </div>
-        <div class="wallboard-metric">
-            <div class="wallboard-value" x-text="stats.todayTotal">—</div>
-            <div class="wallboard-label">Today's Calls</div>
-        </div>
-        <div class="wallboard-metric">
-            <div class="wallboard-value" x-text="stats.answerRate + '%'">—</div>
-            <div class="wallboard-label">Answer Rate</div>
+            <div class="wallboard-value" x-text="formatSeconds(stats.avgWaitTime)">—</div>
+            <div class="wallboard-label">Average Wait</div>
         </div>
     </div>
     <p class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--color-on-surface-dim)] -mt-4"
@@ -125,6 +116,11 @@
             Live state:
             <span class="font-medium text-[var(--color-on-surface-muted)]"
                   x-text="stats.realtimeSource === 'vicidial' ? 'VICIdial real-time report' : (stats.realtimeSource === 'mixed' ? 'VICIdial with CRM fallback' : 'CRM session fallback')"></span>
+        </span>
+        <span>
+            Queue health:
+            <span class="font-medium text-[var(--color-on-surface-muted)]"
+                  x-text="stats.queue?.health_label || 'Unknown'"></span>
         </span>
         <span>
             Agent timing:
@@ -171,25 +167,25 @@
 
     {{-- Tabs --}}
     <div class="flex gap-2 border-b border-[var(--color-border)]" role="tablist">
-        <button class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
+        <button id="supervisor-tab-agents" class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
                 :class="tab === 'agents' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'"
-                @click="tab = 'agents'" role="tab">
-            Agent Status Grid
+                @click="tab = 'agents'" role="tab" :aria-selected="tab === 'agents'" aria-controls="supervisor-panel-agents">
+            Agent Status
         </button>
-        <button class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
-                :class="tab === 'performance' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'"
-                @click="tab = 'performance'" role="tab">
-            Performance Metrics
+        <button id="supervisor-tab-queue" class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
+                :class="tab === 'queue' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'"
+                @click="tab = 'queue'" role="tab" :aria-selected="tab === 'queue'" aria-controls="supervisor-panel-queue">
+            Queue Monitor
         </button>
-        <button class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
+        <button id="supervisor-tab-wallboard" class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
                 :class="tab === 'wallboard' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'"
-                @click="tab = 'wallboard'" role="tab">
+                @click="tab = 'wallboard'" role="tab" :aria-selected="tab === 'wallboard'" aria-controls="supervisor-panel-wallboard">
             Live Wallboard
         </button>
     </div>
 
-    {{-- Agent Status Grid --}}
-    <div x-show="tab === 'agents'" role="tabpanel">
+    {{-- Agent Status --}}
+    <div id="supervisor-panel-agents" x-show="tab === 'agents'" role="tabpanel" aria-labelledby="supervisor-tab-agents">
         <div class="flex items-center justify-between mb-4">
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">
                 Agent Status — <span x-text="agents.length + ' agents'" class="text-[var(--color-primary)]"></span>
@@ -219,30 +215,30 @@
             <template x-for="agent in agents" :key="agent.id">
                 <div class="agent-card"
                      :class="{
-                         'agent-card-available': agent.status === 'available',
-                         'agent-card-oncall':    agent.status === 'oncall',
-                         'agent-card-break':     agent.status === 'break',
-                         'agent-card-wrapup':    agent.status === 'wrapup',
+                         'agent-card-available': agent.state === 'AVAILABLE',
+                         'agent-card-oncall':    ['ON_CALL', 'RINGING'].includes(agent.state),
+                         'agent-card-break':     agent.state === 'PAUSED',
+                         'agent-card-wrapup':    agent.state === 'QUEUE',
                      }">
                     <div class="flex items-center justify-between">
                         <span class="font-semibold text-sm text-[var(--color-on-surface)] truncate" x-text="agent.name"></span>
                         <span class="badge text-xs"
                               :class="{
-                                  'badge-active':   agent.status === 'available',
-                                  'badge-error':    agent.status === 'oncall',
-                                  'badge-warning':  agent.status === 'break',
-                                  'badge-pending':  agent.status === 'wrapup',
-                                  'badge-inactive': agent.status === 'offline',
+                                  'badge-active':   agent.state === 'AVAILABLE',
+                                  'badge-error':    ['ON_CALL', 'RINGING'].includes(agent.state),
+                                  'badge-warning':  agent.state === 'PAUSED',
+                                  'badge-pending':  agent.state === 'QUEUE',
+                                  'badge-inactive': ['OFFLINE', 'UNKNOWN'].includes(agent.state),
                               }"
                               x-text="agent.status_label">
                         </span>
                     </div>
-                    <p class="text-xs text-[var(--color-on-surface-dim)]" x-text="agent.current_call ? (agent.current_call.phone_number + ' · ' + agent.current_call.duration + 's') : '—'"></p>
+                    <p class="text-xs text-[var(--color-on-surface-dim)]" x-text="agent.current_call ? (agent.current_call.phone_number + ' · ' + formatSeconds(agent.current_call.duration)) : (agent.state === 'AVAILABLE' ? 'Ready for next call' : '—')"></p>
                     <div class="flex items-center justify-between mt-1">
-                        <span class="text-xs text-[var(--color-on-surface-dim)]" x-text="agent.calls_today + ' calls today'"></span>
-                        <span class="text-xs font-mono text-[var(--color-on-surface-muted)]" x-text="agent.since"></span>
+                        <span class="text-xs text-[var(--color-on-surface-dim)]" x-text="agent.calls_since_login + ' calls since login'"></span>
+                        <span class="text-xs font-mono text-[var(--color-on-surface-muted)]" x-text="agent.state_duration_seconds == null ? '—' : formatSeconds(agent.state_duration_seconds)"></span>
                     </div>
-                    <div class="text-[11px] text-[var(--color-on-surface-dim)] mt-1" x-text="'Vici: ' + (agent.vici_status || 'unknown') + ' · Queue: ' + (agent.queue_count ?? 0)"></div>
+                    <div class="text-[11px] text-[var(--color-on-surface-dim)] mt-1" x-text="'State: ' + agent.state_label + ' · Vici: ' + (agent.vici_status || 'unknown')"></div>
                 </div>
             </template>
         </div>
@@ -254,50 +250,60 @@
         </template>
     </div>
 
-    {{-- Performance Metrics --}}
-    <div x-show="tab === 'performance'" role="tabpanel">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="chart-container">
-                <p class="chart-title">Agent Performance — Today</p>
-                <div id="chart-agent-perf" style="min-height: 260px;"></div>
+    {{-- Queue Monitor --}}
+    <div id="supervisor-panel-queue" x-show="tab === 'queue'" role="tabpanel" aria-labelledby="supervisor-tab-queue">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="md-card p-4">
+                <p class="text-xs text-[var(--color-on-surface-dim)]">Queue health</p>
+                <p class="mt-2 text-xl font-bold" :class="stats.queue?.health === 'CRITICAL' ? 'text-[var(--color-danger)]' : (stats.queue?.health === 'WARNING' ? 'text-[var(--color-warning)]' : (stats.queue?.health === 'HEALTHY' ? 'text-[var(--color-success)]' : 'text-[var(--color-on-surface-muted)]'))" x-text="stats.queue?.health_label || 'Unknown'"></p>
             </div>
-            <div class="chart-container">
-                <p class="chart-title">Call Volume — Hourly</p>
-                <div id="chart-hourly" style="min-height: 260px;"></div>
+            <div class="md-card p-4">
+                <p class="text-xs text-[var(--color-on-surface-dim)]">Calls waiting</p>
+                <p class="mt-2 text-xl font-bold" x-text="stats.callsWaiting ?? '—'"></p>
+            </div>
+            <div class="md-card p-4">
+                <p class="text-xs text-[var(--color-on-surface-dim)]">Oldest wait</p>
+                <p class="mt-2 text-xl font-bold" x-text="formatSeconds(stats.oldestWaitSeconds)"></p>
+            </div>
+            <div class="md-card p-4">
+                <p class="text-xs text-[var(--color-on-surface-dim)]">Average wait</p>
+                <p class="mt-2 text-xl font-bold" x-text="formatSeconds(stats.avgWaitTime)"></p>
+            </div>
+            <div class="md-card p-4">
+                <p class="text-xs text-[var(--color-on-surface-dim)]">Available agents</p>
+                <p class="mt-2 text-xl font-bold" x-text="stats.agentsAvailable"></p>
+            </div>
+            <div class="md-card p-4">
+                <p class="text-xs text-[var(--color-on-surface-dim)]">Active calls</p>
+                <p class="mt-2 text-xl font-bold" x-text="stats.callsActive ?? '—'"></p>
+            </div>
+            <div class="md-card p-4 col-span-2">
+                <p class="text-xs text-[var(--color-on-surface-dim)]">Queue window</p>
+                <p class="mt-2 text-sm font-medium" x-text="(stats.queue?.window_minutes || 15) + ' minute rolling view · ' + (stats.queue?.abandoned_last_15m == null ? 'Abandoned calls unavailable' : stats.queue.abandoned_last_15m + ' abandoned')"></p>
             </div>
         </div>
-        <div class="mt-6">
-            <x-table.index caption="Agent performance table">
-                <x-table.head :columns="[
-                    ['label' => 'Agent'],
-                    ['label' => 'Status'],
-                    ['label' => 'Calls Today', 'align' => 'right'],
-                    ['label' => 'Avg Talk / Handle (s)', 'align' => 'right'],
-                    ['label' => 'Dispositions', 'align' => 'right'],
-                    ['label' => 'Since'],
-                ]" />
-                <tbody>
-                    <template x-for="agent in agents" :key="agent.id">
-                        <tr>
-                            <td x-text="agent.name" class="font-medium"></td>
-                            <td>
-                                <span class="badge"
-                                      :class="{
-                                          'badge-active':   agent.status === 'available',
-                                          'badge-error':    agent.status === 'oncall',
-                                          'badge-warning':  agent.status === 'break',
-                                          'badge-inactive': agent.status === 'offline',
-                                      }"
-                                      x-text="agent.status_label"></span>
-                            </td>
-                            <td class="text-right font-semibold" x-text="agent.calls_today"></td>
-                            <td class="text-right font-mono text-sm" x-text="agent.avg_handle + 's'"></td>
-                            <td class="text-right" x-text="agent.dispositions"></td>
-                            <td class="text-[var(--color-on-surface-dim)] text-sm" x-text="agent.since"></td>
-                        </tr>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="chart-container">
+                <p class="chart-title">Queue pressure — last 15 minutes</p>
+                <div id="chart-queue-pressure" style="min-height: 260px;"></div>
+            </div>
+            <div class="md-card p-4">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Operational attention</h3>
+                        <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">Conditions that may need supervisor intervention.</p>
+                    </div>
+                    <span class="badge" :class="stats.queue?.health === 'CRITICAL' ? 'badge-error' : (stats.queue?.health === 'WARNING' ? 'badge-warning' : (stats.queue?.health === 'HEALTHY' ? 'badge-active' : 'badge-inactive'))" x-text="stats.queue?.health_label || 'Unknown'"></span>
+                </div>
+                <ul class="mt-4 space-y-2 text-sm" x-show="stats.queue?.reasons?.length">
+                    <template x-for="reason in (stats.queue?.reasons || [])" :key="reason">
+                        <li class="flex gap-2 text-[var(--color-on-surface-muted)]"><span aria-hidden="true">•</span><span x-text="reason"></span></li>
                     </template>
-                </tbody>
-            </x-table.index>
+                </ul>
+                <p class="mt-4 text-sm text-[var(--color-on-surface-dim)]" x-show="!stats.queue?.reasons?.length">
+                    No active queue exceptions reported.
+                </p>
+            </div>
         </div>
     </div>
 
@@ -313,33 +319,24 @@
                 <div class="wallboard-label">Available</div>
             </div>
             <div class="wallboard-metric">
-                <div class="wallboard-value text-4xl" x-text="stats.agentsPaused">0</div>
-                <div class="wallboard-label">On Break</div>
+                <div class="wallboard-value text-4xl" x-text="stats.agentsOnCall">0</div>
+                <div class="wallboard-label">On Call</div>
             </div>
-            <div class="wallboard-metric" :class="{ 'wallboard-alert': stats.callsWaiting > 5 }">
+            <div class="wallboard-metric">
+                <div class="wallboard-value text-4xl" x-text="stats.agentsPaused">0</div>
+                <div class="wallboard-label">Paused</div>
+            </div>
+            <div class="wallboard-metric" :class="{ 'wallboard-alert': ['WARNING', 'CRITICAL'].includes(stats.queue?.health) }">
                 <div class="wallboard-value text-4xl" x-text="stats.callsWaiting">0</div>
                 <div class="wallboard-label">In Queue</div>
             </div>
             <div class="wallboard-metric">
-                <div class="wallboard-value text-4xl" x-text="stats.callsActive">0</div>
-                <div class="wallboard-label">On Call</div>
+                <div class="wallboard-value text-4xl" x-text="formatSeconds(stats.oldestWaitSeconds)">—</div>
+                <div class="wallboard-label">Oldest Wait</div>
             </div>
             <div class="wallboard-metric">
-                <div class="wallboard-value text-4xl" x-text="stats.todayTotal">0</div>
-                <div class="wallboard-label">Total Today</div>
-            </div>
-            <div class="wallboard-metric">
-                <div class="wallboard-value text-4xl" x-text="stats.avgWaitTime + 's'">0s</div>
-                <div class="wallboard-label">Avg Wait</div>
-            </div>
-            <div class="wallboard-metric">
-                <div class="wallboard-value text-4xl" x-text="stats.avgHandleTime + 's'">0s</div>
-                <div class="wallboard-label"
-                     x-text="stats.performanceSource === 'vicidial' ? 'Avg Talk' : (stats.performanceSource === 'mixed' ? 'Avg Talk / Handle' : 'Avg Handle')"></div>
-            </div>
-            <div class="wallboard-metric">
-                <div class="wallboard-value text-4xl" x-text="stats.answerRate + '%'">0%</div>
-                <div class="wallboard-label">Answer Rate</div>
+                <div class="wallboard-value text-4xl" x-text="formatSeconds(stats.avgWaitTime)">—</div>
+                <div class="wallboard-label">Average Wait</div>
             </div>
         </div>
         <p class="text-xs text-[var(--color-on-surface-dim)] -mt-2 mb-4" role="status" aria-live="polite">
@@ -354,7 +351,7 @@
                   x-text="stats.callSource === 'vicidial' ? 'VICIdial daily report' : 'CRM call-session fallback'"></span>
         </p>
         <div class="chart-container">
-            <p class="chart-title">Real-time Call Volume</p>
+            <p class="chart-title">Calls waiting — last 15 minutes</p>
             <div id="chart-realtime" style="min-height: 200px;"></div>
         </div>
     </div>
@@ -365,6 +362,8 @@
 @push('scripts')
 <script>
 const SUPERVISOR_CHART_GROUP = 'supervisor';
+const SUPERVISOR_POLL_SECONDS = Math.max(1, @json((int) config('vicidial.supervisor.poll_seconds', 15)));
+const SUPERVISOR_QUEUE_HISTORY_LENGTH = Math.max(20, Math.ceil((15 * 60) / SUPERVISOR_POLL_SECONDS));
 
 function destroySupervisorCharts() {
     window.crmCharts?.destroyGroup?.(SUPERVISOR_CHART_GROUP);
@@ -385,13 +384,14 @@ window.supervisorDashboard = function(initialCampaign = '') {
         },
         notificationPending: false,
         refreshInFlight: false,
-        activeCallHistory: [],
+        queueHistory: [],
         selectedCampaign: initialCampaign,
         stats: {
             agentsOnline: 0, callsWaiting: 0, callsActive: 0,
             agentsAvailable: 0, agentsOnCall: 0, agentsPaused: 0,
-            avgWaitTime: 0, avgHandleTime: 0, todayTotal: 0,
+            avgWaitTime: null, oldestWaitSeconds: null, avgHandleTime: null, todayTotal: 0,
             callsAnswered: 0, answerRate: 0, slaPercent: 0, callsByHour: {},
+            queue: { health: 'UNKNOWN', health_label: 'Unknown', reasons: [], window_minutes: 15 },
             callSource: 'crm', realtimeSource: 'crm', performanceSource: 'crm',
         },
         pollInterval: null,
@@ -405,6 +405,13 @@ window.supervisorDashboard = function(initialCampaign = '') {
         errorMessage: '',
         lastRefreshAt: '',
 
+        formatSeconds(value) {
+            if (value === null || value === undefined || value === '') return '—';
+            const seconds = Math.max(0, Math.round(Number(value)));
+            if (seconds < 60) return `${seconds}s`;
+            return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, '0')}s`;
+        },
+
         async init() {
             await this.refresh();
             const te = window.TelephonyEcho;
@@ -414,12 +421,12 @@ window.supervisorDashboard = function(initialCampaign = '') {
                     () => this.refresh(),
                     () => this.refresh()
                 );
-                this.pollInterval = setInterval(() => this.refresh(), 15000);
+                this.pollInterval = setInterval(() => this.refresh(), SUPERVISOR_POLL_SECONDS * 1000);
             } else {
-                this.pollInterval = setInterval(() => this.refresh(), 15000);
+                this.pollInterval = setInterval(() => this.refresh(), SUPERVISOR_POLL_SECONDS * 1000);
             }
             this.$watch('tab', (t) => {
-                if (t === 'performance' || t === 'wallboard') this.renderCharts();
+                if (t === 'queue' || t === 'wallboard') this.renderCharts();
             });
         },
 
@@ -454,18 +461,19 @@ window.supervisorDashboard = function(initialCampaign = '') {
                 this.stats  = res.data.stats  ?? {
                     agentsOnline: 0, callsWaiting: 0, callsActive: 0,
                     agentsAvailable: 0, agentsOnCall: 0, agentsPaused: 0,
-                    avgWaitTime: 0, avgHandleTime: 0, todayTotal: 0,
+                    avgWaitTime: null, oldestWaitSeconds: null, avgHandleTime: null, todayTotal: 0,
                     callsAnswered: 0, answerRate: 0, slaPercent: 0, callsByHour: {},
+                    queue: { health: 'UNKNOWN', health_label: 'Unknown', reasons: [], window_minutes: 15 },
                     callSource: 'crm', realtimeSource: 'crm', performanceSource: 'crm',
                 };
-                this.activeCallHistory = [
-                    ...this.activeCallHistory,
-                    Number(this.stats.callsActive || 0),
-                ].slice(-20);
+                this.queueHistory = [
+                    ...this.queueHistory,
+                    this.stats.callsWaiting == null ? null : Number(this.stats.callsWaiting),
+                ].slice(-SUPERVISOR_QUEUE_HISTORY_LENGTH);
                 this.lastRefreshAt = res.data.stats?.updatedAt
                     ? new Date(res.data.stats.updatedAt).toLocaleTimeString()
                     : new Date().toLocaleTimeString();
-                if (this.tab === 'performance' || this.tab === 'wallboard') {
+                if (this.tab === 'queue' || this.tab === 'wallboard') {
                     this.renderCharts();
                 }
             } catch (e) {
@@ -520,57 +528,37 @@ window.supervisorDashboard = function(initialCampaign = '') {
             const textColor = isDark ? '#a1a1aa' : '#52525b';
             const gridColor = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
 
-            const performanceAgents = this.agents.filter(a => a.status !== 'offline' || Number(a.calls_today || 0) > 0);
-            const names = performanceAgents.map(a => a.name.split(' ')[0]);
-            const callsArr = performanceAgents.map(a => a.calls_today);
             const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-            const currentHour = new Date().getHours();
-            const hourlyLabels = Array.from({ length: 12 }, (_, i) => String((currentHour - 11 + i + 24) % 24).padStart(2, '0'));
-            const hourlyData = hourlyLabels.map((hour) => Number(this.stats.callsByHour?.[hour] || 0));
+            const queueData = this.queueHistory.map(value => value == null ? 0 : value);
+            const queueLabels = this.queueHistory.map((_, index) => `${(index + 1) * SUPERVISOR_POLL_SECONDS}s`);
 
-            if (this.tab === 'performance' && document.getElementById('chart-agent-perf')) {
-                document.getElementById('chart-agent-perf').innerHTML = '';
-                const perfChart = new ApexCharts(document.getElementById('chart-agent-perf'), {
-                    series: [{ name: 'Calls Today', data: callsArr }],
-                    chart: { type: 'bar', height: 260, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
-                    colors: ['#e91e8c'],
-                    plotOptions: { bar: { borderRadius: 5, columnWidth: '50%' } },
-                    xaxis: { categories: names, labels: { style: { colors: textColor, fontSize: '11px' } }, axisBorder: { show: false } },
-                    yaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
-                    grid: { borderColor: gridColor, strokeDashArray: 3 },
-                    tooltip: { theme: isDark ? 'dark' : 'light' },
-                    dataLabels: { enabled: false },
-                    theme: { mode: isDark ? 'dark' : 'light' },
-                });
-                window.crmCharts?.register?.(SUPERVISOR_CHART_GROUP, 'agent-perf', perfChart);
-                await perfChart.render();
-
-                document.getElementById('chart-hourly').innerHTML = '';
-                const hourlyChart = new ApexCharts(document.getElementById('chart-hourly'), {
-                    series: [{ name: 'Calls', data: hourlyData }],
-                    chart: { type: 'area', height: 260, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
-                    colors: ['#3b82f6'],
+            if (this.tab === 'queue' && document.getElementById('chart-queue-pressure')) {
+                document.getElementById('chart-queue-pressure').innerHTML = '';
+                const queueChart = new ApexCharts(document.getElementById('chart-queue-pressure'), {
+                    series: [{ name: 'Calls waiting', data: queueData }],
+                    chart: { type: 'area', height: 260, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif', animations: { enabled: !reduceMotion } },
+                    colors: ['#f59e0b'],
                     fill: { type: 'gradient', gradient: { opacityFrom: .3, opacityTo: .03 } },
                     stroke: { curve: 'smooth', width: 2 },
-                    xaxis: { categories: hourlyLabels, labels: { style: { colors: textColor, fontSize: '11px' } }, axisBorder: { show: false } },
+                    xaxis: { categories: queueLabels, labels: { style: { colors: textColor, fontSize: '11px' } }, axisBorder: { show: false } },
                     yaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
                     grid: { borderColor: gridColor, strokeDashArray: 3 },
                     tooltip: { theme: isDark ? 'dark' : 'light' },
                     dataLabels: { enabled: false },
                     theme: { mode: isDark ? 'dark' : 'light' },
                 });
-                window.crmCharts?.register?.(SUPERVISOR_CHART_GROUP, 'hourly', hourlyChart);
-                await hourlyChart.render();
+                window.crmCharts?.register?.(SUPERVISOR_CHART_GROUP, 'queue-pressure', queueChart);
+                await queueChart.render();
             }
 
             if (this.tab === 'wallboard' && document.getElementById('chart-realtime')) {
                 document.getElementById('chart-realtime').innerHTML = '';
                 const sparkData = [
-                    ...Array(Math.max(0, 20 - this.activeCallHistory.length)).fill(0),
-                    ...this.activeCallHistory,
+                    ...Array(Math.max(0, SUPERVISOR_QUEUE_HISTORY_LENGTH - this.queueHistory.length)).fill(0),
+                    ...this.queueHistory.map(value => value == null ? 0 : value),
                 ];
                 const realtimeChart = new ApexCharts(document.getElementById('chart-realtime'), {
-                    series: [{ name: 'Calls/min', data: sparkData }],
+                    series: [{ name: 'Calls waiting', data: sparkData }],
                     chart: { type: 'line', height: 200, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif', animations: { enabled: !reduceMotion, dynamicAnimation: { speed: 350 } } },
                     colors: ['#22c55e'],
                     stroke: { curve: 'smooth', width: 3 },

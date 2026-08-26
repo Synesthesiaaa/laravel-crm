@@ -53,6 +53,38 @@ return [
         static fn ($code) => trim((string) $code),
         explode(',', (string) env('VICI_REPORT_SYSTEM_DISPOSITION_CODES', '')),
     ))),
+    'report_disposition_groups' => [
+        'contacted' => array_values(array_filter(array_map(
+            static fn ($code) => trim((string) $code),
+            explode(',', (string) env('VICI_REPORT_CONTACT_DISPOSITION_CODES', '')),
+        ))),
+        'qualified' => array_values(array_filter(array_map(
+            static fn ($code) => trim((string) $code),
+            explode(',', (string) env('VICI_REPORT_QUALIFIED_DISPOSITION_CODES', '')),
+        ))),
+        'successful' => array_values(array_filter(array_map(
+            static fn ($code) => trim((string) $code),
+            explode(',', (string) env('VICI_REPORT_SUCCESS_DISPOSITION_CODES', '')),
+        ))),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Supervisor operational thresholds
+    |--------------------------------------------------------------------------
+    | These values are deliberately conservative defaults. A queue is unknown
+    | when the required signal is not returned by VICIdial or CRM fallback.
+    */
+    'supervisor' => [
+        'poll_seconds' => (int) env('VICI_SUPERVISOR_POLL_SECONDS', 15),
+        'queue' => [
+            'warning_waiting_calls' => (int) env('VICI_QUEUE_WARNING_WAITING_CALLS', 5),
+            'critical_waiting_calls' => (int) env('VICI_QUEUE_CRITICAL_WAITING_CALLS', 10),
+            'warning_oldest_wait_seconds' => (int) env('VICI_QUEUE_WARNING_OLDEST_WAIT_SECONDS', 60),
+            'critical_oldest_wait_seconds' => (int) env('VICI_QUEUE_CRITICAL_OLDEST_WAIT_SECONDS', 180),
+            'warning_no_available_agents' => (int) env('VICI_QUEUE_WARNING_NO_AVAILABLE_AGENTS', 1),
+        ],
+    ],
 
     /*
     |--------------------------------------------------------------------------

@@ -87,7 +87,10 @@ class SupervisorAgentsApiTest extends TestCase
             ->assertJsonPath('routing.campaign_name', 'Campaign A')
             ->assertJsonPath('routing.server_name', 'Campaign A VICIdial')
             ->assertJsonPath('stats.todayTotal', 1)
+            ->assertJsonPath('stats.queue.health', 'HEALTHY')
+            ->assertJsonPath('stats.queue.active_calls', 0)
             ->assertJsonPath('agents.0.campaign_code', 'campaign-a')
+            ->assertJsonPath('agents.0.state', 'AVAILABLE')
             ->assertJsonPath('agents.0.queue_count', 4)
             ->assertJsonPath('agents.0.dispositions', 1);
     }
@@ -105,6 +108,7 @@ class SupervisorAgentsApiTest extends TestCase
             ->assertJsonPath('routing.campaign_code', 'campaign-a')
             ->assertJsonPath('routing.configured', false)
             ->assertJsonPath('routing.message', "No VICIdial server is configured for campaign 'campaign-a'.")
+            ->assertJsonPath('stats.queue.health', 'UNKNOWN')
             ->assertJsonMissingPath('routing.api_url')
             ->assertJsonMissingPath('routing.api_pass');
     }
@@ -319,6 +323,8 @@ class SupervisorAgentsApiTest extends TestCase
                 ->assertJsonPath('stats.agentsPaused', 0)
                 ->assertJsonPath('stats.callsWaiting', 3)
                 ->assertJsonPath('stats.callsActive', 1)
+                ->assertJsonPath('stats.queue.health', 'HEALTHY')
+                ->assertJsonPath('stats.queue.active_calls', 1)
                 ->assertJsonPath('stats.avgWaitTime', 30)
                 ->assertJsonPath('stats.avgHandleTime', 120)
                 ->assertJsonPath('stats.todayTotal', 9)
@@ -329,6 +335,7 @@ class SupervisorAgentsApiTest extends TestCase
                 ->assertJsonPath('routing.reporting_status', 'live')
                 ->assertJsonPath('routing.message', null)
                 ->assertJsonPath('agents.0.id', $remoteAgent->id)
+                ->assertJsonPath('agents.0.state', 'RINGING')
                 ->assertJsonPath('agents.0.status', 'oncall')
                 ->assertJsonPath('agents.0.calls_today', 4)
                 ->assertJsonPath('agents.0.avg_handle', 120)

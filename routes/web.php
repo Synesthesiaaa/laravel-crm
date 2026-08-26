@@ -104,6 +104,7 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::post('api/leads/switch', [\App\Http\Controllers\Api\LeadController::class, 'switch'])->name('api.leads.switch')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
     Route::post('api/leads/update-fields', [\App\Http\Controllers\Api\LeadController::class, 'updateFields'])->name('api.leads.update-fields')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
     Route::get('api/reports/call-status-stats', [\App\Http\Controllers\Api\ReportingController::class, 'callStatusStats'])->name('api.reports.call-status-stats')->middleware('throttle:api');
+    Route::get('api/reports/dashboard', [\App\Http\Controllers\Api\ReportingController::class, 'dashboard'])->name('api.reports.dashboard')->middleware('throttle:api');
     Route::get('api/reports/call-dispo-report', [\App\Http\Controllers\Api\ReportingController::class, 'callDispoReport'])->name('api.reports.call-dispo-report')->middleware('throttle:api');
     Route::get('api/reports/agent-stats', [\App\Http\Controllers\Api\ReportingController::class, 'agentStats'])->name('api.reports.agent-stats')->middleware('throttle:api');
     Route::get('api/reports/logged-in-agents', [\App\Http\Controllers\Api\ReportingController::class, 'loggedInAgents'])->name('api.reports.logged-in-agents')->middleware('throttle:api');

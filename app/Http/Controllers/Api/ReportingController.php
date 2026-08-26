@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\Telephony\HistoricalTelephonyReportService;
 use App\Services\Telephony\ReportingService;
 use App\Services\Telephony\TelephonyCampaignResolver;
 use Illuminate\Http\JsonResponse;
@@ -10,6 +11,29 @@ use Illuminate\Http\Request;
 
 class ReportingController extends Controller
 {
+    public function dashboard(Request $request, HistoricalTelephonyReportService $service): JsonResponse
+    {
+        $validated = $request->validate([
+            'campaigns' => ['nullable', 'string', 'max:255'],
+            'ingroups' => ['nullable', 'string', 'max:255'],
+            'query_date' => ['nullable', 'date_format:Y-m-d'],
+            'end_date' => ['nullable', 'date_format:Y-m-d'],
+            'disposition_scope' => ['nullable', 'in:all,exclude_system,system_only'],
+            'comparison' => ['nullable', 'in:none,previous_period,previous_day,previous_week,previous_month'],
+        ]);
+        $data = $service->dashboard(
+            $request->user(),
+            $this->campaign($request),
+            $validated,
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => null,
+            'data' => $data,
+        ]);
+    }
+
     public function callStatusStats(Request $request, ReportingService $service): JsonResponse
     {
         return $this->respond($service->callStatusStats($request->user(), $this->campaign($request), $request->all()));

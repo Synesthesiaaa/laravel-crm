@@ -14,6 +14,7 @@ class ReportingService
         return $this->nonAgentApi->execute($user, $campaign, 'call_status_stats', array_filter([
             'campaigns' => $params['campaigns'] ?? '---ALL---',
             'query_date' => $params['query_date'] ?? now()->format('Y-m-d'),
+            'end_date' => $params['end_date'] ?? null,
             'ingroups' => $params['ingroups'] ?? null,
             'statuses' => $params['statuses'] ?? null,
         ], static fn ($v) => $v !== null && $v !== ''), true, $httpOptions);
@@ -93,6 +94,55 @@ class ReportingService
                     'campaigns' => '---ALL---',
                     'query_date' => $queryDate,
                 ],
+            ],
+        ], true, $httpOptions);
+    }
+
+    /**
+     * Fetch the independent historical report sources in one server-scoped
+     * batch so the Reports dashboard does not create a request waterfall.
+     *
+     * @param  array<string, mixed>  $params
+     * @param  array<string, int>  $httpOptions
+     * @return array<string, OperationResult>
+     */
+    public function historicalSnapshot(User $user, string $campaign, array $params, array $httpOptions = []): array
+    {
+        return $this->nonAgentApi->executeBatch($user, $campaign, [
+            'call_status' => [
+                'function' => 'call_status_stats',
+                'params' => array_filter([
+                    'campaigns' => $params['campaigns'] ?? '---ALL---',
+                    'query_date' => $params['query_date'] ?? now()->format('Y-m-d'),
+                    'end_date' => $params['end_date'] ?? null,
+                    'ingroups' => $params['ingroups'] ?? null,
+                    'statuses' => $params['statuses'] ?? null,
+                ], static fn (mixed $value): bool => $value !== null && $value !== ''),
+            ],
+            'agent_stats' => [
+                'function' => 'agent_stats_export',
+                'params' => array_filter([
+                    'datetime_start' => $this->resolveDateTimeStart($params),
+                    'datetime_end' => $this->resolveDateTimeEnd($params),
+                    'agent_user' => $params['agent_user'] ?? null,
+                    'campaign_id' => $this->resolveCampaignId($params),
+                    'group_by_campaign' => $params['group_by_campaign'] ?? 'YES',
+                    'stage' => $params['stage'] ?? 'pipe',
+                    'header' => $params['header'] ?? 'YES',
+                ], static fn (mixed $value): bool => $value !== null && $value !== ''),
+            ],
+            'call_dispo' => [
+                'function' => 'call_dispo_report',
+                'params' => array_filter([
+                    'campaigns' => $params['campaigns'] ?? null,
+                    'ingroups' => $params['ingroups'] ?? null,
+                    'dids' => $params['dids'] ?? null,
+                    'query_date' => $params['query_date'] ?? now()->format('Y-m-d'),
+                    'end_date' => $params['end_date'] ?? now()->format('Y-m-d'),
+                    'statuses' => $params['statuses'] ?? null,
+                    'status_breakdown' => $params['status_breakdown'] ?? 1,
+                    'show_percentages' => $params['show_percentages'] ?? 1,
+                ], static fn (mixed $value): bool => $value !== null && $value !== ''),
             ],
         ], true, $httpOptions);
     }

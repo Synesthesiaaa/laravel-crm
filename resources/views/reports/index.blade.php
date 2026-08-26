@@ -8,7 +8,7 @@
 <div x-data="telephonyReports()" x-init="init()" class="space-y-6">
     <x-page-header
         title="Telephony Reports"
-        description="Dashboard-style VICIdial reporting for higher roles."
+        description="Historical performance, trends, and management reporting."
         :breadcrumbs="['Dashboard' => route('dashboard'), 'Reports' => null]" />
 
     <template x-if="errorMessage">
@@ -23,22 +23,32 @@
         </div>
     </template>
 
+    <div x-show="dashboard.availability.status && dashboard.availability.status !== 'live'"
+         class="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/5 px-4 py-3"
+         role="status"
+         aria-live="polite">
+        <p class="text-sm font-semibold text-[var(--color-warning)]"
+           x-text="dashboard.availability.status === 'unavailable' ? 'Historical reports unavailable' : 'Historical reports are partially available'"></p>
+        <p class="text-xs text-[var(--color-on-surface-muted)] mt-1"
+           x-text="dashboard.availability.message || 'Some report sections could not be loaded.'"></p>
+    </div>
+
     <div class="md-hero">
         <div class="flex items-start justify-between flex-wrap gap-4">
             <div class="space-y-1">
-                <h2 class="text-xl font-bold text-[var(--color-on-surface)]">Operational Snapshot</h2>
+                <h2 class="text-xl font-bold text-[var(--color-on-surface)]">Historical Performance</h2>
                 <p class="text-[var(--color-on-surface-muted)] text-sm">
                     Campaign: <span class="font-semibold text-[var(--color-primary)]" x-text="dashboard.overview.campaign"></span>
                 </p>
                 <p class="text-xs text-[var(--color-on-surface-dim)]">
-                    Report range:
+                    Selected period:
                     <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="filters.query_date"></span>
                     to
                     <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="filters.end_date"></span>
                 </p>
             </div>
             <div class="flex items-center gap-2">
-                <x-badge type="active">Live</x-badge>
+                <x-badge type="active">Historical</x-badge>
                 <button class="btn-secondary text-xs" @click="refreshAll()" x-bind:disabled="loading">
                     <span class="inline-flex" x-bind:class="loading ? 'animate-spin' : ''">
                         <x-icon name="arrow-path" class="w-4 h-4" />
@@ -50,21 +60,29 @@
     </div>
 
     <div class="md-card p-4">
-        <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3">
             <div class="form-field">
-                <label class="form-label">Campaigns</label>
+                <label class="form-label" for="reports-crm-campaign">CRM Campaign</label>
+                <select id="reports-crm-campaign" class="form-select" x-model="filters.crm_campaign">
+                    @foreach($reportCampaigns ?? [] as $code => $config)
+                        <option value="{{ $code }}">{{ $config['name'] ?? $code }} ({{ $code }})</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="form-field">
+                <label class="form-label" for="reports-vici-campaign">VICIdial Campaigns</label>
                 <input class="form-input" x-model="filters.campaigns" placeholder="---ALL--- or TESTCAMP" />
             </div>
             <div class="form-field">
-                <label class="form-label">Date Start</label>
+                <label class="form-label" for="reports-date-start">Date Start</label>
                 <input class="form-input" type="date" x-model="filters.query_date" />
             </div>
             <div class="form-field">
-                <label class="form-label">Date End</label>
+                <label class="form-label" for="reports-date-end">Date End</label>
                 <input class="form-input" type="date" x-model="filters.end_date" />
             </div>
             <div class="form-field">
-                <label class="form-label">Disposition Scope</label>
+                <label class="form-label" for="reports-disposition-scope">Disposition Scope</label>
                 <select class="form-input" x-model="filters.disposition_scope">
                     <template x-for="option in dispositionScopeOptions" :key="option.value">
                         <option :value="option.value" x-text="option.label"></option>
@@ -74,6 +92,16 @@
                     System codes:
                     <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="systemDispositionCodes.length ? systemDispositionCodes.join(', ') : 'None configured'"></span>
                 </p>
+            </div>
+            <div class="form-field">
+                <label class="form-label" for="reports-comparison">Comparison</label>
+                <select id="reports-comparison" class="form-select" x-model="filters.comparison">
+                    <option value="none">No comparison</option>
+                    <option value="previous_period">Previous period</option>
+                    <option value="previous_day">Previous day</option>
+                    <option value="previous_week">Previous week</option>
+                    <option value="previous_month">Previous month</option>
+                </select>
             </div>
             <div class="form-field flex items-end">
                 <button class="btn-primary w-full" @click="refreshAll()" x-bind:disabled="loading">
@@ -86,7 +114,7 @@
         </div>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4 animate-stagger">
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8 gap-4 animate-stagger">
         <div class="md-card p-4 min-w-0">
             <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
@@ -138,11 +166,11 @@
         <div class="md-card p-4 min-w-0">
             <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
-                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Top Agent</p>
-                    <p class="mt-2 text-lg font-semibold text-[var(--color-on-surface)] truncate" x-text="dashboard.overview.topAgent"></p>
+                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Contact Rate</p>
+                    <p class="mt-2 text-2xl font-bold text-[var(--color-on-surface)]" x-text="formatPercent(dashboard.overview.contactRate)"></p>
                 </div>
                 <div class="w-10 h-10 rounded-lg bg-[var(--color-warning)]/10 flex items-center justify-center shrink-0">
-                    <x-icon name="user" class="w-5 h-5 text-[var(--color-warning)]" />
+                    <x-icon name="user-group" class="w-5 h-5 text-[var(--color-warning)]" />
                 </div>
             </div>
         </div>
@@ -150,11 +178,11 @@
         <div class="md-card p-4 min-w-0">
             <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
-                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Top Disposition</p>
-                    <p class="mt-2 text-lg font-semibold text-[var(--color-on-surface)] truncate" x-text="dashboard.overview.topDisposition"></p>
+                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Average Talk Time</p>
+                    <p class="mt-2 text-lg font-semibold text-[var(--color-on-surface)] truncate" x-text="formatDuration(dashboard.overview.averageTalkTimeSeconds)"></p>
                 </div>
                 <div class="w-10 h-10 rounded-lg bg-[var(--color-danger)]/10 flex items-center justify-center shrink-0">
-                    <x-icon name="tag" class="w-5 h-5 text-[var(--color-danger)]" />
+                    <x-icon name="clock" class="w-5 h-5 text-[var(--color-danger)]" />
                 </div>
             </div>
         </div>
@@ -162,21 +190,55 @@
         <div class="md-card p-4 min-w-0">
             <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
-                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Active Agents</p>
-                    <p class="mt-2 text-2xl font-bold text-[var(--color-on-surface)]" x-text="formatNumber(dashboard.overview.activeAgents)"></p>
+                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Agents With Activity</p>
+                    <p class="mt-2 text-2xl font-bold text-[var(--color-on-surface)]" x-text="formatNumber(dashboard.overview.agentsWithActivity)"></p>
                 </div>
                 <div class="w-10 h-10 rounded-lg bg-[var(--color-surface-2)] flex items-center justify-center shrink-0">
                     <x-icon name="users" class="w-5 h-5 text-[var(--color-primary)]" />
                 </div>
             </div>
         </div>
+
+        <div class="md-card p-4 min-w-0">
+            <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Calls / Agent</p>
+                    <p class="mt-2 text-2xl font-bold text-[var(--color-on-surface)]" x-text="formatNumber(dashboard.overview.callsPerAgent)"></p>
+                </div>
+                <div class="w-10 h-10 rounded-lg bg-[var(--color-surface-2)] flex items-center justify-center shrink-0">
+                    <x-icon name="calculator" class="w-5 h-5 text-[var(--color-primary)]" />
+                </div>
+            </div>
+        </div>
     </div>
+
+    <section x-show="dashboard.comparison.enabled" class="md-card p-4 space-y-3" aria-labelledby="comparison-title">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <h3 id="comparison-title" class="text-sm font-semibold text-[var(--color-on-surface)]">Period Comparison</h3>
+                <p class="text-xs text-[var(--color-on-surface-dim)]">
+                    Comparing with
+                    <span class="font-medium" x-text="dashboard.comparison.periodLabel"></span>
+                </p>
+            </div>
+            <span class="text-xs text-[var(--color-on-surface-dim)]" x-text="dashboard.comparison.availabilityLabel"></span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            <template x-for="item in dashboard.comparison.cards" :key="item.key">
+                <div class="rounded-lg border border-[var(--color-border)] p-3">
+                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]" x-text="item.label"></p>
+                    <p class="mt-1 text-lg font-semibold text-[var(--color-on-surface)]" x-text="item.value"></p>
+                    <p class="mt-1 text-xs" :class="item.tone" x-text="item.changeLabel"></p>
+                </div>
+            </template>
+        </div>
+    </section>
 
     <section class="space-y-4">
         <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
-                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Call Status Dashboard</h3>
-                <p class="text-xs text-[var(--color-on-surface-dim)]">Hourly activity and status mix for the selected campaign/date range.</p>
+                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Call Volume Trend</h3>
+                <p class="text-xs text-[var(--color-on-surface-dim)]">Historical activity for the selected campaign/date range.</p>
             </div>
             <p class="text-xs text-[var(--color-on-surface-dim)]" x-text="'Rows loaded: ' + dashboard.status.rows.length"></p>
         </div>
@@ -229,6 +291,19 @@
                         </template>
                     </tbody>
                 </x-table.index>
+            </div>
+        </div>
+    </section>
+
+    <section class="space-y-4">
+        <div>
+            <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Campaign Comparison</h3>
+            <p class="text-xs text-[var(--color-on-surface-dim)]">Compare total calls, answered calls, answer rate, and contact rate by VICIdial campaign.</p>
+        </div>
+        <div class="chart-container">
+            <div x-show="dashboard.campaigns.labels.length" id="chart-campaign-comparison" class="w-full" style="min-height: 260px;"></div>
+            <div x-show="!dashboard.campaigns.labels.length" class="table-empty py-10 text-center text-sm text-[var(--color-on-surface-dim)]">
+                No campaign activity for this period.
             </div>
         </div>
     </section>
@@ -312,7 +387,7 @@
     <section class="space-y-4">
         <div class="flex flex-wrap items-end justify-between gap-3">
                 <div>
-                    <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Disposition Breakdown</h3>
+                    <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Disposition Pareto</h3>
                     <p class="text-xs text-[var(--color-on-surface-dim)]">
                         Disposition totals and percentages for the selected report window.
                         <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="'Scope: ' + dashboard.scopeLabel"></span>
@@ -323,7 +398,7 @@
 
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <div class="chart-container">
-                <p class="chart-title">Disposition mix</p>
+                <p class="chart-title">Top dispositions by volume</p>
                 <div x-show="dashboard.dispo.labels.length" id="chart-dispo-breakdown" class="w-full" style="min-height: 280px;"></div>
                 <div x-show="!dashboard.dispo.labels.length" class="table-empty py-10 text-center text-sm text-[var(--color-on-surface-dim)]">
                     No disposition data yet.
@@ -337,8 +412,8 @@
                         <p class="mt-2 text-2xl font-bold text-[var(--color-on-surface)]" x-text="formatNumber(dashboard.dispo.summary.totalCalls)"></p>
                     </div>
                     <div class="md-card p-4">
-                        <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Top Disposition</p>
-                        <p class="mt-2 text-lg font-semibold text-[var(--color-on-surface)] truncate" x-text="dashboard.dispo.summary.topDisposition"></p>
+                        <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Contact Rate</p>
+                        <p class="mt-2 text-lg font-semibold text-[var(--color-on-surface)] truncate" x-text="formatPercent(dashboard.overview.contactRate)"></p>
                     </div>
                 </div>
             </div>
@@ -375,6 +450,38 @@
         </div>
     </section>
 
+    <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div class="md-card p-4 space-y-3" x-show="dashboard.funnel.length >= 2">
+            <div>
+                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Call Funnel</h3>
+                <p class="text-xs text-[var(--color-on-surface-dim)]">Only configured disposition stages are shown.</p>
+            </div>
+            <ol class="space-y-2">
+                <template x-for="stage in dashboard.funnel" :key="stage.key">
+                    <li class="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] px-3 py-2">
+                        <span class="text-sm text-[var(--color-on-surface)]" x-text="stage.label"></span>
+                        <span class="font-semibold tabular-nums text-[var(--color-on-surface)]" x-text="formatNumber(stage.value)"></span>
+                    </li>
+                </template>
+            </ol>
+        </div>
+        <div class="md-card p-4 space-y-3">
+            <div>
+                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Agent Time Distribution</h3>
+                <p class="text-xs text-[var(--color-on-surface-dim)]">Only durations supplied by VICIdial are shown.</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <template x-for="item in dashboard.timeDistribution" :key="item.key">
+                    <div class="rounded-lg border border-[var(--color-border)] p-3">
+                        <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]" x-text="item.label"></p>
+                        <p class="mt-1 text-lg font-semibold text-[var(--color-on-surface)]" x-text="formatDuration(item.seconds)"></p>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </section>
+
+    @if(auth()->user()?->isAdmin())
     <details class="md-card p-4">
         <summary class="cursor-pointer list-none flex items-center justify-between gap-3">
             <div>
@@ -390,19 +497,14 @@
         <div class="mt-4 space-y-4">
             <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
                 <div class="md-card p-4">
-                    <p class="text-sm font-semibold text-[var(--color-on-surface)] mb-2">Call Status Raw</p>
+                    <p class="text-sm font-semibold text-[var(--color-on-surface)] mb-2">Source availability</p>
                     <pre class="text-xs whitespace-pre-wrap break-words bg-[var(--color-surface-2)] p-3 rounded border border-[var(--color-border)] max-h-72 overflow-auto"
-                         x-text="payloads.status?.data?.raw_response || payloads.status?.message || 'No call status data yet.'"></pre>
+                         x-text="JSON.stringify(dashboard.availability || {}, null, 2)"></pre>
                 </div>
-                <div class="md-card p-4">
-                    <p class="text-sm font-semibold text-[var(--color-on-surface)] mb-2">Agent Stats Raw</p>
+                <div class="md-card p-4 xl:col-span-2">
+                    <p class="text-sm font-semibold text-[var(--color-on-surface)] mb-2">Normalized dashboard response</p>
                     <pre class="text-xs whitespace-pre-wrap break-words bg-[var(--color-surface-2)] p-3 rounded border border-[var(--color-border)] max-h-72 overflow-auto"
-                         x-text="payloads.agents?.data?.raw_response || payloads.agents?.message || 'No agent data yet.'"></pre>
-                </div>
-                <div class="md-card p-4">
-                    <p class="text-sm font-semibold text-[var(--color-on-surface)] mb-2">Disposition Raw</p>
-                    <pre class="text-xs whitespace-pre-wrap break-words bg-[var(--color-surface-2)] p-3 rounded border border-[var(--color-border)] max-h-72 overflow-auto"
-                         x-text="payloads.dispo?.data?.raw_response || payloads.dispo?.message || 'No disposition data yet.'"></pre>
+                         x-text="JSON.stringify(payloads.dashboard?.data || {}, null, 2)"></pre>
                 </div>
             </div>
 
@@ -427,6 +529,7 @@
             </div>
         </div>
     </details>
+    @endif
 </div>
 @endsection
 
@@ -439,10 +542,12 @@ window.telephonyReports = function () {
         loading: false,
         errorMessage: '',
         filters: {
+            crm_campaign: @json($campaign),
             campaigns: '---ALL---',
             query_date: new Date().toISOString().slice(0, 10),
             end_date: new Date().toISOString().slice(0, 10),
             disposition_scope: 'all',
+            comparison: 'none',
         },
         dispositionScopeOptions: [
             { value: 'all', label: 'All dispositions' },
@@ -468,10 +573,24 @@ window.telephonyReports = function () {
                 totalCalls: 0,
                 answeredCalls: 0,
                 answerRate: 0,
+                contactRate: null,
+                averageTalkTimeSeconds: null,
+                agentsWithActivity: 0,
+                callsPerAgent: null,
                 topAgent: '—',
                 topStatus: '—',
                 topDisposition: '—',
                 activeAgents: 0,
+            },
+            availability: {
+                status: 'unavailable',
+                message: '',
+            },
+            comparison: {
+                enabled: false,
+                periodLabel: '',
+                availabilityLabel: '',
+                cards: [],
             },
             status: {
                 rows: [],
@@ -502,6 +621,17 @@ window.telephonyReports = function () {
                     topDispositionCount: 0,
                 },
             },
+            campaigns: {
+                labels: [],
+                values: [],
+            },
+            funnel: [],
+            timeDistribution: [
+                { key: 'talk', label: 'Talk', seconds: null },
+                { key: 'pause', label: 'Pause', seconds: null },
+                { key: 'ready', label: 'Ready', seconds: null },
+                { key: 'other', label: 'Other', seconds: null },
+            ],
         },
         _onPopState: null,
 
@@ -528,29 +658,15 @@ window.telephonyReports = function () {
             this.errorMessage = '';
 
             try {
-                const [status, agents, dispo] = await Promise.all([
-                    window.axios.get('/api/reports/call-status-stats', { params: this.filters }),
-                    window.axios.get('/api/reports/agent-stats', { params: this.filters }),
-                    window.axios.get('/api/reports/call-dispo-report', { params: this.filters }),
-                ]);
-
-                this.payloads.status = status.data;
-                this.payloads.agents = agents.data;
-                this.payloads.dispo = dispo.data;
-
-                this.dashboard.status = this.normalizeCallStatus(status.data);
-                this.dashboard.agents = this.normalizeAgentStats(agents.data);
-                this.dashboard.dispo = this.normalizeDispositionReport(dispo.data, this.filters.disposition_scope);
-                this.dashboard.scopeLabel = this.dashboard.dispo.summary.scopeLabel;
-
-                this.dashboard.overview.totalCalls = this.dashboard.status.summary.totalCalls;
-                this.dashboard.overview.answeredCalls = this.dashboard.status.summary.answeredCalls;
-                this.dashboard.overview.answerRate = this.dashboard.status.summary.answerRate;
-                this.dashboard.overview.topStatus = this.dashboard.status.summary.topStatus;
-                this.dashboard.overview.topAgent = this.dashboard.agents.summary.topAgent;
-                this.dashboard.overview.topDisposition = this.dashboard.dispo.summary.topDisposition;
-                this.dashboard.overview.activeAgents = this.dashboard.agents.summary.agentCount;
-
+                const response = await window.axios.get('/api/reports/dashboard', {
+                    params: {
+                        ...this.filters,
+                        campaign: this.filters.crm_campaign,
+                    },
+                });
+                const data = response.data?.data ?? {};
+                this.payloads.dashboard = response.data;
+                this.applyDashboard(data);
                 await this.renderCharts();
             } catch (e) {
                 this.errorMessage = e.response?.data?.message || 'Failed to load report data.';
@@ -559,6 +675,142 @@ window.telephonyReports = function () {
             } finally {
                 this.loading = false;
             }
+        },
+
+        applyDashboard(data) {
+            const summary = data.summary || {};
+            const callVolume = data.call_volume || {};
+            const campaigns = Array.isArray(data.campaigns) ? data.campaigns : [];
+            const dispositions = data.dispositions || { labels: [], values: [], percentages: [] };
+            const dispositionRows = Array.isArray(data.disposition_rows) ? data.disposition_rows : [];
+            const agents = Array.isArray(data.agents) ? data.agents : [];
+
+            this.dashboard.availability = data.availability || this.dashboard.availability;
+            this.dashboard.scopeLabel = this.dispositionScopeLabel(this.filters.disposition_scope);
+            this.dashboard.overview = {
+                ...this.dashboard.overview,
+                campaign: data.filters?.crm_campaign || this.filters.crm_campaign,
+                totalCalls: summary.total_calls ?? 0,
+                answeredCalls: summary.answered_calls ?? 0,
+                answerRate: summary.answer_rate ?? null,
+                contactRate: summary.contact_rate ?? null,
+                averageTalkTimeSeconds: summary.average_talk_time_seconds ?? null,
+                agentsWithActivity: summary.agents_with_activity ?? 0,
+                callsPerAgent: summary.calls_per_agent ?? null,
+            };
+            this.dashboard.status = {
+                rows: campaigns.map((row, index) => ({
+                    key: (row.campaign || 'campaign') + '-' + index,
+                    label: row.campaign || 'Unknown',
+                    total: row.total_calls ?? 0,
+                    answered: row.answered_calls ?? 0,
+                    answerRate: row.answer_rate ?? null,
+                    topStatus: '—',
+                    peakHourLabel: '—',
+                })),
+                hourlyLabels: callVolume.labels || [],
+                hourlyValues: callVolume.values || [],
+                statusLabels: Object.keys(data.status_totals || {}),
+                statusValues: Object.values(data.status_totals || {}),
+                summary: {
+                    totalCalls: summary.total_calls ?? 0,
+                    answeredCalls: summary.answered_calls ?? 0,
+                    answerRate: summary.answer_rate ?? null,
+                    topStatus: '—',
+                    topHour: '—',
+                },
+            };
+            this.dashboard.agents = {
+                rows: agents.map((row, index) => ({
+                    ...row,
+                    key: (row.user || 'agent') + '-' + index,
+                    total_talk_time: this.formatDuration(row.total_talk_time_seconds),
+                    avg_talk_time: this.formatDuration(row.avg_talk_time_seconds),
+                    total_wait_time: this.formatDuration(row.total_wait_time_seconds),
+                    pause_pct: row.pause_pct === null ? '—' : String(row.pause_pct) + '%',
+                })),
+                callsLabels: agents.slice(0, 10).map((row) => row.full_name || row.user),
+                callsValues: agents.slice(0, 10).map((row) => row.calls || 0),
+                summary: {
+                    agentCount: summary.agents_with_activity ?? 0,
+                    totalCalls: data.agent_summary?.total_calls ?? 0,
+                    totalTalkTime: this.formatDuration(data.agent_summary?.total_talk_time_seconds),
+                    totalPauseTime: this.formatDuration(data.agent_summary?.total_pause_time_seconds),
+                    avgTalkTime: this.formatDuration(summary.average_talk_time_seconds),
+                    topAgent: agents[0]?.full_name || agents[0]?.user || '—',
+                },
+            };
+            this.dashboard.dispo = {
+                rows: dispositionRows.map((row, index) => ({
+                    key: (row.campaign || 'campaign') + '-' + index,
+                    label: row.campaign || 'Unknown',
+                    totalCalls: row.total_calls ?? 0,
+                    topDisposition: row.top_disposition || '—',
+                    breakdownSummary: (row.metrics || []).slice(0, 3)
+                        .map((metric) => metric.label + ': ' + this.formatNumber(metric.value))
+                        .join(' | ') || 'No breakdown data',
+                })),
+                labels: dispositions.labels || [],
+                values: dispositions.values || [],
+                percentages: dispositions.percentages || [],
+                summary: {
+                    totalCalls: summary.total_calls ?? 0,
+                    topDisposition: dispositions.labels?.[0] || '—',
+                    topDispositionCount: dispositions.values?.[0] || 0,
+                    scopeLabel: this.dispositionScopeLabel(this.filters.disposition_scope),
+                },
+            };
+            this.dashboard.campaigns = {
+                labels: campaigns.map((row) => row.campaign),
+                values: campaigns.map((row) => row.total_calls ?? 0),
+            };
+            this.dashboard.funnel = Array.isArray(data.funnel) ? data.funnel : [];
+            const time = data.time_distribution || {};
+            this.dashboard.timeDistribution = [
+                { key: 'talk', label: 'Talk', seconds: time.talk_seconds ?? null },
+                { key: 'pause', label: 'Pause', seconds: time.pause_seconds ?? null },
+                { key: 'ready', label: 'Ready', seconds: time.ready_seconds ?? null },
+                { key: 'other', label: 'Other', seconds: time.other_seconds ?? null },
+            ];
+            this.dashboard.comparison = this.normalizeComparison(data.comparison);
+        },
+
+        normalizeComparison(comparison = {}) {
+            if (!comparison.enabled) {
+                return { enabled: false, periodLabel: '', availabilityLabel: '', cards: [] };
+            }
+            const labels = {
+                total_calls: 'Total Calls',
+                answered_calls: 'Answered',
+                answer_rate: 'Answer Rate',
+                contact_rate: 'Contact Rate',
+                average_talk_time_seconds: 'Average Talk',
+                agents_with_activity: 'Agents With Activity',
+                calls_per_agent: 'Calls / Agent',
+            };
+            const cards = Object.entries(comparison.metrics || {}).slice(0, 4).map(([key, metric]) => {
+                const change = metric.change;
+                const isRate = metric.unit === 'rate';
+                const changeLabel = change === null
+                    ? 'No comparable baseline'
+                    : (change >= 0 ? '↑ ' : '↓ ') + Math.abs(change).toFixed(1)
+                        + (isRate ? ' percentage points' : '%') + ' vs previous';
+
+                return {
+                    key,
+                    label: labels[key] || key,
+                    value: metric.current === null ? '—' : (isRate ? this.formatPercent(metric.current) : this.formatNumber(metric.current)),
+                    changeLabel,
+                    tone: change === null ? 'text-[var(--color-on-surface-dim)]' : (change >= 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'),
+                };
+            });
+
+            return {
+                enabled: true,
+                periodLabel: comparison.period ? comparison.period.start + ' to ' + comparison.period.end : 'previous period',
+                availabilityLabel: comparison.availability?.status || 'unknown',
+                cards,
+            };
         },
 
         async lookupRecordings(filters = {}) {
@@ -838,8 +1090,9 @@ window.telephonyReports = function () {
             const statusMixEl = document.getElementById('chart-status-mix');
             const agentCallsEl = document.getElementById('chart-agent-calls');
             const dispoEl = document.getElementById('chart-dispo-breakdown');
+            const campaignEl = document.getElementById('chart-campaign-comparison');
 
-            if (!statusHourlyEl && !statusMixEl && !agentCallsEl && !dispoEl) {
+            if (!statusHourlyEl && !statusMixEl && !agentCallsEl && !dispoEl && !campaignEl) {
                 return;
             }
 
@@ -904,21 +1157,33 @@ window.telephonyReports = function () {
                 await chart.render();
             }
 
+            if (campaignEl && this.dashboard.campaigns.labels.length) {
+                const chart = new ApexCharts(campaignEl, {
+                    series: [{ name: 'Total Calls', data: this.dashboard.campaigns.values }],
+                    chart: { type: 'bar', height: 260, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
+                    colors: ['#e91e8c'],
+                    plotOptions: { bar: { horizontal: true, borderRadius: 5, barHeight: '55%' } },
+                    xaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
+                    yaxis: { categories: this.dashboard.campaigns.labels, labels: { style: { colors: textColor, fontSize: '11px' }, maxWidth: 160 } },
+                    grid: { borderColor: gridColor, strokeDashArray: 3 },
+                    dataLabels: { enabled: true, style: { colors: [textColor] } },
+                    tooltip: { theme: isDark ? 'dark' : 'light' },
+                    theme: { mode: isDark ? 'dark' : 'light' },
+                });
+                window.crmCharts?.register?.(CHART_GROUP, 'campaign-comparison', chart);
+                await chart.render();
+            }
+
             if (dispoEl && this.dashboard.dispo.labels.length) {
                 const chart = new ApexCharts(dispoEl, {
                     series: this.dashboard.dispo.values,
-                    chart: { type: 'donut', height: 280, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
+                    chart: { type: 'bar', height: 280, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
                     labels: this.dashboard.dispo.labels,
-                    colors: ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#a855f7', '#14b8a6', '#f97316', '#ec4899'],
-                    dataLabels: { enabled: false },
-                    legend: { position: 'bottom', labels: { colors: textColor } },
-                    plotOptions: {
-                        pie: {
-                            donut: {
-                                size: '68%',
-                            },
-                        },
-                    },
+                    colors: ['#3b82f6'],
+                    plotOptions: { bar: { horizontal: true, borderRadius: 5, barHeight: '60%' } },
+                    xaxis: { categories: this.dashboard.dispo.labels, labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
+                    yaxis: { labels: { style: { colors: textColor, fontSize: '11px' }, maxWidth: 160 } },
+                    dataLabels: { enabled: true, style: { colors: [textColor] } },
                     tooltip: { theme: isDark ? 'dark' : 'light' },
                     theme: { mode: isDark ? 'dark' : 'light' },
                 });
@@ -1019,11 +1284,27 @@ window.telephonyReports = function () {
             return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
         },
 
+        formatDuration(seconds) {
+            if (seconds === null || seconds === undefined || seconds === '') {
+                return '—';
+            }
+
+            return this.secondsToDuration(seconds);
+        },
+
         formatNumber(value) {
+            if (value === null || value === undefined || value === '') {
+                return '—';
+            }
+
             return new Intl.NumberFormat().format(Number(value) || 0);
         },
 
         formatPercent(value) {
+            if (value === null || value === undefined || value === '') {
+                return '—';
+            }
+
             return `${(Number(value) || 0).toFixed(1)}%`;
         },
     };
