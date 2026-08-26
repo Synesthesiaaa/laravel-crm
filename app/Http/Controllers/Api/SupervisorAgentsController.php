@@ -221,9 +221,8 @@ class SupervisorAgentsController extends Controller
                 'campaign_name' => $campaignConfig['name'] ?? session('campaign_name', $campaign),
                 'configured' => $server !== null,
                 'server_name' => $server?->server_name,
-                'message' => $server === null
-                    ? "No VICIdial server is configured for campaign '{$campaign}'."
-                    : null,
+                'reporting_status' => $remoteSnapshot['reporting_status'],
+                'message' => $remoteSnapshot['reporting_message'],
             ],
         ]);
     }
@@ -260,7 +259,9 @@ class SupervisorAgentsController extends Controller
      *     realtime_stats: array<string, int>|null,
      *     performance_stats: array{avg_handle?: float|int, avg_wait?: float|int}|null,
      *     realtime_source: string,
-     *     performance_source: string
+     *     performance_source: string,
+     *     reporting_status: string,
+     *     reporting_message: string|null
      * }
      */
     private function fetchRemoteSnapshot(Request $request, string $campaign, ?VicidialServer $server, Carbon $today): array
@@ -273,9 +274,19 @@ class SupervisorAgentsController extends Controller
             'performance_stats' => null,
             'realtime_source' => 'crm',
             'performance_source' => 'crm',
+            'reporting_status' => 'not_configured',
+            'reporting_message' => null,
         ];
 
-        if ($server === null || trim((string) $server->api_user) === '' || trim((string) $server->api_pass) === '') {
+        if ($server === null) {
+            $empty['reporting_message'] = "No VICIdial server is configured for campaign '{$campaign}'.";
+
+            return $empty;
+        }
+
+        if (trim((string) $server->api_user) === '' || trim((string) $server->api_pass) === '') {
+            $empty['reporting_message'] = 'VICIdial reports are not configured. Add an API user and password with View Reports access for this CRM campaign server.';
+
             return $empty;
         }
 
@@ -310,6 +321,7 @@ class SupervisorAgentsController extends Controller
         $realtimeSource = $loggedAgents['available']
             ? ($this->hasCompleteRealtimeStats($realtimeStats) ? 'vicidial' : 'mixed')
             : 'crm';
+        $groupResult = null;
         if ($groups !== []) {
             $groupResult = $this->reportingService->userGroupStatus(
                 $request->user(),
@@ -323,6 +335,12 @@ class SupervisorAgentsController extends Controller
                 $realtimeSource = $this->hasCompleteRealtimeStats($realtimeStats) ? 'vicidial' : 'mixed';
             }
         }
+        $reportingHealth = $this->reportingHealth([
+            $reports['logged_agents'] ?? null,
+            $reports['agent_performance'] ?? null,
+            $reports['call_totals'] ?? null,
+            $groupResult,
+        ]);
 
         return [
             'agents' => $loggedAgents['agents'],
@@ -332,6 +350,35 @@ class SupervisorAgentsController extends Controller
             'performance_stats' => $agentPerformance['stats'],
             'realtime_source' => $realtimeSource,
             'performance_source' => $this->performanceSource($agentPerformance['stats']),
+            'reporting_status' => $reportingHealth['status'],
+            'reporting_message' => $reportingHealth['message'],
+        ];
+    }
+
+    /**
+     * @param  array<int, OperationResult|null>  $results
+     * @return array{status: 'live'|'degraded'|'unavailable', message: string|null}
+     */
+    private function reportingHealth(array $results): array
+    {
+        $reports = array_values(array_filter($results, static fn (mixed $result): bool => $result instanceof OperationResult));
+        $failedReports = array_values(array_filter($reports, static fn (OperationResult $result): bool => ! $result->success));
+
+        if ($failedReports === []) {
+            return ['status' => 'live', 'message' => null];
+        }
+
+        $message = 'Verify this CRM campaign server\'s API URL and network access, then confirm its API user has View Reports permission (levels 7/8).';
+        if (count($failedReports) === count($reports)) {
+            return [
+                'status' => 'unavailable',
+                'message' => 'VICIdial reports are unavailable. '.$message,
+            ];
+        }
+
+        return [
+            'status' => 'degraded',
+            'message' => 'Some VICIdial reports are unavailable, so CRM fallback metrics may be incomplete. '.$message,
         ];
     }
 

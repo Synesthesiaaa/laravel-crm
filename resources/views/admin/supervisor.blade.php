@@ -30,7 +30,17 @@
                   class="badge badge-active"
                   x-text="'Server: ' + (routing.server_name || 'Configured')"></span>
             <span x-show="!routing.configured && routing.campaign_code"
-                  class="badge badge-warning">Server not configured</span>
+                  class="badge badge-pending">Server not configured</span>
+            <span x-show="routing.reporting_status && routing.reporting_status !== 'not_configured'"
+                  role="status"
+                  aria-live="polite"
+                  class="badge"
+                  :class="{
+                      'badge-active': routing.reporting_status === 'live',
+                      'badge-pending': routing.reporting_status === 'degraded',
+                      'badge-error': routing.reporting_status === 'unavailable',
+                  }"
+                  x-text="routing.reporting_status === 'live' ? 'VICIdial reports live' : (routing.reporting_status === 'degraded' ? 'VICIdial reports degraded' : 'VICIdial reports unavailable')"></span>
         </div>
         @if(!empty($supervisorCampaigns))
             <div class="mt-3 max-w-sm">
@@ -49,9 +59,11 @@
             </div>
         @endif
         <p x-show="routing.message"
-           role="alert"
+           role="status"
            aria-live="polite"
-           class="text-xs text-[var(--color-danger)] mt-2"
+           aria-atomic="true"
+           class="text-xs mt-2"
+           :class="routing.reporting_status === 'degraded' ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'"
            x-text="routing.message"></p>
     </section>
 
@@ -368,6 +380,7 @@ window.supervisorDashboard = function(initialCampaign = '') {
             campaign_name: '',
             configured: false,
             server_name: '',
+            reporting_status: 'not_configured',
             message: '',
         },
         notificationPending: false,

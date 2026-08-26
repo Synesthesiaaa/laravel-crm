@@ -11,6 +11,7 @@ use App\Models\VicidialAgentSession;
 use App\Models\VicidialServer;
 use App\Services\CampaignService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -324,6 +325,8 @@ class SupervisorAgentsApiTest extends TestCase
                 ->assertJsonPath('stats.realtimeSource', 'vicidial')
                 ->assertJsonPath('stats.performanceSource', 'vicidial')
                 ->assertJsonPath('stats.callSource', 'vicidial')
+                ->assertJsonPath('routing.reporting_status', 'live')
+                ->assertJsonPath('routing.message', null)
                 ->assertJsonPath('agents.0.id', $remoteAgent->id)
                 ->assertJsonPath('agents.0.status', 'oncall')
                 ->assertJsonPath('agents.0.calls_today', 4)
@@ -407,6 +410,7 @@ class SupervisorAgentsApiTest extends TestCase
                 ->assertJsonPath('stats.performanceSource', 'crm')
                 ->assertJsonPath('stats.realtimeSource', 'vicidial')
                 ->assertJsonPath('stats.callSource', 'vicidial')
+                ->assertJsonPath('routing.reporting_status', 'live')
                 ->assertJsonPath('agents.0.calls_today', 1)
                 ->assertJsonPath('agents.0.avg_handle', 90)
                 ->assertJsonPath('agents.0.avg_wait', 20);
@@ -453,7 +457,57 @@ class SupervisorAgentsApiTest extends TestCase
             $response->assertOk()
                 ->assertJsonPath('stats.todayTotal', 1)
                 ->assertJsonPath('stats.callsAnswered', 0)
-                ->assertJsonPath('stats.callSource', 'crm');
+                ->assertJsonPath('stats.callSource', 'crm')
+                ->assertJsonPath('routing.reporting_status', 'degraded')
+                ->assertJsonPath('routing.message', 'Some VICIdial reports are unavailable, so CRM fallback metrics may be incomplete. Verify this CRM campaign server\'s API URL and network access, then confirm its API user has View Reports permission (levels 7/8).');
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_supervisor_returns_safe_unavailable_reporting_diagnostics_when_all_vicidial_reports_fail(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-26 12:00:00'));
+
+        try {
+            Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+            VicidialServer::factory()->create([
+                'campaign_code' => 'campaign-a',
+                'server_name' => 'Campaign A VICIdial',
+                'api_url' => 'https://campaign-a.example/agc/api.php',
+                'api_user' => 'private-report-user',
+                'api_pass' => 'private-report-password',
+            ]);
+            $this->app->make(CampaignService::class)->clearCampaignsCache();
+
+            $supervisor = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+            $agent = User::factory()->create([
+                'role' => User::ROLE_AGENT,
+                'default_campaign' => 'campaign-a',
+            ]);
+            CallSession::factory()->for($agent)->create([
+                'campaign_code' => 'campaign-a',
+                'status' => CallSession::STATUS_COMPLETED,
+                'dialed_at' => now()->subMinutes(10),
+            ]);
+            Http::fake(fn () => throw new ConnectionException(
+                'cURL error 7 for https://campaign-a.example/non_agent_api.php?user=private-report-user&pass=private-report-password',
+            ));
+
+            $response = $this->actingAs($supervisor)
+                ->withSession(['campaign' => 'campaign-a', 'campaign_name' => 'Campaign A'])
+                ->getJson(route('api.supervisor.agents'));
+
+            $response->assertOk()
+                ->assertJsonPath('stats.todayTotal', 1)
+                ->assertJsonPath('stats.callSource', 'crm')
+                ->assertJsonPath('routing.reporting_status', 'unavailable')
+                ->assertJsonPath('routing.message', 'VICIdial reports are unavailable. Verify this CRM campaign server\'s API URL and network access, then confirm its API user has View Reports permission (levels 7/8).')
+                ->assertJsonMissingPath('routing.api_url')
+                ->assertJsonMissingPath('routing.api_user')
+                ->assertJsonMissingPath('routing.api_pass');
+            $this->assertStringNotContainsString('private-report-user', $response->getContent());
+            $this->assertStringNotContainsString('private-report-password', $response->getContent());
         } finally {
             Carbon::setTestNow();
         }

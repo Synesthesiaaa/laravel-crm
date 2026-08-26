@@ -22,6 +22,8 @@ class SupervisorDashboardTest extends TestCase
             ->assertSee('Live supervisor data unavailable')
             ->assertSee('VICIdial Routing')
             ->assertSee('routing.configured')
+            ->assertSee('routing.reporting_status')
+            ->assertSee('VICIdial reports unavailable')
             ->assertDontSee('actionPending')
             ->assertDontSee('monitorAgent')
             ->assertDontSee('whisperAgent')

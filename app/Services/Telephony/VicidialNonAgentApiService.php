@@ -62,7 +62,7 @@ class VicidialNonAgentApiService
             $this->telephonyLogger->error('VicidialNonAgentApiService', 'HTTP request failed', [
                 'campaign' => $campaign,
                 'function' => $function,
-                'error' => $e->getMessage(),
+                'error' => $this->redactConnectionExceptionMessage($e->getMessage()),
             ]);
 
             return OperationResult::failure('Unable to reach VICIdial Non-Agent API.');
@@ -156,7 +156,7 @@ class VicidialNonAgentApiService
             $this->telephonyLogger->error('VicidialNonAgentApiService', 'HTTP batch failed', [
                 'campaign' => $campaign,
                 'functions' => array_column($requestQueries, 'function'),
-                'error' => $e->getMessage(),
+                'error' => $this->redactConnectionExceptionMessage($e->getMessage()),
             ]);
 
             return $this->failedBatch($requests, 'Unable to reach VICIdial Non-Agent API.');
@@ -169,7 +169,9 @@ class VicidialNonAgentApiService
                 $this->telephonyLogger->error('VicidialNonAgentApiService', 'HTTP batch request failed', [
                     'campaign' => $campaign,
                     'function' => $request['function'],
-                    'error' => $response instanceof Throwable ? $response->getMessage() : 'No response returned.',
+                    'error' => $response instanceof Throwable
+                        ? $this->redactConnectionExceptionMessage($response->getMessage())
+                        : 'No response returned.',
                 ]);
                 $results[$key] = OperationResult::failure('Unable to reach VICIdial Non-Agent API.');
 
@@ -219,6 +221,16 @@ class VicidialNonAgentApiService
         }
 
         return $results;
+    }
+
+    /**
+     * cURL includes a request URL in some connection exception messages. The
+     * Non-Agent API authenticates with query parameters, so preserve useful
+     * diagnostics without persisting API credentials in telemetry.
+     */
+    protected function redactConnectionExceptionMessage(string $message): string
+    {
+        return preg_replace('/([?&](?:user|pass)=)[^&#\s]*/i', '$1[redacted]', $message) ?? $message;
     }
 
     protected function resolveNonAgentUrl(string $apiUrl): string

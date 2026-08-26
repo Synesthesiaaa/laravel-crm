@@ -8,6 +8,7 @@ use App\Repositories\VicidialServerRepository;
 use App\Services\Telephony\TelephonyLogger;
 use App\Services\Telephony\VicidialNonAgentApiService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Mockery;
 use Tests\TestCase;
@@ -90,5 +91,37 @@ class VicidialNonAgentApiServiceTest extends TestCase
                 && ($request->data()['pass'] ?? null) === 'campaign-a-pass';
         });
         Http::assertNotSent(fn ($request): bool => str_starts_with($request->url(), 'https://campaign-b.example/'));
+    }
+
+    public function test_it_redacts_non_agent_api_credentials_from_connection_error_telemetry(): void
+    {
+        VicidialServer::factory()->create([
+            'campaign_code' => 'campaign-a',
+            'api_url' => 'https://campaign-a.example/agc/api.php',
+            'api_user' => 'report-user',
+            'api_pass' => 'report-password',
+            'is_default' => true,
+        ]);
+        Http::fake(fn () => throw new ConnectionException(
+            'cURL error 7 for https://campaign-a.example/non_agent_api.php?user=report-user&pass=report-password&function=version',
+        ));
+        $logger = Mockery::mock(TelephonyLogger::class);
+        $logger->shouldReceive('error')
+            ->once()
+            ->withArgs(function (string $component, string $message, array $context): bool {
+                return $component === 'VicidialNonAgentApiService'
+                    && $message === 'HTTP request failed'
+                    && str_contains((string) ($context['error'] ?? ''), 'user=[redacted]')
+                    && str_contains((string) ($context['error'] ?? ''), 'pass=[redacted]')
+                    && ! str_contains((string) ($context['error'] ?? ''), 'report-user')
+                    && ! str_contains((string) ($context['error'] ?? ''), 'report-password');
+            });
+
+        $service = new VicidialNonAgentApiService(app(VicidialServerRepository::class), $logger);
+
+        $result = $service->execute(User::factory()->make(), 'campaign-a', 'version');
+
+        $this->assertFalse($result->success);
+        $this->assertSame('Unable to reach VICIdial Non-Agent API.', $result->message);
     }
 }
