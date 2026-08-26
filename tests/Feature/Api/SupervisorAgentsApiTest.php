@@ -11,6 +11,7 @@ use App\Models\VicidialAgentSession;
 use App\Models\VicidialServer;
 use App\Services\CampaignService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -182,5 +183,78 @@ class SupervisorAgentsApiTest extends TestCase
             return str_starts_with($request->url(), 'https://campaign-a.example/non_agent_api.php')
                 && ($request->data()['campaigns'] ?? null) === '---ALL---';
         });
+    }
+
+    public function test_supervisor_metrics_are_derived_from_the_current_campaign_call_lifecycle(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-26 12:00:00'));
+
+        try {
+            Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+            VicidialServer::factory()->create([
+                'campaign_code' => 'campaign-a',
+                'server_name' => 'Campaign A VICIdial',
+            ]);
+            $this->app->make(CampaignService::class)->clearCampaignsCache();
+
+            $supervisor = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+            $agent = User::factory()->create([
+                'role' => User::ROLE_AGENT,
+                'full_name' => 'Metrics Agent',
+                'default_campaign' => 'campaign-a',
+            ]);
+            AttendanceLog::create([
+                'user_id' => $agent->id,
+                'event_type' => 'login',
+                'event_time' => now()->subHours(3),
+            ]);
+
+            CallSession::factory()->for($agent)->create([
+                'campaign_code' => 'campaign-a',
+                'status' => CallSession::STATUS_COMPLETED,
+                'dialed_at' => now()->subHours(2),
+                'answered_at' => now()->subHours(2)->addSeconds(10),
+                'ended_at' => now()->subHours(2)->addSeconds(130),
+                'call_duration_seconds' => 120,
+            ]);
+            CallSession::factory()->for($agent)->create([
+                'campaign_code' => 'campaign-a',
+                'status' => CallSession::STATUS_COMPLETED,
+                'dialed_at' => now()->subHour(),
+                'answered_at' => now()->subHour()->addSeconds(30),
+                'ended_at' => now()->subHour()->addSeconds(210),
+                'call_duration_seconds' => null,
+            ]);
+            CallSession::factory()->for($agent)->create([
+                'campaign_code' => 'campaign-a',
+                'status' => CallSession::STATUS_FAILED,
+                'dialed_at' => now()->subMinutes(30),
+                'ended_at' => now()->subMinutes(29),
+            ]);
+            CallSession::factory()->for($agent)->inCall()->create([
+                'campaign_code' => 'campaign-a',
+                'dialed_at' => now()->subMinutes(10),
+            ]);
+
+            $response = $this->actingAs($supervisor)
+                ->withSession(['campaign' => 'campaign-a', 'campaign_name' => 'Campaign A'])
+                ->getJson(route('api.supervisor.agents'));
+
+            $response->assertOk()
+                ->assertJsonPath('stats.agentsOnline', 1)
+                ->assertJsonPath('stats.callsActive', 1)
+                ->assertJsonPath('stats.todayTotal', 3)
+                ->assertJsonPath('stats.callsAnswered', 2)
+                ->assertJsonPath('stats.avgWaitTime', 20)
+                ->assertJsonPath('stats.avgHandleTime', 150)
+                ->assertJsonPath('stats.answerRate', 66.7)
+                ->assertJsonPath('stats.slaPercent', 66.7)
+                ->assertJsonPath('stats.callsByHour.10', 1)
+                ->assertJsonPath('stats.callsByHour.11', 3)
+                ->assertJsonPath('agents.0.calls_today', 3)
+                ->assertJsonPath('agents.0.avg_handle', 150);
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 }

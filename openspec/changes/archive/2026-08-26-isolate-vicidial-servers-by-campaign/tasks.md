@@ -19,10 +19,12 @@
 - [x] 3.2 Send campaign context with monitor, whisper, pause, logout, and notification requests; disable unavailable/in-flight actions and report truthful success or failure feedback.
 - [x] 3.3 Add or update render-level tests for the campaign/server context and control states.
 - [x] 3.4 Add CRM campaign selection to Supervisor and use the mapped server's logged-in-agent feed without VICIdial campaign filtering.
+- [x] 3.5 Derive Supervisor wallboard KPIs from campaign-scoped call lifecycle and agent state data, with near-real-time refresh protection.
+- [x] 3.6 Remove monitor, whisper, pause, and logout controls from the Supervisor agent cards while retaining read-only status and performance details.
 
 ## 4. Validation
 
 - [x] 4.1 Run the focused PHPUnit tests for repository, VICIdial services, Supervisor APIs, and Supervisor dashboard rendering.
 - [x] 4.2 Run Laravel Pint on changed PHP files and build the frontend assets.
-- [ ] 4.3 Validate configured and unmapped campaign Supervisor flows with Playwright, including action feedback, responsive layouts, failed requests, and browser console health.
+- [x] 4.3 Validate configured and unmapped campaign Supervisor flows with Playwright, including action feedback, responsive layouts, failed requests, and browser console health. (Reverb was started for the run; the only remaining 422 came from the existing SIP credentials endpoint.)
 - [x] 4.4 Review security boundaries, verify no credentials or URLs are exposed, and reconcile implementation details with the OpenSpec artifacts.

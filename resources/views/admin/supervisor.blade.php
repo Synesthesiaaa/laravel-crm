@@ -73,6 +73,14 @@
             <div class="wallboard-value" x-text="stats.agentsOnline">—</div>
             <div class="wallboard-label">Agents Online</div>
         </div>
+        <div class="wallboard-metric">
+            <div class="wallboard-value" x-text="stats.agentsAvailable">0</div>
+            <div class="wallboard-label">Available</div>
+        </div>
+        <div class="wallboard-metric">
+            <div class="wallboard-value" x-text="stats.agentsPaused">0</div>
+            <div class="wallboard-label">On Break</div>
+        </div>
         <div class="wallboard-metric" :class="{ 'wallboard-alert': stats.callsWaiting > 5 }">
             <div class="wallboard-value" x-text="stats.callsWaiting">—</div>
             <div class="wallboard-label">Calls Waiting</div>
@@ -86,12 +94,16 @@
             <div class="wallboard-label">Avg Wait (s)</div>
         </div>
         <div class="wallboard-metric">
+            <div class="wallboard-value" x-text="stats.avgHandleTime">0</div>
+            <div class="wallboard-label">Avg Handle (s)</div>
+        </div>
+        <div class="wallboard-metric">
             <div class="wallboard-value" x-text="stats.todayTotal">—</div>
             <div class="wallboard-label">Today's Calls</div>
         </div>
         <div class="wallboard-metric">
-            <div class="wallboard-value" x-text="stats.slaPercent + '%'">—</div>
-            <div class="wallboard-label">SLA %</div>
+            <div class="wallboard-value" x-text="stats.answerRate + '%'">—</div>
+            <div class="wallboard-label">Answer Rate</div>
         </div>
     </div>
 
@@ -193,39 +205,12 @@
                               x-text="agent.status_label">
                         </span>
                     </div>
-                    <p class="text-xs text-[var(--color-on-surface-dim)]" x-text="agent.current_call || '—'"></p>
+                    <p class="text-xs text-[var(--color-on-surface-dim)]" x-text="agent.current_call ? (agent.current_call.phone_number + ' · ' + agent.current_call.duration + 's') : '—'"></p>
                     <div class="flex items-center justify-between mt-1">
                         <span class="text-xs text-[var(--color-on-surface-dim)]" x-text="agent.calls_today + ' calls today'"></span>
                         <span class="text-xs font-mono text-[var(--color-on-surface-muted)]" x-text="agent.since"></span>
                     </div>
                     <div class="text-[11px] text-[var(--color-on-surface-dim)] mt-1" x-text="'Vici: ' + (agent.vici_status || 'unknown') + ' · Queue: ' + (agent.queue_count ?? 0)"></div>
-                    {{-- Supervisor controls --}}
-                    <div class="flex gap-1.5 mt-2 flex-wrap">
-                         <button class="btn-ghost text-xs px-2 py-1"
-                                 :disabled="!routing.configured || isActionPending(agent, 'monitor')"
-                                 @click="monitorAgent(agent)" title="Monitor (listen only)">
-                            <x-icon name="eye" class="w-3 h-3" />
-                            Monitor
-                        </button>
-                         <button class="btn-ghost text-xs px-2 py-1"
-                                 :disabled="!routing.configured || isActionPending(agent, 'whisper')"
-                                 @click="whisperAgent(agent)" title="Whisper (agent only)">
-                            <x-icon name="microphone" class="w-3 h-3" />
-                            Whisper
-                        </button>
-                         <button class="btn-ghost text-xs px-2 py-1"
-                                 :disabled="!routing.configured || isActionPending(agent, 'pause')"
-                                 @click="forcePause(agent)" title="Force pause agent">
-                            <x-icon name="pause" class="w-3 h-3" />
-                            Pause
-                        </button>
-                         <button class="btn-ghost text-xs px-2 py-1"
-                                 :disabled="!routing.configured || isActionPending(agent, 'logout')"
-                                 @click="forceLogout(agent)" title="Force logout agent">
-                            <x-icon name="arrow-right-on-rectangle" class="w-3 h-3" />
-                            Logout
-                        </button>
-                    </div>
                 </div>
             </template>
         </div>
@@ -291,6 +276,14 @@
                 <div class="wallboard-value text-4xl" x-text="stats.agentsOnline">0</div>
                 <div class="wallboard-label">Agents Online</div>
             </div>
+            <div class="wallboard-metric">
+                <div class="wallboard-value text-4xl" x-text="stats.agentsAvailable">0</div>
+                <div class="wallboard-label">Available</div>
+            </div>
+            <div class="wallboard-metric">
+                <div class="wallboard-value text-4xl" x-text="stats.agentsPaused">0</div>
+                <div class="wallboard-label">On Break</div>
+            </div>
             <div class="wallboard-metric" :class="{ 'wallboard-alert': stats.callsWaiting > 5 }">
                 <div class="wallboard-value text-4xl" x-text="stats.callsWaiting">0</div>
                 <div class="wallboard-label">In Queue</div>
@@ -308,8 +301,12 @@
                 <div class="wallboard-label">Avg Wait</div>
             </div>
             <div class="wallboard-metric">
-                <div class="wallboard-value text-4xl" x-text="stats.slaPercent + '%'">0%</div>
-                <div class="wallboard-label">SLA</div>
+                <div class="wallboard-value text-4xl" x-text="stats.avgHandleTime + 's'">0s</div>
+                <div class="wallboard-label">Avg Handle</div>
+            </div>
+            <div class="wallboard-metric">
+                <div class="wallboard-value text-4xl" x-text="stats.answerRate + '%'">0%</div>
+                <div class="wallboard-label">Answer Rate</div>
             </div>
         </div>
         <div class="chart-container">
@@ -341,12 +338,15 @@ window.supervisorDashboard = function(initialCampaign = '') {
             server_name: '',
             message: '',
         },
-        actionPending: {},
         notificationPending: false,
+        refreshInFlight: false,
+        activeCallHistory: [],
         selectedCampaign: initialCampaign,
         stats: {
             agentsOnline: 0, callsWaiting: 0, callsActive: 0,
-            avgWaitTime: 0, todayTotal: 0, slaPercent: 0,
+            agentsAvailable: 0, agentsOnCall: 0, agentsPaused: 0,
+            avgWaitTime: 0, avgHandleTime: 0, todayTotal: 0,
+            callsAnswered: 0, answerRate: 0, slaPercent: 0, callsByHour: {},
         },
         pollInterval: null,
         _echoUnsubscribe: null,
@@ -368,9 +368,9 @@ window.supervisorDashboard = function(initialCampaign = '') {
                     () => this.refresh(),
                     () => this.refresh()
                 );
-                this.pollInterval = setInterval(() => this.refresh(), 60000);
-            } else {
                 this.pollInterval = setInterval(() => this.refresh(), 15000);
+            } else {
+                this.pollInterval = setInterval(() => this.refresh(), 5000);
             }
             this.$watch('tab', (t) => {
                 if (t === 'performance' || t === 'wallboard') this.renderCharts();
@@ -393,6 +393,9 @@ window.supervisorDashboard = function(initialCampaign = '') {
         },
 
         async refresh() {
+            if (this.refreshInFlight) return;
+
+            this.refreshInFlight = true;
             this.loading = true;
             this.errorMessage = '';
             try {
@@ -404,18 +407,25 @@ window.supervisorDashboard = function(initialCampaign = '') {
                 this.selectedCampaign = this.routing.campaign_code || this.selectedCampaign;
                 this.stats  = res.data.stats  ?? {
                     agentsOnline: 0, callsWaiting: 0, callsActive: 0,
-                    avgWaitTime: 0, todayTotal: 0, slaPercent: 0,
+                    agentsAvailable: 0, agentsOnCall: 0, agentsPaused: 0,
+                    avgWaitTime: 0, avgHandleTime: 0, todayTotal: 0,
+                    callsAnswered: 0, answerRate: 0, slaPercent: 0, callsByHour: {},
                 };
-                this.lastRefreshAt = new Date().toLocaleTimeString();
+                this.activeCallHistory = [
+                    ...this.activeCallHistory,
+                    Number(this.stats.callsActive || 0),
+                ].slice(-20);
+                this.lastRefreshAt = res.data.stats?.updatedAt
+                    ? new Date(res.data.stats.updatedAt).toLocaleTimeString()
+                    : new Date().toLocaleTimeString();
+                if (this.tab === 'performance' || this.tab === 'wallboard') {
+                    this.renderCharts();
+                }
             } catch (e) {
-                this.agents = [];
-                this.stats = {
-                    agentsOnline: 0, callsWaiting: 0, callsActive: 0,
-                    avgWaitTime: 0, todayTotal: 0, slaPercent: 0,
-                };
                 this.errorMessage = e.response?.data?.message || 'The supervisor API could not be reached. Check database, auth, and telephony services.';
             } finally {
                 this.loading = false;
+                this.refreshInFlight = false;
             }
         },
 
@@ -425,54 +435,6 @@ window.supervisorDashboard = function(initialCampaign = '') {
                 url.searchParams.set('campaign', this.selectedCampaign);
             }
             window.location.assign(url.toString());
-        },
-
-        actionKey(agent, action) {
-            return `${agent.id}:${action}`;
-        },
-
-        isActionPending(agent, action) {
-            return this.actionPending[this.actionKey(agent, action)] === true;
-        },
-
-        async runAgentAction(agent, action, url, successMessage) {
-            if (!this.routing.configured) {
-                Alpine.store('toast').error(this.routing.message || 'No VICIdial server is configured for this campaign.');
-                return;
-            }
-
-            const key = this.actionKey(agent, action);
-            this.actionPending[key] = true;
-            try {
-                const res = await window.axios.post(url, {
-                    agent_user_id: agent.id,
-                    campaign: agent.campaign_code || this.routing.campaign_code,
-                });
-                if (res.data?.success === false) {
-                    throw new Error(res.data?.message || 'VICIdial action failed.');
-                }
-                Alpine.store('toast').info(`${successMessage} ${agent.name}`);
-            } catch (e) {
-                Alpine.store('toast').error(e.response?.data?.message || e.message || 'VICIdial action failed.');
-            } finally {
-                delete this.actionPending[key];
-            }
-        },
-
-        async monitorAgent(agent) {
-            await this.runAgentAction(agent, 'monitor', '/api/supervisor/monitor', 'Monitoring');
-        },
-
-        async whisperAgent(agent) {
-            await this.runAgentAction(agent, 'whisper', '/api/supervisor/whisper', 'Whispering to');
-        },
-
-        async forcePause(agent) {
-            await this.runAgentAction(agent, 'pause', '/api/supervisor/force-pause', 'Pause command sent to');
-        },
-
-        async forceLogout(agent) {
-            await this.runAgentAction(agent, 'logout', '/api/supervisor/force-logout', 'Logout command sent to');
         },
 
         async sendNotification() {
@@ -515,7 +477,7 @@ window.supervisorDashboard = function(initialCampaign = '') {
             const callsArr= this.agents.filter(a => a.status !== 'offline').map(a => a.calls_today);
             const currentHour = new Date().getHours();
             const hourlyLabels = Array.from({ length: 12 }, (_, i) => String((currentHour - 11 + i + 24) % 24).padStart(2, '0'));
-            const hourlyData = hourlyLabels.map((hour) => Number(hour) === currentHour ? Number(this.stats.todayTotal || 0) : 0);
+            const hourlyData = hourlyLabels.map((hour) => Number(this.stats.callsByHour?.[hour] || 0));
 
             if (this.tab === 'performance' && document.getElementById('chart-agent-perf')) {
                 document.getElementById('chart-agent-perf').innerHTML = '';
@@ -554,7 +516,10 @@ window.supervisorDashboard = function(initialCampaign = '') {
 
             if (this.tab === 'wallboard' && document.getElementById('chart-realtime')) {
                 document.getElementById('chart-realtime').innerHTML = '';
-                const sparkData = Array.from({length:20}, (_, i) => i === 19 ? Number(this.stats.callsActive || 0) : 0);
+                const sparkData = [
+                    ...Array(Math.max(0, 20 - this.activeCallHistory.length)).fill(0),
+                    ...this.activeCallHistory,
+                ];
                 const realtimeChart = new ApexCharts(document.getElementById('chart-realtime'), {
                     series: [{ name: 'Calls/min', data: sparkData }],
                     chart: { type: 'line', height: 200, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif', animations: { enabled: true, dynamicAnimation: { speed: 350 } } },

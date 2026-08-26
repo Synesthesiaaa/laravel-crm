@@ -9,6 +9,8 @@ Supervisor actions currently lose the monitored agent's campaign context, while 
 - Route Supervisor monitor, whisper, pause, and logout actions with the CRM campaign represented by the selected dashboard context.
 - Let supervisors select a CRM campaign on the Supervisor page and, when available, supplement local cards from that campaign's mapped-server logged-in-agent feed across all VICIdial campaigns.
 - Scope the Supervisor agent/session data to the active CRM campaign and expose the resolved campaign and server identity in the interface.
+- Derive Supervisor wallboard KPIs from campaign-scoped call lifecycle and current agent state data, with bounded near-real-time refreshes.
+- Keep Supervisor agent cards read-only by removing monitor, whisper, pause, and logout controls from the dashboard.
 - Resolve Non-Agent API requests from the selected `vicidial_servers` row rather than allowing one global endpoint override to replace every campaign-specific endpoint.
 - Add regression coverage for two campaigns mapped to different VICIdial servers and for campaigns with no mapping.
 - **BREAKING**: Off-CRM or unmapped campaign requests will no longer use an unrelated active/default VICIdial server.

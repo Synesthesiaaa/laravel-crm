@@ -32,13 +32,15 @@ Alternative considered: retain the cross-campaign default as a last resort. This
 
 ### Use the active CRM campaign for Supervisor scope
 
-`SupervisorAgentsController` will resolve the requested CRM campaign query parameter, then the active CRM session campaign, and scope session, call, disposition, and aggregate queries to it. The response will include a top-level routing context containing the campaign code/name, configured state, and non-sensitive server identity. Agent items will carry the same campaign code so the existing Alpine controls can submit it explicitly. When the selected server has Non-Agent credentials, its logged-in-agent feed is requested across all VICIdial campaigns and matched to known CRM users by VICIdial username, so a different VICIdial campaign does not hide an agent on the correctly mapped server.
+`SupervisorAgentsController` will resolve the requested CRM campaign query parameter, then the active CRM session campaign, and scope session, call, disposition, and aggregate queries to it. The response will include a top-level routing context containing the campaign code/name, configured state, and non-sensitive server identity. Agent items will carry the same campaign code for consistent context. When the selected server has Non-Agent credentials, its logged-in-agent feed is requested across all VICIdial campaigns and matched to known CRM users by VICIdial username, so a different VICIdial campaign does not hide an agent on the correctly mapped server.
+
+The wallboard KPIs will be calculated in one campaign-scoped call query: terminal calls provide today's total, answered terminal calls provide answer rate, dialed-to-answered timestamps provide average wait, and recorded/fallback answered-to-ended durations provide average handle time. Remote queue depth and statuses supplement local state when the mapped server responds. The browser will prevent overlapping refresh requests, poll every five seconds without broadcasts (and every fifteen seconds with broadcasts), and keep the last successful values visible on transient errors.
 
 Alternative considered: combine agents from all CRM campaigns in one response and route every card independently. This was deferred because the Supervisor now has an explicit CRM campaign selector, and a combined wallboard would require additional filtering, aggregation, and interaction design beyond the requested fix.
 
 ### Require campaign context on Supervisor telephony actions
 
-Monitor, whisper, pause, logout, and notification requests will submit the displayed campaign. The controller will validate the value and pass it to `VicidialProxyService`, whose strict repository lookup selects only that campaign's server. The interface will stop swallowing failed action requests and will show accurate success or error feedback. VICIdial-directed controls will be disabled when the routing context is unconfigured.
+Notification requests will submit the displayed campaign. The controller will validate the value and pass it to `VicidialProxyService`, whose strict repository lookup selects only that campaign's server. The interface will show accurate notification failure feedback. The Supervisor agent cards are intentionally read-only: monitor, whisper, pause, and logout controls are not rendered, while the protected API endpoints remain available for other integrations.
 
 Alternative considered: infer the campaign solely from the target user's latest VICIdial session. This was rejected because an agent can retain historical rows for multiple campaigns and the Supervisor page already has an explicit active campaign context.
 
@@ -58,7 +60,7 @@ The Supervisor UI will show campaign name/code and server name only. API respons
 - [Existing off-CRM campaign behavior changes] -> Update the platform specification and tests; require an explicit CRM/server mapping for every telephony campaign.
 - [A global Non-Agent override was masking an unusual endpoint] -> Derive from each server row and document that every mapped row must contain the correct VICIdial API base URL.
 - [An agent has records in multiple campaigns] -> Scope every Supervisor data query to the selected campaign and send that campaign explicitly with actions.
-- [Rapid repeated controls issue duplicate requests] -> Track action state per agent/control, disable the in-flight control, and provide completion feedback without changing focus.
+- [Rapid refreshes issue duplicate requests] -> Track one in-flight read request, poll at a bounded interval, and retain the last successful values when a refresh fails.
 
 ## Migration Plan
 

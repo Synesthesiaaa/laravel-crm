@@ -14,6 +14,7 @@ use App\Services\Telephony\ReportingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class SupervisorAgentsController extends Controller
@@ -69,19 +70,26 @@ class SupervisorAgentsController extends Controller
         $userIds = $users->pluck('id')->all();
         $agentNames = $users->keyBy('id')->map(fn ($u) => $u->full_name ?? $u->username ?? (string) $u->id)->all();
 
-        $activeCalls = CallSession::whereIn('user_id', $userIds)
+        $activeCallRecords = CallSession::whereIn('user_id', $userIds)
             ->where('campaign_code', $campaign)
             ->active()
-            ->get()
-            ->keyBy('user_id');
+            ->get();
+        $activeCalls = $activeCallRecords->keyBy('user_id');
 
-        $todaysCompleted = CallSession::whereIn('user_id', $userIds)
+        $todayCalls = CallSession::whereIn('user_id', $userIds)
             ->where('campaign_code', $campaign)
             ->whereDate('dialed_at', $today)
-            ->whereIn('status', ['completed', 'failed', 'abandoned'])
-            ->select('user_id', DB::raw('COUNT(*) as total'))
+            ->get([
+                'user_id',
+                'status',
+                'dialed_at',
+                'answered_at',
+                'ended_at',
+                'call_duration_seconds',
+            ]);
+        $todayCallMetrics = $todayCalls
             ->groupBy('user_id')
-            ->pluck('total', 'user_id');
+            ->map(fn (Collection $calls): array => $this->summarizeCalls($calls));
 
         $todaysDispositions = CampaignDispositionRecord::whereIn('agent', array_values($agentNames))
             ->where('campaign_code', $campaign)
@@ -95,7 +103,7 @@ class SupervisorAgentsController extends Controller
             ->get()
             ->keyBy('user_id');
 
-        $agents = $users->map(function (User $user) use ($campaign, $activeCalls, $todaysCompleted, $todaysDispositions, $agentNames, $viciSessions, $remoteAgents) {
+        $agents = $users->map(function (User $user) use ($campaign, $activeCalls, $todayCallMetrics, $todaysDispositions, $agentNames, $viciSessions, $remoteAgents) {
             $latestLog = $user->attendanceLogs->first();
             $isOnline = $latestLog?->event_type === 'login';
             $currentCall = $activeCalls->get($user->id);
@@ -112,10 +120,19 @@ class SupervisorAgentsController extends Controller
                 $status = 'available';
             }
 
-            $callsToday = $todaysCompleted->get($user->id, 0);
-            $handleTimes = $currentCall && $currentCall->answered_at
-                ? [(int) now()->diffInSeconds($currentCall->answered_at)]
-                : [];
+            $callMetrics = $todayCallMetrics->get($user->id, [
+                'total' => 0,
+                'terminal' => 0,
+                'answered' => 0,
+                'answered_terminal' => 0,
+                'wait_seconds' => 0,
+                'wait_samples' => 0,
+                'handle_seconds' => 0,
+                'handle_samples' => 0,
+            ]);
+            $averageHandle = $callMetrics['handle_samples'] > 0
+                ? round($callMetrics['handle_seconds'] / $callMetrics['handle_samples'], 1)
+                : 0;
 
             return [
                 'id' => $user->id,
@@ -123,8 +140,8 @@ class SupervisorAgentsController extends Controller
                 'campaign_code' => $campaign,
                 'status' => $status,
                 'status_label' => $this->statusLabel($status),
-                'calls_today' => $callsToday,
-                'avg_handle' => 0,
+                'calls_today' => $callMetrics['terminal'],
+                'avg_handle' => $averageHandle,
                 'dispositions' => $dispositions,
                 'since' => $latestLog?->event_time?->format('H:i') ?? '—',
                 'current_call' => $currentCall ? [
@@ -137,13 +154,37 @@ class SupervisorAgentsController extends Controller
             ];
         });
 
+        $totalToday = (int) $todayCallMetrics->sum('terminal');
+        $answeredToday = (int) $todayCallMetrics->sum('answered_terminal');
+        $waitSamples = (int) $todayCallMetrics->sum('wait_samples');
+        $waitSeconds = (int) $todayCallMetrics->sum('wait_seconds');
+        $handleSamples = (int) $todayCallMetrics->sum('handle_samples');
+        $handleSeconds = (int) $todayCallMetrics->sum('handle_seconds');
+        $answerRate = $totalToday > 0 ? round(($answeredToday / $totalToday) * 100, 1) : 0;
+        $remoteOnCallCount = $agents->where('status', 'oncall')->count();
+        $callsByHour = $todayCalls
+            ->filter(fn (CallSession $call): bool => $call->dialed_at !== null)
+            ->groupBy(fn (CallSession $call): string => $call->dialed_at->format('H'))
+            ->map(fn (Collection $calls): int => $calls->count())
+            ->all();
+
         $stats = [
-            'agentsOnline' => $agents->whereIn('status', ['available', 'oncall'])->count(),
-            'callsWaiting' => 0,
-            'callsActive' => $activeCalls->count(),
-            'avgWaitTime' => 0,
-            'todayTotal' => $todaysCompleted->sum(),
-            'slaPercent' => 100,
+            'agentsOnline' => $agents->whereIn('status', ['available', 'oncall', 'break', 'wrapup'])->count(),
+            'agentsAvailable' => $agents->where('status', 'available')->count(),
+            'agentsOnCall' => $remoteOnCallCount,
+            'agentsPaused' => $agents->where('status', 'break')->count(),
+            'callsWaiting' => (int) ($agents->max('queue_count') ?? 0),
+            'callsActive' => max($activeCallRecords->count(), $remoteOnCallCount),
+            'avgWaitTime' => $waitSamples > 0 ? round($waitSeconds / $waitSamples, 1) : 0,
+            'avgHandleTime' => $handleSamples > 0 ? round($handleSeconds / $handleSamples, 1) : 0,
+            'todayTotal' => $totalToday,
+            'callsAnswered' => $answeredToday,
+            'answerRate' => $answerRate,
+            'callsByHour' => $callsByHour,
+            // Keep the legacy key for API consumers while the UI uses the
+            // more precise answer-rate label.
+            'slaPercent' => $answerRate,
+            'updatedAt' => now()->toIso8601String(),
         ];
 
         return response()->json([
@@ -303,5 +344,67 @@ class SupervisorAgentsController extends Controller
             'wrapup' => 'Wrap-up',
             default => 'Offline',
         };
+    }
+
+    /**
+     * Summarize today's calls for one agent without making per-agent queries.
+     * Wait time is measured from dialed_at to answered_at. Handle time uses
+     * call_duration_seconds when available and falls back to answered_at to
+     * ended_at for completed calls.
+     *
+     * @param  Collection<int, CallSession>  $calls
+     * @return array{total: int, terminal: int, answered: int, answered_terminal: int, wait_seconds: int, wait_samples: int, handle_seconds: int, handle_samples: int}
+     */
+    private function summarizeCalls(Collection $calls): array
+    {
+        $terminalCalls = $calls->filter(fn (CallSession $call): bool => $call->isTerminal());
+        $answeredCalls = $calls->filter(fn (CallSession $call): bool => $call->answered_at !== null);
+        $answeredTerminalCalls = $terminalCalls->filter(fn (CallSession $call): bool => $call->answered_at !== null);
+        $waitSeconds = 0;
+        $waitSamples = 0;
+
+        foreach ($answeredTerminalCalls as $call) {
+            if ($call->dialed_at === null || $call->answered_at === null) {
+                continue;
+            }
+
+            $wait = (int) $call->dialed_at->diffInSeconds($call->answered_at, false);
+            if ($wait < 0) {
+                continue;
+            }
+
+            $waitSeconds += $wait;
+            $waitSamples++;
+        }
+
+        $handleSeconds = 0;
+        $handleSamples = 0;
+        foreach ($terminalCalls as $call) {
+            if ($call->answered_at === null) {
+                continue;
+            }
+
+            $duration = $call->call_duration_seconds;
+            if ($duration === null && $call->ended_at !== null) {
+                $duration = (int) $call->answered_at->diffInSeconds($call->ended_at, false);
+            }
+            if ($duration === null || (int) $duration < 0) {
+                continue;
+            }
+
+            $handleSeconds += (int) $duration;
+            $handleSamples++;
+        }
+
+        return [
+            'total' => $calls->count(),
+            'terminal' => $terminalCalls->count(),
+            'answered' => $answeredCalls->count(),
+            'answered_terminal' => $answeredTerminalCalls->count(),
+            'wait_seconds' => $waitSeconds,
+            'wait_samples' => $waitSamples,
+            'handle_seconds' => $handleSeconds,
+            'handle_samples' => $handleSamples,
+        ];
     }
 }
