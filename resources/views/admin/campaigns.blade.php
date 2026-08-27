@@ -168,7 +168,7 @@
                                             <template x-for="campaign in filteredCampaigns" :key="campaign.code">
                                                 <label class="flex min-h-[44px] cursor-pointer items-start gap-2 rounded-md border border-transparent px-2 py-2 text-sm hover:border-[var(--color-border)] hover:bg-[var(--color-surface-raised)] focus-within:ring-2 focus-within:ring-[var(--color-primary)]">
                                                     <input type="checkbox" name="vicidial_campaign_codes[]" class="mt-1 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
-                                                           :value="campaign.code" x-model="selected" :disabled="campaign.unavailable">
+                                                           :value="campaign.code" x-model="selected" :disabled="campaign.unavailable === true">
                                                     <span class="min-w-0">
                                                         <span class="block truncate font-medium text-[var(--color-on-surface)]" x-text="campaign.code"></span>
                                                         <span class="block truncate text-xs text-[var(--color-on-surface-muted)]" x-text="campaign.name"></span>
@@ -262,7 +262,12 @@
                         .map((campaign) => ({ ...campaign, unavailable: true }));
                     this.campaigns = [...remote, ...unavailable]
                         .filter((campaign, index, all) => all.findIndex((item) => item.code.toLowerCase() === campaign.code.toLowerCase()) === index)
-                        .map((campaign) => ({ ...campaign, code: String(campaign.code), name: String(campaign.name || campaign.code) }));
+                        .map((campaign) => ({
+                            ...campaign,
+                            code: String(campaign.code),
+                            name: String(campaign.name || campaign.code),
+                            unavailable: Boolean(campaign.unavailable),
+                        }));
                     this.loaded = true;
                 } catch (exception) {
                     this.error = exception.message || 'Unable to load VICIdial campaigns.';

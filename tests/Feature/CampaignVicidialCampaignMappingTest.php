@@ -79,6 +79,7 @@ class CampaignVicidialCampaignMappingTest extends TestCase
             ->assertSee('Search VICIdial campaigns')
             ->assertSee('Select all')
             ->assertSee('Clear all')
+            ->assertSee(':disabled="campaign.unavailable === true"', false)
             ->assertSee('At least one campaign is required.');
     }
 
