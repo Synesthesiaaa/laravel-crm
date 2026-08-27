@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\Telephony\HistoricalTelephonyReportService;
+use App\Services\Telephony\RealtimeTelephonyReportService;
 use App\Services\Telephony\ReportingService;
 use App\Services\Telephony\TelephonyCampaignResolver;
 use Illuminate\Http\JsonResponse;
@@ -11,6 +12,26 @@ use Illuminate\Http\Request;
 
 class ReportingController extends Controller
 {
+    public function realtime(
+        Request $request,
+        RealtimeTelephonyReportService $service,
+        ?string $mode = null,
+    ): JsonResponse {
+        $validated = $request->validate([
+            'mode' => ['nullable', 'in:live,today'],
+        ]);
+        $mode = $mode ?? (string) ($validated['mode'] ?? 'live');
+        if (! in_array($mode, ['live', 'today'], true)) {
+            abort(422, 'Unsupported real-time report mode.');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => null,
+            'data' => $service->dashboard($request, $mode),
+        ]);
+    }
+
     public function dashboard(Request $request, HistoricalTelephonyReportService $service): JsonResponse
     {
         $validated = $request->validate([

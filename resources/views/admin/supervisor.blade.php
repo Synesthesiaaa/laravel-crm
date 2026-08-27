@@ -39,8 +39,9 @@
                       'badge-active': routing.reporting_status === 'live',
                       'badge-pending': routing.reporting_status === 'degraded',
                       'badge-error': routing.reporting_status === 'unavailable',
+                      'badge-inactive': routing.reporting_status === 'stale',
                   }"
-                  x-text="routing.reporting_status === 'live' ? 'VICIdial reports live' : (routing.reporting_status === 'degraded' ? 'VICIdial reports degraded' : 'VICIdial reports unavailable')"></span>
+                  x-text="routing.reporting_status === 'live' ? 'VICIdial reports live' : (routing.reporting_status === 'degraded' ? 'VICIdial reports degraded' : (routing.reporting_status === 'stale' ? 'VICIdial reports stale' : 'VICIdial reports unavailable'))"></span>
         </div>
         @if(!empty($supervisorCampaigns))
             <div class="mt-3 max-w-sm">
@@ -65,6 +66,28 @@
            class="text-xs mt-2"
            :class="routing.reporting_status === 'degraded' ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'"
            x-text="routing.message"></p>
+        <p x-show="freshness.status === 'stale'"
+           role="status"
+           aria-live="polite"
+           class="text-xs mt-2 text-[var(--color-warning)]"
+           x-text="freshness.last_success_at ? 'Live data is stale. Last successful update: ' + formatAge(freshness.last_success_at) : 'Live data is stale. No successful update is available.'"></p>
+        @if(auth()->user()?->isAdmin())
+            <details x-show="Object.keys(routing.diagnostics || {}).length" class="mt-3 rounded-lg border border-[var(--color-border)] p-3">
+                <summary class="cursor-pointer text-xs font-semibold text-[var(--color-on-surface)]">Technical source diagnostics</summary>
+                <div class="mt-3 space-y-2">
+                    <template x-for="(source, name) in (routing.diagnostics || {})" :key="name">
+                        <div class="rounded border border-[var(--color-border)] p-2 text-xs">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <span class="font-medium text-[var(--color-on-surface)]" x-text="name"></span>
+                                <span class="text-[var(--color-on-surface-muted)]" x-text="source.status + ' · ' + source.classification"></span>
+                            </div>
+                            <p class="mt-1 text-[var(--color-on-surface-dim)]" x-text="'HTTP ' + (source.http_status ?? '—') + ' · ' + (source.duration_ms ?? '—') + ' ms · ' + (source.parsed_rows ?? 0) + ' rows'"></p>
+                            <p x-show="source.message" class="mt-1 text-[var(--color-warning)]" x-text="source.message"></p>
+                        </div>
+                    </template>
+                </div>
+            </details>
+        @endif
     </section>
 
     <div x-show="errorMessage"
@@ -381,6 +404,12 @@ window.supervisorDashboard = function(initialCampaign = '') {
             server_name: '',
             reporting_status: 'not_configured',
             message: '',
+            diagnostics: {},
+        },
+        freshness: {
+            status: 'offline',
+            last_success_at: null,
+            stale_after_seconds: 45,
         },
         notificationPending: false,
         refreshInFlight: false,
@@ -404,6 +433,13 @@ window.supervisorDashboard = function(initialCampaign = '') {
         },
         errorMessage: '',
         lastRefreshAt: '',
+
+        formatAge(value) {
+            if (!value) return 'unknown';
+            const seconds = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 1000));
+            if (seconds < 60) return `${seconds}s ago`;
+            return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, '0')}s ago`;
+        },
 
         formatSeconds(value) {
             if (value === null || value === undefined || value === '') return '—';
@@ -457,6 +493,7 @@ window.supervisorDashboard = function(initialCampaign = '') {
                 });
                 this.agents = res.data.agents ?? [];
                 this.routing = res.data.routing ?? this.routing;
+                this.freshness = res.data.freshness ?? this.freshness;
                 this.selectedCampaign = this.routing.campaign_code || this.selectedCampaign;
                 this.stats  = res.data.stats  ?? {
                     agentsOnline: 0, callsWaiting: 0, callsActive: 0,
@@ -478,6 +515,10 @@ window.supervisorDashboard = function(initialCampaign = '') {
                 }
             } catch (e) {
                 this.errorMessage = e.response?.data?.message || 'The supervisor API could not be reached. Check database, auth, and telephony services.';
+                if (this.lastRefreshAt) {
+                    this.freshness.status = 'stale';
+                    this.routing.reporting_status = 'stale';
+                }
             } finally {
                 this.loading = false;
                 this.refreshInFlight = false;

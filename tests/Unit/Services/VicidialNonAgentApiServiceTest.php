@@ -32,7 +32,7 @@ class VicidialNonAgentApiServiceTest extends TestCase
 
         $service = new VicidialNonAgentApiService(
             app(VicidialServerRepository::class),
-            Mockery::mock(TelephonyLogger::class),
+            Mockery::mock(TelephonyLogger::class)->shouldIgnoreMissing(),
         );
 
         $result = $service->execute(User::factory()->make(), 'campaign-a', 'agent_status');
@@ -57,7 +57,7 @@ class VicidialNonAgentApiServiceTest extends TestCase
 
         $service = new VicidialNonAgentApiService(
             app(VicidialServerRepository::class),
-            Mockery::mock(TelephonyLogger::class),
+            Mockery::mock(TelephonyLogger::class)->shouldIgnoreMissing(),
         );
 
         $result = $service->execute(User::factory()->make(), 'campaign-a', 'agent_status');
@@ -146,6 +146,142 @@ class VicidialNonAgentApiServiceTest extends TestCase
         $result = $service->execute(User::factory()->make(), 'campaign-a', 'version');
 
         $this->assertFalse($result->success);
-        $this->assertSame('Unable to reach VICIdial Non-Agent API.', $result->message);
+        $this->assertSame('The VICIdial report connection was refused.', $result->message);
+        $this->assertSame('CONNECTION_REFUSED', $result->meta['classification']);
+    }
+
+    public function test_it_classifies_a_http_200_login_error_without_parsing_it_as_report_data(): void
+    {
+        VicidialServer::factory()->create([
+            'campaign_code' => 'campaign-a',
+            'api_url' => 'https://campaign-a.example/agc/api.php',
+            'api_user' => 'report-user',
+            'api_pass' => 'report-pass',
+            'is_default' => true,
+        ]);
+        Http::fake(['*' => Http::response('ERROR: Login incorrect, please try again: |||BAD|', 200)]);
+
+        $service = new VicidialNonAgentApiService(
+            app(VicidialServerRepository::class),
+            Mockery::mock(TelephonyLogger::class)->shouldIgnoreMissing(),
+        );
+
+        $result = $service->execute(User::factory()->make(), 'campaign-a', 'call_status_stats');
+
+        $this->assertFalse($result->success);
+        $this->assertSame('AUTHENTICATION_FAILED', $result->meta['classification']);
+        $this->assertSame(200, $result->meta['http_status']);
+        $this->assertSame(0, $result->meta['parsed_rows']);
+        $this->assertStringNotContainsString('report-pass', (string) $result->message);
+    }
+
+    public function test_it_classifies_a_http_200_login_html_page_as_authentication_failure(): void
+    {
+        VicidialServer::factory()->create([
+            'campaign_code' => 'campaign-a',
+            'api_url' => 'https://campaign-a.example/agc/api.php',
+            'api_user' => 'report-user',
+            'api_pass' => 'report-pass',
+            'is_default' => true,
+        ]);
+        Http::fake(['*' => Http::response('<html><title>Login</title><form><input name="password" type="password"></form></html>', 200, ['Content-Type' => 'text/html'])]);
+
+        $service = new VicidialNonAgentApiService(
+            app(VicidialServerRepository::class),
+            Mockery::mock(TelephonyLogger::class)->shouldIgnoreMissing(),
+        );
+        $result = $service->execute(User::factory()->make(), 'campaign-a', 'call_status_stats');
+
+        $this->assertFalse($result->success);
+        $this->assertSame('AUTHENTICATION_FAILED', $result->meta['classification']);
+        $this->assertSame(0, $result->meta['parsed_rows']);
+    }
+
+    public function test_it_classifies_permission_errors_returned_with_http_200(): void
+    {
+        VicidialServer::factory()->create([
+            'campaign_code' => 'campaign-a',
+            'api_url' => 'https://campaign-a.example/agc/api.php',
+            'api_user' => 'report-user',
+            'api_pass' => 'report-pass',
+            'is_default' => true,
+        ]);
+        Http::fake(['*' => Http::response('ERROR: report access denied - View Reports permission required', 200)]);
+
+        $service = new VicidialNonAgentApiService(
+            app(VicidialServerRepository::class),
+            Mockery::mock(TelephonyLogger::class)->shouldIgnoreMissing(),
+        );
+        $result = $service->execute(User::factory()->make(), 'campaign-a', 'call_dispo_report');
+
+        $this->assertFalse($result->success);
+        $this->assertSame('PERMISSION_DENIED', $result->meta['classification']);
+    }
+
+    public function test_it_treats_a_success_marker_as_valid_empty_report_data(): void
+    {
+        VicidialServer::factory()->create([
+            'campaign_code' => 'campaign-a',
+            'api_url' => 'https://campaign-a.example/agc/api.php',
+            'api_user' => 'report-user',
+            'api_pass' => 'report-pass',
+            'is_default' => true,
+        ]);
+        Http::fake(['*' => Http::response('SUCCESS', 200)]);
+
+        $service = new VicidialNonAgentApiService(
+            app(VicidialServerRepository::class),
+            Mockery::mock(TelephonyLogger::class)->shouldIgnoreMissing(),
+        );
+        $result = $service->execute(User::factory()->make(), 'campaign-a', 'logged_in_agents');
+
+        $this->assertTrue($result->success);
+        $this->assertSame('REPORT_EMPTY', $result->meta['classification']);
+        $this->assertSame(0, $result->meta['parsed_rows']);
+        $this->assertSame([], $result->data['rows']);
+    }
+
+    public function test_it_treats_no_logged_in_agents_as_valid_empty_report_data(): void
+    {
+        VicidialServer::factory()->create([
+            'campaign_code' => 'campaign-a',
+            'api_url' => 'https://campaign-a.example/agc/api.php',
+            'api_user' => 'report-user',
+            'api_pass' => 'report-pass',
+            'is_default' => true,
+        ]);
+        Http::fake(['*' => Http::response('ERROR: logged_in_agents NO LOGGED IN AGENTS: 9999|', 200)]);
+
+        $service = new VicidialNonAgentApiService(
+            app(VicidialServerRepository::class),
+            Mockery::mock(TelephonyLogger::class)->shouldIgnoreMissing(),
+        );
+        $result = $service->execute(User::factory()->make(), 'campaign-a', 'logged_in_agents');
+
+        $this->assertTrue($result->success);
+        $this->assertSame('REPORT_EMPTY', $result->meta['classification']);
+        $this->assertSame(0, $result->meta['parsed_rows']);
+        $this->assertSame([], $result->data['rows']);
+    }
+
+    public function test_it_classifies_html_report_changes_before_parser_consumption(): void
+    {
+        VicidialServer::factory()->create([
+            'campaign_code' => 'campaign-a',
+            'api_url' => 'https://campaign-a.example/agc/api.php',
+            'api_user' => 'report-user',
+            'api_pass' => 'report-pass',
+            'is_default' => true,
+        ]);
+        Http::fake(['*' => Http::response('<html><body>Unexpected report layout</body></html>', 200, ['Content-Type' => 'text/html'])]);
+
+        $service = new VicidialNonAgentApiService(
+            app(VicidialServerRepository::class),
+            Mockery::mock(TelephonyLogger::class)->shouldIgnoreMissing(),
+        );
+        $result = $service->execute(User::factory()->make(), 'campaign-a', 'agent_stats_export');
+
+        $this->assertFalse($result->success);
+        $this->assertSame('REPORT_HTML_CHANGED', $result->meta['classification']);
     }
 }

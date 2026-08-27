@@ -205,11 +205,30 @@ class HistoricalTelephonyReportService
         $failed = count($known) - count($successful);
         $status = count($successful) === 0 ? 'unavailable' : ($failed > 0 ? 'degraded' : 'live');
 
+        $sources = [];
+        foreach ($results as $name => $result) {
+            if (! $result instanceof OperationResult) {
+                continue;
+            }
+            $meta = $result->meta;
+            $sources[$name] = [
+                'status' => $result->success ? (($meta['classification'] ?? '') === 'REPORT_EMPTY' ? 'empty' : 'healthy') : 'unavailable',
+                'classification' => $meta['classification'] ?? ($result->success ? 'OK' : 'UNKNOWN'),
+                'http_status' => $meta['http_status'] ?? null,
+                'content_type' => $meta['content_type'] ?? null,
+                'response_bytes' => $meta['response_bytes'] ?? null,
+                'duration_ms' => $meta['duration_ms'] ?? null,
+                'parsed_rows' => $meta['parsed_rows'] ?? 0,
+                'message' => $result->success ? null : $result->message,
+            ];
+        }
+
         return [
             'status' => $status,
             'available_sections' => count($successful),
             'failed_sections' => $failed,
             'message' => $status === 'live' ? null : 'Some historical VICIdial report data is unavailable. Retry the report or verify the campaign server permissions.',
+            'sources' => $sources,
         ];
     }
 
@@ -221,22 +240,26 @@ class HistoricalTelephonyReportService
      */
     protected function summary(array $callStatus, array $agents, array $dispositions): array
     {
-        $totalCalls = (int) $callStatus['total_calls'];
-        $answeredCalls = (int) $callStatus['answered_calls'];
+        $callDataAvailable = (bool) ($callStatus['available'] ?? false);
+        $agentDataAvailable = (bool) ($agents['available'] ?? false);
+        $totalCalls = $callDataAvailable ? (int) $callStatus['total_calls'] : null;
+        $answeredCalls = $callDataAvailable ? (int) $callStatus['answered_calls'] : null;
         $contacted = $dispositions['group_totals']['contacted'] ?? null;
-        $averageTalk = $agents['summary']['average_talk_time_seconds'];
-        $agentCount = (int) $agents['summary']['agents_with_activity'];
+        $averageTalk = $agentDataAvailable ? $agents['summary']['average_talk_time_seconds'] : null;
+        $agentCount = $agentDataAvailable ? (int) $agents['summary']['agents_with_activity'] : null;
 
         return [
             'total_calls' => $totalCalls,
             'answered_calls' => $answeredCalls,
-            'answer_rate' => $totalCalls > 0 ? round(($answeredCalls / $totalCalls) * 100, 2) : 0,
-            'contact_rate' => is_numeric($contacted) && $totalCalls > 0
+            'answer_rate' => $totalCalls !== null && $totalCalls > 0 ? round(($answeredCalls / $totalCalls) * 100, 2) : ($totalCalls === null ? null : 0),
+            'contact_rate' => is_numeric($contacted) && $totalCalls !== null && $totalCalls > 0
                 ? round(((float) $contacted / $totalCalls) * 100, 2)
                 : null,
             'average_talk_time_seconds' => $averageTalk,
             'agents_with_activity' => $agentCount,
-            'calls_per_agent' => $agentCount > 0 ? round($totalCalls / $agentCount, 2) : null,
+            'calls_per_agent' => $agentCount !== null && $agentCount > 0 && $totalCalls !== null
+                ? round($totalCalls / $agentCount, 2)
+                : null,
         ];
     }
 
@@ -246,6 +269,7 @@ class HistoricalTelephonyReportService
     protected function parseCallStatus(?OperationResult $result): array
     {
         $empty = [
+            'available' => false,
             'total_calls' => 0,
             'answered_calls' => 0,
             'campaigns' => [],
@@ -287,6 +311,7 @@ class HistoricalTelephonyReportService
         arsort($statusMap);
 
         return [
+            'available' => true,
             'total_calls' => array_sum(array_column($campaignMap, 'total_calls')),
             'answered_calls' => array_sum(array_column($campaignMap, 'answered_calls')),
             'campaigns' => array_values($campaignMap),
@@ -305,10 +330,11 @@ class HistoricalTelephonyReportService
     protected function parseAgentStats(?OperationResult $result): array
     {
         $empty = [
+            'available' => false,
             'rows' => [],
             'summary' => [
-                'agents_with_activity' => 0,
-                'total_calls' => 0,
+                'agents_with_activity' => null,
+                'total_calls' => null,
                 'average_talk_time_seconds' => null,
                 'total_talk_time_seconds' => null,
                 'total_pause_time_seconds' => null,
@@ -320,6 +346,10 @@ class HistoricalTelephonyReportService
         }
         $rows = $this->rows($result);
         if (count($rows) < 2) {
+            $empty['available'] = true;
+            $empty['summary']['agents_with_activity'] = 0;
+            $empty['summary']['total_calls'] = 0;
+
             return $empty;
         }
         $headers = array_map(fn (mixed $header): string => $this->key($header), $rows[0]);
@@ -382,6 +412,7 @@ class HistoricalTelephonyReportService
         $totalCalls = array_sum(array_column($agents, 'calls'));
 
         return [
+            'available' => true,
             'rows' => array_values($agents),
             'summary' => [
                 'agents_with_activity' => count($agents),
@@ -476,8 +507,11 @@ class HistoricalTelephonyReportService
      * @param  array<string, int|float>  $codeTotals
      * @return array<int, array<string, int|float|string>>
      */
-    protected function funnel(int $totalCalls, int $answeredCalls, array $codeTotals): array
+    protected function funnel(?int $totalCalls, ?int $answeredCalls, array $codeTotals): array
     {
+        if ($totalCalls === null || $answeredCalls === null) {
+            return [];
+        }
         $groups = config('vicidial.report_disposition_groups', []);
         $configuredGroups = array_filter(
             ['contacted', 'qualified', 'successful'],

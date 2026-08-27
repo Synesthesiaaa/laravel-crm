@@ -135,3 +135,32 @@ The Supervisor broadcast message form SHALL remain available with its recipient 
 - **WHEN** an authorized supervisor submits a valid broadcast for the selected CRM campaign
 - **THEN** the existing notification endpoint receives the selected campaign context and sends the notification
 - **AND** the refactor does not move the functionality into Reports
+
+### Requirement: VICIdial transport diagnostics remain server-scoped and redacted
+The system SHALL resolve Non-Agent API requests from the selected CRM campaign's mapped active VICIdial server, preserve explicit per-server URLs, classify HTTP 200 error bodies, and expose safe transport metadata without credentials or unmasked customer data.
+
+#### Scenario: VICIdial returns a login or permission error with HTTP 200
+- **WHEN** a mapped server returns an authentication or permission error body with a successful HTTP status
+- **THEN** the transport result is classified as `AUTHENTICATION_FAILED` or `PERMISSION_DENIED`
+- **AND** the report parser does not treat the body as report rows
+
+#### Scenario: VICIdial returns a valid empty operational feed
+- **WHEN** the mapped server returns a recognized no-data response such as `NO LOGGED IN AGENTS`
+- **THEN** the source is classified as `REPORT_EMPTY`
+- **AND** the Supervisor remains operational without a false degraded warning
+
+### Requirement: Real-time and historical report modes have explicit scopes
+The system SHALL expose Live, Today, and Historical report modes. Live SHALL use one normalized Supervisor snapshot per refresh and label rolling metrics with their window. Today SHALL distinguish midnight-to-now totals from current operational state. Historical SHALL retain date-range analytics and comparison behavior.
+
+#### Scenario: Live or Today report is refreshed
+- **WHEN** an authorized report user selects Live or Today
+- **THEN** the report uses the campaign-scoped normalized snapshot and bounded CRM event aggregation
+- **AND** unavailable values remain null or visibly unavailable rather than being replaced with zero
+
+### Requirement: Real-time polling is bounded and freshness-aware
+The Reports Live and Today modes SHALL prevent overlapping requests, stop polling while the page is hidden, clean up timers and charts on navigation or mode changes, and expose live, degraded, stale, and unavailable source states.
+
+#### Scenario: A refresh fails after a successful snapshot
+- **WHEN** a subsequent real-time refresh fails
+- **THEN** the last successful values remain visible with stale/retry context
+- **AND** the UI does not show a permanently green live state

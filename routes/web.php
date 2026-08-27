@@ -104,6 +104,18 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::post('api/leads/switch', [\App\Http\Controllers\Api\LeadController::class, 'switch'])->name('api.leads.switch')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
     Route::post('api/leads/update-fields', [\App\Http\Controllers\Api\LeadController::class, 'updateFields'])->name('api.leads.update-fields')->middleware(['throttle:api', 'telephony_feature:lead_tools']);
     Route::get('api/reports/call-status-stats', [\App\Http\Controllers\Api\ReportingController::class, 'callStatusStats'])->name('api.reports.call-status-stats')->middleware('throttle:api');
+    Route::get('api/reports/realtime/{mode?}', [\App\Http\Controllers\Api\ReportingController::class, 'realtime'])
+        ->whereIn('mode', ['live', 'today'])
+        ->name('api.reports.realtime')
+        ->middleware(['role:Team Leader,Admin,Super Admin', 'throttle:telephony-poll']);
+    Route::get('api/reports/live', [\App\Http\Controllers\Api\ReportingController::class, 'realtime'])
+        ->defaults('mode', 'live')
+        ->name('api.reports.live')
+        ->middleware(['role:Team Leader,Admin,Super Admin', 'throttle:telephony-poll']);
+    Route::get('api/reports/today', [\App\Http\Controllers\Api\ReportingController::class, 'realtime'])
+        ->defaults('mode', 'today')
+        ->name('api.reports.today')
+        ->middleware(['role:Team Leader,Admin,Super Admin', 'throttle:telephony-poll']);
     Route::get('api/reports/dashboard', [\App\Http\Controllers\Api\ReportingController::class, 'dashboard'])->name('api.reports.dashboard')->middleware('throttle:api');
     Route::get('api/reports/call-dispo-report', [\App\Http\Controllers\Api\ReportingController::class, 'callDispoReport'])->name('api.reports.call-dispo-report')->middleware('throttle:api');
     Route::get('api/reports/agent-stats', [\App\Http\Controllers\Api\ReportingController::class, 'agentStats'])->name('api.reports.agent-stats')->middleware('throttle:api');

@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\CallSession;
 use App\Models\Campaign;
 use App\Models\User;
 use App\Models\VicidialServer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -28,6 +30,10 @@ class ReportsDashboardTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Historical Performance');
+        $response->assertSee('Live — rolling window');
+        $response->assertSee('Today — midnight to now');
+        $response->assertSee('chart-live-activity');
+        $response->assertSee('refreshInFlight');
         $response->assertSee('Disposition Scope');
         $response->assertSee('Hide system dispositions');
         $response->assertSee('Call Volume Trend');
@@ -71,15 +77,9 @@ class ReportsDashboardTest extends TestCase
 
         Http::fake(function ($request) {
             return match ($request->data()['function'] ?? null) {
-                'call_status_stats' => Http::response('VICICAMP|10|4|08-10|SALE-2,NA-8', 200),
-                'agent_stats_export' => Http::response(
-                    "user|full_name|calls|avg_talk_time\nagent-a|Agent A|4|00:01:00\nagent-a|Agent A|2|00:02:00",
-                    200,
-                ),
-                'call_dispo_report' => Http::response(
-                    "campaign|ingroup|NA|SALE\nVICICAMP|IN|8|2",
-                    200,
-                ),
+                'call_status_stats' => Http::response(file_get_contents(base_path('tests/Fixtures/Vicidial/call_status_stats.txt')), 200),
+                'agent_stats_export' => Http::response(file_get_contents(base_path('tests/Fixtures/Vicidial/agent_stats_export.txt')), 200),
+                'call_dispo_report' => Http::response(file_get_contents(base_path('tests/Fixtures/Vicidial/call_dispo_report.txt')), 200),
                 default => Http::response('', 200),
             };
         });
@@ -109,5 +109,63 @@ class ReportsDashboardTest extends TestCase
                 && ($request->data()['query_date'] ?? null) === '2026-08-20'
                 && ($request->data()['end_date'] ?? null) === '2026-08-26';
         });
+    }
+
+    public function test_live_and_today_reports_reuse_one_normalized_snapshot_and_keep_scopes_explicit(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-26 12:00:00'));
+
+        try {
+            Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+            VicidialServer::factory()->create([
+                'campaign_code' => 'campaign-a',
+                'api_url' => 'https://reports-a.example/agc/api.php',
+                'api_user' => 'report-user',
+                'api_pass' => 'report-pass',
+            ]);
+            CallSession::factory()->create([
+                'campaign_code' => 'campaign-a',
+                'status' => CallSession::STATUS_COMPLETED,
+                'dialed_at' => now()->subMinutes(5),
+                'answered_at' => now()->subMinutes(5)->addSeconds(10),
+                'ended_at' => now()->subMinutes(5)->addSeconds(70),
+                'call_duration_seconds' => 60,
+                'disposition_code' => 'SALE',
+                'disposition_at' => now()->subMinutes(4),
+            ]);
+            $this->app->make(\App\Services\CampaignService::class)->clearCampaignsCache();
+
+            Http::fake(function ($request) {
+                return match ($request->data()['function'] ?? null) {
+                    'logged_in_agents' => Http::response("user|status\n", 200),
+                    'agent_stats_export' => Http::response("user|calls\n", 200),
+                    'call_status_stats' => Http::response('VICICAMP|1|1|12-1|SALE-1', 200),
+                    default => Http::response('', 200),
+                };
+            });
+
+            $user = User::factory()->create(['role' => User::ROLE_TEAM_LEADER]);
+            $live = $this->actingAs($user)
+                ->withSession(['campaign' => 'campaign-a', 'campaign_name' => 'Campaign A'])
+                ->getJson(route('api.reports.live', ['campaign' => 'campaign-a']));
+
+            $live->assertOk()
+                ->assertJsonPath('data.mode', 'live')
+                ->assertJsonPath('data.rolling.calls_initiated', 1)
+                ->assertJsonPath('data.rolling.answered', 1)
+                ->assertJsonPath('data.rolling.average_talk_seconds', 60)
+                ->assertJsonPath('data.time_scope.label', 'Last 15 minutes');
+
+            $today = $this->getJson(route('api.reports.today', ['campaign' => 'campaign-a']));
+            $today->assertOk()
+                ->assertJsonPath('data.mode', 'today')
+                ->assertJsonPath('data.today.total_calls', 1)
+                ->assertJsonPath('data.today.answered', 1)
+                ->assertJsonPath('data.today.label', 'Midnight → now');
+
+            Http::assertSentCount(6);
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 }

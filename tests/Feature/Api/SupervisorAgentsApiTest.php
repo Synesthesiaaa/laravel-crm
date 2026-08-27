@@ -468,6 +468,8 @@ class SupervisorAgentsApiTest extends TestCase
                 ->assertJsonPath('stats.callsAnswered', 0)
                 ->assertJsonPath('stats.callSource', 'crm')
                 ->assertJsonPath('routing.reporting_status', 'degraded')
+                ->assertJsonPath('routing.classification', 'PERMISSION_DENIED')
+                ->assertJsonPath('routing.diagnostics.call_totals.classification', 'PERMISSION_DENIED')
                 ->assertJsonPath('routing.message', 'Some VICIdial reports are unavailable, so CRM fallback metrics may be incomplete. Verify this CRM campaign server\'s API URL and network access, then confirm its API user has View Reports permission (levels 7/8).');
         } finally {
             Carbon::setTestNow();
@@ -511,6 +513,8 @@ class SupervisorAgentsApiTest extends TestCase
                 ->assertJsonPath('stats.todayTotal', 1)
                 ->assertJsonPath('stats.callSource', 'crm')
                 ->assertJsonPath('routing.reporting_status', 'unavailable')
+                ->assertJsonPath('routing.classification', 'CONNECTION_REFUSED')
+                ->assertJsonPath('routing.diagnostics.logged_agents.classification', 'CONNECTION_REFUSED')
                 ->assertJsonPath('routing.message', 'VICIdial reports are unavailable. Verify this CRM campaign server\'s API URL and network access, then confirm its API user has View Reports permission (levels 7/8).')
                 ->assertJsonMissingPath('routing.api_url')
                 ->assertJsonMissingPath('routing.api_user')

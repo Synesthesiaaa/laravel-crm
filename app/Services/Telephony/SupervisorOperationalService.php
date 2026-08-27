@@ -94,9 +94,12 @@ class SupervisorOperationalService
                 'user_id',
                 'status',
                 'dialed_at',
+                'ringing_at',
                 'answered_at',
                 'ended_at',
                 'call_duration_seconds',
+                'disposition_code',
+                'disposition_at',
             ]);
         $todayCallMetrics = $todayCalls
             ->groupBy('user_id')
@@ -109,6 +112,10 @@ class SupervisorOperationalService
             ->select('agent', DB::raw('COUNT(*) as total'))
             ->groupBy('agent')
             ->pluck('total', 'agent');
+        $rolling = $this->rollingMetrics(
+            $todayCalls,
+            now()->subMinutes((int) config('vicidial.supervisor.rolling_window_minutes', 15)),
+        );
 
         $viciSessions = VicidialAgentSession::query()
             ->whereIn('user_id', $userIds)
@@ -172,6 +179,12 @@ class SupervisorOperationalService
                 ? (int) now()->diffInSeconds($currentCall->answered_at)
                 : null;
             $stateDuration = $remote['state_duration_seconds'] ?? null;
+            $currentCallData = $currentCall ? [
+                'phone_number' => $this->maskPhoneNumber($currentCall->phone_number),
+                'status' => $currentCall->status,
+                'duration' => $currentCallDuration,
+                'source' => 'crm',
+            ] : ($remote['current_call'] ?? null);
 
             return [
                 'id' => $user->id,
@@ -190,11 +203,7 @@ class SupervisorOperationalService
                 'state_duration_seconds' => $stateDuration,
                 'idle_seconds' => $state === AgentOperationalState::Available ? $stateDuration : null,
                 'last_call_at' => null,
-                'current_call' => $currentCall ? [
-                    'phone_number' => $currentCall->phone_number,
-                    'status' => $currentCall->status,
-                    'duration' => $currentCallDuration,
-                ] : null,
+                'current_call' => $currentCallData,
                 'vici_status' => $remote['status'] ?? $viciSession?->session_status,
                 'vici_sub_status' => $remote['sub_status'] ?? null,
                 'queue_count' => $remote['queue_count'] ?? $viciSession?->last_status_payload['queue_count'] ?? null,
@@ -276,6 +285,7 @@ class SupervisorOperationalService
                 'queue' => $queue,
                 'updatedAt' => now()->toIso8601String(),
                 'slaPercent' => $answerRate,
+                'rolling' => $rolling,
             ],
             'routing' => [
                 'campaign_code' => $campaign,
@@ -284,7 +294,44 @@ class SupervisorOperationalService
                 'server_name' => $server?->server_name,
                 'reporting_status' => $remoteSnapshot['reporting_status'],
                 'message' => $remoteSnapshot['reporting_message'],
+                'diagnostics' => $remoteSnapshot['diagnostics'],
+                'classification' => $remoteSnapshot['reporting_classification'],
             ],
+            'generated_at' => now()->toIso8601String(),
+            'source_updated_at' => $remoteSnapshot['freshness']['last_success_at'],
+            'health' => $remoteSnapshot['freshness']['status'],
+            'server' => $server ? [
+                'id' => $server->getKey(),
+                'name' => $server->server_name,
+            ] : null,
+            'campaign' => [
+                'code' => $campaign,
+                'name' => $campaignConfig['name'] ?? $request->session()->get('campaign_name', $campaign),
+            ],
+            'metrics' => [
+                'agents_online' => $agentsOnline,
+                'agents_available' => $agentsAvailable,
+                'agents_on_call' => $agentsOnCall,
+                'agents_paused' => $agentsPaused,
+                'calls_waiting' => $callsWaiting,
+                'active_calls' => $activeCallCount,
+                'oldest_wait_seconds' => $oldestWait,
+                'average_wait_seconds' => $avgWait,
+            ],
+            'sources' => $remoteSnapshot['source_health'],
+            'freshness' => $remoteSnapshot['freshness'],
+            'active_calls' => $agents
+                ->filter(fn (array $agent): bool => is_array($agent['current_call'] ?? null))
+                ->map(function (array $agent): array {
+                    return [
+                        'agent_id' => $agent['id'],
+                        'agent_name' => $agent['name'],
+                        'campaign_code' => $agent['campaign_code'],
+                        ...$agent['current_call'],
+                    ];
+                })
+                ->values(),
+            'queues' => [],
         ];
     }
 
@@ -324,6 +371,14 @@ class SupervisorOperationalService
             'performance_source' => 'crm',
             'reporting_status' => 'not_configured',
             'reporting_message' => null,
+            'reporting_classification' => 'NOT_CONFIGURED',
+            'source_health' => [],
+            'diagnostics' => [],
+            'freshness' => [
+                'status' => 'offline',
+                'last_success_at' => null,
+                'stale_after_seconds' => (int) config('vicidial.supervisor.stale_after_seconds', 45),
+            ],
         ];
         if ($server === null) {
             $empty['reporting_message'] = "No VICIdial server is configured for campaign '{$campaign}'.";
@@ -378,6 +433,23 @@ class SupervisorOperationalService
             $reports['call_totals'] ?? null,
             $groupResult,
         ]);
+        $sourceResults = [
+            'logged_agents' => $reports['logged_agents'] ?? null,
+            'agent_performance' => $reports['agent_performance'] ?? null,
+            'call_totals' => $reports['call_totals'] ?? null,
+            'user_group_status' => $groupResult,
+        ];
+        $sourceHealth = $this->sourceHealth($sourceResults);
+        $lastSuccessAt = collect($sourceResults)
+            ->filter(fn (mixed $result): bool => $result instanceof OperationResult && $result->success)
+            ->isNotEmpty()
+            ? now()->toIso8601String()
+            : null;
+        $freshnessStatus = match ($health['status']) {
+            'live' => 'live',
+            'degraded' => 'degraded',
+            default => 'offline',
+        };
 
         return [
             'agents' => $loggedAgents['agents'],
@@ -389,26 +461,130 @@ class SupervisorOperationalService
             'performance_source' => $this->performanceSource($agentPerformance['stats']),
             'reporting_status' => $health['status'],
             'reporting_message' => $health['message'],
+            'reporting_classification' => $health['classification'],
+            'source_health' => $sourceHealth,
+            'diagnostics' => $sourceHealth,
+            'freshness' => [
+                'status' => $freshnessStatus,
+                'last_success_at' => $lastSuccessAt,
+                'stale_after_seconds' => (int) config('vicidial.supervisor.stale_after_seconds', 45),
+            ],
         ];
     }
 
     /**
      * @param  array<int, OperationResult|null>  $results
-     * @return array{status: string, message: string|null}
+     * @return array{status: string, message: string|null, classification: string|null}
      */
     private function reportingHealth(array $results): array
     {
         $reports = array_values(array_filter($results, static fn (mixed $result): bool => $result instanceof OperationResult));
         $failed = array_values(array_filter($reports, static fn (OperationResult $result): bool => ! $result->success));
         if ($failed === []) {
-            return ['status' => 'live', 'message' => null];
+            return ['status' => 'live', 'message' => null, 'classification' => null];
         }
+        $classification = (string) ($failed[0]->meta['classification'] ?? 'UNKNOWN');
         $guidance = 'Verify this CRM campaign server\'s API URL and network access, then confirm its API user has View Reports permission (levels 7/8).';
         if (count($failed) === count($reports)) {
-            return ['status' => 'unavailable', 'message' => 'VICIdial reports are unavailable. '.$guidance];
+            return [
+                'status' => 'unavailable',
+                'message' => 'VICIdial reports are unavailable. '.$guidance,
+                'classification' => $classification,
+            ];
         }
 
-        return ['status' => 'degraded', 'message' => 'Some VICIdial reports are unavailable, so CRM fallback metrics may be incomplete. '.$guidance];
+        return [
+            'status' => 'degraded',
+            'message' => 'Some VICIdial reports are unavailable, so CRM fallback metrics may be incomplete. '.$guidance,
+            'classification' => $classification,
+        ];
+    }
+
+    /**
+     * @param  array<string, OperationResult|null>  $results
+     * @return array<string, array<string, mixed>>
+     */
+    private function sourceHealth(array $results): array
+    {
+        $health = [];
+        foreach ($results as $name => $result) {
+            if (! $result instanceof OperationResult) {
+                continue;
+            }
+            $meta = $result?->meta ?? [];
+            $classification = $meta['classification'] ?? ($result?->success ? 'OK' : 'UNKNOWN');
+            $health[$name] = [
+                'status' => $result?->success ? ($classification === 'REPORT_EMPTY' ? 'empty' : 'healthy') : 'unavailable',
+                'classification' => $classification,
+                'http_status' => $meta['http_status'] ?? null,
+                'content_type' => $meta['content_type'] ?? null,
+                'response_bytes' => $meta['response_bytes'] ?? null,
+                'duration_ms' => $meta['duration_ms'] ?? null,
+                'parsed_rows' => $meta['parsed_rows'] ?? 0,
+                'last_success_at' => $result?->success ? now()->toIso8601String() : null,
+                'message' => $result?->success ? null : $result?->message,
+            ];
+        }
+
+        return $health;
+    }
+
+    /**
+     * Calculate a CRM-backed rolling window. A zero is valid when the scoped
+     * query confirms there were no events; duration averages stay null when
+     * there are no reliable samples.
+     *
+     * @param  Collection<int, CallSession>  $calls
+     * @return array<string, mixed>
+     */
+    private function rollingMetrics(Collection $calls, Carbon $from): array
+    {
+        $windowCalls = $calls->filter(
+            fn (CallSession $call): bool => $call->dialed_at !== null && $call->dialed_at->greaterThanOrEqualTo($from),
+        );
+        $answeredCalls = $windowCalls->filter(fn (CallSession $call): bool => $call->answered_at !== null);
+        $completedCalls = $windowCalls->filter(fn (CallSession $call): bool => $call->isTerminal());
+        $waits = $answeredCalls
+            ->filter(fn (CallSession $call): bool => $call->dialed_at !== null && $call->answered_at !== null)
+            ->map(fn (CallSession $call): int => max(0, (int) $call->dialed_at->diffInSeconds($call->answered_at, false)))
+            ->values();
+        $talks = $completedCalls
+            ->filter(fn (CallSession $call): bool => $call->answered_at !== null && $call->call_duration_seconds !== null)
+            ->map(fn (CallSession $call): int => max(0, (int) $call->call_duration_seconds))
+            ->values();
+        $dispositions = $windowCalls
+            ->filter(fn (CallSession $call): bool => trim((string) $call->disposition_code) !== '')
+            ->groupBy(fn (CallSession $call): string => (string) $call->disposition_code)
+            ->map(fn (Collection $items): int => $items->count())
+            ->sortDesc()
+            ->all();
+
+        return [
+            'window_minutes' => max(1, (int) config('vicidial.supervisor.rolling_window_minutes', 15)),
+            'source' => 'crm',
+            'calls_initiated' => $windowCalls->count(),
+            'answered' => $answeredCalls->count(),
+            'abandoned' => $windowCalls->where('status', CallSession::STATUS_ABANDONED)->count(),
+            'answer_rate' => $windowCalls->count() > 0
+                ? round(($answeredCalls->count() / $windowCalls->count()) * 100, 2)
+                : 0,
+            'average_wait_seconds' => $waits->isNotEmpty() ? round($waits->avg(), 1) : null,
+            'average_talk_seconds' => $talks->isNotEmpty() ? round($talks->avg(), 1) : null,
+            'dispositions' => $dispositions,
+            'available' => true,
+        ];
+    }
+
+    private function maskPhoneNumber(?string $phoneNumber): ?string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $phoneNumber) ?? '';
+        if ($digits === '') {
+            return null;
+        }
+
+        $visible = min(4, strlen($digits));
+
+        return str_repeat('*', max(0, strlen($digits) - $visible)).substr($digits, -$visible);
     }
 
     /**
@@ -478,6 +654,7 @@ class SupervisorOperationalService
                 'queue_count' => $queueCount,
                 'calls_today' => $this->nonNegativeInteger($this->remoteRowValue($row, ['calls_today', 'calls', 'total_calls'])),
                 'state_duration_seconds' => $this->parseRemoteSeconds($this->remoteRowValue($row, ['status_seconds', 'state_duration', 'pause_seconds', 'duration'])),
+                'current_call' => $this->remoteCurrentCall($row, $state),
             ];
         }
 
@@ -698,6 +875,33 @@ class SupervisorOperationalService
         $normalized = strtolower(trim((string) $header));
 
         return preg_replace('/[^a-z0-9]+/', '_', $normalized) ?: '';
+    }
+
+    /**
+     * @param  array<string, string>  $row
+     * @return array<string, mixed>|null
+     */
+    private function remoteCurrentCall(array $row, AgentOperationalState $state): ?array
+    {
+        if (! in_array($state, [AgentOperationalState::OnCall, AgentOperationalState::Ringing], true)) {
+            return null;
+        }
+
+        $rawPhone = trim((string) $this->remoteRowValue($row, ['phone_number', 'phone', 'number']));
+        $phone = $this->maskPhoneNumber($rawPhone);
+        $callId = trim((string) $this->remoteRowValue($row, ['call_id', 'uniqueid', 'lead_id']));
+        $duration = $this->parseRemoteSeconds($this->remoteRowValue($row, ['call_duration', 'call_duration_seconds', 'duration']));
+
+        return [
+            'call_id' => $callId !== '' ? $callId : null,
+            'direction' => $this->remoteRowValue($row, ['direction', 'call_type']) ?: null,
+            'campaign' => $this->remoteRowValue($row, ['campaign', 'campaign_id']) ?: null,
+            'ingroup' => $this->remoteRowValue($row, ['ingroup', 'in_group', 'queue']) ?: null,
+            'phone_number' => $phone,
+            'status' => $this->remoteRowValue($row, ['status', 'agent_status', 'state']) ?: null,
+            'duration' => $duration,
+            'source' => 'vicidial',
+        ];
     }
 
     private function stateFromRemoteAgent(string $status, string $subStatus = ''): AgentOperationalState

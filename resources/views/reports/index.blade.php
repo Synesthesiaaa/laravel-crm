@@ -12,10 +12,10 @@
         :breadcrumbs="['Dashboard' => route('dashboard'), 'Reports' => null]" />
 
     <template x-if="errorMessage">
-        <div class="rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/5 px-4 py-3">
+        <div class="rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/5 px-4 py-3" role="alert" aria-live="assertive">
             <div class="flex items-start justify-between gap-3">
                 <div>
-                    <p class="text-sm font-semibold text-[var(--color-danger)]">Report data could not be loaded</p>
+                    <p class="text-sm font-semibold text-[var(--color-danger)]" x-text="mode === 'historical' ? 'Historical report data could not be loaded' : 'Live report data could not be loaded'"></p>
                     <p class="text-xs text-[var(--color-on-surface-muted)] mt-1" x-text="errorMessage"></p>
                 </div>
                 <button type="button" class="btn-secondary text-xs" @click="refreshAll()">Retry</button>
@@ -28,7 +28,7 @@
          role="status"
          aria-live="polite">
         <p class="text-sm font-semibold text-[var(--color-warning)]"
-           x-text="dashboard.availability.status === 'unavailable' ? 'Historical reports unavailable' : 'Historical reports are partially available'"></p>
+           x-text="dashboard.availability.status === 'unavailable' ? (mode === 'historical' ? 'Historical reports unavailable' : 'Live report sources unavailable') : 'Report sources are partially available'"></p>
         <p class="text-xs text-[var(--color-on-surface-muted)] mt-1"
            x-text="dashboard.availability.message || 'Some report sections could not be loaded.'"></p>
     </div>
@@ -36,19 +36,23 @@
     <div class="md-hero">
         <div class="flex items-start justify-between flex-wrap gap-4">
             <div class="space-y-1">
-                <h2 class="text-xl font-bold text-[var(--color-on-surface)]">Historical Performance</h2>
+                <h2 class="text-xl font-bold text-[var(--color-on-surface)]" x-text="mode === 'historical' ? 'Historical Performance' : (mode === 'today' ? 'Today at a glance' : 'Live reporting')"></h2>
                 <p class="text-[var(--color-on-surface-muted)] text-sm">
                     Campaign: <span class="font-semibold text-[var(--color-primary)]" x-text="dashboard.overview.campaign"></span>
                 </p>
                 <p class="text-xs text-[var(--color-on-surface-dim)]">
-                    Selected period:
-                    <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="filters.query_date"></span>
-                    to
-                    <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="filters.end_date"></span>
+                    <span x-show="mode === 'historical'">Selected period:
+                        <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="filters.query_date"></span>
+                        to
+                        <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="filters.end_date"></span>
+                    </span>
+                    <span x-show="mode !== 'historical'" x-text="mode === 'today' ? 'Historical totals: midnight → now · live state is separate' : (realtime.timeScope || 'Rolling operational window')"></span>
                 </p>
             </div>
             <div class="flex items-center gap-2">
-                <x-badge type="active">Historical</x-badge>
+                <span class="badge"
+                      :class="mode === 'historical' ? 'badge-pending' : (realtime.status === 'live' ? 'badge-active' : 'badge-warning')"
+                      x-text="mode === 'historical' ? 'Historical' : (realtime.status || 'Unavailable')"></span>
                 <button class="btn-secondary text-xs" @click="refreshAll()" x-bind:disabled="loading">
                     <span class="inline-flex" x-bind:class="loading ? 'animate-spin' : ''">
                         <x-icon name="arrow-path" class="w-4 h-4" />
@@ -59,6 +63,85 @@
         </div>
     </div>
 
+    <div class="md-card p-4" aria-label="Report mode controls">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <label class="form-label mb-1" for="reports-mode">Report mode</label>
+                <p class="text-xs text-[var(--color-on-surface-dim)]">Choose operational telemetry or date-scoped analysis.</p>
+            </div>
+            <select id="reports-mode" class="form-select max-w-xs" x-model="mode" @change="changeMode()">
+                <option value="live">Live — rolling window</option>
+                <option value="today">Today — midnight to now</option>
+                <option value="historical">Historical — custom range</option>
+            </select>
+        </div>
+    </div>
+
+    <section x-show="mode !== 'historical'" x-cloak class="space-y-4" aria-labelledby="live-report-title">
+        <div class="flex flex-wrap items-end justify-between gap-3">
+            <div>
+                <h3 id="live-report-title" class="text-sm font-semibold text-[var(--color-on-surface)]" x-text="mode === 'today' ? 'Today and live operations' : 'Live operational metrics'"></h3>
+                <p class="text-xs text-[var(--color-on-surface-dim)]" x-text="realtime.scopeLabel"></p>
+            </div>
+            <p class="text-xs text-[var(--color-on-surface-dim)]" role="status" aria-live="polite">
+                <span x-text="realtime.lastUpdated ? 'Updated ' + realtime.lastUpdated : 'Waiting for first refresh'">Waiting for first refresh</span>
+            </p>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+            <template x-for="card in realtime.cards" :key="card.key">
+                <div class="md-card p-4 min-w-0">
+                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]" x-text="card.label"></p>
+                    <p class="mt-2 text-2xl font-bold tabular-nums text-[var(--color-on-surface)]" x-text="card.value"></p>
+                    <p class="mt-1 text-[11px] text-[var(--color-on-surface-dim)]" x-text="card.scope"></p>
+                </div>
+            </template>
+        </div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div class="chart-container">
+                <p class="chart-title">Live call activity</p>
+                <div id="chart-live-activity" style="min-height: 260px;"></div>
+                <p class="text-xs text-[var(--color-on-surface-dim)] mt-2">The chart contains only snapshots received while this page is open.</p>
+            </div>
+            <div class="md-card p-4 space-y-3">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <h4 class="text-sm font-semibold text-[var(--color-on-surface)]">Source health</h4>
+                        <p class="text-xs text-[var(--color-on-surface-dim)]">Color is supplementary; the status text is authoritative.</p>
+                    </div>
+                    <span class="badge" :class="realtime.status === 'live' ? 'badge-active' : (realtime.status === 'degraded' ? 'badge-warning' : 'badge-error')" x-text="realtime.status"></span>
+                </div>
+                <ul class="space-y-2 text-sm">
+                    <template x-for="source in realtime.sources" :key="source.key">
+                        <li class="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] px-3 py-2">
+                            <span class="text-[var(--color-on-surface)]" x-text="source.label"></span>
+                            <span class="text-xs font-medium" :class="source.status === 'healthy' ? 'text-[var(--color-success)]' : 'text-[var(--color-warning)]'" x-text="source.status"></span>
+                        </li>
+                    </template>
+                </ul>
+                <p class="text-xs text-[var(--color-on-surface-dim)]" x-show="realtime.staleMessage" x-text="realtime.staleMessage"></p>
+            </div>
+        </div>
+
+        <div class="md-card p-4">
+            <div class="flex items-center justify-between gap-3 mb-3">
+                <div>
+                    <h4 class="text-sm font-semibold text-[var(--color-on-surface)]">Recent completed outcomes</h4>
+                    <p class="text-xs text-[var(--color-on-surface-dim)]" x-text="realtime.rollingScope"></p>
+                </div>
+                <span class="text-xs text-[var(--color-on-surface-dim)]" x-text="realtime.dispositions.length + ' dispositions'"></span>
+            </div>
+            <div class="flex flex-wrap gap-2" x-show="realtime.dispositions.length">
+                <template x-for="item in realtime.dispositions" :key="item.code">
+                    <span class="badge badge-pending"><span x-text="item.code"></span>: <span x-text="item.count"></span></span>
+                </template>
+            </div>
+            <p class="text-sm text-[var(--color-on-surface-dim)]" x-show="!realtime.dispositions.length">No completed dispositions were returned for this window.</p>
+        </div>
+    </section>
+
+    <div x-show="mode === 'historical'" x-cloak>
     <div class="md-card p-4">
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3">
             <div class="form-field">
@@ -481,6 +564,8 @@
         </div>
     </section>
 
+    </div>
+
     @if(auth()->user()?->isAdmin())
     <details class="md-card p-4">
         <summary class="cursor-pointer list-none flex items-center justify-between gap-3">
@@ -535,12 +620,19 @@
 
 @push('scripts')
 <script>
+const REPORT_LIVE_POLL_SECONDS = Math.max(5, @json((int) config('vicidial.supervisor.poll_seconds', 15)));
 window.telephonyReports = function () {
     const CHART_GROUP = 'telephony-reports';
 
     return {
+        mode: 'historical',
         loading: false,
         errorMessage: '',
+        refreshInFlight: false,
+        pollInterval: null,
+        requestController: null,
+        liveHistory: [],
+        liveChart: null,
         filters: {
             crm_campaign: @json($campaign),
             campaigns: '---ALL---',
@@ -633,12 +725,36 @@ window.telephonyReports = function () {
                 { key: 'other', label: 'Other', seconds: null },
             ],
         },
+        realtime: {
+            status: 'unavailable',
+            scopeLabel: 'Rolling operational window',
+            rollingScope: 'Rolling metrics unavailable',
+            lastUpdated: '',
+            staleMessage: '',
+            cards: [],
+            sources: [],
+            dispositions: [],
+        },
         _onPopState: null,
+        _onVisibilityChange: null,
 
         async init() {
             this._onPopState = () => this.refreshAll();
             window.addEventListener('popstate', this._onPopState);
+            this._onVisibilityChange = () => {
+                if (document.hidden) {
+                    if (this.pollInterval) {
+                        clearInterval(this.pollInterval);
+                        this.pollInterval = null;
+                    }
+                    return;
+                }
+
+                this.startPolling();
+            };
+            document.addEventListener('visibilitychange', this._onVisibilityChange);
             await this.refreshAll();
+            this.startPolling();
         },
 
         destroy() {
@@ -646,35 +762,132 @@ window.telephonyReports = function () {
                 window.removeEventListener('popstate', this._onPopState);
                 this._onPopState = null;
             }
+            if (this._onVisibilityChange) {
+                document.removeEventListener('visibilitychange', this._onVisibilityChange);
+                this._onVisibilityChange = null;
+            }
+            if (this.requestController) {
+                this.requestController.abort();
+                this.requestController = null;
+            }
+            if (this.pollInterval) {
+                clearInterval(this.pollInterval);
+                this.pollInterval = null;
+            }
             this.destroyCharts();
         },
 
         destroyCharts() {
             window.crmCharts?.destroyGroup?.(CHART_GROUP);
+            this.liveChart = null;
         },
 
         async refreshAll() {
+            if (this.refreshInFlight) {
+                return;
+            }
             this.loading = true;
             this.errorMessage = '';
+            this.refreshInFlight = true;
+            this.requestController = new AbortController();
 
             try {
-                const response = await window.axios.get('/api/reports/dashboard', {
+                const endpoint = this.mode === 'historical'
+                    ? '/api/reports/dashboard'
+                    : `/api/reports/realtime/${this.mode}`;
+                const response = await window.axios.get(endpoint, {
                     params: {
                         ...this.filters,
                         campaign: this.filters.crm_campaign,
                     },
+                    signal: this.requestController.signal,
                 });
                 const data = response.data?.data ?? {};
                 this.payloads.dashboard = response.data;
-                this.applyDashboard(data);
+                if (this.mode === 'historical') {
+                    this.applyDashboard(data);
+                } else {
+                    this.applyRealtime(data);
+                }
                 await this.renderCharts();
             } catch (e) {
+                if (e.code === 'ERR_CANCELED' || e.name === 'CanceledError' || e.name === 'AbortError') {
+                    return;
+                }
                 this.errorMessage = e.response?.data?.message || 'Failed to load report data.';
+                if (this.mode !== 'historical' && this.realtime.lastUpdated) {
+                    this.realtime.status = 'stale';
+                    this.realtime.staleMessage = 'The last live snapshot could not be refreshed. Retry to request a fresh snapshot.';
+                }
                 Alpine.store('toast').error(this.errorMessage);
                 this.destroyCharts();
             } finally {
                 this.loading = false;
+                this.refreshInFlight = false;
+                this.requestController = null;
             }
+        },
+
+        startPolling() {
+            if (this.pollInterval) {
+                clearInterval(this.pollInterval);
+                this.pollInterval = null;
+            }
+            if (this.mode === 'historical') {
+                return;
+            }
+            if (document.hidden) {
+                return;
+            }
+            this.pollInterval = setInterval(() => this.refreshAll(), REPORT_LIVE_POLL_SECONDS * 1000);
+        },
+
+        changeMode() {
+            this.liveHistory = [];
+            this.destroyCharts();
+            this.startPolling();
+            this.refreshAll();
+        },
+
+        applyRealtime(data) {
+            const metrics = data.metrics || {};
+            const rolling = data.rolling || {};
+            const today = data.today || {};
+            const isToday = this.mode === 'today';
+            const status = data.freshness?.status || data.availability?.status || 'unavailable';
+            const numberOrDash = (value) => value === null || value === undefined ? '—' : this.formatNumber(value);
+            const cards = isToday ? [
+                { key: 'today-total', label: "Today's Calls", value: numberOrDash(today.total_calls), scope: today.label || 'Midnight → now' },
+                { key: 'today-answered', label: 'Answered', value: numberOrDash(today.answered), scope: today.label || 'Midnight → now' },
+                { key: 'today-rate', label: 'Answer Rate', value: this.formatPercent(today.answer_rate), scope: today.label || 'Midnight → now' },
+                { key: 'live-calls', label: 'Live Calls', value: numberOrDash(metrics.live_calls), scope: 'Current snapshot' },
+                { key: 'waiting', label: 'Waiting Calls', value: numberOrDash(metrics.calls_waiting), scope: 'Current snapshot' },
+                { key: 'available', label: 'Available Agents', value: numberOrDash(metrics.available_agents), scope: 'Current snapshot' },
+            ] : [
+                { key: 'live-calls', label: 'Live Calls', value: numberOrDash(metrics.live_calls), scope: 'Current snapshot' },
+                { key: 'active-agents', label: 'Active Agents', value: numberOrDash(metrics.active_agents), scope: 'Current snapshot' },
+                { key: 'available', label: 'Available Agents', value: numberOrDash(metrics.available_agents), scope: 'Current snapshot' },
+                { key: 'waiting', label: 'Waiting Calls', value: numberOrDash(metrics.calls_waiting), scope: 'Current snapshot' },
+                { key: 'rolling-answered', label: 'Answered', value: numberOrDash(rolling.answered), scope: rolling.label || 'Rolling window' },
+                { key: 'rolling-rate', label: 'Answer Rate', value: this.formatPercent(rolling.answer_rate), scope: rolling.label || 'Rolling window' },
+            ];
+            this.realtime = {
+                status: String(status).toLowerCase(),
+                scopeLabel: data.time_scope?.label || rolling.label || 'Rolling operational window',
+                rollingScope: rolling.label || 'Rolling metrics unavailable',
+                lastUpdated: data.freshness?.last_success_at ? new Date(data.freshness.last_success_at).toLocaleTimeString() : new Date().toLocaleTimeString(),
+                staleMessage: data.freshness?.status === 'stale' ? 'Live data is stale. Retry to request a fresh snapshot.' : (data.availability?.message || ''),
+                cards,
+                sources: Object.entries(data.sources || {}).map(([key, source]) => ({ key, label: key.replaceAll('_', ' '), status: source.status || 'unavailable' })),
+                dispositions: Object.entries((isToday ? today.dispositions : rolling.dispositions) || {}).map(([code, count]) => ({ code, count: this.formatNumber(count) })),
+            };
+            this.liveHistory = [...this.liveHistory, {
+                label: new Date().toLocaleTimeString(),
+                active: metrics.live_calls ?? null,
+                waiting: metrics.calls_waiting ?? null,
+                answered: rolling.answered ?? null,
+                abandoned: rolling.abandoned ?? null,
+            }].slice(-60);
         },
 
         applyDashboard(data) {
@@ -690,13 +903,13 @@ window.telephonyReports = function () {
             this.dashboard.overview = {
                 ...this.dashboard.overview,
                 campaign: data.filters?.crm_campaign || this.filters.crm_campaign,
-                totalCalls: summary.total_calls ?? 0,
-                answeredCalls: summary.answered_calls ?? 0,
-                answerRate: summary.answer_rate ?? null,
+                totalCalls: summary.total_calls,
+                answeredCalls: summary.answered_calls,
+                answerRate: summary.answer_rate,
                 contactRate: summary.contact_rate ?? null,
                 averageTalkTimeSeconds: summary.average_talk_time_seconds ?? null,
-                agentsWithActivity: summary.agents_with_activity ?? 0,
-                callsPerAgent: summary.calls_per_agent ?? null,
+                agentsWithActivity: summary.agents_with_activity,
+                callsPerAgent: summary.calls_per_agent,
             };
             this.dashboard.status = {
                 rows: campaigns.map((row, index) => ({
@@ -713,9 +926,9 @@ window.telephonyReports = function () {
                 statusLabels: Object.keys(data.status_totals || {}),
                 statusValues: Object.values(data.status_totals || {}),
                 summary: {
-                    totalCalls: summary.total_calls ?? 0,
-                    answeredCalls: summary.answered_calls ?? 0,
-                    answerRate: summary.answer_rate ?? null,
+                    totalCalls: summary.total_calls,
+                    answeredCalls: summary.answered_calls,
+                    answerRate: summary.answer_rate,
                     topStatus: '—',
                     topHour: '—',
                 },
@@ -732,8 +945,8 @@ window.telephonyReports = function () {
                 callsLabels: agents.slice(0, 10).map((row) => row.full_name || row.user),
                 callsValues: agents.slice(0, 10).map((row) => row.calls || 0),
                 summary: {
-                    agentCount: summary.agents_with_activity ?? 0,
-                    totalCalls: data.agent_summary?.total_calls ?? 0,
+                    agentCount: summary.agents_with_activity,
+                    totalCalls: data.agent_summary?.total_calls,
                     totalTalkTime: this.formatDuration(data.agent_summary?.total_talk_time_seconds),
                     totalPauseTime: this.formatDuration(data.agent_summary?.total_pause_time_seconds),
                     avgTalkTime: this.formatDuration(summary.average_talk_time_seconds),
@@ -754,9 +967,9 @@ window.telephonyReports = function () {
                 values: dispositions.values || [],
                 percentages: dispositions.percentages || [],
                 summary: {
-                    totalCalls: summary.total_calls ?? 0,
+                    totalCalls: summary.total_calls,
                     topDisposition: dispositions.labels?.[0] || '—',
-                    topDispositionCount: dispositions.values?.[0] || 0,
+                    topDispositionCount: dispositions.values?.[0] ?? null,
                     scopeLabel: this.dispositionScopeLabel(this.filters.disposition_scope),
                 },
             };
@@ -1079,6 +1292,10 @@ window.telephonyReports = function () {
         },
 
         async renderCharts() {
+            if (this.mode !== 'historical') {
+                await this.renderLiveChart();
+                return;
+            }
             this.destroyCharts();
 
             const ApexCharts = await window.ApexChartsLoader?.() ?? null;
@@ -1176,7 +1393,7 @@ window.telephonyReports = function () {
 
             if (dispoEl && this.dashboard.dispo.labels.length) {
                 const chart = new ApexCharts(dispoEl, {
-                    series: this.dashboard.dispo.values,
+                    series: [{ name: 'Calls', data: this.dashboard.dispo.values }],
                     chart: { type: 'bar', height: 280, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
                     labels: this.dashboard.dispo.labels,
                     colors: ['#3b82f6'],
@@ -1193,6 +1410,45 @@ window.telephonyReports = function () {
 
             await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
             window.crmCharts?.resizeGroup?.(CHART_GROUP);
+        },
+
+        async renderLiveChart() {
+            const ApexCharts = await window.ApexChartsLoader?.() ?? null;
+            const chartElement = document.getElementById('chart-live-activity');
+            if (!ApexCharts || !chartElement || this.liveHistory.length === 0) {
+                return;
+            }
+
+            const labels = this.liveHistory.map((point) => point.label);
+            const series = [
+                { name: 'Live calls', data: this.liveHistory.map((point) => point.active) },
+                { name: 'Waiting calls', data: this.liveHistory.map((point) => point.waiting) },
+            ];
+            if (this.liveChart) {
+                await this.liveChart.updateOptions({ xaxis: { categories: labels } }, false, false);
+                await this.liveChart.updateSeries(series, true);
+                return;
+            }
+
+            const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+            const textColor = isDark ? '#a1a1aa' : '#52525b';
+            const gridColor = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
+            const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            this.liveChart = new ApexCharts(chartElement, {
+                series,
+                chart: { type: 'line', height: 260, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif', animations: { enabled: !reduceMotion, dynamicAnimation: { speed: 350 } } },
+                colors: ['#22c55e', '#f59e0b'],
+                stroke: { curve: 'smooth', width: 2 },
+                xaxis: { categories: labels, labels: { style: { colors: textColor, fontSize: '11px' } }, axisBorder: { show: false } },
+                yaxis: { min: 0, labels: { style: { colors: textColor, fontSize: '11px' } } },
+                grid: { borderColor: gridColor, strokeDashArray: 3 },
+                legend: { labels: { colors: textColor } },
+                tooltip: { theme: isDark ? 'dark' : 'light' },
+                dataLabels: { enabled: false },
+                theme: { mode: isDark ? 'dark' : 'light' },
+            });
+            window.crmCharts?.register?.(CHART_GROUP, 'live-activity', this.liveChart);
+            await this.liveChart.render();
         },
 
         parseBreakdown(value, entrySeparator = ',', pairSeparator = '-') {

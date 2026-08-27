@@ -4,6 +4,7 @@ namespace App\Services\Telephony;
 
 use App\Models\User;
 use App\Support\OperationResult;
+use Illuminate\Support\Facades\Cache;
 
 class ReportingService
 {
@@ -67,7 +68,7 @@ class ReportingService
      */
     public function supervisorSnapshot(User $user, string $campaign, string $queryDate, array $httpOptions = []): array
     {
-        return $this->nonAgentApi->executeBatch($user, $campaign, [
+        $requests = [
             'logged_agents' => [
                 'function' => 'logged_in_agents',
                 'params' => [
@@ -95,7 +96,34 @@ class ReportingService
                     'query_date' => $queryDate,
                 ],
             ],
-        ], true, $httpOptions);
+        ];
+        $cacheSeconds = max(0, (int) config('vicidial.supervisor.remote_cache_seconds', 0));
+        if ($cacheSeconds === 0) {
+            return $this->nonAgentApi->executeBatch($user, $campaign, $requests, true, $httpOptions);
+        }
+
+        $server = $this->nonAgentApi->getServerForCampaign($campaign);
+        if ($server === null) {
+            return $this->nonAgentApi->executeBatch($user, $campaign, $requests, true, $httpOptions);
+        }
+
+        $cacheKey = sprintf(
+            'vicidial:supervisor:%s:%s:%s',
+            $server->getKey(),
+            sha1($campaign),
+            $queryDate,
+        );
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        $snapshot = $this->nonAgentApi->executeBatch($user, $campaign, $requests, true, $httpOptions);
+        if (collect($snapshot)->contains(fn (OperationResult $result): bool => $result->success)) {
+            Cache::put($cacheKey, $snapshot, now()->addSeconds($cacheSeconds));
+        }
+
+        return $snapshot;
     }
 
     /**

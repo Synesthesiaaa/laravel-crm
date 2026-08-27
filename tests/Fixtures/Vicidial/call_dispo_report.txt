@@ -1,0 +1,2 @@
+campaign|ingroup|NA|SALE
+TESTCAMP|IN|8|2

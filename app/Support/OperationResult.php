@@ -8,15 +8,28 @@ class OperationResult
         public bool $success,
         public ?string $message = null,
         public mixed $data = null,
+        /**
+         * Safe transport and parser metadata. This must never contain secrets
+         * or unmasked customer data.
+         *
+         * @var array<string, mixed>
+         */
+        public array $meta = [],
     ) {}
 
-    public static function success(mixed $data = null, ?string $message = null): self
+    /**
+     * @param  array<string, mixed>  $meta
+     */
+    public static function success(mixed $data = null, ?string $message = null, array $meta = []): self
     {
-        return new self(true, $message, $data);
+        return new self(true, $message, $data, $meta);
     }
 
-    public static function failure(string $message, mixed $data = null): self
+    /**
+     * @param  array<string, mixed>  $meta
+     */
+    public static function failure(string $message, mixed $data = null, array $meta = []): self
     {
-        return new self(false, $message, $data);
+        return new self(false, $message, $data, $meta);
     }
 }

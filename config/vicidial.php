@@ -77,6 +77,11 @@ return [
     */
     'supervisor' => [
         'poll_seconds' => (int) env('VICI_SUPERVISOR_POLL_SECONDS', 15),
+        'rolling_window_minutes' => (int) env('VICI_SUPERVISOR_ROLLING_WINDOW_MINUTES', 15),
+        'stale_after_seconds' => (int) env('VICI_SUPERVISOR_STALE_AFTER_SECONDS', 45),
+        // Opt in after measuring dashboard concurrency; zero avoids hiding
+        // fresh agent state during initial rollout.
+        'remote_cache_seconds' => (int) env('VICI_SUPERVISOR_REMOTE_CACHE_SECONDS', 0),
         'queue' => [
             'warning_waiting_calls' => (int) env('VICI_QUEUE_WARNING_WAITING_CALLS', 5),
             'critical_waiting_calls' => (int) env('VICI_QUEUE_CRITICAL_WAITING_CALLS', 10),
