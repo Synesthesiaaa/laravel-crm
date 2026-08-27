@@ -397,6 +397,7 @@ window.supervisorDashboard = function(initialCampaign = '') {
         tab: 'agents',
         loading: false,
         agents: [],
+        hasRenderedSnapshot: false,
         routing: {
             campaign_code: '',
             campaign_name: '',
@@ -491,9 +492,38 @@ window.supervisorDashboard = function(initialCampaign = '') {
                 const res = await window.axios.get('/api/supervisor/agents', {
                     params: { campaign: this.selectedCampaign || initialCampaign },
                 });
+                const incomingRouting = res.data.routing ?? {};
+                const incomingFreshness = res.data.freshness ?? {};
+                const incomingStatus = String(incomingFreshness.status || '').toLowerCase();
+                const incomingClassification = String(incomingRouting.classification || '').toUpperCase();
+                const sameCampaign = !this.routing.campaign_code
+                    || !incomingRouting.campaign_code
+                    || this.routing.campaign_code === incomingRouting.campaign_code;
+                const preserveLastGood = this.hasRenderedSnapshot
+                    && sameCampaign
+                    && ['offline', 'stale', 'unavailable'].includes(incomingStatus)
+                    && !['NOT_CONFIGURED', 'NO_CAMPAIGNS_MAPPED'].includes(incomingClassification);
+
+                if (preserveLastGood) {
+                    this.freshness = {
+                        ...this.freshness,
+                        ...incomingFreshness,
+                        status: 'stale',
+                        last_success_at: this.freshness.last_success_at,
+                    };
+                    this.routing = {
+                        ...this.routing,
+                        reporting_status: 'stale',
+                        message: incomingRouting.message || 'The last live snapshot could not be refreshed. Retry to request a fresh snapshot.',
+                        diagnostics: incomingRouting.diagnostics ?? this.routing.diagnostics,
+                    };
+
+                    return;
+                }
+
                 this.agents = res.data.agents ?? [];
-                this.routing = res.data.routing ?? this.routing;
-                this.freshness = res.data.freshness ?? this.freshness;
+                this.routing = incomingRouting || this.routing;
+                this.freshness = incomingFreshness || this.freshness;
                 this.selectedCampaign = this.routing.campaign_code || this.selectedCampaign;
                 this.stats  = res.data.stats  ?? {
                     agentsOnline: 0, callsWaiting: 0, callsActive: 0,
@@ -513,6 +543,7 @@ window.supervisorDashboard = function(initialCampaign = '') {
                 if (this.tab === 'queue' || this.tab === 'wallboard') {
                     this.renderCharts();
                 }
+                this.hasRenderedSnapshot = this.hasRenderedSnapshot || ['live', 'degraded'].includes(incomingStatus);
             } catch (e) {
                 this.errorMessage = e.response?.data?.message || 'The supervisor API could not be reached. Check database, auth, and telephony services.';
                 if (this.lastRefreshAt) {

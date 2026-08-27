@@ -74,6 +74,22 @@ class ViewLifecycleRenderTest extends TestCase
         $this->assertStringContainsString('campaignName', $contents);
     }
 
+    public function test_reports_preserve_last_good_data_when_a_refresh_is_unavailable(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_TEAM_LEADER]);
+
+        $response = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('reports.index'));
+
+        $response->assertOk();
+        $response->assertSee('hasDashboardSnapshot', false);
+        $response->assertSee('hasRealtimeSnapshot', false);
+        $response->assertSee('Showing the last successful report snapshot', false);
+        $response->assertSee("status: 'stale'", false);
+        $response->assertSee('The last live snapshot could not be refreshed', false);
+    }
+
     public function test_top_agent_stat_card_renders_sales_summary(): void
     {
         $html = view('components.stat-card', [

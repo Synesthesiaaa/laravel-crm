@@ -28,7 +28,7 @@
          role="status"
          aria-live="polite">
         <p class="text-sm font-semibold text-[var(--color-warning)]"
-           x-text="dashboard.availability.status === 'unavailable' ? (mode === 'historical' ? 'Historical reports unavailable' : 'Live report sources unavailable') : 'Report sources are partially available'"></p>
+           x-text="dashboard.availability.status === 'stale' ? 'Showing the last successful report snapshot' : (dashboard.availability.status === 'unavailable' ? (mode === 'historical' ? 'Historical reports unavailable' : 'Live report sources unavailable') : 'Report sources are partially available')"></p>
         <p class="text-xs text-[var(--color-on-surface-muted)] mt-1"
            x-text="dashboard.availability.message || 'Some report sections could not be loaded.'"></p>
     </div>
@@ -641,6 +641,10 @@ window.telephonyReports = function () {
         requestController: null,
         liveHistory: [],
         liveChart: null,
+        hasDashboardSnapshot: false,
+        dashboardSnapshotKey: '',
+        hasRealtimeSnapshot: false,
+        realtimeSnapshotKey: '',
         filters: {
             crm_campaign: @json($campaign),
             campaigns: '---ALL---',
@@ -735,6 +739,7 @@ window.telephonyReports = function () {
             ],
         },
         realtime: {
+            mode: '',
             status: 'unavailable',
             scopeLabel: 'Rolling operational window',
             rollingScope: 'Rolling metrics unavailable',
@@ -854,6 +859,18 @@ window.telephonyReports = function () {
         changeMode() {
             this.liveHistory = [];
             this.destroyCharts();
+            this.hasRealtimeSnapshot = false;
+            this.realtimeSnapshotKey = '';
+            this.realtime = {
+                ...this.realtime,
+                mode: this.mode,
+                status: 'unavailable',
+                lastUpdated: '',
+                staleMessage: '',
+                cards: [],
+                sources: [],
+                dispositions: [],
+            };
             this.startPolling();
             this.refreshAll();
         },
@@ -864,6 +881,33 @@ window.telephonyReports = function () {
             const today = data.today || {};
             const isToday = this.mode === 'today';
             const status = data.freshness?.status || data.availability?.status || 'unavailable';
+            const normalizedStatus = String(status).toLowerCase();
+            const realtimeSnapshotKey = this.mode + '|' + this.filters.crm_campaign;
+            const shouldPreserveLastGood = this.hasRealtimeSnapshot
+                && this.realtime.mode === this.mode
+                && this.realtimeSnapshotKey === realtimeSnapshotKey
+                && ['offline', 'stale', 'unavailable'].includes(normalizedStatus);
+
+            if (shouldPreserveLastGood) {
+                this.realtime = {
+                    ...this.realtime,
+                    status: 'stale',
+                    staleMessage: data.availability?.message || 'The last live snapshot could not be refreshed. Retry to request a fresh snapshot.',
+                    sources: Object.entries(data.sources || {}).map(([key, source]) => ({
+                        key,
+                        label: key.replaceAll('_', ' '),
+                        status: source.status || 'unavailable',
+                    })),
+                };
+                this.dashboard.availability = {
+                    ...this.dashboard.availability,
+                    ...(data.availability || {}),
+                    status: 'stale',
+                    message: data.availability?.message || this.realtime.staleMessage,
+                };
+
+                return;
+            }
             const numberOrDash = (value) => value === null || value === undefined ? '—' : this.formatNumber(value);
             const cards = isToday ? [
                 { key: 'today-total', label: "Today's Calls", value: numberOrDash(today.total_calls), scope: today.label || 'Midnight → now' },
@@ -881,7 +925,9 @@ window.telephonyReports = function () {
                 { key: 'rolling-rate', label: 'Answer Rate', value: this.formatPercent(rolling.answer_rate), scope: rolling.label || 'Rolling window' },
             ];
             this.realtime = {
-                status: String(status).toLowerCase(),
+                mode: this.mode,
+                snapshotKey: realtimeSnapshotKey,
+                status: normalizedStatus,
                 scopeLabel: data.time_scope?.label || rolling.label || 'Rolling operational window',
                 rollingScope: rolling.label || 'Rolling metrics unavailable',
                 lastUpdated: data.freshness?.last_success_at ? new Date(data.freshness.last_success_at).toLocaleTimeString() : new Date().toLocaleTimeString(),
@@ -889,6 +935,13 @@ window.telephonyReports = function () {
                 cards,
                 sources: Object.entries(data.sources || {}).map(([key, source]) => ({ key, label: key.replaceAll('_', ' '), status: source.status || 'unavailable' })),
                 dispositions: Object.entries((isToday ? today.dispositions : rolling.dispositions) || {}).map(([code, count]) => ({ code, count: this.formatNumber(count) })),
+            };
+            this.hasRealtimeSnapshot = true;
+            this.realtimeSnapshotKey = realtimeSnapshotKey;
+            this.dashboard.availability = {
+                ...this.dashboard.availability,
+                ...(data.availability || {}),
+                status: normalizedStatus,
             };
             this.liveHistory = [...this.liveHistory, {
                 label: new Date().toLocaleTimeString(),
@@ -900,6 +953,27 @@ window.telephonyReports = function () {
         },
 
         applyDashboard(data) {
+            const availabilityStatus = String(data.availability?.status || 'unavailable').toLowerCase();
+            const dashboardSnapshotKey = [
+                data.filters?.crm_campaign || this.filters.crm_campaign,
+                this.filters.campaigns,
+                this.filters.query_date,
+                this.filters.end_date,
+                this.filters.disposition_scope,
+                this.filters.comparison,
+            ].join('|');
+            if (this.hasDashboardSnapshot
+                && this.dashboardSnapshotKey === dashboardSnapshotKey
+                && availabilityStatus !== 'live') {
+                this.dashboard.availability = {
+                    ...this.dashboard.availability,
+                    ...(data.availability || {}),
+                    status: 'stale',
+                    message: data.availability?.message || 'The last successful report snapshot is being shown while VICIdial refreshes.',
+                };
+
+                return;
+            }
             const summary = data.summary || {};
             const callVolume = data.call_volume || {};
             const campaigns = Array.isArray(data.campaigns) ? data.campaigns : [];
@@ -1001,6 +1075,8 @@ window.telephonyReports = function () {
                 { key: 'other', label: 'Other', seconds: time.other_seconds ?? null },
             ];
             this.dashboard.comparison = this.normalizeComparison(data.comparison);
+            this.hasDashboardSnapshot = availabilityStatus === 'live';
+            this.dashboardSnapshotKey = dashboardSnapshotKey;
         },
 
         normalizeComparison(comparison = {}) {

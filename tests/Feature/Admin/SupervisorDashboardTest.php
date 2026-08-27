@@ -41,6 +41,8 @@ class SupervisorDashboardTest extends TestCase
             ->assertSee('VICIdial daily report')
             ->assertSee('avgHandleTime')
             ->assertSee('refreshInFlight')
+            ->assertSee('hasRenderedSnapshot')
+            ->assertSee("reporting_status: 'stale'", false)
             ->assertSee('notificationPending')
             ->assertSee('campaign: this.routing.campaign_code')
             ->assertDontSee('Maria Santos')
