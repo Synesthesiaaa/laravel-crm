@@ -71,7 +71,7 @@ class VicidialServer extends Model
 
     public function scopeForCampaign(Builder $query, string $campaignCode): Builder
     {
-        return $query->where('campaign_code', $campaignCode);
+        return $query->whereRaw('LOWER(campaign_code) = ?', [strtolower(trim($campaignCode))]);
     }
 
     public function scopeDefault(Builder $query): Builder

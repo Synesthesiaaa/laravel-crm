@@ -10,9 +10,9 @@ class VicidialServerRepository implements VicidialServerRepositoryInterface
 {
     public function getForCampaign(string $campaignCode): ?VicidialServer
     {
-        $campaignCode = trim($campaignCode);
+        $campaignCode = strtolower(trim($campaignCode));
 
-        $default = VicidialServer::where('campaign_code', $campaignCode)
+        $default = VicidialServer::whereRaw('LOWER(campaign_code) = ?', [$campaignCode])
             ->where('is_active', true)
             ->where('is_default', true)
             ->orderBy('priority')
@@ -21,7 +21,7 @@ class VicidialServerRepository implements VicidialServerRepositoryInterface
             return $default;
         }
 
-        $campaignServer = VicidialServer::where('campaign_code', $campaignCode)
+        $campaignServer = VicidialServer::whereRaw('LOWER(campaign_code) = ?', [$campaignCode])
             ->where('is_active', true)
             ->orderBy('priority')
             ->orderBy('id')
@@ -35,7 +35,7 @@ class VicidialServerRepository implements VicidialServerRepositoryInterface
 
     public function getAllForCampaign(string $campaignCode): Collection
     {
-        return VicidialServer::where('campaign_code', $campaignCode)
+        return VicidialServer::whereRaw('LOWER(campaign_code) = ?', [strtolower(trim($campaignCode))])
             ->where('is_active', true)
             ->orderBy('priority')
             ->orderBy('id')

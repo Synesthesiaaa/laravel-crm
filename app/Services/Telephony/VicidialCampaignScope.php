@@ -107,8 +107,10 @@ final class VicidialCampaignScope
     /**
      * @return array<string, mixed>
      */
-    public function toArray(): array
+    public function toArray(bool $historicalOnly = false): array
     {
+        $mappings = $historicalOnly ? $this->historicalMappings() : $this->mappings;
+
         return [
             'crm_campaign' => [
                 'id' => $this->campaign->getKey(),
@@ -122,7 +124,7 @@ final class VicidialCampaignScope
             'campaign_count' => count($this->historicalCampaignCodes()),
             'campaign_codes' => $this->historicalCampaignCodes(),
             'live_campaign_codes' => $this->liveCampaignCodes(),
-            'mappings' => $this->mappings->map(fn (CampaignVicidialMapping $mapping): array => [
+            'mappings' => $mappings->map(fn (CampaignVicidialMapping $mapping): array => [
                 'id' => $mapping->getKey(),
                 'campaign_code' => $mapping->vicidial_campaign_code,
                 'is_enabled' => (bool) $mapping->is_enabled,

@@ -18,7 +18,7 @@ class CrmCampaignVicidialScopeResolver
     {
         $campaignModel = $campaign instanceof Campaign
             ? $campaign
-            : Campaign::query()->where('code', trim($campaign))->first();
+            : Campaign::query()->whereRaw('LOWER(code) = ?', [strtolower(trim($campaign))])->first();
 
         if ($campaignModel === null) {
             $campaignModel = new Campaign([
@@ -41,7 +41,7 @@ class CrmCampaignVicidialScopeResolver
     {
         $campaignModel = $campaign instanceof Campaign
             ? $campaign
-            : Campaign::query()->where('code', trim($campaign))->first();
+            : Campaign::query()->whereRaw('LOWER(code) = ?', [strtolower(trim($campaign))])->first();
 
         if ($campaignModel === null) {
             return;
@@ -70,7 +70,7 @@ class CrmCampaignVicidialScopeResolver
             ? ($mappedServerId !== null
                 ? VicidialServer::query()
                     ->active()
-                    ->where('campaign_code', $campaign->code)
+                    ->whereRaw('LOWER(campaign_code) = ?', [strtolower((string) $campaign->code)])
                     ->whereKey((int) $mappedServerId)
                     ->first()
                 : $this->serverRepository->getForCampaign((string) $campaign->code))

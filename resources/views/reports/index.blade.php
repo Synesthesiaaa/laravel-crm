@@ -339,14 +339,14 @@
                 <p class="chart-title">Hourly volume</p>
                 <div x-show="dashboard.status.hourlyLabels.length" id="chart-status-hourly" class="w-full" style="min-height: 280px;"></div>
                 <div x-show="!dashboard.status.hourlyLabels.length" class="table-empty py-10 text-center text-sm text-[var(--color-on-surface-dim)]">
-                    No hourly data yet.
+                    <span x-text="reportSectionMessage(dashboard.status.hourlyState, 'Hourly volume')">Hourly volume unavailable.</span>
                 </div>
             </div>
             <div class="chart-container">
                 <p class="chart-title">Status mix</p>
                 <div x-show="dashboard.status.statusLabels.length" id="chart-status-mix" class="w-full" style="min-height: 280px;"></div>
                 <div x-show="!dashboard.status.statusLabels.length" class="table-empty py-10 text-center text-sm text-[var(--color-on-surface-dim)]">
-                    No status breakdown yet.
+                    <span x-text="reportSectionMessage(dashboard.status.statusState, 'Status breakdown')">Status breakdown unavailable.</span>
                 </div>
             </div>
         </div>
@@ -380,6 +380,9 @@
                                 <td class="text-right tabular-nums" x-text="row.peakHourLabel"></td>
                             </tr>
                         </template>
+                        <tr x-show="!dashboard.status.rows.length">
+                            <td colspan="6" class="table-empty py-8 text-center text-sm text-[var(--color-on-surface-dim)]" x-text="reportSectionMessage(dashboard.status.statusState, 'Call status data')"></td>
+                        </tr>
                     </tbody>
                 </x-table.index>
             </div>
@@ -394,7 +397,7 @@
         <div class="chart-container">
             <div x-show="dashboard.campaigns.labels.length" id="chart-campaign-comparison" class="w-full" style="min-height: 260px;"></div>
             <div x-show="!dashboard.campaigns.labels.length" class="table-empty py-10 text-center text-sm text-[var(--color-on-surface-dim)]">
-                No campaign activity for this period.
+                <span x-text="reportSectionMessage(dashboard.campaigns.state, 'Campaign activity')">Campaign activity unavailable.</span>
             </div>
         </div>
     </section>
@@ -469,6 +472,9 @@
                                 <td class="text-right tabular-nums" x-text="row.pause_pct"></td>
                             </tr>
                         </template>
+                        <tr x-show="!dashboard.agents.rows.length">
+                            <td colspan="7" class="table-empty py-8 text-center text-sm text-[var(--color-on-surface-dim)]">No agent rows were returned for this scope.</td>
+                        </tr>
                     </tbody>
                 </x-table.index>
             </div>
@@ -492,7 +498,7 @@
                 <p class="chart-title">Top dispositions by volume</p>
                 <div x-show="dashboard.dispo.labels.length" id="chart-dispo-breakdown" class="w-full" style="min-height: 280px;"></div>
                 <div x-show="!dashboard.dispo.labels.length" class="table-empty py-10 text-center text-sm text-[var(--color-on-surface-dim)]">
-                    No disposition data yet.
+                    <span x-text="reportSectionMessage(dashboard.dispo.state, 'Disposition data')">Disposition data unavailable.</span>
                 </div>
             </div>
             <div class="md-card p-4 space-y-3">
@@ -535,6 +541,9 @@
                                 <td class="text-sm text-[var(--color-on-surface-dim)]" x-text="row.breakdownSummary"></td>
                             </tr>
                         </template>
+                        <tr x-show="!dashboard.dispo.rows.length">
+                            <td colspan="4" class="table-empty py-8 text-center text-sm text-[var(--color-on-surface-dim)]" x-text="reportSectionMessage(dashboard.dispo.state, 'Disposition data')"></td>
+                        </tr>
                     </tbody>
                 </x-table.index>
             </div>
@@ -650,6 +659,7 @@ window.telephonyReports = function () {
             campaigns: '---ALL---',
             query_date: new Date().toISOString().slice(0, 10),
             end_date: new Date().toISOString().slice(0, 10),
+            timezone: @json(config('vicidial.report_timezone', config('app.timezone', 'UTC'))),
             disposition_scope: 'all',
             comparison: 'none',
         },
@@ -675,12 +685,12 @@ window.telephonyReports = function () {
             scopeLabel: 'All dispositions',
             overview: {
                 campaign: @json($campaignName),
-                totalCalls: 0,
-                answeredCalls: 0,
-                answerRate: 0,
+                totalCalls: null,
+                answeredCalls: null,
+                answerRate: null,
                 contactRate: null,
                 averageTalkTimeSeconds: null,
-                agentsWithActivity: 0,
+                agentsWithActivity: null,
                 callsPerAgent: null,
                 topAgent: '—',
                 topStatus: '—',
@@ -701,8 +711,10 @@ window.telephonyReports = function () {
                 rows: [],
                 hourlyLabels: [],
                 hourlyValues: [],
+                hourlyState: 'loading',
                 statusLabels: [],
                 statusValues: [],
+                statusState: 'loading',
             },
             agents: {
                 rows: [],
@@ -710,25 +722,27 @@ window.telephonyReports = function () {
                 callsValues: [],
                 summary: {
                     agentCount: 0,
-                    totalCalls: 0,
-                    totalTalkTime: '0:00:00',
-                    totalPauseTime: '0:00:00',
-                    avgTalkTime: '0:00:00',
+                    totalCalls: null,
+                    totalTalkTime: '—',
+                    totalPauseTime: '—',
+                    avgTalkTime: '—',
                 },
             },
             dispo: {
                 rows: [],
                 labels: [],
                 values: [],
+                state: 'loading',
                 summary: {
-                    totalCalls: 0,
+                    totalCalls: null,
                     topDisposition: '—',
-                    topDispositionCount: 0,
+                    topDispositionCount: null,
                 },
             },
             campaigns: {
                 labels: [],
                 values: [],
+                state: 'loading',
             },
             funnel: [],
             timeDistribution: [
@@ -829,12 +843,18 @@ window.telephonyReports = function () {
                     return;
                 }
                 this.errorMessage = e.response?.data?.message || 'Failed to load report data.';
+                if (this.mode === 'historical' && this.hasDashboardSnapshot) {
+                    this.dashboard.availability = {
+                        ...this.dashboard.availability,
+                        status: 'stale',
+                        message: 'The last successful report snapshot is being shown. Retry to request fresh data.',
+                    };
+                }
                 if (this.mode !== 'historical' && this.realtime.lastUpdated) {
                     this.realtime.status = 'stale';
                     this.realtime.staleMessage = 'The last live snapshot could not be refreshed. Retry to request a fresh snapshot.';
                 }
                 Alpine.store('toast').error(this.errorMessage);
-                this.destroyCharts();
             } finally {
                 this.loading = false;
                 this.refreshInFlight = false;
@@ -959,6 +979,7 @@ window.telephonyReports = function () {
                 this.filters.campaigns,
                 this.filters.query_date,
                 this.filters.end_date,
+                this.filters.timezone,
                 this.filters.disposition_scope,
                 this.filters.comparison,
             ].join('|');
@@ -1004,16 +1025,18 @@ window.telephonyReports = function () {
                 rows: campaigns.map((row, index) => ({
                     key: (row.campaign || 'campaign') + '-' + index,
                     label: row.campaign || 'Unknown',
-                    total: row.total_calls ?? 0,
-                    answered: row.answered_calls ?? 0,
+                    total: row.total_calls ?? null,
+                    answered: row.answered_calls ?? null,
                     answerRate: row.answer_rate ?? null,
                     topStatus: '—',
                     peakHourLabel: '—',
                 })),
                 hourlyLabels: callVolume.labels || [],
                 hourlyValues: callVolume.values || [],
+                hourlyState: callVolume.state || 'unavailable',
                 statusLabels: Object.keys(data.status_totals || {}),
                 statusValues: Object.values(data.status_totals || {}),
+                statusState: data.status_state || (Object.keys(data.status_totals || {}).length ? 'data' : 'unavailable'),
                 summary: {
                     totalCalls: summary.total_calls,
                     answeredCalls: summary.answered_calls,
@@ -1022,6 +1045,11 @@ window.telephonyReports = function () {
                     topHour: '—',
                 },
             };
+            this.dashboard.status.rows.forEach((statusRow, index) => {
+                const source = campaigns[index];
+                statusRow.topStatus = source?.top_status ?? statusRow.topStatus;
+                statusRow.peakHourLabel = source?.peak_hour ?? statusRow.peakHourLabel;
+            });
             this.dashboard.agents = {
                 rows: agents.map((row, index) => ({
                     ...row,
@@ -1032,7 +1060,7 @@ window.telephonyReports = function () {
                     pause_pct: row.pause_pct === null ? '—' : String(row.pause_pct) + '%',
                 })),
                 callsLabels: agents.slice(0, 10).map((row) => row.full_name || row.user),
-                callsValues: agents.slice(0, 10).map((row) => row.calls || 0),
+                callsValues: agents.slice(0, 10).map((row) => row.calls ?? null),
                 summary: {
                     agentCount: summary.agents_with_activity,
                     totalCalls: data.agent_summary?.total_calls,
@@ -1046,7 +1074,7 @@ window.telephonyReports = function () {
                 rows: dispositionRows.map((row, index) => ({
                     key: (row.campaign || 'campaign') + '-' + index,
                     label: row.campaign || 'Unknown',
-                    totalCalls: row.total_calls ?? 0,
+                    totalCalls: row.total_calls ?? null,
                     topDisposition: row.top_disposition || '—',
                     breakdownSummary: (row.metrics || []).slice(0, 3)
                         .map((metric) => metric.label + ': ' + this.formatNumber(metric.value))
@@ -1055,16 +1083,26 @@ window.telephonyReports = function () {
                 labels: dispositions.labels || [],
                 values: dispositions.values || [],
                 percentages: dispositions.percentages || [],
+                state: dispositions.state || data.disposition_summary?.state || 'unavailable',
                 summary: {
-                    totalCalls: summary.total_calls,
+                    totalCalls: data.disposition_summary?.total_calls ?? null,
                     topDisposition: dispositions.labels?.[0] || '—',
                     topDispositionCount: dispositions.values?.[0] ?? null,
                     scopeLabel: this.dispositionScopeLabel(this.filters.disposition_scope),
                 },
             };
+            this.dashboard.dispo.rows.forEach((dispositionRow, index) => {
+                const source = dispositionRows[index];
+                const metrics = Array.isArray(source?.metrics) ? source.metrics : [];
+                dispositionRow.topDisposition = source?.top_disposition ?? dispositionRow.topDisposition;
+                if (metrics.length === 0 || metrics.every((metric) => metric.value === null || metric.value === undefined)) {
+                    dispositionRow.breakdownSummary = 'Unavailable';
+                }
+            });
             this.dashboard.campaigns = {
                 labels: campaigns.map((row) => row.campaign),
-                values: campaigns.map((row) => row.total_calls ?? 0),
+                values: campaigns.map((row) => row.total_calls ?? null),
+                state: data.campaign_state || (campaigns.length ? 'data' : 'unavailable'),
             };
             this.dashboard.funnel = Array.isArray(data.funnel) ? data.funnel : [];
             const time = data.time_distribution || {};
@@ -1127,6 +1165,8 @@ window.telephonyReports = function () {
             }
         },
 
+        /* Legacy raw VICIdial normalizers are retained as inert compatibility code.
+         * refreshAll uses the normalized dashboard API contract exclusively.
         normalizeCallStatus(response) {
             const rows = Array.isArray(response?.data?.rows) ? response.data.rows : [];
             const parsedRows = [];
@@ -1376,6 +1416,7 @@ window.telephonyReports = function () {
         normalizeDispositionCode(value) {
             return String(value ?? '').trim().toUpperCase();
         },
+        */
 
         dispositionScopeLabel(scope) {
             const option = this.dispositionScopeOptions.find((entry) => entry.value === scope);
@@ -1542,6 +1583,8 @@ window.telephonyReports = function () {
             await this.liveChart.render();
         },
 
+        /* Legacy raw response parsing is intentionally disabled; the backend
+         * parser is the sole source of historical report values.
         parseBreakdown(value, entrySeparator = ',', pairSeparator = '-') {
             return String(value || '')
                 .split(entrySeparator)
@@ -1621,6 +1664,7 @@ window.telephonyReports = function () {
 
             return parts[0] || 0;
         },
+        */
 
         secondsToDuration(seconds) {
             const total = Math.max(0, Math.round(Number(seconds) || 0));
@@ -1632,6 +1676,10 @@ window.telephonyReports = function () {
         },
 
         formatDuration(seconds) {
+            if (seconds !== null && seconds !== undefined && seconds !== '' && !Number.isFinite(Number(seconds))) {
+                return 'Unavailable';
+            }
+
             if (seconds === null || seconds === undefined || seconds === '') {
                 return '—';
             }
@@ -1639,12 +1687,31 @@ window.telephonyReports = function () {
             return this.secondsToDuration(seconds);
         },
 
+        reportSectionMessage(state, label) {
+            if (state === 'loading') {
+                return 'Loading ' + label.toLowerCase() + '...';
+            }
+            if (state === 'empty' || state === 'confirmed_zero') {
+                return 'No ' + label.toLowerCase() + ' was returned for this scope.';
+            }
+            if (state === 'unsupported' || state === 'parse_failure') {
+                return label + ' unavailable from the VICIdial response.';
+            }
+
+            return label + ' unavailable. Retry to request a fresh report.';
+        },
+
         formatNumber(value) {
             if (value === null || value === undefined || value === '') {
                 return '—';
             }
 
-            return new Intl.NumberFormat().format(Number(value) || 0);
+            const number = Number(value);
+            if (!Number.isFinite(number)) {
+                return '—';
+            }
+
+            return new Intl.NumberFormat().format(number);
         },
 
         formatPercent(value) {
@@ -1652,7 +1719,12 @@ window.telephonyReports = function () {
                 return '—';
             }
 
-            return `${(Number(value) || 0).toFixed(1)}%`;
+            const number = Number(value);
+            if (!Number.isFinite(number)) {
+                return '—';
+            }
+
+            return `${number.toFixed(1)}%`;
         },
     };
 };

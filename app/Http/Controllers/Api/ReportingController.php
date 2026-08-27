@@ -39,6 +39,7 @@ class ReportingController extends Controller
             'ingroups' => ['nullable', 'string', 'max:255'],
             'query_date' => ['nullable', 'date_format:Y-m-d'],
             'end_date' => ['nullable', 'date_format:Y-m-d'],
+            'timezone' => ['nullable', 'timezone'],
             'disposition_scope' => ['nullable', 'in:all,exclude_system,system_only'],
             'comparison' => ['nullable', 'in:none,previous_period,previous_day,previous_week,previous_month'],
         ]);

@@ -375,6 +375,9 @@ class VicidialNonAgentApiService
             'no logged in agents',
             'no agents logged in',
             'no logged-in agents',
+            'no records found',
+            'no results found',
+            'no data found',
         ])) {
             return 'REPORT_EMPTY';
         }
@@ -467,9 +470,11 @@ class VicidialNonAgentApiService
                 continue;
             }
             if (str_contains($line, '|')) {
-                $rows[] = array_map('trim', explode('|', $line));
+                $rows[] = array_map('trim', str_getcsv($line, '|'));
+            } elseif (str_contains($line, "\t")) {
+                $rows[] = array_map('trim', str_getcsv($line, "\t"));
             } elseif (str_contains($line, ',')) {
-                $rows[] = array_map('trim', explode(',', $line));
+                $rows[] = array_map('trim', str_getcsv($line, ','));
             }
         }
 

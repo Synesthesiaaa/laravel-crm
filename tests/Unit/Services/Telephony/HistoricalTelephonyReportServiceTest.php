@@ -68,6 +68,10 @@ class HistoricalTelephonyReportServiceTest extends TestCase
         $this->assertSame(1, $data['summary']['agents_with_activity']);
         $this->assertSame(6, $data['agents'][0]['calls']);
         $this->assertSame(480, $data['agents'][0]['total_talk_time_seconds']);
+        $this->assertNull($data['time_distribution']['ready_seconds']);
+        $this->assertSame('unsupported', $data['time_distribution']['states']['ready_seconds']);
+        $this->assertNull($data['time_distribution']['other_seconds']);
+        $this->assertSame('unsupported', $data['time_distribution']['states']['other_seconds']);
         $this->assertSame(5, $data['funnel'][1]['value']);
         $this->assertSame(2, $data['funnel'][2]['value']);
         $this->assertSame(3, $data['status_totals']['SALE']);
