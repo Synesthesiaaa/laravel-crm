@@ -10,6 +10,7 @@ class HistoricalTelephonyReportService
 {
     public function __construct(
         protected ReportingService $reportingService,
+        protected CrmCampaignVicidialScopeResolver $scopeResolver,
     ) {}
 
     /**
@@ -19,8 +20,23 @@ class HistoricalTelephonyReportService
     public function dashboard(User $user, string $crmCampaign, array $filters): array
     {
         $period = $this->period($filters);
+        $scope = $this->scopeResolver->resolve($crmCampaign);
+        $allowedCampaignCodes = $scope->historicalCampaignCodes();
+        if ($scope->server === null || $allowedCampaignCodes === []) {
+            return $this->unavailableDashboard($crmCampaign, $period, $filters, $scope);
+        }
+        $selectedCampaignCodes = $scope->narrowCampaignCodes(
+            isset($filters['campaigns']) ? (string) $filters['campaigns'] : null,
+            true,
+        );
+        if ($selectedCampaignCodes === []) {
+            return $this->unavailableDashboard($crmCampaign, $period, $filters, $scope, 'No permitted VICIdial campaigns matched the selected filter.');
+        }
+        $campaignFilter = $selectedCampaignCodes === null
+            ? ($filters['campaigns'] ?? '---ALL---')
+            : implode('|', $selectedCampaignCodes);
         $params = [
-            'campaigns' => $filters['campaigns'] ?? '---ALL---',
+            'campaigns' => $campaignFilter,
             'ingroups' => $filters['ingroups'] ?? null,
             'disposition_scope' => $filters['disposition_scope'] ?? 'all',
             'query_date' => $period['start']->format('Y-m-d'),
@@ -34,11 +50,12 @@ class HistoricalTelephonyReportService
             $params,
             ['connect_timeout' => 3, 'timeout' => 10, 'retry_times' => 1],
         );
-        $callStatus = $this->parseCallStatus($current['call_status'] ?? null);
-        $agents = $this->parseAgentStats($current['agent_stats'] ?? null);
+        $callStatus = $this->parseCallStatus($current['call_status'] ?? null, $selectedCampaignCodes);
+        $agents = $this->parseAgentStats($current['agent_stats'] ?? null, $selectedCampaignCodes);
         $dispositions = $this->parseDispositions(
             $current['call_dispo'] ?? null,
             (string) ($filters['disposition_scope'] ?? 'all'),
+            $selectedCampaignCodes,
         );
         $summary = $this->summary($callStatus, $agents, $dispositions);
 
@@ -50,6 +67,7 @@ class HistoricalTelephonyReportService
             $period,
             $comparisonMode,
             $summary,
+            $selectedCampaignCodes,
         );
         $sourceStatus = $this->sourceStatus($current);
 
@@ -75,6 +93,70 @@ class HistoricalTelephonyReportService
             'agents' => $agents['rows'],
             'agent_summary' => $agents['summary'],
             'time_distribution' => $agents['time_distribution'],
+            'campaign_scope' => $scope->toArray(),
+        ];
+    }
+
+    /**
+     * @param  array{start: Carbon, end: Carbon}  $period
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    protected function unavailableDashboard(
+        string $crmCampaign,
+        array $period,
+        array $filters,
+        VicidialCampaignScope $scope,
+        ?string $message = null,
+    ): array {
+        $message ??= $scope->server === null
+            ? "No VICIdial server is configured for campaign '{$crmCampaign}'."
+            : "No enabled VICIdial campaigns are mapped to CRM campaign '{$crmCampaign}'.";
+        $emptySummary = [
+            'total_calls' => null,
+            'answered_calls' => null,
+            'answer_rate' => null,
+            'contact_rate' => null,
+            'average_talk_time_seconds' => null,
+            'agents_with_activity' => null,
+            'calls_per_agent' => null,
+        ];
+
+        return [
+            'filters' => [
+                'crm_campaign' => $crmCampaign,
+                'campaigns' => $filters['campaigns'] ?? '---ALL---',
+                'ingroups' => $filters['ingroups'] ?? null,
+                'query_date' => $period['start']->format('Y-m-d'),
+                'end_date' => $period['end']->format('Y-m-d'),
+                'disposition_scope' => $filters['disposition_scope'] ?? 'all',
+                'comparison' => $filters['comparison'] ?? 'none',
+            ],
+            'availability' => [
+                'status' => 'unavailable',
+                'available_sections' => 0,
+                'failed_sections' => 0,
+                'message' => $message,
+                'sources' => [],
+            ],
+            'summary' => $emptySummary,
+            'comparison' => ['enabled' => false, 'mode' => 'none', 'period' => null, 'metrics' => []],
+            'call_volume' => ['labels' => [], 'values' => [], 'grouping' => 'hourly'],
+            'status_totals' => [],
+            'campaigns' => [],
+            'dispositions' => ['labels' => [], 'values' => [], 'percentages' => []],
+            'disposition_rows' => [],
+            'funnel' => [],
+            'agents' => [],
+            'agent_summary' => [
+                'agents_with_activity' => null,
+                'total_calls' => null,
+                'average_talk_time_seconds' => null,
+                'total_talk_time_seconds' => null,
+                'total_pause_time_seconds' => null,
+            ],
+            'time_distribution' => ['talk_seconds' => null, 'pause_seconds' => null, 'ready_seconds' => null, 'other_seconds' => null],
+            'campaign_scope' => $scope->toArray(),
         ];
     }
 
@@ -106,6 +188,7 @@ class HistoricalTelephonyReportService
         array $period,
         string $mode,
         array $summary,
+        ?array $allowedCampaignCodes = null,
     ): array {
         if ($mode === 'none') {
             return ['enabled' => false, 'mode' => 'none', 'period' => null, 'metrics' => []];
@@ -137,11 +220,12 @@ class HistoricalTelephonyReportService
             $previousParams,
             ['connect_timeout' => 3, 'timeout' => 10, 'retry_times' => 1],
         );
-        $previousStatus = $this->parseCallStatus($previous['call_status'] ?? null);
-        $previousAgents = $this->parseAgentStats($previous['agent_stats'] ?? null);
+        $previousStatus = $this->parseCallStatus($previous['call_status'] ?? null, $allowedCampaignCodes);
+        $previousAgents = $this->parseAgentStats($previous['agent_stats'] ?? null, $allowedCampaignCodes);
         $previousDispositions = $this->parseDispositions(
             $previous['call_dispo'] ?? null,
             (string) ($params['disposition_scope'] ?? 'all'),
+            $allowedCampaignCodes,
         );
         $previousSummary = $this->summary($previousStatus, $previousAgents, $previousDispositions);
         $metrics = [];
@@ -266,7 +350,7 @@ class HistoricalTelephonyReportService
     /**
      * @return array<string, mixed>
      */
-    protected function parseCallStatus(?OperationResult $result): array
+    protected function parseCallStatus(?OperationResult $result, ?array $allowedCampaignCodes = null): array
     {
         $empty = [
             'available' => false,
@@ -286,6 +370,11 @@ class HistoricalTelephonyReportService
             if (strtoupper($label) === 'TOTAL') {
                 continue;
             }
+            $campaignCode = trim(explode('/', $label, 2)[0]);
+            if ($allowedCampaignCodes !== null && ! $this->campaignCodeIsAllowed($campaignCode, $allowedCampaignCodes)) {
+                continue;
+            }
+            $label = $campaignCode;
             $total = $this->number($row[1] ?? 0);
             $answered = $this->number($row[2] ?? 0);
             if (! isset($campaignMap[$label])) {
@@ -327,7 +416,7 @@ class HistoricalTelephonyReportService
     /**
      * @return array<string, mixed>
      */
-    protected function parseAgentStats(?OperationResult $result): array
+    protected function parseAgentStats(?OperationResult $result, ?array $allowedCampaignCodes = null): array
     {
         $empty = [
             'available' => false,
@@ -367,13 +456,19 @@ class HistoricalTelephonyReportService
             if ($user === '') {
                 continue;
             }
+            $agentKey = strtolower($user);
+            $campaignCode = trim((string) ($data['campaign'] ?? $data['campaign_id'] ?? $data['campaign_code'] ?? ''));
+            if ($allowedCampaignCodes !== null
+                && ($campaignCode === '' || ! $this->campaignCodeIsAllowed($campaignCode, $allowedCampaignCodes))) {
+                continue;
+            }
             $calls = $this->number($data['calls'] ?? $data['calls_today'] ?? $data['total_calls'] ?? 0);
             $talk = $this->seconds($data['total_talk_time'] ?? $data['talk_time'] ?? null);
             $avgTalk = $this->seconds($data['avg_talk_time'] ?? $data['average_talk_time'] ?? null);
             $talk = $talk ?? ($avgTalk !== null ? $avgTalk * $calls : null);
             $pause = $this->seconds($data['pause_time'] ?? $data['total_pause_time'] ?? null);
-            if (! isset($agents[$user])) {
-                $agents[$user] = [
+            if (! isset($agents[$agentKey])) {
+                $agents[$agentKey] = [
                     'user' => $user,
                     'full_name' => $data['full_name'] ?? $user,
                     'user_group' => $data['user_group'] ?? $data['group'] ?? '',
@@ -384,13 +479,14 @@ class HistoricalTelephonyReportService
                     'total_wait_time_seconds' => 0,
                     'pause_time_seconds' => 0,
                     'pause_pct' => null,
+                    'campaigns' => [],
                 ];
             }
-            $agents[$user]['calls'] += $calls;
-            $agents[$user]['answered'] += $this->number($data['answered'] ?? $data['answered_calls'] ?? 0);
-            $agents[$user]['total_talk_time_seconds'] += $talk ?? 0;
-            $agents[$user]['total_wait_time_seconds'] += $this->seconds($data['total_wait_time'] ?? $data['wait_time'] ?? null) ?? 0;
-            $agents[$user]['pause_time_seconds'] += $pause ?? 0;
+            $agents[$agentKey]['calls'] += $calls;
+            $agents[$agentKey]['answered'] += $this->number($data['answered'] ?? $data['answered_calls'] ?? 0);
+            $agents[$agentKey]['total_talk_time_seconds'] += $talk ?? 0;
+            $agents[$agentKey]['total_wait_time_seconds'] += $this->seconds($data['total_wait_time'] ?? $data['wait_time'] ?? null) ?? 0;
+            $agents[$agentKey]['pause_time_seconds'] += $pause ?? 0;
             if ($talk !== null) {
                 $hasTalk = true;
                 $totalTalk += $talk;
@@ -399,7 +495,10 @@ class HistoricalTelephonyReportService
                 $hasPause = true;
                 $totalPause += $pause;
             }
-            $agents[$user]['pause_pct'] = $this->percent($data['pause_pct'] ?? null);
+            $agents[$agentKey]['pause_pct'] = $this->percent($data['pause_pct'] ?? null);
+            if ($campaignCode !== '') {
+                $agents[$agentKey]['campaigns'][$campaignCode] = ($agents[$agentKey]['campaigns'][$campaignCode] ?? 0) + $calls;
+            }
         }
         foreach ($agents as &$agent) {
             $agent['answer_rate'] = $agent['calls'] > 0 ? round(($agent['answered'] / $agent['calls']) * 100, 2) : 0;
@@ -433,7 +532,7 @@ class HistoricalTelephonyReportService
     /**
      * @return array<string, mixed>
      */
-    protected function parseDispositions(?OperationResult $result, string $scope): array
+    protected function parseDispositions(?OperationResult $result, string $scope, ?array $allowedCampaignCodes = null): array
     {
         $empty = ['rows' => [], 'pareto' => ['labels' => [], 'values' => [], 'percentages' => []], 'code_totals' => [], 'group_totals' => []];
         if ($result === null || ! $result->success) {
@@ -450,6 +549,9 @@ class HistoricalTelephonyReportService
         foreach (array_slice($rows, 1) as $index => $row) {
             $campaign = trim((string) ($row[0] ?? 'Unknown'));
             if (strtoupper($campaign) === 'TOTAL') {
+                continue;
+            }
+            if ($allowedCampaignCodes !== null && ! $this->campaignCodeIsAllowed($campaign, $allowedCampaignCodes)) {
                 continue;
             }
             $metrics = [];
@@ -616,5 +718,15 @@ class HistoricalTelephonyReportService
     protected function normalizeCode(mixed $value): string
     {
         return strtoupper(trim((string) $value));
+    }
+
+    /**
+     * @param  array<int, string>  $allowedCampaignCodes
+     */
+    protected function campaignCodeIsAllowed(string $campaignCode, array $allowedCampaignCodes): bool
+    {
+        $campaignCode = strtolower(trim($campaignCode));
+
+        return in_array($campaignCode, array_map('strtolower', $allowedCampaignCodes), true);
     }
 }

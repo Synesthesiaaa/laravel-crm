@@ -2,8 +2,13 @@
 
 namespace Tests\Unit;
 
+use App\Models\Campaign;
+use App\Models\CampaignVicidialMapping;
 use App\Models\User;
+use App\Models\VicidialServer;
+use App\Services\Telephony\CrmCampaignVicidialScopeResolver;
 use App\Services\Telephony\ReportingService;
+use App\Services\Telephony\VicidialCampaignScope;
 use App\Services\Telephony\VicidialNonAgentApiService;
 use App\Support\OperationResult;
 use Carbon\Carbon;
@@ -28,9 +33,12 @@ class ReportingServiceTest extends TestCase
         $nonAgentApi = Mockery::mock(VicidialNonAgentApiService::class);
 
         $nonAgentApi->shouldReceive('execute')
+            ->never();
+        $nonAgentApi->shouldReceive('executeOnServer')
             ->once()
             ->with(
                 $user,
+                Mockery::type(VicidialServer::class),
                 'mbsales',
                 'agent_stats_export',
                 Mockery::on(function (array $params): bool {
@@ -42,10 +50,11 @@ class ReportingServiceTest extends TestCase
                         && $params['header'] === 'YES';
                 }),
                 true,
+                [],
             )
             ->andReturn(OperationResult::success(['rows' => []]));
 
-        $service = new ReportingService($nonAgentApi);
+        $service = new ReportingService($nonAgentApi, $this->scopeResolver());
 
         $result = $service->agentStats($user, 'mbsales', [
             'campaigns' => 'TESTCAMP',
@@ -63,14 +72,15 @@ class ReportingServiceTest extends TestCase
         $user = User::factory()->make();
         $nonAgentApi = Mockery::mock(VicidialNonAgentApiService::class);
 
-        $nonAgentApi->shouldReceive('execute')
+        $nonAgentApi->shouldReceive('executeOnServer')
             ->once()
             ->with(
                 $user,
+                Mockery::type(VicidialServer::class),
                 'campaign-a',
                 'call_status_stats',
                 [
-                    'campaigns' => '---ALL---',
+                    'campaigns' => 'campaign-a',
                     'query_date' => '2026-08-26',
                 ],
                 true,
@@ -82,7 +92,7 @@ class ReportingServiceTest extends TestCase
             )
             ->andReturn(OperationResult::success(['rows' => []]));
 
-        $service = new ReportingService($nonAgentApi);
+        $service = new ReportingService($nonAgentApi, $this->scopeResolver());
 
         $result = $service->callStatusStats(
             $user,
@@ -107,7 +117,7 @@ class ReportingServiceTest extends TestCase
                 'campaign-a',
                 Mockery::on(function (array $requests): bool {
                     return $requests['logged_agents']['function'] === 'logged_in_agents'
-                        && $requests['logged_agents']['params']['campaigns'] === '---ALL---'
+                        && $requests['logged_agents']['params']['campaigns'] === 'campaign-a'
                         && $requests['agent_performance']['function'] === 'agent_stats_export'
                         && $requests['agent_performance']['params']['datetime_start'] === '2026-08-26+00:00:00'
                         && $requests['agent_performance']['params']['datetime_end'] === '2026-08-26+23:59:59'
@@ -115,10 +125,11 @@ class ReportingServiceTest extends TestCase
                         && $requests['agent_performance']['params']['time_format'] === 'S'
                         && ! isset($requests['agent_performance']['params']['campaign_id'])
                         && $requests['call_totals']['function'] === 'call_status_stats'
-                        && $requests['call_totals']['params']['campaigns'] === '---ALL---';
+                        && $requests['call_totals']['params']['campaigns'] === 'campaign-a';
                 }),
                 true,
                 $httpOptions,
+                Mockery::type(VicidialServer::class),
             )
             ->andReturn([
                 'logged_agents' => OperationResult::success(['rows' => []]),
@@ -126,7 +137,7 @@ class ReportingServiceTest extends TestCase
                 'call_totals' => OperationResult::success(['rows' => []]),
             ]);
 
-        $service = new ReportingService($nonAgentApi);
+        $service = new ReportingService($nonAgentApi, $this->scopeResolver());
         $result = $service->supervisorSnapshot($user, 'campaign-a', '2026-08-26', $httpOptions);
 
         $this->assertCount(3, $result);
@@ -138,10 +149,11 @@ class ReportingServiceTest extends TestCase
         $nonAgentApi = Mockery::mock(VicidialNonAgentApiService::class);
         $httpOptions = ['connect_timeout' => 1, 'timeout' => 3, 'retry_times' => 0];
 
-        $nonAgentApi->shouldReceive('execute')
+        $nonAgentApi->shouldReceive('executeOnServer')
             ->once()
             ->with(
                 $user,
+                Mockery::type(VicidialServer::class),
                 'campaign-a',
                 'user_group_status',
                 [
@@ -154,9 +166,31 @@ class ReportingServiceTest extends TestCase
             )
             ->andReturn(OperationResult::success(['rows' => []]));
 
-        $service = new ReportingService($nonAgentApi);
+        $service = new ReportingService($nonAgentApi, $this->scopeResolver());
         $result = $service->userGroupStatus($user, 'campaign-a', 'SALES|RETENTION', $httpOptions);
 
         $this->assertTrue($result->success);
+    }
+
+    private function scopeResolver(): CrmCampaignVicidialScopeResolver
+    {
+        $resolver = Mockery::mock(CrmCampaignVicidialScopeResolver::class);
+        $resolver->shouldReceive('resolve')->andReturnUsing(function (string $campaignCode): VicidialCampaignScope {
+            $campaign = new Campaign(['code' => $campaignCode, 'name' => $campaignCode]);
+            $campaign->id = 1;
+            $campaign->exists = true;
+            $server = new VicidialServer(['campaign_code' => $campaignCode, 'server_name' => 'Test Server']);
+            $server->id = 1;
+            $server->exists = true;
+            $mapping = new CampaignVicidialMapping([
+                'vicidial_campaign_code' => $campaignCode === 'mbsales' ? 'TESTCAMP' : 'campaign-a',
+                'is_enabled' => true,
+                'status' => CampaignVicidialMapping::STATUS_ACTIVE,
+            ]);
+
+            return new VicidialCampaignScope($campaign, $server, collect([$mapping]));
+        });
+
+        return $resolver;
     }
 }

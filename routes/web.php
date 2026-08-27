@@ -205,6 +205,8 @@ Route::middleware(['auth', 'campaign'])->group(function () {
             Route::get('campaigns', [\App\Http\Controllers\Admin\CampaignsController::class, 'index'])->name('campaigns.index');
             Route::post('campaigns', [\App\Http\Controllers\Admin\CampaignsController::class, 'store'])->name('campaigns.store');
             Route::put('campaigns/{campaign}', [\App\Http\Controllers\Admin\CampaignsController::class, 'update'])->name('campaigns.update');
+            Route::get('campaigns/{campaign}/vicidial-campaigns', [\App\Http\Controllers\Admin\CampaignsController::class, 'vicidialCampaigns'])->name('campaigns.vicidial-campaigns');
+            Route::put('campaigns/{campaign}/vicidial-mapping', [\App\Http\Controllers\Admin\CampaignsController::class, 'updateVicidialMapping'])->name('campaigns.vicidial-mapping.update');
             Route::post('campaigns/delete', [\App\Http\Controllers\Admin\CampaignsController::class, 'destroy'])->name('campaigns.destroy');
             Route::get('forms', [\App\Http\Controllers\Admin\FormsController::class, 'index'])->name('forms.index');
             Route::post('forms', [\App\Http\Controllers\Admin\FormsController::class, 'store'])->name('forms.store');

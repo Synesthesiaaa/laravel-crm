@@ -64,6 +64,11 @@ class Campaign extends Model
         return $this->hasMany(VicidialServer::class, 'campaign_code', 'code');
     }
 
+    public function vicidialCampaignMappings(): HasMany
+    {
+        return $this->hasMany(CampaignVicidialMapping::class);
+    }
+
     public function agentScreenFields(): HasMany
     {
         return $this->hasMany(AgentScreenField::class, 'campaign_code', 'code');

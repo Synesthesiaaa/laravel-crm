@@ -8,7 +8,7 @@ The CRM can reach the configured VICIdial host, but the reporting pipeline curre
 - Centralize per-server endpoint resolution for Non-Agent API and report endpoints without allowing a global URL to override an explicit campaign-server URL.
 - Emit server-, campaign-, endpoint-, latency-, status-, content-type-, payload-size-, parser-, and row-count diagnostics without logging credentials or customer data.
 - Preserve campaign/server isolation and partial-failure behavior while adding stale/offline semantics and last-successful-refresh metadata.
-- Add one normalized Live and Today reporting API contract alongside the existing Historical mode, using the existing operational snapshot rather than duplicating per-card VICIdial requests.
+- Add one normalized Live and Today reporting API contract alongside the existing Historical mode, using the existing operational snapshot rather than duplicating per-card VICIdial requests; Today uses cumulative VICIdial daily totals with CRM fallback.
 - Add rolling short-window metrics only from available CRM/VICIdial events, display unavailable values as unavailable, and prevent overlapping browser polls.
 - Improve Supervisor and Reports error, health, refresh, and source-status presentation while retaining the existing design system and access controls.
 - Add regression, integration-style fixture, and UI-flow coverage for authentication, network, parsing, isolation, stale data, partial failures, and Live/Today modes.

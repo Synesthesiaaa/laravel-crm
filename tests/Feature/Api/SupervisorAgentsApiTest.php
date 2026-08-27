@@ -6,6 +6,7 @@ use App\Models\AttendanceLog;
 use App\Models\CallSession;
 use App\Models\Campaign;
 use App\Models\CampaignDispositionRecord;
+use App\Models\CampaignVicidialMapping;
 use App\Models\User;
 use App\Models\VicidialAgentSession;
 use App\Models\VicidialServer;
@@ -20,15 +21,27 @@ class SupervisorAgentsApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function mapCampaign(Campaign $campaign, VicidialServer $server, string ...$codes): void
+    {
+        foreach ($codes as $code) {
+            CampaignVicidialMapping::factory()->create([
+                'campaign_id' => $campaign->id,
+                'vicidial_server_id' => $server->id,
+                'vicidial_campaign_code' => $code,
+            ]);
+        }
+    }
+
     public function test_supervisor_data_is_scoped_to_the_active_campaign_and_includes_routing_context(): void
     {
-        Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+        $campaignA = Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
         Campaign::factory()->create(['code' => 'campaign-b', 'name' => 'Campaign B']);
-        VicidialServer::factory()->create([
+        $serverA = VicidialServer::factory()->create([
             'campaign_code' => 'campaign-a',
             'server_name' => 'Campaign A VICIdial',
             'is_default' => true,
         ]);
+        $this->mapCampaign($campaignA, $serverA, 'campaign-a');
 
         $supervisor = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
         $agent = User::factory()->create([
@@ -95,6 +108,55 @@ class SupervisorAgentsApiTest extends TestCase
             ->assertJsonPath('agents.0.dispositions', 1);
     }
 
+    public function test_supervisor_deduplicates_an_agent_across_multiple_mapped_vicidial_campaigns(): void
+    {
+        $campaign = Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+        $server = VicidialServer::factory()->create([
+            'campaign_code' => 'campaign-a',
+            'api_url' => 'https://campaign-a.example/agc/api.php',
+            'api_user' => 'report-user',
+            'api_pass' => 'report-pass',
+        ]);
+        $this->mapCampaign($campaign, $server, 'CAMP_A', 'CAMP_B');
+        $supervisor = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+        $agent = User::factory()->create([
+            'role' => User::ROLE_AGENT,
+            'vici_user' => 'agent-a',
+            'default_campaign' => 'other',
+        ]);
+        Http::fake(function ($request) {
+            return match ($request->data()['function'] ?? null) {
+                'logged_in_agents' => Http::response(
+                    "user|campaign|status|calls_today\nagent-a|CAMP_A|READY|2\nagent-a|CAMP_B|PAUSED|3\nother-agent|OTHER|READY|99",
+                    200,
+                ),
+                'agent_stats_export' => Http::response(
+                    "user|campaign|calls|total_talk_time\nagent-a|CAMP_A|2|20\nagent-a|CAMP_B|3|60\nother-agent|OTHER|99|990",
+                    200,
+                ),
+                'call_status_stats' => Http::response(
+                    "CAMP_A|10|5|10-10|SALE-10\nCAMP_B|20|10|11-20|SALE-20\nOTHER|100|100|12-100|SALE-100",
+                    200,
+                ),
+                default => Http::response('', 200),
+            };
+        });
+
+        $response = $this->actingAs($supervisor)
+            ->withSession(['campaign' => 'campaign-a', 'campaign_name' => 'Campaign A'])
+            ->getJson(route('api.supervisor.agents'));
+
+        $response->assertOk()
+            ->assertJsonCount(1, 'agents')
+            ->assertJsonPath('agents.0.id', $agent->id)
+            ->assertJsonPath('agents.0.calls_today', 5)
+            ->assertJsonPath('agents.0.vicidial_campaign', 'CAMP_B')
+            ->assertJsonPath('stats.agentsOnline', 1)
+            ->assertJsonPath('stats.todayTotal', 30)
+            ->assertJsonPath('stats.callsAnswered', 15)
+            ->assertJsonPath('stats.answerRate', 50);
+    }
+
     public function test_unmapped_campaign_returns_an_actionable_routing_state_without_connection_details(): void
     {
         Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
@@ -143,16 +205,17 @@ class SupervisorAgentsApiTest extends TestCase
             ->assertJsonPath('routing.server_name', 'Campaign B VICIdial');
     }
 
-    public function test_supervisor_uses_the_mapped_server_agent_list_without_filtering_on_vicidial_campaign(): void
+    public function test_supervisor_uses_only_the_mapped_vicidial_campaign_agent_list(): void
     {
-        Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
-        VicidialServer::factory()->create([
+        $campaign = Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+        $server = VicidialServer::factory()->create([
             'campaign_code' => 'campaign-a',
             'server_name' => 'Campaign A VICIdial',
             'api_url' => 'https://campaign-a.example/agc/api.php',
             'api_user' => 'report-user',
             'api_pass' => 'report-pass',
         ]);
+        $this->mapCampaign($campaign, $server, 'other-vicidial-campaign');
         $this->app->make(CampaignService::class)->clearCampaignsCache();
 
         $supervisor = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
@@ -164,7 +227,7 @@ class SupervisorAgentsApiTest extends TestCase
         ]);
         Http::fake([
             'https://campaign-a.example/non_agent_api.php*' => Http::response(
-                "user|status|queue_count\nremote-agent|INCALL|3",
+                "user|campaign|status|queue_count\nremote-agent|other-vicidial-campaign|INCALL|3",
                 200,
             ),
         ]);
@@ -186,7 +249,7 @@ class SupervisorAgentsApiTest extends TestCase
 
         Http::assertSent(function ($request): bool {
             return str_starts_with($request->url(), 'https://campaign-a.example/non_agent_api.php')
-                && ($request->data()['campaigns'] ?? null) === '---ALL---';
+                && ($request->data()['campaigns'] ?? null) === 'other-vicidial-campaign';
         });
     }
 
@@ -195,14 +258,15 @@ class SupervisorAgentsApiTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-08-26 12:00:00'));
 
         try {
-            Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
-            VicidialServer::factory()->create([
+            $campaign = Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+            $server = VicidialServer::factory()->create([
                 'campaign_code' => 'campaign-a',
                 'server_name' => 'Campaign A VICIdial',
                 'api_url' => 'https://campaign-a.example/agc/api.php',
                 'api_user' => 'report-user',
                 'api_pass' => 'report-pass',
             ]);
+            $this->mapCampaign($campaign, $server, 'campaign-a');
             $this->app->make(CampaignService::class)->clearCampaignsCache();
 
             $supervisor = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
@@ -215,11 +279,11 @@ class SupervisorAgentsApiTest extends TestCase
             Http::fake(function ($request) {
                 return match ($request->data()['function'] ?? null) {
                     'logged_in_agents' => Http::response(
-                        "user|status|calls_today\nremote-agent|READY|7",
+                        "user|campaign|status|calls_today\nremote-agent|campaign-a|READY|7",
                         200,
                     ),
                     'call_status_stats' => Http::response(
-                        'campaign/ingroup|7|5|10-2,11-5|SALE-7',
+                        'campaign-a/ingroup|7|5|10-2,11-5|SALE-7',
                         200,
                     ),
                     default => Http::response('', 200),
@@ -246,7 +310,7 @@ class SupervisorAgentsApiTest extends TestCase
             Http::assertSent(function ($request): bool {
                 return str_starts_with($request->url(), 'https://campaign-a.example/non_agent_api.php')
                     && ($request->data()['function'] ?? null) === 'call_status_stats'
-                    && ($request->data()['campaigns'] ?? null) === '---ALL---'
+                    && ($request->data()['campaigns'] ?? null) === 'campaign-a'
                     && ($request->data()['query_date'] ?? null) === '2026-08-26';
             });
         } finally {
@@ -259,9 +323,9 @@ class SupervisorAgentsApiTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-08-26 12:00:00'));
 
         try {
-            Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+            $campaignA = Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
             Campaign::factory()->create(['code' => 'campaign-b', 'name' => 'Campaign B']);
-            VicidialServer::factory()->create([
+            $serverA = VicidialServer::factory()->create([
                 'campaign_code' => 'campaign-a',
                 'server_name' => 'Campaign A VICIdial',
                 'api_url' => 'https://campaign-a.example/agc/api.php',
@@ -269,6 +333,7 @@ class SupervisorAgentsApiTest extends TestCase
                 'api_user' => 'campaign-a-user',
                 'api_pass' => 'campaign-a-pass',
             ]);
+            $this->mapCampaign($campaignA, $serverA, 'remote-campaign');
             VicidialServer::factory()->create([
                 'campaign_code' => 'campaign-b',
                 'server_name' => 'Campaign B VICIdial',
@@ -292,11 +357,11 @@ class SupervisorAgentsApiTest extends TestCase
 
                 return match ($request->data()['function'] ?? null) {
                     'logged_in_agents' => Http::response(
-                        "user|status|calls_today|user_group|sub_status\nagent-a|INCALL|4|SALES|RING\nunknown-agent|READY|2|SALES|",
+                        "user|campaign|status|calls_today|user_group|sub_status\nagent-a|remote-campaign|INCALL|4|SALES|RING\nunknown-agent|remote-campaign|READY|2|SALES|",
                         200,
                     ),
                     'agent_stats_export' => Http::response(
-                        "user|user_group|calls|total_talk_time|avg_talk_time|avg_wait_time|total_wait_time\nagent-a|SALES|4|480|120|30|120",
+                        "user|campaign|user_group|calls|total_talk_time|avg_talk_time|avg_wait_time|total_wait_time\nagent-a|remote-campaign|SALES|4|480|120|30|120",
                         200,
                     ),
                     'call_status_stats' => Http::response(
@@ -304,7 +369,7 @@ class SupervisorAgentsApiTest extends TestCase
                         200,
                     ),
                     'user_group_status' => Http::response(
-                        "usergroups|calls_waiting|agents_logged_in|agents_in_calls|agents_waiting|agents_paused|agents_in_dead_calls|agents_in_dispo|agents_in_dial\nSALES|3|2|1|1|0|0|0|0",
+                        "campaign|usergroups|calls_waiting|agents_logged_in|agents_in_calls|agents_waiting|agents_paused|agents_in_dead_calls|agents_in_dispo|agents_in_dial\nremote-campaign|SALES|3|2|1|1|0|0|0|0",
                         200,
                     ),
                     default => Http::response('ERROR: unsupported test function', 400),
@@ -367,13 +432,14 @@ class SupervisorAgentsApiTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-08-26 12:00:00'));
 
         try {
-            Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
-            VicidialServer::factory()->create([
+            $campaign = Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+            $server = VicidialServer::factory()->create([
                 'campaign_code' => 'campaign-a',
                 'api_url' => 'https://campaign-a.example/agc/api.php',
                 'api_user' => 'report-user',
                 'api_pass' => 'report-pass',
             ]);
+            $this->mapCampaign($campaign, $server, 'campaign-a');
             $this->app->make(CampaignService::class)->clearCampaignsCache();
 
             $supervisor = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
@@ -393,16 +459,16 @@ class SupervisorAgentsApiTest extends TestCase
             Http::fake(function ($request) {
                 return match ($request->data()['function'] ?? null) {
                     'logged_in_agents' => Http::response(
-                        "user|status|calls_today|user_group\nagent-a|READY|invalid|SALES",
+                        "user|campaign|status|calls_today|user_group\nagent-a|campaign-a|READY|invalid|SALES",
                         200,
                     ),
                     'agent_stats_export' => Http::response(
-                        "user|user_group|calls|avg_talk_time|avg_wait_time\nagent-a|SALES|not-a-number|broken|broken",
+                        "user|campaign|user_group|calls|avg_talk_time|avg_wait_time\nagent-a|campaign-a|SALES|not-a-number|broken|broken",
                         200,
                     ),
-                    'call_status_stats' => Http::response('remote-campaign|1|1|11-1|SALE-1', 200),
+                    'call_status_stats' => Http::response('campaign-a|1|1|11-1|SALE-1', 200),
                     'user_group_status' => Http::response(
-                        "usergroups|calls_waiting|agents_logged_in|agents_in_calls|agents_waiting|agents_paused\nSALES|0|1|0|1|0",
+                        "campaign|usergroups|calls_waiting|agents_logged_in|agents_in_calls|agents_waiting|agents_paused\ncampaign-a|SALES|0|1|0|1|0",
                         200,
                     ),
                     default => Http::response('', 200),
@@ -433,14 +499,15 @@ class SupervisorAgentsApiTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-08-26 12:00:00'));
 
         try {
-            Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
-            VicidialServer::factory()->create([
+            $campaign = Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+            $server = VicidialServer::factory()->create([
                 'campaign_code' => 'campaign-a',
                 'server_name' => 'Campaign A VICIdial',
                 'api_url' => 'https://campaign-a.example/agc/api.php',
                 'api_user' => 'report-user',
                 'api_pass' => 'report-pass',
             ]);
+            $this->mapCampaign($campaign, $server, 'campaign-a');
             $this->app->make(CampaignService::class)->clearCampaignsCache();
 
             $supervisor = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
@@ -481,14 +548,15 @@ class SupervisorAgentsApiTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-08-26 12:00:00'));
 
         try {
-            Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
-            VicidialServer::factory()->create([
+            $campaign = Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+            $server = VicidialServer::factory()->create([
                 'campaign_code' => 'campaign-a',
                 'server_name' => 'Campaign A VICIdial',
                 'api_url' => 'https://campaign-a.example/agc/api.php',
                 'api_user' => 'private-report-user',
                 'api_pass' => 'private-report-password',
             ]);
+            $this->mapCampaign($campaign, $server, 'campaign-a');
             $this->app->make(CampaignService::class)->clearCampaignsCache();
 
             $supervisor = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
@@ -531,11 +599,12 @@ class SupervisorAgentsApiTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-08-26 12:00:00'));
 
         try {
-            Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
-            VicidialServer::factory()->create([
+            $campaign = Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+            $server = VicidialServer::factory()->create([
                 'campaign_code' => 'campaign-a',
                 'server_name' => 'Campaign A VICIdial',
             ]);
+            $this->mapCampaign($campaign, $server, 'campaign-a');
             $this->app->make(CampaignService::class)->clearCampaignsCache();
 
             $supervisor = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);

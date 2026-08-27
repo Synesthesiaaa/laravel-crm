@@ -14,7 +14,7 @@ The system SHALL include generated time, source last-success time, source health
 - **AND** the UI displays the last successful update age and a recoverable refresh action
 
 ### Requirement: Reports provides Live, Today, and Historical modes
-The system SHALL expose distinct report modes. Live SHALL show current operational state and explicitly time-scoped rolling metrics, Today SHALL distinguish midnight-to-now totals from current state, and Historical SHALL retain date-range analysis and comparison.
+The system SHALL expose distinct report modes. Live SHALL show current operational state and explicitly time-scoped rolling metrics, Today SHALL distinguish cumulative midnight-to-now totals from current state and prefer the authenticated VICIdial daily report for those totals, and Historical SHALL retain date-range analysis and comparison.
 
 #### Scenario: Live mode is selected
 - **WHEN** a report user selects Live
@@ -24,6 +24,8 @@ The system SHALL expose distinct report modes. Live SHALL show current operation
 #### Scenario: Today mode is selected
 - **WHEN** a report user selects Today
 - **THEN** totals cover the configured local midnight through now
+- **AND** the totals remain cumulative across refreshes for that local calendar day rather than resetting to the Live rolling window
+- **AND** CRM aggregation is used only when the VICIdial daily report is unavailable
 - **AND** current operational values are displayed separately from historical totals
 
 ### Requirement: Rolling metrics are evidence-based

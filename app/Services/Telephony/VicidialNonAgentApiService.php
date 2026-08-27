@@ -39,6 +39,19 @@ class VicidialNonAgentApiService
             ]);
         }
 
+        return $this->executeOnServer($user, $server, $campaign, $function, $params, $useServerCredentials, $httpOptions);
+    }
+
+    public function executeOnServer(
+        User $user,
+        \App\Models\VicidialServer $server,
+        string $campaign,
+        string $function,
+        array $params = [],
+        bool $useServerCredentials = true,
+        array $httpOptions = [],
+    ): OperationResult {
+
         $baseUrl = $this->endpointResolver->nonAgentApi($server);
         if ($baseUrl === '') {
             return OperationResult::failure('Non-Agent API URL is not configured.', null, $this->baseMeta(
@@ -106,12 +119,13 @@ class VicidialNonAgentApiService
         array $requests,
         bool $useServerCredentials = true,
         array $httpOptions = [],
+        ?\App\Models\VicidialServer $selectedServer = null,
     ): array {
         if ($requests === []) {
             return [];
         }
 
-        $server = $this->serverRepository->getForCampaign($campaign);
+        $server = $selectedServer ?? $this->serverRepository->getForCampaign($campaign);
         if (! $server) {
             return $this->failedBatch($requests, 'No VICIdial server configured for this campaign.', 'NOT_CONFIGURED');
         }

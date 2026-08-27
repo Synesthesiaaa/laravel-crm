@@ -24,12 +24,16 @@ class RealtimeTelephonyReportService
         $mode = in_array($mode, ['live', 'today'], true) ? $mode : 'live';
         $snapshot = $this->operationalService->snapshot($request);
         $campaign = (string) ($snapshot['campaign']['code'] ?? $snapshot['routing']['campaign_code'] ?? '');
+        $vicidialCampaigns = array_values(array_filter(
+            (array) ($snapshot['routing']['live_vicidial_campaigns'] ?? []),
+            static fn (mixed $code): bool => trim((string) $code) !== '',
+        ));
         $now = now();
         $windowMinutes = max(1, (int) config('vicidial.supervisor.rolling_window_minutes', 15));
         $rolling = is_array($snapshot['stats']['rolling'] ?? null)
             ? $snapshot['stats']['rolling']
-            : $this->rollingMetrics($campaign, $now->copy()->subMinutes($windowMinutes), $now, $windowMinutes);
-        $today = $this->todayMetrics($campaign, $now);
+            : $this->rollingMetrics($vicidialCampaigns, $now->copy()->subMinutes($windowMinutes), $now, $windowMinutes);
+        $today = $this->todayMetrics($vicidialCampaigns, $now, $snapshot);
         $snapshotHealth = (string) ($snapshot['health'] ?? 'offline');
         $availabilityStatus = match ($snapshotHealth) {
             'live' => 'live',
@@ -75,14 +79,14 @@ class RealtimeTelephonyReportService
     /**
      * @return array<string, mixed>
      */
-    protected function rollingMetrics(string $campaign, Carbon $from, Carbon $until, int $windowMinutes): array
+    protected function rollingMetrics(array $vicidialCampaigns, Carbon $from, Carbon $until, int $windowMinutes): array
     {
-        if ($campaign === '') {
+        if ($vicidialCampaigns === []) {
             return $this->emptyRolling($windowMinutes, false);
         }
 
         $calls = CallSession::query()
-            ->where('campaign_code', $campaign)
+            ->whereIn('campaign_code', $vicidialCampaigns)
             ->where(function ($query) use ($from, $until): void {
                 $query->whereBetween('dialed_at', [$from, $until])
                     ->orWhereBetween('answered_at', [$from, $until])
@@ -105,21 +109,52 @@ class RealtimeTelephonyReportService
     /**
      * @return array<string, mixed>
      */
-    protected function todayMetrics(string $campaign, Carbon $now): array
+    protected function todayMetrics(array $vicidialCampaigns, Carbon $now, array $snapshot): array
     {
-        if ($campaign === '') {
+        $stats = is_array($snapshot['stats'] ?? null) ? $snapshot['stats'] : [];
+        $remoteTotal = $stats['todayTotal'] ?? null;
+        $remoteAnswered = $stats['callsAnswered'] ?? null;
+        $remoteAnswerRate = $stats['answerRate'] ?? null;
+
+        if (($stats['callSource'] ?? null) === 'vicidial'
+            && is_numeric($remoteTotal)
+            && is_numeric($remoteAnswered)) {
+            $totalCalls = max(0, (int) $remoteTotal);
+            $answered = max(0, (int) $remoteAnswered);
+
             return [
                 'label' => 'Midnight → now',
+                'day_key' => $now->toDateString(),
+                'start' => $now->copy()->startOfDay()->toIso8601String(),
+                'end' => $now->toIso8601String(),
+                'total_calls' => $totalCalls,
+                'answered' => $answered,
+                'answer_rate' => is_numeric($remoteAnswerRate)
+                    ? round((float) $remoteAnswerRate, 1)
+                    : ($totalCalls > 0 ? round(($answered / $totalCalls) * 100, 1) : 0),
+                'source' => 'vicidial',
+                'available' => true,
+                'dispositions' => [],
+            ];
+        }
+
+        if ($vicidialCampaigns === []) {
+            return [
+                'label' => 'Midnight → now',
+                'day_key' => $now->toDateString(),
+                'start' => $now->copy()->startOfDay()->toIso8601String(),
+                'end' => $now->toIso8601String(),
                 'total_calls' => null,
                 'answered' => null,
                 'answer_rate' => null,
                 'source' => 'unavailable',
+                'available' => false,
                 'dispositions' => [],
             ];
         }
 
         $calls = CallSession::query()
-            ->where('campaign_code', $campaign)
+            ->whereIn('campaign_code', $vicidialCampaigns)
             ->whereBetween('dialed_at', [$now->copy()->startOfDay(), $now])
             ->get([
                 'status',
@@ -141,10 +176,14 @@ class RealtimeTelephonyReportService
 
         return [
             'label' => 'Midnight → now',
+            'day_key' => $now->toDateString(),
+            'start' => $now->copy()->startOfDay()->toIso8601String(),
+            'end' => $now->toIso8601String(),
             'total_calls' => $attempted,
             'answered' => $answered,
             'answer_rate' => $attempted > 0 ? round(($answered / $attempted) * 100, 2) : 0,
             'source' => 'crm',
+            'available' => true,
             'dispositions' => $dispositions,
         ];
     }

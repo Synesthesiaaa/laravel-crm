@@ -1,3 +1,3 @@
-user|full_name|calls|avg_talk_time
-agent-001|Agent One|4|00:01:00
-agent-001|Agent One|2|00:02:00
+user|campaign|full_name|calls|avg_talk_time
+agent-001|TESTCAMP|Agent One|4|00:01:00
+agent-001|TESTCAMP|Agent One|2|00:02:00

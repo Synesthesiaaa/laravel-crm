@@ -11,7 +11,7 @@ The application must keep CRM campaign isolation, server-side credential handlin
 - Make every Non-Agent API result carry a safe diagnostic classification and transport metadata.
 - Resolve all VICIdial endpoint categories from the selected server in one place.
 - Keep Supervisor operational requests independent from historical Reports requests and make source health/freshness explicit.
-- Add Live and Today report modes using one normalized backend snapshot per refresh, with bounded rolling metrics from available CRM data.
+- Add Live and Today report modes using one normalized backend snapshot per refresh, with cumulative VICIdial daily totals for Today and bounded rolling metrics from available CRM data.
 - Preserve successful values during transient refresh failures and expose stale/offline status instead of zeroing the dashboard.
 - Exercise representative login, permission, network, parser, isolation, and partial-failure paths with sanitized fixtures.
 

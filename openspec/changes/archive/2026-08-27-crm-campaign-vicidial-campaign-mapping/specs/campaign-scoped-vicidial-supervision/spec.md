@@ -1,8 +1,4 @@
-## Purpose
-
-Keep Supervisor live operations restricted to the VICIdial campaigns mapped to the selected CRM campaign.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Supervisor live data is filtered by the resolved mapped campaign set
 The Supervisor SHALL remain CRM-campaign-first. After resolving the selected CRM campaign and its one VICIdial server, it SHALL include live agents, active calls, waiting calls, sessions, and CRM fallback records only when their reliable VICIdial campaign identifier belongs to the resolved enabled campaign set.

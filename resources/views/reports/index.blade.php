@@ -146,7 +146,7 @@
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3">
             <div class="form-field">
                 <label class="form-label" for="reports-crm-campaign">CRM Campaign</label>
-                <select id="reports-crm-campaign" class="form-select" x-model="filters.crm_campaign">
+                <select id="reports-crm-campaign" class="form-select" x-model="filters.crm_campaign" @change="filters.campaigns = '---ALL---'; refreshAll()">
                     @foreach($reportCampaigns ?? [] as $code => $config)
                         <option value="{{ $code }}">{{ $config['name'] ?? $code }} ({{ $code }})</option>
                     @endforeach
@@ -154,7 +154,15 @@
             </div>
             <div class="form-field">
                 <label class="form-label" for="reports-vici-campaign">VICIdial Campaigns</label>
-                <input class="form-input" x-model="filters.campaigns" placeholder="---ALL--- or TESTCAMP" />
+                <select id="reports-vici-campaign" class="form-select" x-model="filters.campaigns">
+                    <option value="---ALL---">All mapped campaigns</option>
+                    <template x-for="code in mappedCampaigns" :key="code">
+                        <option :value="code" x-text="code"></option>
+                    </template>
+                </select>
+                <p class="mt-1 text-[11px] text-[var(--color-on-surface-dim)]">
+                    Only campaigns mapped to the selected CRM campaign are available.
+                </p>
             </div>
             <div class="form-field">
                 <label class="form-label" for="reports-date-start">Date Start</label>
@@ -620,7 +628,7 @@
 
 @push('scripts')
 <script>
-const REPORT_LIVE_POLL_SECONDS = Math.max(5, @json((int) config('vicidial.supervisor.poll_seconds', 15)));
+window.REPORT_LIVE_POLL_SECONDS = Math.max(5, @json((int) config('vicidial.supervisor.poll_seconds', 15)));
 window.telephonyReports = function () {
     const CHART_GROUP = 'telephony-reports';
 
@@ -641,6 +649,7 @@ window.telephonyReports = function () {
             disposition_scope: 'all',
             comparison: 'none',
         },
+        mappedCampaigns: @json($vicidialCampaignCodes ?? []),
         dispositionScopeOptions: [
             { value: 'all', label: 'All dispositions' },
             { value: 'exclude_system', label: 'Hide system dispositions' },
@@ -839,7 +848,7 @@ window.telephonyReports = function () {
             if (document.hidden) {
                 return;
             }
-            this.pollInterval = setInterval(() => this.refreshAll(), REPORT_LIVE_POLL_SECONDS * 1000);
+            this.pollInterval = setInterval(() => this.refreshAll(), window.REPORT_LIVE_POLL_SECONDS * 1000);
         },
 
         changeMode() {
@@ -899,6 +908,12 @@ window.telephonyReports = function () {
             const agents = Array.isArray(data.agents) ? data.agents : [];
 
             this.dashboard.availability = data.availability || this.dashboard.availability;
+            if (Array.isArray(data.campaign_scope?.campaign_codes)) {
+                this.mappedCampaigns = data.campaign_scope.campaign_codes;
+                if (this.filters.campaigns !== '---ALL---' && !this.mappedCampaigns.includes(this.filters.campaigns)) {
+                    this.filters.campaigns = '---ALL---';
+                }
+            }
             this.dashboard.scopeLabel = this.dispositionScopeLabel(this.filters.disposition_scope);
             this.dashboard.overview = {
                 ...this.dashboard.overview,

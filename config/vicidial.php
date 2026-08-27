@@ -15,6 +15,8 @@ return [
     'connect_timeout' => (int) env('VICI_CONNECT_TIMEOUT', 5),
     'retry_times' => (int) env('VICI_RETRY_TIMES', 2),
     'retry_sleep_ms' => (int) env('VICI_RETRY_SLEEP_MS', 500),
+    'campaign_scope_cache_seconds' => (int) env('VICI_CAMPAIGN_SCOPE_CACHE_SECONDS', 60),
+    'campaign_catalog_cache_seconds' => (int) env('VICI_CAMPAIGN_CATALOG_CACHE_SECONDS', 60),
 
     /*
     |--------------------------------------------------------------------------

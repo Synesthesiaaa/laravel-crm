@@ -6,7 +6,6 @@ use App\Models\CallSession;
 use App\Models\CampaignDispositionRecord;
 use App\Models\User;
 use App\Models\VicidialAgentSession;
-use App\Models\VicidialServer;
 use App\Services\CampaignService;
 use App\Support\OperationResult;
 use App\Telephony\AgentOperationalState;
@@ -20,8 +19,8 @@ class SupervisorOperationalService
 {
     public function __construct(
         protected CampaignService $campaignService,
-        protected \App\Repositories\VicidialServerRepository $serverRepository,
         protected ReportingService $reportingService,
+        protected CrmCampaignVicidialScopeResolver $scopeResolver,
     ) {}
 
     /**
@@ -35,20 +34,22 @@ class SupervisorOperationalService
         $campaigns = $this->campaignService->getCampaigns();
         $campaign = $this->resolveCampaign($request, $campaigns);
         $campaignConfig = $this->campaignService->getCampaign($campaign);
-        $server = $campaign !== '' ? $this->serverRepository->getForCampaign($campaign) : null;
-        $remoteSnapshot = $this->fetchRemoteSnapshot($request, $campaign, $server, $today);
+        $scope = $this->scopeResolver->resolve($campaign);
+        $server = $scope->server;
+        $liveCampaignCodes = $scope->liveCampaignCodes();
+        $remoteSnapshot = $this->fetchRemoteSnapshot($request, $scope, $today);
         $remoteAgents = $remoteSnapshot['agents'];
         $remoteAgentMetrics = $remoteSnapshot['agent_metrics'];
 
         $users = User::query()
             ->whereIn('role', ['Agent', 'Team Leader'])
-            ->where(function ($query) use ($campaign, $today): void {
+            ->where(function ($query) use ($campaign, $liveCampaignCodes, $today): void {
                 $query->where('default_campaign', $campaign)
-                    ->orWhereHas('vicidialSessions', function ($sessionQuery) use ($campaign): void {
-                        $sessionQuery->where('campaign_code', $campaign);
+                    ->orWhereHas('vicidialSessions', function ($sessionQuery) use ($liveCampaignCodes): void {
+                        $sessionQuery->whereIn('campaign_code', $liveCampaignCodes);
                     })
-                    ->orWhereHas('callSessions', function ($callQuery) use ($campaign, $today): void {
-                        $callQuery->where('campaign_code', $campaign)
+                    ->orWhereHas('callSessions', function ($callQuery) use ($liveCampaignCodes, $today): void {
+                        $callQuery->whereIn('campaign_code', $liveCampaignCodes)
                             ->whereDate('dialed_at', $today);
                     });
             })
@@ -81,14 +82,14 @@ class SupervisorOperationalService
 
         $activeCallRecords = CallSession::query()
             ->whereIn('user_id', $userIds)
-            ->where('campaign_code', $campaign)
+            ->whereIn('campaign_code', $liveCampaignCodes)
             ->active()
             ->get();
         $activeCalls = $activeCallRecords->keyBy('user_id');
 
         $todayCalls = CallSession::query()
             ->whereIn('user_id', $userIds)
-            ->where('campaign_code', $campaign)
+            ->whereIn('campaign_code', $liveCampaignCodes)
             ->whereDate('dialed_at', $today)
             ->get([
                 'user_id',
@@ -107,7 +108,7 @@ class SupervisorOperationalService
 
         $todaysDispositions = CampaignDispositionRecord::query()
             ->whereIn('agent', array_values($agentNames))
-            ->where('campaign_code', $campaign)
+            ->whereIn('campaign_code', $liveCampaignCodes)
             ->whereDate('called_at', $today)
             ->select('agent', DB::raw('COUNT(*) as total'))
             ->groupBy('agent')
@@ -119,7 +120,9 @@ class SupervisorOperationalService
 
         $viciSessions = VicidialAgentSession::query()
             ->whereIn('user_id', $userIds)
-            ->where('campaign_code', $campaign)
+            ->whereIn('campaign_code', $liveCampaignCodes)
+            ->orderByDesc('last_synced_at')
+            ->orderByDesc('id')
             ->get()
             ->keyBy('user_id');
 
@@ -190,6 +193,7 @@ class SupervisorOperationalService
                 'id' => $user->id,
                 'name' => $agentName,
                 'campaign_code' => $campaign,
+                'vicidial_campaign' => $remote['campaign'] ?? $viciSession?->campaign_code,
                 'state' => $state->value,
                 'state_label' => $state->label(),
                 'status' => $this->legacyStatus($state),
@@ -296,6 +300,9 @@ class SupervisorOperationalService
                 'message' => $remoteSnapshot['reporting_message'],
                 'diagnostics' => $remoteSnapshot['diagnostics'],
                 'classification' => $remoteSnapshot['reporting_classification'],
+                'vicidial_campaign_count' => count($scope->historicalCampaignCodes()),
+                'vicidial_campaigns' => $scope->historicalCampaignCodes(),
+                'live_vicidial_campaigns' => $scope->liveCampaignCodes(),
             ],
             'generated_at' => now()->toIso8601String(),
             'source_updated_at' => $remoteSnapshot['freshness']['last_success_at'],
@@ -307,6 +314,7 @@ class SupervisorOperationalService
             'campaign' => [
                 'code' => $campaign,
                 'name' => $campaignConfig['name'] ?? $request->session()->get('campaign_name', $campaign),
+                'vicidial_campaigns' => $scope->historicalCampaignCodes(),
             ],
             'metrics' => [
                 'agents_online' => $agentsOnline,
@@ -357,10 +365,12 @@ class SupervisorOperationalService
      */
     private function fetchRemoteSnapshot(
         Request $request,
-        string $campaign,
-        ?VicidialServer $server,
+        VicidialCampaignScope $scope,
         Carbon $today,
     ): array {
+        $campaign = (string) $scope->campaign->code;
+        $server = $scope->server;
+        $liveCampaignCodes = $scope->liveCampaignCodes();
         $empty = [
             'agents' => [],
             'agent_metrics' => [],
@@ -385,6 +395,13 @@ class SupervisorOperationalService
 
             return $empty;
         }
+        if ($liveCampaignCodes === []) {
+            $empty['reporting_status'] = 'unavailable';
+            $empty['reporting_classification'] = 'NO_CAMPAIGNS_MAPPED';
+            $empty['reporting_message'] = "No enabled VICIdial campaigns are mapped to CRM campaign '{$campaign}'.";
+
+            return $empty;
+        }
         if (trim((string) $server->api_user) === '' || trim((string) $server->api_pass) === '') {
             $empty['reporting_message'] = 'VICIdial reports are not configured. Add an API user and password with View Reports access for this CRM campaign server.';
 
@@ -402,9 +419,10 @@ class SupervisorOperationalService
             $campaign,
             $today->format('Y-m-d'),
             $httpOptions,
+            $server,
         );
-        $loggedAgents = $this->parseLoggedAgentReport($reports['logged_agents'] ?? null, $candidates);
-        $agentPerformance = $this->parseAgentPerformanceReport($reports['agent_performance'] ?? null, $candidates);
+        $loggedAgents = $this->parseLoggedAgentReport($reports['logged_agents'] ?? null, $candidates, $liveCampaignCodes);
+        $agentPerformance = $this->parseAgentPerformanceReport($reports['agent_performance'] ?? null, $candidates, $liveCampaignCodes);
         $groups = array_values(array_unique(array_filter([
             ...$loggedAgents['user_groups'],
             ...$agentPerformance['user_groups'],
@@ -421,7 +439,7 @@ class SupervisorOperationalService
                 implode('|', $groups),
                 $httpOptions,
             );
-            $groupStats = $this->parseUserGroupStatus($groupResult);
+            $groupStats = $this->parseUserGroupStatus($groupResult, $liveCampaignCodes);
             if ($groupStats !== null) {
                 $realtimeStats = array_merge($realtimeStats ?? [], $groupStats);
                 $realtimeSource = $this->hasCompleteRealtimeStats($realtimeStats) ? 'vicidial' : 'mixed';
@@ -454,7 +472,7 @@ class SupervisorOperationalService
         return [
             'agents' => $loggedAgents['agents'],
             'agent_metrics' => $agentPerformance['agents'],
-            'call_stats' => $this->parseRemoteCallStats($reports['call_totals'] ?? null),
+            'call_stats' => $this->parseRemoteCallStats($reports['call_totals'] ?? null, $liveCampaignCodes),
             'realtime_stats' => $realtimeStats,
             'performance_stats' => $agentPerformance['stats'],
             'realtime_source' => $realtimeSource,
@@ -603,7 +621,7 @@ class SupervisorOperationalService
      * @param  Collection<int, User>  $candidates
      * @return array<string, mixed>
      */
-    private function parseLoggedAgentReport(?OperationResult $result, Collection $candidates): array
+    private function parseLoggedAgentReport(?OperationResult $result, Collection $candidates, array $allowedCampaignCodes): array
     {
         $table = $this->parseRemoteTable($result);
         $empty = ['available' => false, 'agents' => [], 'user_groups' => [], 'stats' => null];
@@ -615,6 +633,7 @@ class SupervisorOperationalService
         );
         $remoteAgents = [];
         $userGroups = [];
+        $seenViciUsers = [];
         $stats = ['agents_online' => 0, 'agents_available' => 0, 'agents_in_calls' => 0, 'agents_paused' => 0];
         $hasQueueCount = $this->remoteTableHasAnyHeader($table, ['queue_count', 'calls_waiting', 'queue']);
         if ($hasQueueCount) {
@@ -622,6 +641,9 @@ class SupervisorOperationalService
         }
 
         foreach ($table['rows'] as $row) {
+            if (! $this->rowMatchesAllowedCampaign($row, $allowedCampaignCodes)) {
+                continue;
+            }
             $status = trim((string) $this->remoteRowValue($row, ['status', 'agent_status', 'state']));
             $subStatus = trim((string) $this->remoteRowValue($row, ['sub_status', 'real_time_sub_status']));
             $userGroup = trim((string) $this->remoteRowValue($row, ['user_group', 'group']));
@@ -629,6 +651,42 @@ class SupervisorOperationalService
             if ($userGroup !== '') {
                 $userGroups[] = $userGroup;
             }
+            $queueCount = $this->nonNegativeInteger($this->remoteRowValue($row, ['queue_count', 'calls_waiting', 'queue']));
+            $viciUser = strtolower(trim((string) $this->remoteRowValue($row, ['user', 'agent_user', 'username'])));
+            if ($viciUser === '') {
+                continue;
+            }
+            if (isset($seenViciUsers[$viciUser])) {
+                $user = $candidatesByViciUser->get($viciUser);
+                if ($user !== null && isset($remoteAgents[$user->id])) {
+                    $remoteAgents[$user->id]['queue_count'] = max(
+                        (int) ($remoteAgents[$user->id]['queue_count'] ?? 0),
+                        $queueCount ?? 0,
+                    );
+                    $remoteAgents[$user->id]['calls_today'] = ($remoteAgents[$user->id]['calls_today'] ?? 0) + ($this->nonNegativeInteger(
+                        $this->remoteRowValue($row, ['calls_today', 'calls', 'total_calls']),
+                    ) ?? 0);
+                    if ($hasQueueCount) {
+                        $stats['calls_waiting'] = max($stats['calls_waiting'], $queueCount ?? 0);
+                    }
+                    $existingState = AgentOperationalState::from($remoteAgents[$user->id]['state']);
+                    if ($this->statePriority($state) > $this->statePriority($existingState)) {
+                        $remoteAgents[$user->id]['status'] = $status;
+                        $remoteAgents[$user->id]['sub_status'] = $subStatus;
+                        $remoteAgents[$user->id]['state'] = $state->value;
+                        $remoteAgents[$user->id]['campaign'] = $this->remoteRowValue($row, ['campaign', 'campaign_id', 'campaign_code']);
+                        $remoteAgents[$user->id]['state_duration_seconds'] = $this->parseRemoteSeconds(
+                            $this->remoteRowValue($row, ['status_seconds', 'state_duration', 'pause_seconds', 'duration']),
+                        );
+                    }
+                    if (($remoteAgents[$user->id]['current_call'] ?? null) === null) {
+                        $remoteAgents[$user->id]['current_call'] = $this->remoteCurrentCall($row, $state);
+                    }
+                }
+
+                continue;
+            }
+            $seenViciUsers[$viciUser] = true;
             $stats['agents_online']++;
             if ($state === AgentOperationalState::Available || $state === AgentOperationalState::Queue) {
                 $stats['agents_available']++;
@@ -637,11 +695,9 @@ class SupervisorOperationalService
             } elseif ($state === AgentOperationalState::Paused) {
                 $stats['agents_paused']++;
             }
-            $queueCount = $this->nonNegativeInteger($this->remoteRowValue($row, ['queue_count', 'calls_waiting', 'queue']));
             if ($hasQueueCount) {
                 $stats['calls_waiting'] = max($stats['calls_waiting'], $queueCount ?? 0);
             }
-            $viciUser = strtolower(trim((string) $this->remoteRowValue($row, ['user', 'agent_user', 'username'])));
             $user = $candidatesByViciUser->get($viciUser);
             if (! $user) {
                 continue;
@@ -651,6 +707,7 @@ class SupervisorOperationalService
                 'sub_status' => $subStatus,
                 'state' => $state->value,
                 'user_group' => $userGroup,
+                'campaign' => $this->remoteRowValue($row, ['campaign', 'campaign_id', 'campaign_code']),
                 'queue_count' => $queueCount,
                 'calls_today' => $this->nonNegativeInteger($this->remoteRowValue($row, ['calls_today', 'calls', 'total_calls'])),
                 'state_duration_seconds' => $this->parseRemoteSeconds($this->remoteRowValue($row, ['status_seconds', 'state_duration', 'pause_seconds', 'duration'])),
@@ -658,7 +715,7 @@ class SupervisorOperationalService
             ];
         }
 
-        $this->addOperationalFields($stats, $table);
+        $this->addOperationalFields($stats, $table, $allowedCampaignCodes);
 
         return ['available' => true, 'agents' => $remoteAgents, 'user_groups' => array_values(array_unique($userGroups)), 'stats' => $stats];
     }
@@ -667,7 +724,7 @@ class SupervisorOperationalService
      * @param  Collection<int, User>  $candidates
      * @return array<string, mixed>
      */
-    private function parseAgentPerformanceReport(?OperationResult $result, Collection $candidates): array
+    private function parseAgentPerformanceReport(?OperationResult $result, Collection $candidates, array $allowedCampaignCodes): array
     {
         $table = $this->parseRemoteTable($result);
         if ($table === null || ! $this->remoteTableHasAnyHeader($table, ['user', 'agent_user', 'username'])) {
@@ -683,6 +740,9 @@ class SupervisorOperationalService
         $talkSamples = 0;
         $waitSamples = 0;
         foreach ($table['rows'] as $row) {
+            if (! $this->rowMatchesAllowedCampaign($row, $allowedCampaignCodes)) {
+                continue;
+            }
             $calls = $this->nonNegativeInteger($this->remoteRowValue($row, ['calls', 'calls_today', 'total_calls']));
             if ($calls === null) {
                 continue;
@@ -695,6 +755,7 @@ class SupervisorOperationalService
             $averageWait = $this->parseRemoteSeconds($this->remoteRowValue($row, ['avg_wait_time', 'average_wait_time']));
             $totalTalk = $this->parseRemoteSeconds($this->remoteRowValue($row, ['total_talk_time', 'talk_time']));
             $totalWait = $this->parseRemoteSeconds($this->remoteRowValue($row, ['total_wait_time', 'wait_time']));
+            $campaignCode = trim((string) $this->remoteRowValue($row, ['campaign', 'campaign_id', 'campaign_code']));
             if ($calls > 0 && ($totalTalk !== null || $averageTalk !== null)) {
                 $totalTalkSeconds += $totalTalk ?? ($averageTalk * $calls);
                 $talkSamples += $calls;
@@ -708,7 +769,26 @@ class SupervisorOperationalService
             if (! $user) {
                 continue;
             }
-            $remoteAgents[$user->id] = ['calls_today' => $calls, 'avg_handle' => $averageTalk, 'avg_wait' => $averageWait];
+            $remoteAgents[$user->id] ??= [
+                'calls_today' => 0,
+                'campaign' => $campaignCode !== '' ? $campaignCode : null,
+                'avg_handle' => null,
+                'avg_wait' => null,
+                '_talk_seconds' => 0,
+                '_talk_samples' => 0,
+                '_wait_seconds' => 0,
+                '_wait_samples' => 0,
+            ];
+            $remoteAgents[$user->id]['calls_today'] += $calls;
+            $remoteAgents[$user->id]['campaign'] ??= $campaignCode !== '' ? $campaignCode : null;
+            if ($calls > 0 && ($totalTalk !== null || $averageTalk !== null)) {
+                $remoteAgents[$user->id]['_talk_seconds'] += $totalTalk ?? ($averageTalk * $calls);
+                $remoteAgents[$user->id]['_talk_samples'] += $calls;
+            }
+            if ($calls > 0 && ($totalWait !== null || $averageWait !== null)) {
+                $remoteAgents[$user->id]['_wait_seconds'] += $totalWait ?? ($averageWait * $calls);
+                $remoteAgents[$user->id]['_wait_samples'] += $calls;
+            }
         }
         $stats = [];
         if ($talkSamples > 0) {
@@ -718,13 +798,24 @@ class SupervisorOperationalService
             $stats['avg_wait'] = round($totalWaitSeconds / $waitSamples, 1);
         }
 
+        foreach ($remoteAgents as &$agent) {
+            $agent['avg_handle'] = $agent['_talk_samples'] > 0
+                ? round($agent['_talk_seconds'] / $agent['_talk_samples'], 1)
+                : null;
+            $agent['avg_wait'] = $agent['_wait_samples'] > 0
+                ? round($agent['_wait_seconds'] / $agent['_wait_samples'], 1)
+                : null;
+            unset($agent['_talk_seconds'], $agent['_talk_samples'], $agent['_wait_seconds'], $agent['_wait_samples']);
+        }
+        unset($agent);
+
         return ['agents' => $remoteAgents, 'user_groups' => array_values(array_unique($userGroups)), 'stats' => $stats !== [] ? $stats : null];
     }
 
     /**
      * @return array<string, int|float>|null
      */
-    private function parseUserGroupStatus(OperationResult $result): ?array
+    private function parseUserGroupStatus(OperationResult $result, array $allowedCampaignCodes): ?array
     {
         $table = $this->parseRemoteTable($result);
         if ($table === null || $table['rows'] === []) {
@@ -743,6 +834,9 @@ class SupervisorOperationalService
         $stats = [];
         $validRows = 0;
         foreach ($table['rows'] as $row) {
+            if (! $this->rowMatchesAllowedCampaign($row, $allowedCampaignCodes)) {
+                continue;
+            }
             $rowIsValid = false;
             foreach ($fieldMap as $target => $sourceHeaders) {
                 $value = $target === 'avg_wait_seconds'
@@ -931,6 +1025,18 @@ class SupervisorOperationalService
         };
     }
 
+    private function statePriority(AgentOperationalState $state): int
+    {
+        return match ($state) {
+            AgentOperationalState::Ringing => 5,
+            AgentOperationalState::OnCall => 4,
+            AgentOperationalState::Paused => 3,
+            AgentOperationalState::Queue => 2,
+            AgentOperationalState::Available => 1,
+            default => 0,
+        };
+    }
+
     private function legacyStatus(AgentOperationalState $state): string
     {
         return match ($state) {
@@ -958,8 +1064,9 @@ class SupervisorOperationalService
     /**
      * @param  array<string, int|float>  $stats
      * @param  array{headers: array<int, string>, rows: array<int, array<string, string>>}  $table
+     * @param  array<int, string>  $allowedCampaignCodes
      */
-    private function addOperationalFields(array &$stats, array $table): void
+    private function addOperationalFields(array &$stats, array $table, array $allowedCampaignCodes): void
     {
         $fieldMap = [
             'oldest_wait_seconds' => ['oldest_wait', 'oldest_wait_seconds'],
@@ -968,6 +1075,9 @@ class SupervisorOperationalService
         ];
         foreach ($fieldMap as $target => $headers) {
             foreach ($table['rows'] as $row) {
+                if (! $this->rowMatchesAllowedCampaign($row, $allowedCampaignCodes)) {
+                    continue;
+                }
                 $value = $target === 'avg_wait_seconds'
                     ? $this->nonNegativeNumber($this->remoteRowValue($row, $headers))
                     : $this->nonNegativeInteger($this->remoteRowValue($row, $headers));
@@ -1067,7 +1177,7 @@ class SupervisorOperationalService
     /**
      * @return array<string, int|float>|null
      */
-    private function parseRemoteCallStats(?OperationResult $result): ?array
+    private function parseRemoteCallStats(?OperationResult $result, array $allowedCampaignCodes): ?array
     {
         if ($result === null || ! $result->success) {
             return null;
@@ -1077,6 +1187,9 @@ class SupervisorOperationalService
         $validRows = 0;
         $callsByHour = [];
         foreach (array_values(array_filter((array) ($result->data['rows'] ?? []), 'is_array')) as $row) {
+            if (! $this->callStatsRowMatchesAllowedCampaign($row, $allowedCampaignCodes)) {
+                continue;
+            }
             if (! isset($row[1], $row[2]) || ! is_numeric($row[1]) || ! is_numeric($row[2])) {
                 continue;
             }
@@ -1120,6 +1233,49 @@ class SupervisorOperationalService
         }
 
         return $result;
+    }
+
+    /**
+     * @param  array<string, string>  $row
+     * @param  array<int, string>  $allowedCampaignCodes
+     */
+    private function rowMatchesAllowedCampaign(array $row, array $allowedCampaignCodes): bool
+    {
+        $campaign = $this->remoteRowValue($row, ['campaign', 'campaign_id', 'campaign_code']);
+        if ($campaign === null || trim((string) $campaign) === '') {
+            return false;
+        }
+
+        return $this->campaignCodeIsAllowed((string) $campaign, $allowedCampaignCodes);
+    }
+
+    /**
+     * @param  array<int, string>  $row
+     * @param  array<int, string>  $allowedCampaignCodes
+     */
+    private function callStatsRowMatchesAllowedCampaign(array $row, array $allowedCampaignCodes): bool
+    {
+        $label = trim((string) ($row[0] ?? ''));
+        if ($label === '') {
+            return false;
+        }
+
+        return $this->campaignCodeIsAllowed(explode('/', $label, 2)[0], $allowedCampaignCodes);
+    }
+
+    /**
+     * @param  array<int, string>  $allowedCampaignCodes
+     */
+    private function campaignCodeIsAllowed(string $value, array $allowedCampaignCodes): bool
+    {
+        $value = strtolower(trim($value));
+        foreach ($allowedCampaignCodes as $allowedCampaignCode) {
+            if ($value === strtolower(trim($allowedCampaignCode))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

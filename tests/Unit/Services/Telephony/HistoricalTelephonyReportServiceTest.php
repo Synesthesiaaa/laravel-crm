@@ -2,7 +2,11 @@
 
 namespace Tests\Unit\Services\Telephony;
 
+use App\Models\Campaign;
+use App\Models\CampaignVicidialMapping;
 use App\Models\User;
+use App\Models\VicidialServer;
+use App\Services\Telephony\CrmCampaignVicidialScopeResolver;
 use App\Services\Telephony\HistoricalTelephonyReportService;
 use App\Services\Telephony\ReportingService;
 use App\Support\OperationResult;
@@ -36,9 +40,9 @@ class HistoricalTelephonyReportServiceTest extends TestCase
                     ['TOTAL', '12', '5', '08-4,09-8', 'SALE-3,NA-9'],
                 ],
                 [
-                    ['user', 'full_name', 'calls', 'avg_talk_time', 'pause_time'],
-                    ['agent-a', 'Agent A', '4', '00:01:00', '00:10:00'],
-                    ['agent-a', 'Agent A', '2', '00:02:00', '00:05:00'],
+                    ['user', 'campaign', 'full_name', 'calls', 'avg_talk_time', 'pause_time'],
+                    ['agent-a', 'campaign-a', 'Agent A', '4', '00:01:00', '00:10:00'],
+                    ['agent-a', 'campaign-a', 'Agent A', '2', '00:02:00', '00:05:00'],
                 ],
                 [
                     ['campaign', 'ingroup', 'NA', 'SALE'],
@@ -46,7 +50,7 @@ class HistoricalTelephonyReportServiceTest extends TestCase
                 ],
             ));
 
-        $service = new HistoricalTelephonyReportService($reporting);
+        $service = new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver());
         $data = $service->dashboard(
             User::factory()->make(),
             'crm-campaign',
@@ -83,11 +87,11 @@ class HistoricalTelephonyReportServiceTest extends TestCase
             ->once()
             ->andReturn($this->snapshot(
                 [['campaign-a', '10', '4', '', 'SALE-4']],
-                [['user', 'calls'], ['agent-a', '10']],
+                [['user', 'campaign', 'calls'], ['agent-a', 'campaign-a', '10']],
                 [['campaign', 'ingroup', 'SALE'], ['campaign-a', 'IN', '4']],
             ));
 
-        $data = (new HistoricalTelephonyReportService($reporting))->dashboard(
+        $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver()))->dashboard(
             User::factory()->make(),
             'crm-campaign',
             ['query_date' => '2026-08-20', 'end_date' => '2026-08-26'],
@@ -104,17 +108,17 @@ class HistoricalTelephonyReportServiceTest extends TestCase
             ->andReturn(
                 $this->snapshot(
                     [['campaign-a', '10', '4', '', '']],
-                    [['user', 'calls', 'avg_talk_time'], ['agent-a', '10', '10']],
+                    [['user', 'campaign', 'calls', 'avg_talk_time'], ['agent-a', 'campaign-a', '10', '10']],
                     [['campaign', 'ingroup', 'SALE'], ['campaign-a', 'IN', '1']],
                 ),
                 $this->snapshot(
                     [['campaign-a', '10', '2', '', '']],
-                    [['user', 'calls', 'avg_talk_time'], ['agent-a', '10', '10']],
+                    [['user', 'campaign', 'calls', 'avg_talk_time'], ['agent-a', 'campaign-a', '10', '10']],
                     [['campaign', 'ingroup', 'SALE'], ['campaign-a', 'IN', '1']],
                 ),
             );
 
-        $service = new HistoricalTelephonyReportService($reporting);
+        $service = new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver());
         $data = $service->dashboard(
             User::factory()->make(),
             'crm-campaign',
@@ -132,6 +136,31 @@ class HistoricalTelephonyReportServiceTest extends TestCase
         $this->assertSame('2026-08-19', $data['comparison']['period']['end']);
     }
 
+    public function test_answer_rate_is_weighted_from_raw_campaign_totals(): void
+    {
+        $reporting = Mockery::mock(ReportingService::class);
+        $reporting->shouldReceive('historicalSnapshot')
+            ->once()
+            ->andReturn($this->snapshot(
+                [
+                    ['campaign-a', '100', '50', '', ''],
+                    ['campaign-b', '900', '90', '', ''],
+                ],
+                [['user', 'campaign', 'calls'], ['agent-a', 'campaign-a', '100']],
+                [['campaign', 'ingroup', 'SALE'], ['campaign-a', 'IN', '10']],
+            ));
+
+        $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver()))->dashboard(
+            User::factory()->make(),
+            'crm-campaign',
+            ['query_date' => '2026-08-20', 'end_date' => '2026-08-26'],
+        );
+
+        $this->assertSame(1000, $data['summary']['total_calls']);
+        $this->assertSame(140, $data['summary']['answered_calls']);
+        $this->assertSame(14.0, $data['summary']['answer_rate']);
+    }
+
     public function test_system_disposition_scope_is_applied_to_pareto_and_contact_rate(): void
     {
         config()->set('vicidial.report_system_disposition_codes', ['SYS']);
@@ -146,11 +175,11 @@ class HistoricalTelephonyReportServiceTest extends TestCase
             ->once()
             ->andReturn($this->snapshot(
                 [['campaign-a', '10', '4', '', 'SALE-3,SYS-7']],
-                [['user', 'calls'], ['agent-a', '10']],
+                [['user', 'campaign', 'calls'], ['agent-a', 'campaign-a', '10']],
                 [['campaign', 'ingroup', 'SYS', 'SALE'], ['campaign-a', 'IN', '7', '3']],
             ));
 
-        $data = (new HistoricalTelephonyReportService($reporting))->dashboard(
+        $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver()))->dashboard(
             User::factory()->make(),
             'crm-campaign',
             [
@@ -178,5 +207,26 @@ class HistoricalTelephonyReportServiceTest extends TestCase
             'agent_stats' => OperationResult::success(['rows' => $agentStats]),
             'call_dispo' => OperationResult::success(['rows' => $dispositions]),
         ];
+    }
+
+    private function legacyScopeResolver(): CrmCampaignVicidialScopeResolver
+    {
+        $campaign = new Campaign(['code' => 'crm-campaign', 'name' => 'CRM Campaign']);
+        $campaign->id = 1;
+        $campaign->exists = true;
+        $server = new VicidialServer(['server_name' => 'Test Server', 'campaign_code' => 'crm-campaign']);
+        $server->id = 1;
+        $server->exists = true;
+        $mappings = collect([
+            new CampaignVicidialMapping(['vicidial_campaign_code' => 'campaign-a', 'is_enabled' => true, 'status' => 'active']),
+            new CampaignVicidialMapping(['vicidial_campaign_code' => 'campaign-b', 'is_enabled' => true, 'status' => 'active']),
+        ]);
+
+        $resolver = Mockery::mock(CrmCampaignVicidialScopeResolver::class);
+        $resolver->shouldReceive('resolve')
+            ->with('crm-campaign')
+            ->andReturn(new \App\Services\Telephony\VicidialCampaignScope($campaign, $server, $mappings));
+
+        return $resolver;
     }
 }
