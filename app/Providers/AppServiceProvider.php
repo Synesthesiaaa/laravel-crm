@@ -16,6 +16,7 @@ use App\Policies\DispositionCodePolicy;
 use App\Policies\FormPolicy;
 use App\Policies\UserPolicy;
 use App\Policies\VicidialServerPolicy;
+use App\Services\BrandingService;
 use App\Services\CampaignService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
@@ -35,6 +36,10 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Model::preventLazyLoading(! $this->app->isProduction());
+
+        View::composer('*', function ($view): void {
+            $view->with('branding', app(BrandingService::class)->resolve());
+        });
 
         Gate::policy(Campaign::class, CampaignPolicy::class);
         Gate::policy(\App\Models\User::class, UserPolicy::class);

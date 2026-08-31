@@ -26,7 +26,8 @@
     <div class="md-hero">
         <div class="flex items-start justify-between flex-wrap gap-4">
             <div>
-                <h2 class="text-xl font-bold text-[var(--color-on-surface)]">Hello, {{ $user->full_name ?? $user->username }}</h2>
+                <h2 class="text-xl font-bold text-[var(--color-on-surface)]">Welcome to {{ data_get($branding, 'name', 'CRM') }}</h2>
+                <p class="text-sm text-[var(--color-on-surface-muted)] mt-1">Hello, {{ $user->full_name ?? $user->username }}</p>
                 <p class="text-[var(--color-on-surface-muted)] text-sm mt-1">
                     Campaign: <span class="font-semibold text-[var(--color-primary)]">{{ $campaignName }}</span>
                 </p>

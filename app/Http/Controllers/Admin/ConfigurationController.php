@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\UpdateBrandingRequest;
 use App\Models\DataRetentionPolicy;
 use App\Models\Form;
+use App\Services\BrandingService;
 use App\Services\CampaignService;
 use App\Services\DataRetentionService;
 use App\Services\TelephonyFeatureService;
@@ -16,6 +18,7 @@ class ConfigurationController extends Controller
 {
     public function __construct(
         protected CampaignService $campaignService,
+        protected BrandingService $brandingService,
         protected TelephonyFeatureService $telephonyFeatureService,
         protected DataRetentionService $dataRetentionService,
     ) {}
@@ -41,6 +44,7 @@ class ConfigurationController extends Controller
 
         return view('admin.configuration', [
             'tab' => $tab,
+            'brandingSettings' => $this->brandingService->resolve(),
             'campaigns' => $campaigns,
             'telephonyFeatures' => $this->telephonyFeatureService->getAll(),
             'retentionForms' => $retentionForms,
@@ -50,6 +54,15 @@ class ConfigurationController extends Controller
                 ->get(),
             'selectedRetentionFormId' => $selectedRetentionFormId,
         ]);
+    }
+
+    public function updateBranding(UpdateBrandingRequest $request): RedirectResponse
+    {
+        $this->brandingService->update($request->validated());
+
+        return redirect()
+            ->route('admin.configuration', ['tab' => 'branding'])
+            ->with('status', 'Branding settings updated successfully.');
     }
 
     public function updateTelephonyFeatures(Request $request): RedirectResponse

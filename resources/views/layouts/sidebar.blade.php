@@ -1,5 +1,4 @@
 @php
-    $campaignName = session('campaign_name', 'CRM');
     $campaign     = session('campaign', '');
     $forms        = $campaignConfig['forms'] ?? [];
     $agentScreenVisible = app(\App\Services\TelephonyFeatureService::class)->isEnabled('agent_screen_access');
@@ -72,12 +71,7 @@
        aria-label="Main navigation">
 
     <div class="sidebar-header">
-        <div class="sidebar-logo shrink-0">
-            <x-icon name="signal" class="w-5 h-5 text-[var(--color-primary)]" />
-        </div>
-        <span class="sidebar-brand-text font-bold uppercase tracking-wider text-[var(--color-on-surface)] truncate">
-            {{ $campaignName }}
-        </span>
+        <x-brand :branding="$branding" variant="sidebar" />
         {{-- Mobile close button --}}
         <button type="button"
                 class="lg:hidden ml-auto btn-icon shrink-0"

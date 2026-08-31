@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    @php
+        $layoutBrandName = data_get($branding, 'name', config('app.name', 'CRM'));
+        $layoutFaviconUrl = data_get($branding, 'favicon_url', asset('favicon.ico'));
+    @endphp
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -11,7 +15,9 @@
         document.documentElement.setAttribute('data-theme', t);
       })();
     </script>
-    <title>@yield('title', config('app.name'))</title>
+    <title>@hasSection('title')@yield('title') | @endif{{ $layoutBrandName }}</title>
+    <link rel="icon" href="{{ $layoutFaviconUrl }}">
+    <link rel="shortcut icon" href="{{ $layoutFaviconUrl }}">
     {{-- Self-hosted DM Sans font (fallback to system) --}}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

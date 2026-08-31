@@ -1,13 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    @php
+        $guestBrandName = data_get($branding, 'name', config('app.name', 'CRM'));
+        $guestFaviconUrl = data_get($branding, 'favicon_url', asset('favicon.ico'));
+    @endphp
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script>
       (function() { var t = localStorage.getItem('theme') || 'dark'; document.documentElement.setAttribute('data-theme', t); })();
     </script>
-    <title>Login - {{ config('app.name') }}</title>
+    <title>Login | {{ $guestBrandName }}</title>
+    <link rel="icon" href="{{ $guestFaviconUrl }}">
+    <link rel="shortcut icon" href="{{ $guestFaviconUrl }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -22,6 +28,7 @@
 
         <div class="login-content">
             <div class="login-glass-card">
+                <x-brand :branding="$branding" variant="login" />
                 <h1>Sign in</h1>
                 <p class="login-sub">Enter your credentials to continue</p>
 
