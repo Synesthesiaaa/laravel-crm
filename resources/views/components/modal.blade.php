@@ -9,6 +9,7 @@
      x-transition:leave-start="opacity-100"
      x-transition:leave-end="opacity-0"
      class="modal-backdrop"
+     role="presentation"
      style="display: none;{{ $pointerThroughBackdrop ? ' pointer-events: none;' : '' }}">
     <div class="modal-box {{ $w }}"
          x-transition:enter="transition ease-out duration-200"
@@ -18,12 +19,15 @@
          x-transition:leave-start="opacity-100 scale-100"
          x-transition:leave-end="opacity-0 scale-95"
          {{ $attributes }}
+         role="dialog"
+         aria-modal="true"
+         @if($title) aria-labelledby="modal-title-{{ $name }}" @endif
          style="{{ $pointerThroughBackdrop ? 'pointer-events: auto;' : '' }}"
          @click.stop>
         @if($title)
         <div class="modal-header">
-            <h3 class="modal-title">{{ $title }}</h3>
-            <button class="btn-icon" @click="$store.modal.hide()" aria-label="Close">
+            <h3 id="modal-title-{{ $name }}" class="modal-title">{{ $title }}</h3>
+            <button type="button" class="btn-icon" @click="$store.modal.hide()" aria-label="Close dialog" title="Close dialog">
                 <x-icon name="x-mark" class="w-4 h-4" />
             </button>
         </div>

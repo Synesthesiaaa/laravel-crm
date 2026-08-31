@@ -94,3 +94,53 @@ test('renders structured audit detail sections for expanded entries', () => {
     assert.match(activityLogView, /After/);
     assert.match(activityLogView, /changes\.diff/);
 });
+
+test('keeps activity polling bounded to one request and clears its timer on destroy', async () => {
+    let resolveRequest;
+    let requests = 0;
+    const context = {
+        window: {
+            TelephonyEcho: {
+                isBroadcastEnabled: () => false,
+                isEchoConnected: () => false,
+            },
+            axios: {
+                get: () => {
+                    requests++;
+
+                    return new Promise((resolve) => {
+                        resolveRequest = resolve;
+                    });
+                },
+            },
+            setInterval: () => 123,
+            clearInterval: () => {},
+        },
+        setInterval: () => 123,
+        clearInterval: () => {},
+    };
+
+    vm.runInNewContext(activityLogScript, context);
+
+    const component = context.window.activityLogTerminal({
+        initialEntries: [],
+        historyUrl: '/admin/activity-log/entries',
+    });
+    component.$nextTick = () => {};
+
+    const firstPoll = component.poll();
+    const secondPoll = component.poll();
+
+    assert.equal(requests, 1);
+    resolveRequest({ data: { data: [] } });
+    await firstPoll;
+    await secondPoll;
+
+    let clearedTimer = null;
+    component._pollTimer = 456;
+    context.window.clearInterval = (timer) => { clearedTimer = timer; };
+    component.destroy();
+
+    assert.equal(clearedTimer, 456);
+    assert.equal(component._pollTimer, null);
+});

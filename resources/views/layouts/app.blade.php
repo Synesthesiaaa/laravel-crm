@@ -28,11 +28,13 @@
     );
     $layoutCampaignName = (string) (session('campaign_name') ?: $layoutTelephonyCampaign);
 @endphp
-<body class="min-h-screen flex" style="margin: 0;" x-data
+<body class="min-h-screen flex crm-app-shell" x-data
       data-campaign="{{ $layoutTelephonyCampaign }}"
       data-campaign-name="{{ $layoutCampaignName }}"
       data-telephony-campaign="{{ $layoutTelephonyCampaign }}"
       data-user-id="{{ auth()->id() }}">
+
+    <a class="skip-link" href="#main-content">Skip to main content</a>
 
     {{-- Mobile sidebar overlay --}}
     <div x-show="$store.sidebar.mobileOpen"
@@ -44,6 +46,7 @@
          x-transition:leave-end="opacity-0"
          class="fixed inset-0 bg-black/60 z-[60] lg:hidden"
          @click="$store.sidebar.closeMobile()"
+         aria-hidden="true"
          style="display: none;">
     </div>
 
@@ -55,20 +58,24 @@
          :data-collapsed="$store.sidebar.collapsed ? 'true' : 'false'">
 
         {{-- Sticky header --}}
-        <header class="md-header" role="banner">
+        <header class="md-header" role="banner" aria-label="Application header">
             <div class="flex items-center gap-3 min-w-0">
                 {{-- Mobile hamburger --}}
                 <button type="button"
                         class="lg:hidden btn-icon mr-1"
                         @click="$store.sidebar.openMobile()"
-                        aria-label="Open navigation">
+                        aria-label="Open navigation"
+                        aria-controls="sidebar"
+                        :aria-expanded="$store.sidebar.mobileOpen">
                     <x-icon name="bars-3" class="w-5 h-5" />
                 </button>
                 {{-- Desktop sidebar toggle --}}
                 <button type="button"
                         class="hidden lg:inline-flex btn-icon"
                         @click="$store.sidebar.toggle()"
-                        aria-label="Toggle sidebar">
+                        aria-label="Toggle sidebar"
+                        aria-controls="sidebar"
+                        :aria-expanded="!$store.sidebar.collapsed">
                     <x-icon name="bars-3" class="w-5 h-5" />
                 </button>
                 <h1 class="text-base font-semibold tracking-tight flex items-center gap-2 text-[var(--color-on-surface)] truncate">
@@ -94,7 +101,10 @@
                     <button type="button"
                             class="btn-icon relative"
                             @click="toggle()"
-                            aria-label="Notifications">
+                            aria-label="Notifications"
+                            aria-haspopup="true"
+                            :aria-expanded="open"
+                            aria-controls="notifications-menu">
                         <x-icon name="bell" class="w-4 h-4" />
                         <span x-show="unread > 0"
                               x-text="unread > 9 ? '9+' : unread"
@@ -102,7 +112,8 @@
                         </span>
                     </button>
                     {{-- Notifications dropdown --}}
-                    <div x-show="open"
+                    <div id="notifications-menu"
+                         x-show="open"
                          x-transition:enter="transition ease-out duration-150"
                          x-transition:enter-start="opacity-0 scale-95 -translate-y-1"
                          x-transition:enter-end="opacity-100 scale-100 translate-y-0"
@@ -169,7 +180,7 @@
                 </div>
 
                 {{-- Theme toggle --}}
-                <button type="button" id="theme-toggle" class="btn-icon theme-toggle" aria-label="Toggle theme">
+                <button type="button" id="theme-toggle" class="btn-icon theme-toggle" aria-label="Toggle theme" aria-pressed="false">
                     <x-icon name="moon" class="theme-icon-dark w-4 h-4" />
                     <x-icon name="sun" class="theme-icon-light w-4 h-4 hidden" />
                 </button>
@@ -177,8 +188,11 @@
                 {{-- User dropdown --}}
                 <div class="relative" x-data="{ open: false }">
                     <button type="button"
-                            class="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-[var(--color-surface-3)] transition-colors text-sm"
-                            @click="open = !open">
+                            class="header-user-trigger flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-[var(--color-surface-3)] transition-colors text-sm"
+                            @click="open = !open"
+                            aria-haspopup="true"
+                            :aria-expanded="open"
+                            aria-controls="user-menu">
                         <div class="w-7 h-7 rounded-full bg-[var(--color-primary-muted)] border border-[var(--color-primary)] flex items-center justify-center text-[var(--color-primary)] font-bold text-xs uppercase">
                             {{ substr($user->full_name ?? $user->username ?? 'U', 0, 1) }}
                         </div>
@@ -187,7 +201,8 @@
                         </span>
                         <x-icon name="chevron-down" class="w-3.5 h-3.5 text-[var(--color-on-surface-dim)]" />
                     </button>
-                    <div x-show="open"
+                    <div id="user-menu"
+                         x-show="open"
                          x-transition:enter="transition ease-out duration-150"
                          x-transition:enter-start="opacity-0 scale-95 -translate-y-1"
                          x-transition:enter-end="opacity-100 scale-100 translate-y-0"
@@ -220,7 +235,7 @@
         </header>
 
         {{-- Page content --}}
-        <main class="content-padding flex-1 p-6 lg:p-8" id="main-content">
+        <main class="content-padding flex-1 p-6 lg:p-8" id="main-content" tabindex="-1" aria-label="Main content">
             @yield('content')
         </main>
     </div>
@@ -573,6 +588,7 @@
           if (btn) {
             btn.setAttribute('aria-label', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
             btn.setAttribute('title', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+            btn.setAttribute('aria-pressed', t === 'light' ? 'true' : 'false');
           }
         }
         document.addEventListener('click', function (e) {

@@ -38,6 +38,10 @@ class ActivityLogTest extends TestCase
             ->assertOk()
             ->assertSee('Activity Log', false)
             ->assertSee('LIVE ACTIVITY STREAM', false)
+            ->assertSee('activity-log-filters', false)
+            ->assertSee('activity-filter-heading', false)
+            ->assertSee('role="log"', false)
+            ->assertSee('aria-current="page"', false)
             ->assertSee('Follow', false)
             ->assertSee('Pause', false);
     }

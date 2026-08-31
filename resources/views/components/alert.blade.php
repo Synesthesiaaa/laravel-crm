@@ -10,7 +10,7 @@ $icon  = $icons[$type] ?? 'information-circle';
         <div class="text-sm">{{ $slot }}</div>
     </div>
     @if($dismissible)
-        <button @click="show = false" class="shrink-0 opacity-60 hover:opacity-100" aria-label="Dismiss">
+        <button type="button" @click="show = false" class="alert-dismiss shrink-0 opacity-60 hover:opacity-100" aria-label="Dismiss alert" title="Dismiss alert">
             <x-icon name="x-mark" class="w-4 h-4" />
         </button>
     @endif

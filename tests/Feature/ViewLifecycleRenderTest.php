@@ -30,6 +30,10 @@ class ViewLifecycleRenderTest extends TestCase
             ->get(route('dashboard'));
 
         $response->assertOk();
+        $response->assertSee('href="#main-content"', false);
+        $response->assertSee('id="main-content"', false);
+        $response->assertSee('tabindex="-1"', false);
+        $response->assertSee('aria-controls="sidebar"', false);
         $response->assertSee('window.crmGracefulLogout && window.crmGracefulLogout()', false);
         $response->assertSee('window.TelephonyMediaPath?.shouldUseSipMedia?.() === true', false);
         $response->assertSee('window.TelephonyMediaPath?.isDual?.() === true', false);
@@ -72,6 +76,8 @@ class ViewLifecycleRenderTest extends TestCase
         $this->assertStringContainsString('dataset.campaign', $contents);
         $this->assertStringContainsString('crm-campaign-changed', $contents);
         $this->assertStringContainsString('campaignName', $contents);
+        $this->assertStringContainsString("querySelector('#main-content')", $contents);
+        $this->assertStringContainsString('preventScroll: true', $contents);
     }
 
     public function test_reports_preserve_last_good_data_when_a_refresh_is_unavailable(): void

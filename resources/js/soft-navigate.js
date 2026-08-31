@@ -276,6 +276,11 @@ async function softNavigate(url, { push = true } = {}) {
         detail: { url, scope: nextScope, previousScope },
     }));
 
+    const nextMainContent = mainLayout.querySelector('#main-content');
+    if (nextMainContent && typeof nextMainContent.focus === 'function') {
+        nextMainContent.focus({ preventScroll: true });
+    }
+
     currentSoftNavPhase = 'idle';
 
     if (push) {

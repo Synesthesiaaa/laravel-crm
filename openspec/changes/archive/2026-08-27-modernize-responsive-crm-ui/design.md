@@ -25,7 +25,7 @@ The current shared system is dark-first with a saturated magenta primary color. 
 
 ### 1. Extend the existing token system instead of introducing a second design system
 
-Update `resources/css/app.css` semantic variables and shared component classes. Keep `var(--color-*)` references as the contract used by Blade views, status components, charts, and widgets. Use a navy/slate surface family with an accessible blue primary accent and retain separate success, warning, danger, and info tokens. Keep light/dark overrides side by side so each state is designed as a pair.
+Update `resources/css/app.css` semantic variables and shared component classes. Keep `var(--color-*)` references as the contract used by Blade views, status components, charts, and widgets. Preserve the existing pink/magenta primary accent and neutral surface family while retaining separate success, warning, danger, and info tokens. Keep light/dark overrides side by side so each state is designed as a pair.
 
 Alternatives considered: a page-local redesign would create visual drift; a new component library would add dependency and migration risk without improving existing soft-navigation behavior.
 

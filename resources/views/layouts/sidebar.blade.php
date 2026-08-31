@@ -67,6 +67,7 @@
            'sidebar-mobile-open': $store.sidebar.mobileOpen,
        }"
        x-data
+       @keydown.escape="$store.sidebar.closeMobile()"
        role="navigation"
        aria-label="Main navigation">
 
@@ -81,17 +82,19 @@
         <button type="button"
                 class="lg:hidden ml-auto btn-icon shrink-0"
                 @click="$store.sidebar.closeMobile()"
-                aria-label="Close navigation">
+                aria-label="Close navigation"
+                aria-controls="sidebar">
             <x-icon name="x-mark" class="w-4 h-4" />
         </button>
     </div>
 
-    <nav class="sidebar-nav" aria-label="Main navigation">
+    <nav class="sidebar-nav" aria-label="Primary destinations">
         {{-- Main --}}
         @foreach($navItems as $item)
             <a href="{{ route($item['route']) }}"
                class="sidebar-item {{ $sidebarLinkActive($item['route']) ? 'active' : '' }}"
                title="{{ $item['label'] }}"
+               @if($sidebarLinkActive($item['route'])) aria-current="page" @endif
                @click="$store.sidebar.closeMobile()">
                 <x-icon :name="$item['icon']" class="sidebar-icon shrink-0" />
                 <span class="sidebar-item-label">{{ $item['label'] }}</span>
@@ -99,12 +102,13 @@
         @endforeach
 
         {{-- Telephony section --}}
-        <div class="sidebar-section-label">Telephony</div>
+        <div class="sidebar-section-label" role="heading" aria-level="2">Telephony</div>
         @foreach($telephonyItems as $item)
             @if($item['route'] !== 'agent.index' || $agentScreenVisible)
             <a href="{{ route($item['route']) }}"
                class="sidebar-item {{ $sidebarLinkActive($item['route']) ? 'active' : '' }}"
                title="{{ $item['label'] }}"
+               @if($sidebarLinkActive($item['route'])) aria-current="page" @endif
                @click="$store.sidebar.closeMobile()">
                 <x-icon :name="$item['icon']" class="sidebar-icon shrink-0" />
                 <span class="sidebar-item-label">{{ $item['label'] }}</span>
@@ -114,11 +118,12 @@
 
         {{-- Campaign Forms --}}
         @if(!empty($forms))
-        <div class="sidebar-section-label">Campaign Forms</div>
+        <div class="sidebar-section-label" role="heading" aria-level="2">Campaign Forms</div>
         @foreach($forms as $formCode => $formConfig)
             <a href="{{ route('forms.show', ['type' => $formCode, 'campaign' => $campaign]) }}"
                class="sidebar-item {{ (request()->routeIs('forms.show') && (string) $formsRouteType === (string) $formCode) ? 'active' : '' }}"
                title="{{ $formConfig['name'] ?? $formCode }}"
+               @if(request()->routeIs('forms.show') && (string) $formsRouteType === (string) $formCode) aria-current="page" @endif
                @click="$store.sidebar.closeMobile()">
                 <x-icon name="document-text" class="sidebar-icon shrink-0" />
                 <span class="sidebar-item-label truncate">{{ $formConfig['name'] ?? $formCode }}</span>
@@ -128,11 +133,12 @@
 
         {{-- Admin section --}}
         @if($user && $user->isTeamLeader())
-        <div class="sidebar-section-label">Admin</div>
+        <div class="sidebar-section-label" role="heading" aria-level="2">Admin</div>
         @foreach($adminItems as $item)
             <a href="{{ route($item['route']) }}"
                class="sidebar-item {{ $sidebarLinkActive($item['route']) ? 'active' : '' }}"
                title="{{ $item['label'] }}"
+               @if($sidebarLinkActive($item['route'])) aria-current="page" @endif
                @click="$store.sidebar.closeMobile()">
                 <x-icon :name="$item['icon']" class="sidebar-icon shrink-0" />
                 <span class="sidebar-item-label">{{ $item['label'] }}</span>
@@ -141,12 +147,13 @@
 
             {{-- Super Admin section --}}
             @if($user->isSuperAdmin())
-            <div class="sidebar-section-label">Super Admin</div>
+            <div class="sidebar-section-label" role="heading" aria-level="2">Super Admin</div>
             @foreach($superAdminItems as $item)
                 @if($item['route'] !== 'admin.agent-screen.index' || $agentScreenVisible)
                 <a href="{{ route($item['route']) }}"
                    class="sidebar-item {{ $sidebarLinkActive($item['route']) ? 'active' : '' }}"
                    title="{{ $item['label'] }}"
+                   @if($sidebarLinkActive($item['route'])) aria-current="page" @endif
                    @click="$store.sidebar.closeMobile()">
                     <x-icon :name="$item['icon']" class="sidebar-icon shrink-0" />
                     <span class="sidebar-item-label">{{ $item['label'] }}</span>
