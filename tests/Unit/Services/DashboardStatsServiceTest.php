@@ -730,6 +730,142 @@ class DashboardStatsServiceTest extends TestCase
         $this->assertSame(2, $rolling['sales']);
         $this->assertSame(150.0, $rolling['sales_amount']);
         $this->assertSame('Alice', $rolling['top_agent']);
+
+        $summary = app(DashboardStatsService::class)->getDashboardSummaryForCampaign('mbsales');
+        $this->assertSame(['count' => 2, 'amount' => 150.0], $summary['summary']['current']);
+        $this->assertSame(['count' => 0, 'amount' => 0.0], $summary['summary']['previous']);
+        $this->assertSame('new', $summary['comparison']['count']['status']);
+        $this->assertSame(2, $summary['daily'][14]['current']['count']);
+    }
+
+    public function test_dashboard_summary_compares_aligned_month_to_date_sales_once_per_record(): void
+    {
+        Carbon::setTestNow('2026-05-07 12:00:00');
+        Cache::flush();
+        $this->seed(CampaignSeeder::class);
+
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount',
+            'field_label' => 'EzyCash Amount',
+            'field_type' => 'number',
+            'is_required' => false,
+            'is_sale_amount' => true,
+            'field_order' => 1,
+        ]);
+
+        $this->insertEzycashSaleRow('2026-05-01', 'Alice', 100.00, 10.00, '2026-05-01 10:00:00', 1);
+        $this->insertEzycashSaleRow('2026-05-03', 'Alice', 50.00, 10.00, '2026-05-03 10:00:00', 2);
+        $this->insertEzycashSaleRow('2026-05-07', 'Alice', 25.00, 10.00, '2026-05-07 11:00:00', 3);
+        $this->insertEzycashSaleRow('2026-05-02', 'Alice', 0.00, 10.00, '2026-05-02 10:00:00', 4);
+        $this->insertEzycashSaleRow('2026-04-01', 'Alice', 80.00, 10.00, '2026-04-01 10:00:00', 5);
+        $this->insertEzycashSaleRow('2026-04-03', 'Alice', 20.00, 10.00, '2026-04-03 10:00:00', 6);
+        $this->insertEzycashSaleRow('2026-04-07', 'Alice', 10.00, 10.00, '2026-04-07 11:00:00', 7);
+        $this->insertEzycashSaleRow('2026-04-07', 'Alice', 900.00, 10.00, '2026-04-07 12:00:01', 8);
+
+        $summary = app(DashboardStatsService::class)->getDashboardSummaryForCampaign(
+            'mbsales',
+            Carbon::create(2026, 5, 7, 12, 0, 0, 'UTC'),
+        );
+
+        $this->assertTrue($summary['has_activity']);
+        $this->assertSame('May 1, 2026 - May 7, 2026', $summary['period']['current']['label']);
+        $this->assertSame('Apr 1, 2026 - Apr 7, 2026', $summary['period']['previous']['label']);
+        $this->assertSame(['count' => 4, 'amount' => 175.0], $summary['summary']['current']);
+        $this->assertSame(['count' => 3, 'amount' => 110.0], $summary['summary']['previous']);
+        $this->assertSame(1, $summary['comparison']['count']['difference']);
+        $this->assertSame(33.33, $summary['comparison']['count']['percentage']);
+        $this->assertSame(65.0, $summary['comparison']['amount']['difference']);
+        $this->assertSame(59.09, $summary['comparison']['amount']['percentage']);
+        $this->assertSame(1, $summary['daily'][1]['current']['count']);
+        $this->assertSame(0.0, $summary['daily'][1]['current']['amount']);
+        $this->assertSame(0, $summary['daily'][3]['current']['count']);
+        $this->assertSame(1, $summary['daily'][2]['current']['count']);
+        $this->assertSame(1, $summary['daily'][6]['previous']['count']);
+        $this->assertSame(25.0, $summary['daily'][6]['current']['amount']);
+        $this->assertSame(10.0, $summary['daily'][6]['previous']['amount']);
+    }
+
+    public function test_dashboard_summary_marks_missing_previous_month_days_as_unavailable(): void
+    {
+        Carbon::setTestNow('2026-03-31 12:00:00');
+
+        $summary = app(DashboardStatsService::class)->getDashboardSummaryForCampaign(
+            'mbsales',
+            Carbon::create(2026, 3, 31, 12, 0, 0, 'UTC'),
+        );
+
+        $this->assertCount(31, $summary['daily']);
+        $this->assertSame('Feb 28, 2026', $summary['daily'][27]['previous_date']);
+        $this->assertNull($summary['daily'][28]['previous_date']);
+        $this->assertNull($summary['daily'][28]['previous']['count']);
+        $this->assertNull($summary['daily'][28]['previous']['amount']);
+    }
+
+    public function test_dashboard_summary_preserves_negative_amounts_and_campaign_scope(): void
+    {
+        Carbon::setTestNow('2026-05-07 12:00:00');
+        $this->seed(CampaignSeeder::class);
+
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount',
+            'field_label' => 'EzyCash Amount',
+            'field_type' => 'number',
+            'is_required' => false,
+            'is_sale_amount' => true,
+            'field_order' => 1,
+        ]);
+
+        $this->insertEzycashSaleRow('2026-05-07', 'Alice', -25.00, 10.00, '2026-05-07 11:00:00', 9);
+
+        $summary = app(DashboardStatsService::class)->getDashboardSummaryForCampaign('mbsales');
+        $otherCampaignSummary = app(DashboardStatsService::class)->getDashboardSummaryForCampaign('pjli');
+
+        $this->assertSame(['count' => 1, 'amount' => -25.0], $summary['summary']['current']);
+        $this->assertSame('new', $summary['comparison']['amount']['status']);
+        $this->assertSame(0, $otherCampaignSummary['summary']['current']['count']);
+        $this->assertSame(0.0, $otherCampaignSummary['summary']['current']['amount']);
+        $this->assertFalse($otherCampaignSummary['has_activity']);
+    }
+
+    public function test_dashboard_summary_uses_full_previous_month_when_current_month_is_complete(): void
+    {
+        $asOf = Carbon::create(2026, 5, 31, 23, 59, 59, 'UTC')->endOfDay();
+
+        $summary = app(DashboardStatsService::class)->getDashboardSummaryForCampaign('mbsales', $asOf);
+
+        $this->assertSame('completed_month', $summary['period']['mode']);
+        $this->assertSame('May 1, 2026 - May 31, 2026', $summary['period']['current']['label']);
+        $this->assertSame('Apr 1, 2026 - Apr 30, 2026', $summary['period']['previous']['label']);
+        $this->assertSame(31, $summary['period']['current']['day_count']);
+        $this->assertSame(30, $summary['period']['previous']['day_count']);
+    }
+
+    public function test_dashboard_summary_includes_records_at_the_observation_timestamp(): void
+    {
+        $this->seed(CampaignSeeder::class);
+
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount',
+            'field_label' => 'EzyCash Amount',
+            'field_type' => 'number',
+            'is_required' => false,
+            'is_sale_amount' => true,
+            'field_order' => 1,
+        ]);
+        $this->insertEzycashSaleRow('2026-05-07', 'Alice', 40.00, 10.00, '2026-05-07 12:00:00', 10);
+
+        $summary = app(DashboardStatsService::class)->getDashboardSummaryForCampaign(
+            'mbsales',
+            Carbon::create(2026, 5, 7, 12, 0, 0, 'UTC'),
+        );
+
+        $this->assertSame(['count' => 1, 'amount' => 40.0], $summary['summary']['current']);
     }
 
     private function insertEzycashRow(string $dateYmd): void

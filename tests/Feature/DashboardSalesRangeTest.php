@@ -239,6 +239,7 @@ class DashboardSalesRangeTest extends TestCase
         $response->assertSee('value="06:00"', false);
         $response->assertSee('name="sales_end"', false);
         $response->assertSee('value="18:00"', false);
+        $response->assertSee('No activity found for the selected period.', false);
     }
 
     public function test_dashboard_uses_requested_sales_filter_values_and_renders_the_sales_modal_trigger(): void
@@ -493,6 +494,38 @@ class DashboardSalesRangeTest extends TestCase
             $content,
         );
         $this->assertSame(4, substr_count($content, 'class="report-table--wide"'));
+    }
+
+    public function test_dashboard_renders_monthly_summary_comparison_and_accessible_data_table(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        Cache::flush();
+        config(['dashboard.currency_symbol' => '$']);
+        $this->registerSalesForm('cash', 'Cash Sale', 'cash_sales');
+        $this->insertSale('cash_sales', 'Alice', 100.00, '2026-05-15 07:00:00');
+        $this->insertSale('cash_sales', 'Alice', 80.00, '2026-04-15 07:00:00');
+
+        $response = $this->actingAs(User::factory()->create())
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertSee('Monthly performance', false);
+        $response->assertSee('Month to date: May 1, 2026 - May 15, 2026', false);
+        $response->assertSee('Compared with Apr 1, 2026 - Apr 15, 2026', false);
+        $response->assertSee('Transactions', false);
+        $response->assertSee('Total amount', false);
+        $response->assertSee('Transaction change', false);
+        $response->assertSee('Amount change', false);
+        $response->assertSee('id="chart-dashboard-summary"', false);
+        $response->assertSee('Chart measure', false);
+        $response->assertSee('View daily summary data', false);
+        $response->assertSee('Daily current and previous period transaction and amount comparison', false);
+        $response->assertSee('Amount is the sum of numeric form fields marked as sale amounts for qualifying records.', false);
+        $response->assertSee('$100.00', false);
+        $response->assertSee('+$20.00', false);
+        $response->assertSee('25.00%', false);
+        $response->assertSee('No change vs last month', false);
     }
 
     public function test_dashboard_reverts_invalid_sales_filters_to_the_default_business_hours(): void

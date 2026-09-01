@@ -17,6 +17,42 @@
     $salesAttributionLabel = $salesMode === 'custom'
         ? 'Amounts follow this campaign’s custom tag rules.'
         : 'Amounts come only from numeric form fields marked as sale amounts.';
+    $summary = $dashboardSummary ?? [];
+    $summaryCurrent = data_get($summary, 'summary.current', ['count' => 0, 'amount' => 0.0]);
+    $summaryPrevious = data_get($summary, 'summary.previous', ['count' => 0, 'amount' => 0.0]);
+    $summaryCountComparison = data_get($summary, 'comparison.count', []);
+    $summaryAmountComparison = data_get($summary, 'comparison.amount', []);
+    $summaryDaily = data_get($summary, 'daily', []);
+    $summaryHasActivity = (bool) data_get($summary, 'has_activity', false);
+    $summaryCurrencySymbol = (string) data_get($summary, 'currency.symbol', config('dashboard.currency_symbol', '₱'));
+    $summaryModeLabel = data_get($summary, 'period.mode') === 'completed_month' ? 'Completed month' : 'Month to date';
+    $summaryCurrentPeriodLabel = (string) data_get($summary, 'period.current.label', $monthTitle);
+    $summaryPreviousPeriodLabel = (string) data_get($summary, 'period.previous.label', 'Previous month');
+    $formatSummaryNumber = static function (float|int $amount, bool $compact = false): string {
+        $amount = abs((float) $amount);
+        if (! $compact || $amount < 1000) {
+            return number_format($amount, 2);
+        }
+
+        foreach ([
+            1000000000 => 'B',
+            1000000 => 'M',
+            1000 => 'K',
+        ] as $threshold => $suffix) {
+            if ($amount >= $threshold) {
+                return rtrim(rtrim(number_format($amount / $threshold, 2, '.', ''), '0'), '.').$suffix;
+            }
+        }
+
+        return number_format($amount, 2);
+    };
+    $formatSummaryAmount = static function (float|int $amount, bool $compact = false) use ($summaryCurrencySymbol, $formatSummaryNumber): string {
+        return ($amount < 0 ? '-' : '').$summaryCurrencySymbol.$formatSummaryNumber($amount, $compact);
+    };
+    $formatSignedAmount = static function (float|int $amount, bool $compact = false) use ($formatSummaryAmount): string {
+        return ($amount > 0 ? '+' : ($amount < 0 ? '-' : '')).$formatSummaryAmount(abs((float) $amount), $compact);
+    };
+    $formatSignedCount = static fn (float|int $count): string => ($count > 0 ? '+' : ($count < 0 ? '-' : '')).number_format(abs((float) $count));
 @endphp
 <div class="space-y-8 flex flex-col">
 
@@ -103,6 +139,122 @@
             <x-stat-card label="Active Forms" :value="count($forms ?? [])" icon="document-text" color="info" />
             <x-stat-card label="Campaign" :value="strtoupper($campaign ?? '—')" icon="building-office" color="info" />
         </div>
+
+        {{-- Month comparison summary --}}
+        <section class="mt-6 space-y-4" data-dashboard-summary aria-labelledby="dashboard-summary-title">
+            <div class="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                    <h3 id="dashboard-summary-title" class="text-sm font-semibold text-[var(--color-on-surface)]">Monthly performance</h3>
+                    <p class="text-xs text-[var(--color-on-surface-muted)] mt-1">
+                        {{ $summaryModeLabel }}: {{ $summaryCurrentPeriodLabel }}
+                    </p>
+                    <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">
+                        Compared with {{ $summaryPreviousPeriodLabel }}
+                    </p>
+                </div>
+                <span class="badge badge-info">{{ $summaryModeLabel }}</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 animate-stagger">
+                <x-stat-card
+                    label="Transactions"
+                    :value="number_format($summaryCurrent['count'])"
+                    :secondary="'Current period: '.$summaryCurrentPeriodLabel"
+                    icon="clipboard-document-check"
+                    color="success"
+                    :trend="$summaryCountComparison['percentage'] ?? null"
+                    :trend-difference="$formatSignedCount($summaryCountComparison['difference'] ?? 0)"
+                    :trend-label="$summaryCountComparison['message'] ?? 'vs last month'"
+                    :trend-status="$summaryCountComparison['status'] ?? 'unchanged'" />
+                <x-stat-card
+                    label="Total amount"
+                    :value="$formatSummaryAmount($summaryCurrent['amount'] ?? 0, true)"
+                    :secondary="'Current period: '.$summaryCurrentPeriodLabel"
+                    icon="tag"
+                    color="primary"
+                    :trend="$summaryAmountComparison['percentage'] ?? null"
+                    :trend-difference="$formatSignedAmount($summaryAmountComparison['difference'] ?? 0, true)"
+                    :trend-label="$summaryAmountComparison['message'] ?? 'vs last month'"
+                    :trend-status="$summaryAmountComparison['status'] ?? 'unchanged'" />
+                <x-stat-card
+                    label="Transaction change"
+                    :value="$formatSignedCount($summaryCountComparison['difference'] ?? 0)"
+                    :secondary="number_format($summaryCurrent['count']).' current vs '.number_format($summaryPrevious['count']).' previous'"
+                    icon="chart-bar"
+                    color="info"
+                    :trend="$summaryCountComparison['percentage'] ?? null"
+                    :trend-label="$summaryCountComparison['message'] ?? 'vs last month'"
+                    :trend-status="$summaryCountComparison['status'] ?? 'unchanged'" />
+                <x-stat-card
+                    label="Amount change"
+                    :value="$formatSignedAmount($summaryAmountComparison['difference'] ?? 0, true)"
+                    :secondary="$formatSummaryAmount($summaryCurrent['amount'] ?? 0, true).' current vs '.$formatSummaryAmount($summaryPrevious['amount'] ?? 0, true).' previous'"
+                    icon="arrow-trending-up"
+                    color="warning"
+                    :trend="$summaryAmountComparison['percentage'] ?? null"
+                    :trend-label="$summaryAmountComparison['message'] ?? 'vs last month'"
+                    :trend-status="$summaryAmountComparison['status'] ?? 'unchanged'" />
+            </div>
+
+            <div class="chart-container" data-dashboard-summary-chart>
+                <div class="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                        <h4 class="chart-title mb-1">Daily comparison</h4>
+                        <p class="text-xs text-[var(--color-on-surface-muted)]">Current period versus the equivalent previous-month days.</p>
+                        <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">{{ data_get($summary, 'amount_definition', 'Amount attribution follows the campaign configuration.') }}</p>
+                    </div>
+                    @if($summaryHasActivity)
+                        <div x-data="{ mode: 'volume' }" x-init="$watch('mode', value => window.setDashboardSummaryMode?.(value))" class="inline-flex rounded-lg border border-[var(--color-border)] p-1" role="group" aria-label="Chart measure">
+                            <button type="button" class="min-h-11 rounded-md px-3 text-xs font-semibold transition-colors" :class="mode === 'volume' ? 'bg-[var(--color-primary-muted)] text-[var(--color-primary)]' : 'text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'" :aria-pressed="mode === 'volume'" x-on:click="mode = 'volume'">Volume</button>
+                            <button type="button" class="min-h-11 rounded-md px-3 text-xs font-semibold transition-colors" :class="mode === 'amount' ? 'bg-[var(--color-primary-muted)] text-[var(--color-primary)]' : 'text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'" :aria-pressed="mode === 'amount'" x-on:click="mode = 'amount'">Amount</button>
+                        </div>
+                    @endif
+                </div>
+
+                @if($summaryHasActivity)
+                    <div id="chart-dashboard-summary" class="mt-4 min-h-[280px]" role="img" aria-describedby="dashboard-summary-description" aria-busy="true">
+                        <div class="skeleton h-[280px] w-full" data-summary-chart-loading aria-hidden="true"></div>
+                    </div>
+                    <p id="dashboard-summary-description" class="sr-only">A line chart compares daily transaction volume or amount for the current period and the equivalent previous-month period. The previous period uses a dashed line.</p>
+                    <p data-summary-chart-status class="mt-2 text-xs text-[var(--color-on-surface-dim)]" role="status" aria-live="polite">Loading comparison chart...</p>
+
+                    <details class="mt-4 border-t border-[var(--color-border)] pt-3">
+                        <summary class="cursor-pointer text-xs font-semibold text-[var(--color-on-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">View daily summary data</summary>
+                        <div class="md-table-wrap mt-3">
+                            <table>
+                                <caption class="sr-only">Daily current and previous period transaction and amount comparison</caption>
+                                <thead>
+                                    <tr>
+                                        <th>Day</th>
+                                        <th class="text-right">Current volume</th>
+                                        <th class="text-right">Current amount</th>
+                                        <th class="text-right">Previous volume</th>
+                                        <th class="text-right">Previous amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($summaryDaily as $summaryDay)
+                                        <tr>
+                                            <td class="font-medium text-[var(--color-on-surface)]" title="{{ $summaryDay['current_date'] }}">{{ $summaryDay['label'] }}</td>
+                                            <td class="text-right tabular-nums">{{ number_format($summaryDay['current']['count']) }}</td>
+                                            <td class="text-right tabular-nums">{{ $formatSummaryAmount($summaryDay['current']['amount']) }}</td>
+                                            <td class="text-right tabular-nums" title="{{ $summaryDay['previous_date'] ?? 'No equivalent date' }}">{{ $summaryDay['previous']['count'] === null ? '—' : number_format($summaryDay['previous']['count']) }}</td>
+                                            <td class="text-right tabular-nums">{{ $summaryDay['previous']['amount'] === null ? '—' : $formatSummaryAmount($summaryDay['previous']['amount']) }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
+                @else
+                    <div class="mt-4 rounded-lg border border-dashed border-[var(--color-border)] px-4 py-8 text-center" role="status">
+                        <x-icon name="chart-bar" class="mx-auto h-8 w-8 text-[var(--color-on-surface-dim)]" />
+                        <p class="mt-3 text-sm font-medium text-[var(--color-on-surface-muted)]">No activity found for the selected period.</p>
+                        <p class="mt-1 text-xs text-[var(--color-on-surface-dim)]">The chart will appear when qualifying sales activity is recorded.</p>
+                    </div>
+                @endif
+            </div>
+        </section>
 
         <x-modal name="sales-summary"
                  title="Sales by form"
@@ -465,9 +617,18 @@
     let refreshInFlight = false;
     let echo = null;
     let echoReadyHandler = null;
+    let summaryChart = null;
+    let summaryChartConfig = null;
+    let summaryMode = 'volume';
+    const summaryDaily = @json($summaryDaily);
+    const summaryCurrencySymbol = @json($summaryCurrencySymbol);
+    const summaryCurrentLabel = @json($summaryCurrentPeriodLabel);
+    const summaryPreviousLabel = @json($summaryPreviousPeriodLabel);
 
     function destroyCharts() {
         window.crmCharts?.destroyGroup?.(chartGroup);
+        summaryChart = null;
+        summaryChartConfig = null;
     }
 
     function scheduleRefresh() {
@@ -521,6 +682,173 @@
             }
         }, fallbackIntervalMs);
     }
+
+    function setSummaryChartStatus(message) {
+        const status = document.querySelector('[data-summary-chart-status]');
+        if (status) {
+            status.textContent = message;
+        }
+    }
+
+    function clearSummaryChartLoading() {
+        document.querySelector('[data-summary-chart-loading]')?.remove();
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;',
+        })[character]);
+    }
+
+    function formatSummaryValue(value, mode = summaryMode) {
+        const numericValue = Number(value) || 0;
+        if (mode === 'amount') {
+            return `${numericValue < 0 ? '-' : ''}${summaryCurrencySymbol}${Math.abs(numericValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
+
+        return Math.round(numericValue).toLocaleString();
+    }
+
+    function formatSummaryAxisValue(value, mode = summaryMode) {
+        const numericValue = Math.abs(Number(value) || 0);
+        if (mode !== 'amount' || numericValue < 1000) {
+            return formatSummaryValue(value, mode);
+        }
+
+        const units = [[1_000_000_000, 'B'], [1_000_000, 'M'], [1_000, 'K']];
+        const unit = units.find(([threshold]) => numericValue >= threshold);
+        const scaled = numericValue / unit[0];
+        return `${Number(value) < 0 ? '-' : ''}${summaryCurrencySymbol}${scaled.toFixed(1).replace(/\.0$/, '')}${unit[1]}`;
+    }
+
+    function formatSignedSummaryValue(value, mode = summaryMode) {
+        const numericValue = Number(value) || 0;
+        return `${numericValue > 0 ? '+' : numericValue < 0 ? '-' : ''}${formatSummaryValue(Math.abs(numericValue), mode)}`;
+    }
+
+    function summarySeries() {
+        const key = summaryMode === 'amount' ? 'amount' : 'count';
+
+        return [
+            { name: summaryCurrentLabel, data: summaryDaily.map((point) => point.current[key]) },
+            { name: summaryPreviousLabel, data: summaryDaily.map((point) => point.previous[key]) },
+        ];
+    }
+
+    function summaryTooltip({ dataPointIndex }) {
+        const point = summaryDaily[dataPointIndex];
+        if (!point) {
+            return '';
+        }
+
+        const key = summaryMode === 'amount' ? 'amount' : 'count';
+        const currentValue = Number(point.current[key]) || 0;
+        const hasPreviousEquivalent = point.previous_date !== null;
+        const previousValue = hasPreviousEquivalent ? Number(point.previous[key]) || 0 : null;
+        const difference = hasPreviousEquivalent ? currentValue - previousValue : null;
+        const comparison = !hasPreviousEquivalent
+            ? 'No equivalent date'
+            : previousValue === 0
+                ? (currentValue === 0 ? 'No change vs last month' : 'New activity vs last month')
+                : `${difference >= 0 ? '+' : ''}${((difference / previousValue) * 100).toFixed(2)}% vs last month`;
+        const currentDate = escapeHtml(point.current_date);
+        const previousDate = escapeHtml(point.previous_date || 'No equivalent date');
+        const currentLabel = escapeHtml(summaryCurrentLabel);
+        const previousLabel = escapeHtml(summaryPreviousLabel);
+        const previousDisplay = hasPreviousEquivalent ? formatSummaryValue(previousValue) : '—';
+        const differenceDisplay = hasPreviousEquivalent ? formatSignedSummaryValue(difference) : '—';
+
+        return `<div class="px-3 py-2 text-xs" style="background: var(--color-surface-card); color: var(--color-on-surface);">
+            <div class="font-semibold">Day ${escapeHtml(point.label)}</div>
+            <div class="mt-2 flex justify-between gap-6"><span>${currentLabel} <span class="text-[var(--color-on-surface-dim)]">(${currentDate})</span></span><strong>${formatSummaryValue(currentValue)}</strong></div>
+            <div class="flex justify-between gap-6"><span>${previousLabel} <span class="text-[var(--color-on-surface-dim)]">(${previousDate})</span></span><strong>${previousDisplay}</strong></div>
+            <div class="mt-2 border-t border-[var(--color-border)] pt-2"><span class="text-[var(--color-on-surface-dim)]">Difference</span> <strong>${differenceDisplay}</strong> <span class="text-[var(--color-on-surface-dim)]">${escapeHtml(comparison)}</span></div>
+        </div>`;
+    }
+
+    function summaryChartOptions(config) {
+        const amountMode = summaryMode === 'amount';
+        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+        return {
+            series: summarySeries(),
+            chart: {
+                type: 'line',
+                height: 300,
+                width: '100%',
+                toolbar: { show: false },
+                background: 'transparent',
+                fontFamily: 'DM Sans, ui-sans-serif',
+                animations: { enabled: !reduceMotion, easing: 'easeinout', speed: 400 },
+            },
+            colors: ['#e91e8c', config.isDark ? '#a1a1aa' : '#52525b'],
+            stroke: { curve: 'smooth', width: [3, 2], dashArray: [0, 6] },
+            markers: { size: 3, strokeWidth: 0, hover: { size: 5 } },
+            xaxis: {
+                categories: summaryDaily.map((point) => point.label),
+                labels: { style: { colors: config.textColor, fontSize: '11px' }, rotate: 0, hideOverlappingLabels: true },
+                axisBorder: { show: false },
+                axisTicks: { show: false },
+                title: { text: 'Day of month', style: { color: config.textColor, fontSize: '11px', fontWeight: 500 } },
+            },
+            yaxis: {
+                ...(amountMode ? {} : { min: 0 }),
+                labels: { style: { colors: config.textColor, fontSize: '11px' }, formatter: (value) => formatSummaryAxisValue(value) },
+                title: { text: amountMode ? `Amount (${summaryCurrencySymbol})` : 'Transactions', style: { color: config.textColor, fontSize: '11px', fontWeight: 500 } },
+            },
+            grid: { borderColor: config.gridColor, strokeDashArray: 3 },
+            tooltip: { theme: config.isDark ? 'dark' : 'light', shared: false, intersect: true, custom: summaryTooltip },
+            dataLabels: { enabled: false },
+            legend: { show: true, position: 'top', horizontalAlign: 'left', labels: { colors: config.textColor } },
+            theme: { mode: config.isDark ? 'dark' : 'light' },
+        };
+    }
+
+    async function mountDashboardSummaryChart(ApexCharts, config) {
+        const el = document.getElementById('chart-dashboard-summary');
+        if (!el || !document.getElementById('main-layout')?.contains(el)) {
+            return;
+        }
+        if (!Array.isArray(summaryDaily) || summaryDaily.length === 0) {
+            clearSummaryChartLoading();
+            el.setAttribute('aria-busy', 'false');
+            setSummaryChartStatus('No daily comparison data is available.');
+            return;
+        }
+
+        el.innerHTML = '';
+        summaryChartConfig = config;
+        summaryChart = new ApexCharts(el, summaryChartOptions(config));
+        window.crmCharts?.register?.(chartGroup, 'chart-dashboard-summary', summaryChart);
+
+        try {
+            await summaryChart.render();
+            el.setAttribute('aria-busy', 'false');
+            setSummaryChartStatus('Comparison chart ready.');
+        } catch (_) {
+            el.setAttribute('aria-busy', 'false');
+            setSummaryChartStatus('Chart visualization is unavailable. Use the daily summary data table below.');
+        }
+    }
+
+    window.setDashboardSummaryMode = (mode) => {
+        summaryMode = mode === 'amount' ? 'amount' : 'volume';
+        if (!summaryChart || !summaryChartConfig) {
+            return;
+        }
+
+        const options = summaryChartOptions(summaryChartConfig);
+        Promise.all([
+            summaryChart.updateSeries(options.series, true),
+            summaryChart.updateOptions({ yaxis: options.yaxis, tooltip: options.tooltip }, false, true),
+        ]).catch(() => {
+            setSummaryChartStatus('Chart visualization is unavailable. Use the daily summary data table below.');
+        });
+    };
 
     async function mountAreaChart(ApexCharts, elId, categories, values, config) {
         const el = document.getElementById(elId);
@@ -576,11 +904,13 @@
 
         const ApexCharts = await window.ApexChartsLoader?.() ?? null;
         if (!ApexCharts) {
+            clearSummaryChartLoading();
+            setSummaryChartStatus('Chart visualization is unavailable. Use the daily summary data table below.');
             return;
         }
 
         const main = document.getElementById('main-layout');
-        if (!main || !main.querySelector('#chart-monthly-activity')) {
+        if (!main || (!main.querySelector('#chart-monthly-activity') && !main.querySelector('#chart-dashboard-summary'))) {
             return;
         }
 
@@ -595,6 +925,7 @@
             mountAreaChart(ApexCharts, 'chart-daily-activity', @json($dailyActivity['labels'] ?? []), @json($dailyActivity['values'] ?? []), config),
             mountAreaChart(ApexCharts, 'chart-weekly-activity', @json($weeklyActivity['labels'] ?? []), @json($weeklyActivity['values'] ?? []), config),
             mountAreaChart(ApexCharts, 'chart-monthly-activity', @json($monthlyActivity['labels'] ?? []), @json($monthlyActivity['values'] ?? []), config),
+            mountDashboardSummaryChart(ApexCharts, config),
         ]);
 
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));

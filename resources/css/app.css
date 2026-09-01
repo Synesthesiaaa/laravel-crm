@@ -400,6 +400,7 @@ html[data-theme="light"] {
   .stat-card-trend { display: flex; align-items: center; gap: .25rem; font-size: .75rem; font-weight: 600; }
   .stat-card-trend.up   { color: var(--color-success); }
   .stat-card-trend.down { color: var(--color-danger); }
+  .stat-card-trend.flat { color: var(--color-on-surface-muted); }
 
   /* ---- Form inputs ---- */
   .form-field { display: flex; flex-direction: column; gap: .375rem; }

@@ -8,6 +8,9 @@
     'color'    => 'primary',
     'loading'  => false,
     'secondary' => null,
+    'trendDifference' => null,
+    'trendLabel' => 'vs last period',
+    'trendStatus' => null,
 ])
 @php
 $colorMap = [
@@ -19,6 +22,21 @@ $colorMap = [
 ];
 $c = $colorMap[$color] ?? $colorMap['primary'];
 $statCardClass = 'stat-card'.($href ? ' cursor-pointer hover:-translate-y-0.5 transition-transform' : '');
+$trendState = $trendStatus ?? match (true) {
+    $trendUp === true => 'increase',
+    $trendUp === false => 'decrease',
+    default => 'unchanged',
+};
+$trendClass = match ($trendState) {
+    'increase', 'new' => 'up',
+    'decrease' => 'down',
+    default => 'flat',
+};
+$trendIcon = match ($trendState) {
+    'increase', 'new' => 'arrow-trending-up',
+    'decrease' => 'chevron-down',
+    default => 'minus',
+};
 @endphp
 <div {{ $attributes->merge(['class' => $statCardClass]) }}
      @if($href) onclick="window.location='{{ $href }}'" @endif>
@@ -36,11 +54,17 @@ $statCardClass = 'stat-card'.($href ? ' cursor-pointer hover:-translate-y-0.5 tr
             <div class="stat-card-secondary">{{ $secondary }}</div>
         @endif
     @endif
-    @if($trend !== null)
-        <div class="stat-card-trend {{ $trendUp ? 'up' : 'down' }}">
-            <x-icon :name="$trendUp ? 'arrow-trending-up' : 'chevron-down'" class="w-3.5 h-3.5" />
-            <span>{{ abs($trend) }}%</span>
-            <span class="font-normal text-[var(--color-on-surface-dim)]">vs last period</span>
+    @if($trend !== null || $trendDifference !== null)
+        <div class="stat-card-trend {{ $trendClass }}" aria-label="{{ ucfirst($trendState) }}{{ $trendDifference !== null ? ': '.$trendDifference : '' }}{{ $trend !== null ? ', '.number_format(abs((float) $trend), 2).' percent' : '' }}, {{ $trendLabel }}">
+            <x-icon :name="$trendIcon" class="w-3.5 h-3.5" />
+            <span class="sr-only">{{ ucfirst($trendState) }}</span>
+            @if($trendDifference !== null)
+                <span class="tabular-nums">{{ $trendDifference }}</span>
+            @endif
+            @if($trend !== null)
+                <span class="tabular-nums">{{ number_format(abs((float) $trend), 2) }}%</span>
+            @endif
+            <span class="font-normal text-[var(--color-on-surface-dim)]">{{ $trendLabel }}</span>
         </div>
     @endif
 </div>

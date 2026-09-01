@@ -6,6 +6,7 @@ use App\Models\FormField;
 use App\Repositories\CampaignRepository;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
+use Closure;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -16,6 +17,7 @@ class DashboardStatsService
         protected CampaignRepository $campaignRepository,
         protected DashboardLayoutService $dashboardLayoutService,
         protected DashboardSalesRuleService $dashboardSalesRuleService,
+        protected DashboardPeriodService $dashboardPeriodService,
     ) {}
 
     /**
@@ -134,6 +136,100 @@ class DashboardStatsService
 
             return ['labels' => $labels, 'values' => $values];
         });
+    }
+
+    /**
+     * Build the campaign-scoped executive summary for the current and previous monthly periods.
+     *
+     * @return array<string, mixed>
+     */
+    public function getDashboardSummaryForCampaign(
+        string $campaignCode,
+        ?Carbon $asOf = null,
+        ?bool $completedMonth = null,
+    ): array {
+        $asOf ??= now(config('app.timezone'));
+        $completedMonth ??= $asOf->copy()
+            ->setTimezone(config('app.timezone'))
+            ->gte($asOf->copy()->setTimezone(config('app.timezone'))->endOfMonth());
+        $periods = $completedMonth
+            ? $this->dashboardPeriodService->completedMonth($asOf)
+            : $this->dashboardPeriodService->monthToDate($asOf);
+        $salesConfig = $this->dashboardLayoutService->getForCampaign($campaignCode)['sales'] ?? null;
+        $resolvedSalesRules = $this->dashboardSalesRuleService->resolveForCampaign($campaignCode, $salesConfig);
+
+        $amountDefinition = $resolvedSalesRules['mode'] === DashboardSalesRuleService::MODE_CUSTOM
+            ? 'Amount uses the configured custom sales rule amount field for qualifying records.'
+            : 'Amount is the sum of numeric form fields marked as sale amounts for qualifying records.';
+
+        $aggregate = ['totals' => [
+            'current' => ['count' => 0, 'amount' => 0.0],
+            'previous' => ['count' => 0, 'amount' => 0.0],
+        ], 'daily' => $this->emptyDashboardSummaryDaily($periods)];
+
+        if ($resolvedSalesRules['mode'] === DashboardSalesRuleService::MODE_CUSTOM) {
+            $sources = $this->dashboardSummaryCustomSources($resolvedSalesRules['forms']);
+            $aggregate = $this->aggregateDashboardSummary(
+                $periods,
+                $sources,
+                function (object $row, array $source): ?float {
+                    $rule = $source['rule'];
+                    if (! $this->matchesCustomConditions(
+                        $row,
+                        $rule['conditions'],
+                        $rule['amount_field'],
+                        $rule['trigger'],
+                    )) {
+                        return null;
+                    }
+
+                    return $this->customSaleAmount($row, $rule['amount_field']);
+                },
+            );
+        } else {
+            $markedSaleFields = $this->resolveMarkedSaleFields($campaignCode);
+            $sources = $this->dashboardSummaryLegacySources($markedSaleFields['fields']);
+            if ($sources !== []) {
+                $aggregate = $this->aggregateDashboardSummary(
+                    $periods,
+                    $sources,
+                    fn (object $row, array $source): ?float => $this->sumMarkedSaleValues($row, $source['fields']),
+                );
+            }
+        }
+
+        $current = $aggregate['totals']['current'];
+        $previous = $aggregate['totals']['previous'];
+        $currentCount = (int) $current['count'];
+        $previousCount = (int) $previous['count'];
+        $currentAmount = round((float) $current['amount'], 2);
+        $previousAmount = round((float) $previous['amount'], 2);
+
+        return [
+            'available' => true,
+            'has_activity' => $currentCount > 0 || $previousCount > 0,
+            'amount_definition' => $amountDefinition,
+            'currency' => [
+                'code' => (string) config('dashboard.currency_code', 'PHP'),
+                'symbol' => (string) config('dashboard.currency_symbol', '₱'),
+            ],
+            'period' => $this->serializeDashboardPeriods($periods),
+            'summary' => [
+                'current' => [
+                    'count' => $currentCount,
+                    'amount' => $currentAmount,
+                ],
+                'previous' => [
+                    'count' => $previousCount,
+                    'amount' => $previousAmount,
+                ],
+            ],
+            'comparison' => [
+                'count' => $this->dashboardPeriodService->compare($currentCount, $previousCount),
+                'amount' => $this->dashboardPeriodService->compare($currentAmount, $previousAmount),
+            ],
+            'daily' => $aggregate['daily'],
+        ];
     }
 
     /**
@@ -1442,6 +1538,178 @@ class DashboardStatsService
         }
 
         return $amount;
+    }
+
+    /**
+     * @param  array<string, list<string>>  $fieldsByTable
+     * @return list<array{table: string, fields: list<string>, select: list<string>}>
+     */
+    private function dashboardSummaryLegacySources(array $fieldsByTable): array
+    {
+        $sources = [];
+
+        foreach ($fieldsByTable as $tableName => $fieldNames) {
+            $sources[] = [
+                'table' => $tableName,
+                'fields' => $fieldNames,
+                'select' => array_values(array_unique(['id', 'created_at', ...$fieldNames])),
+            ];
+        }
+
+        return $sources;
+    }
+
+    /**
+     * @param  list<array{form_code: string, form_name: string, table: string, amount_field: string|null, trigger: string, conditions: list<array{field_name: string, accepted_values: list<string>}>}>  $forms
+     * @return list<array{table: string, rule: array<string, mixed>, select: list<string>}>
+     */
+    private function dashboardSummaryCustomSources(array $forms): array
+    {
+        $sources = [];
+
+        foreach ($forms as $form) {
+            $conditionFields = array_column($form['conditions'], 'field_name');
+            $fields = array_merge(
+                $conditionFields,
+                $form['amount_field'] === null ? [] : [$form['amount_field']],
+            );
+
+            $sources[] = [
+                'table' => $form['table'],
+                'rule' => $form,
+                'select' => array_values(array_unique(['id', 'created_at', ...$fields])),
+            ];
+        }
+
+        return $sources;
+    }
+
+    /**
+     * Read the combined comparison window once per source and classify qualifying rows.
+     *
+     * @param  list<array<string, mixed>>  $sources
+     * @return array{totals: array{current: array{count: int, amount: float}, previous: array{count: int, amount: float}}, daily: list<array<string, mixed>>}
+     */
+    private function aggregateDashboardSummary(
+        array $periods,
+        array $sources,
+        Closure $resolveAmount,
+    ): array {
+        $result = [
+            'totals' => [
+                'current' => ['count' => 0, 'amount' => 0.0],
+                'previous' => ['count' => 0, 'amount' => 0.0],
+            ],
+            'daily' => $this->emptyDashboardSummaryDaily($periods),
+        ];
+
+        foreach ($sources as $source) {
+            $tableName = (string) $source['table'];
+            if (! Schema::hasTable($tableName) || ! Schema::hasColumn($tableName, 'created_at')) {
+                continue;
+            }
+
+            $endOperator = $periods['mode'] === 'month_to_date' ? '<=' : '<';
+            DB::table($tableName)
+                ->where('created_at', '>=', $periods['previous']['start'])
+                ->where('created_at', $endOperator, $periods['current']['end'])
+                ->select($source['select'])
+                ->orderBy('id')
+                ->chunk(1000, function ($rows) use (&$result, $periods, $source, $resolveAmount): void {
+                    foreach ($rows as $row) {
+                        $amount = $resolveAmount($row, $source);
+                        if ($amount === null) {
+                            continue;
+                        }
+
+                        $occurredAt = Carbon::parse($row->created_at, config('app.timezone'));
+                        $periodKey = $occurredAt->lt($periods['current']['start']) ? 'previous' : 'current';
+                        $outsidePeriodEnd = $periods['mode'] === 'month_to_date'
+                            ? $occurredAt->gt($periods[$periodKey]['end'])
+                            : $occurredAt->gte($periods[$periodKey]['end']);
+                        if ($occurredAt->lt($periods[$periodKey]['start']) || $outsidePeriodEnd) {
+                            continue;
+                        }
+
+                        $day = $occurredAt->day;
+                        $dailyIndex = $day - 1;
+                        if (! isset($result['daily'][$dailyIndex])) {
+                            continue;
+                        }
+
+                        $result['totals'][$periodKey]['count']++;
+                        $result['totals'][$periodKey]['amount'] += $amount;
+                        $result['daily'][$dailyIndex][$periodKey]['count']++;
+                        $result['daily'][$dailyIndex][$periodKey]['amount'] += $amount;
+                    }
+                });
+        }
+
+        foreach ($result['totals'] as &$totals) {
+            $totals['amount'] = round($totals['amount'], 2);
+        }
+        unset($totals);
+
+        foreach ($result['daily'] as &$day) {
+            $day['current']['amount'] = round($day['current']['amount'], 2);
+            if ($day['previous']['amount'] !== null) {
+                $day['previous']['amount'] = round($day['previous']['amount'], 2);
+            }
+        }
+        unset($day);
+
+        return $result;
+    }
+
+    /**
+     * @return list<array{day: int, label: string, current_date: string, previous_date: string|null, current: array{count: int, amount: float}, previous: array{count: int|null, amount: float|null}}>
+     */
+    private function emptyDashboardSummaryDaily(array $periods): array
+    {
+        $daily = [];
+        $currentStart = $periods['current']['start'];
+        $previousStart = $periods['previous']['start'];
+        $previousDayCount = $periods['previous']['day_count'];
+
+        for ($day = 1; $day <= $periods['current']['day_count']; $day++) {
+            $currentDate = $currentStart->copy()->addDays($day - 1);
+            $previousDate = $day <= $previousDayCount
+                ? $previousStart->copy()->addDays($day - 1)
+                : null;
+
+            $daily[] = [
+                'day' => $day,
+                'label' => (string) $day,
+                'current_date' => $currentDate->format('M j, Y'),
+                'previous_date' => $previousDate?->format('M j, Y'),
+                'current' => ['count' => 0, 'amount' => 0.0],
+                'previous' => ['count' => $previousDate === null ? null : 0, 'amount' => $previousDate === null ? null : 0.0],
+            ];
+        }
+
+        return $daily;
+    }
+
+    /**
+     * @return array{mode: string, current: array{start: string, end: string, label: string, day_count: int}, previous: array{start: string, end: string, label: string, day_count: int}}
+     */
+    private function serializeDashboardPeriods(array $periods): array
+    {
+        return [
+            'mode' => $periods['mode'],
+            'current' => [
+                'start' => $periods['current']['start']->toIso8601String(),
+                'end' => $periods['current']['end']->toIso8601String(),
+                'label' => $periods['current']['label'],
+                'day_count' => $periods['current']['day_count'],
+            ],
+            'previous' => [
+                'start' => $periods['previous']['start']->toIso8601String(),
+                'end' => $periods['previous']['end']->toIso8601String(),
+                'label' => $periods['previous']['label'],
+                'day_count' => $periods['previous']['day_count'],
+            ],
+        ];
     }
 
     /**

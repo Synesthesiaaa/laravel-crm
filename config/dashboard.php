@@ -62,4 +62,12 @@ return [
 
     'last_24h_activity_cache_seconds' => 120,
 
+    /*
+    | Currency used by the executive dashboard summary. Override both values
+    | when a deployment reports monetary values in another currency.
+    */
+
+    'currency_code' => env('DASHBOARD_CURRENCY_CODE', 'PHP'),
+    'currency_symbol' => env('DASHBOARD_CURRENCY_SYMBOL', '₱'),
+
 ];
