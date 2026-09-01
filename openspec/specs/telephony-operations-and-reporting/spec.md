@@ -202,13 +202,19 @@ The Reports Live and Today modes SHALL prevent overlapping requests, stop pollin
 - **AND** the UI does not show a permanently green live state
 
 ### Requirement: Historical Reports use the shared mapped campaign scope
-Historical Telephony Reports SHALL resolve the selected CRM campaign through the shared scope resolver, select its assigned VICIdial server, include every enabled mapped VICIdial campaign code by default, and filter backend rows to that set using case-insensitive normalization. An optional secondary VICIdial campaign filter SHALL only narrow that set and SHALL never expand it. The same effective scope SHALL be used for current and comparison periods and reflected in the API response.
+Historical Telephony Reports SHALL resolve the selected CRM campaign through the shared scope resolver, select its assigned VICIdial server, include every enabled mapped VICIdial campaign code by default, serialize the effective campaign set using VICIdial's supported hyphen-delimited multi-campaign format, and filter backend rows to that set using case-insensitive normalization. An optional secondary VICIdial campaign filter SHALL only narrow that set and SHALL never expand it. The same effective scope SHALL be used for current and comparison periods and reflected in the API response.
 
 #### Scenario: Report totals aggregate all mapped campaigns
 - **WHEN** CRM campaign `mbsales` maps `mbsales`, `mbsales2`, `cro1`, and `cro2`
 - **AND** raw campaign totals are 413, 4326, 21, and 2 calls respectively
-- **THEN** the CRM report total is 4762 calls
+- **THEN** the historical report request sends `campaigns=mbsales-mbsales2-cro1-cro2` to VICIdial
+- **AND** the CRM report total is 4762 calls
 - **AND** rows for `winback` are excluded before aggregation
+
+#### Scenario: VICIdial receives all mapped campaign codes
+- **WHEN** CRM campaign `mbsales` maps `mbsales`, `mbsales2`, `cro1`, and `cro2`
+- **THEN** the historical Non-Agent API request uses `mbsales-mbsales2-cro1-cro2` as its campaign scope
+- **AND** it does not send a pipe-delimited value that VICIdial cannot interpret as a campaign list
 
 #### Scenario: Secondary campaign filter cannot escape CRM scope
 - **WHEN** a report requests `cro1`

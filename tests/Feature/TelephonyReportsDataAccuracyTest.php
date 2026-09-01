@@ -110,7 +110,68 @@ class TelephonyReportsDataAccuracyTest extends TestCase
         });
         Http::assertSent(function ($request): bool {
             return ($request->data()['function'] ?? null) === 'call_status_stats'
-                && ($request->data()['campaigns'] ?? null) === 'CAMP_A|camp_b';
+                && ($request->data()['campaigns'] ?? null) === 'CAMP_A-camp_b';
+        });
+    }
+
+    public function test_historical_requests_use_vicidial_campaign_delimiter_for_all_mapped_campaigns(): void
+    {
+        [$campaign, $server] = $this->campaignAndServer();
+        $this->mapCampaign($campaign, $server, 'CAMP_A', 'CAMP_B');
+        $this->clearCampaignCache();
+
+        Http::fake(function ($request) {
+            $function = $request->data()['function'] ?? null;
+            if (in_array($function, ['call_status_stats', 'call_dispo_report'], true)
+                && ($request->data()['campaigns'] ?? null) !== 'CAMP_A-CAMP_B') {
+                return Http::response('ERROR: invalid campaign scope', 200);
+            }
+
+            return match ($function) {
+                'call_status_stats' => Http::response(implode("\n", [
+                    'campaign_id/ingroup|total calls|human answered calls|hourly breakdown|status breakdown',
+                    'CAMP_A/IN|100|50|08-100|SALE-50',
+                    'CAMP_B/IN|900|90|09-900|SALE-90',
+                ]), 200),
+                'agent_stats_export' => Http::response(implode("\n", [
+                    'campaign_id|user|full_name|calls|total_talk_time',
+                    'CAMP_A|agent-a|Agent A|100|1000',
+                    'CAMP_B|agent-a|Agent A|900|9000',
+                ]), 200),
+                'call_dispo_report' => Http::response(implode("\n", [
+                    'campaign|ingroup|SALE',
+                    'CAMP_A|IN|50',
+                    'CAMP_B|IN|90',
+                ]), 200),
+                default => Http::response('', 200),
+            };
+        });
+
+        $response = $this->actingAs($this->reportUser())
+            ->withSession(['campaign' => 'crm-campaign'])
+            ->getJson(route('api.reports.dashboard', [
+                'campaign' => 'crm-campaign',
+                'query_date' => '2026-08-20',
+                'end_date' => '2026-08-26',
+            ]));
+
+        $response->assertOk()
+            ->assertJsonPath('data.summary.total_calls', 1000)
+            ->assertJsonPath('data.summary.answered_calls', 140)
+            ->assertJsonPath('data.campaign_scope.campaign_codes', ['CAMP_A', 'CAMP_B'])
+            ->assertJsonCount(2, 'data.campaigns');
+
+        Http::assertSent(function ($request): bool {
+            return ($request->data()['function'] ?? null) === 'call_status_stats'
+                && ($request->data()['campaigns'] ?? null) === 'CAMP_A-CAMP_B';
+        });
+        Http::assertSent(function ($request): bool {
+            return ($request->data()['function'] ?? null) === 'call_dispo_report'
+                && ($request->data()['campaigns'] ?? null) === 'CAMP_A-CAMP_B';
+        });
+        Http::assertSent(function ($request): bool {
+            return ($request->data()['function'] ?? null) === 'agent_stats_export'
+                && ! array_key_exists('campaign_id', $request->data());
         });
     }
 

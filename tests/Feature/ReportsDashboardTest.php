@@ -175,7 +175,7 @@ class ReportsDashboardTest extends TestCase
 
         Http::assertSent(function ($request): bool {
             return ($request->data()['function'] ?? null) === 'call_status_stats'
-                && ($request->data()['campaigns'] ?? null) === 'CAMP_A|CAMP_B';
+                && ($request->data()['campaigns'] ?? null) === 'CAMP_A-CAMP_B';
         });
     }
 

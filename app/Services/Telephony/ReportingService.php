@@ -94,7 +94,7 @@ class ReportingService
     {
         $scope = $this->scopeResolver->resolve($campaign);
         $server = $scope->server;
-        $campaigns = implode('|', $scope->liveCampaignCodes());
+        $campaigns = implode('-', $scope->liveCampaignCodes());
         if ($server === null || $campaigns === '') {
             $failure = OperationResult::failure(
                 "No permitted VICIdial campaigns are mapped to CRM campaign '{$campaign}'.",
@@ -311,7 +311,7 @@ class ReportingService
             );
         }
 
-        return implode('|', $allowed);
+        return implode('-', $allowed);
     }
 
     private function executeScoped(
@@ -345,7 +345,7 @@ class ReportingService
     private function singleCampaignCode(string $campaigns): ?string
     {
         $codes = array_values(array_filter(
-            explode('|', $campaigns),
+            explode('-', $campaigns),
             static fn (string $code): bool => trim($code) !== '',
         ));
 
