@@ -195,7 +195,70 @@ class HistoricalTelephonyReportServiceTest extends TestCase
 
         $this->assertSame(30.0, $data['summary']['contact_rate']);
         $this->assertSame(['SALE'], $data['dispositions']['labels']);
+        $this->assertSame(['SALE' => 3], $data['status_totals']);
+        $this->assertSame('SALE', $data['campaigns'][0]['top_status']);
         $this->assertNotContains('SYS', array_column($data['disposition_rows'][0]['metrics'], 'label'));
+    }
+
+    public function test_all_disposition_scope_keeps_system_and_non_system_values(): void
+    {
+        config()->set('vicidial.report_system_disposition_codes', ['SYS']);
+
+        $reporting = Mockery::mock(ReportingService::class);
+        $reporting->shouldReceive('historicalSnapshot')
+            ->once()
+            ->andReturn($this->snapshot(
+                [['campaign-a', '10', '4', '', 'SALE-3,SYS-7']],
+                [['user', 'campaign', 'calls'], ['agent-a', 'campaign-a', '10']],
+                [['campaign', 'ingroup', 'SYS', 'SALE'], ['campaign-a', 'IN', '7', '3']],
+            ));
+
+        $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver()))->dashboard(
+            User::factory()->make(),
+            'crm-campaign',
+            [
+                'query_date' => '2026-08-20',
+                'end_date' => '2026-08-26',
+                'disposition_scope' => 'all',
+            ],
+        );
+
+        $this->assertSame(10, $data['summary']['total_calls']);
+        $this->assertSame(['SYS', 'SALE'], $data['dispositions']['labels']);
+        $this->assertSame(['SYS' => 7, 'SALE' => 3], $data['status_totals']);
+        $this->assertSame('SYS', $data['campaigns'][0]['top_status']);
+        $this->assertSame(10, $data['disposition_summary']['total_calls']);
+    }
+
+    public function test_system_only_disposition_scope_excludes_non_system_values(): void
+    {
+        config()->set('vicidial.report_system_disposition_codes', ['SYS']);
+
+        $reporting = Mockery::mock(ReportingService::class);
+        $reporting->shouldReceive('historicalSnapshot')
+            ->once()
+            ->andReturn($this->snapshot(
+                [['campaign-a', '10', '4', '', 'SALE-3,SYS-7']],
+                [['user', 'campaign', 'calls'], ['agent-a', 'campaign-a', '10']],
+                [['campaign', 'ingroup', 'SYS', 'SALE'], ['campaign-a', 'IN', '7', '3']],
+            ));
+
+        $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver()))->dashboard(
+            User::factory()->make(),
+            'crm-campaign',
+            [
+                'query_date' => '2026-08-20',
+                'end_date' => '2026-08-26',
+                'disposition_scope' => 'system_only',
+            ],
+        );
+
+        $this->assertSame(10, $data['summary']['total_calls']);
+        $this->assertSame(['SYS'], $data['dispositions']['labels']);
+        $this->assertSame(['SYS' => 7], $data['status_totals']);
+        $this->assertSame('SYS', $data['campaigns'][0]['top_status']);
+        $this->assertSame(7, $data['disposition_summary']['total_calls']);
+        $this->assertNotContains('SALE', array_column($data['disposition_rows'][0]['metrics'], 'label'));
     }
 
     /**

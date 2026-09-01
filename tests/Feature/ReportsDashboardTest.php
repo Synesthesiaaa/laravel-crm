@@ -48,6 +48,8 @@ class ReportsDashboardTest extends TestCase
         $response->assertSee('refreshInFlight');
         $response->assertSee('Disposition Scope');
         $response->assertSee('Hide system dispositions');
+        $response->assertSee('id="reports-disposition-scope"', false);
+        $response->assertSee('@change="refreshAll()"', false);
         $response->assertSee('Call Volume Trend');
         $response->assertSee('Agent Performance');
         $response->assertSee('Disposition Pareto');

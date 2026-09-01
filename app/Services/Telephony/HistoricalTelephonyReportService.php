@@ -32,6 +32,7 @@ class HistoricalTelephonyReportService
         if ($selectedCampaignCodes === []) {
             return $this->unavailableDashboard($crmCampaign, $period, $filters, $scope, 'No permitted VICIdial campaigns matched the selected filter.');
         }
+        $dispositionScope = (string) ($filters['disposition_scope'] ?? 'all');
         $campaignFilter = $selectedCampaignCodes === null
             ? ($filters['campaigns'] ?? '---ALL---')
             : implode('|', $selectedCampaignCodes);
@@ -51,11 +52,11 @@ class HistoricalTelephonyReportService
             $params,
             ['connect_timeout' => 3, 'timeout' => 10, 'retry_times' => 1],
         );
-        $callStatus = $this->parseCallStatus($current['call_status'] ?? null, $selectedCampaignCodes);
+        $callStatus = $this->parseCallStatus($current['call_status'] ?? null, $selectedCampaignCodes, $dispositionScope);
         $agents = $this->parseAgentStats($current['agent_stats'] ?? null, $selectedCampaignCodes);
         $dispositions = $this->parseDispositions(
             $current['call_dispo'] ?? null,
-            (string) ($filters['disposition_scope'] ?? 'all'),
+            $dispositionScope,
             $selectedCampaignCodes,
         );
         $summary = $this->summary($callStatus, $agents, $dispositions);
@@ -251,7 +252,11 @@ class HistoricalTelephonyReportService
             $previousParams,
             ['connect_timeout' => 3, 'timeout' => 10, 'retry_times' => 1],
         );
-        $previousStatus = $this->parseCallStatus($previous['call_status'] ?? null, $allowedCampaignCodes);
+        $previousStatus = $this->parseCallStatus(
+            $previous['call_status'] ?? null,
+            $allowedCampaignCodes,
+            (string) ($params['disposition_scope'] ?? 'all'),
+        );
         $previousAgents = $this->parseAgentStats($previous['agent_stats'] ?? null, $allowedCampaignCodes);
         $previousDispositions = $this->parseDispositions(
             $previous['call_dispo'] ?? null,
@@ -408,8 +413,11 @@ class HistoricalTelephonyReportService
     /**
      * @return array<string, mixed>
      */
-    protected function parseCallStatus(?OperationResult $result, ?array $allowedCampaignCodes = null): array
-    {
+    protected function parseCallStatus(
+        ?OperationResult $result,
+        ?array $allowedCampaignCodes = null,
+        string $dispositionScope = 'all',
+    ): array {
         $empty = [
             'available' => false,
             'state' => $this->resultState($result),
@@ -459,8 +467,10 @@ class HistoricalTelephonyReportService
         $hourMap = [];
         $statusMap = [];
         $allowed = $this->campaignDisplayMap($allowedCampaignCodes);
+        $systemCodes = $this->systemDispositionCodes();
         $parseFailures = 0;
         $hasHourly = false;
+        $hasStatusData = false;
         $hasStatuses = false;
         foreach ($dataRows as $row) {
             $rawLabel = trim((string) ($row[$indexes['campaign']] ?? ''));
@@ -507,6 +517,10 @@ class HistoricalTelephonyReportService
             $statusPairs = $indexes['status'] === null ? [] : $this->pairs($row[$indexes['status']] ?? '', ',', '-');
             foreach ($statusPairs as $pair) {
                 $status = $this->normalizeCode($pair['label']);
+                $hasStatusData = true;
+                if (! $this->dispositionMatchesScope($status, $systemCodes, $dispositionScope)) {
+                    continue;
+                }
                 $statusMap[$status] = ($statusMap[$status] ?? 0) + $pair['value'];
                 $hasStatuses = true;
             }
@@ -529,7 +543,14 @@ class HistoricalTelephonyReportService
         $state = $totalCalls === 0 ? 'confirmed_zero' : 'data';
         $hourlyValues = $hasHourly ? array_map(static fn (string $hour): int => $hourMap[$hour] ?? 0, $this->hourLabels()) : [];
         foreach ($campaignMap as &$campaign) {
-            $campaign['top_status'] = $this->topCampaignStatus($campaign['campaign'], $dataRows, $indexes['campaign'], $indexes['status']);
+            $campaign['top_status'] = $this->topCampaignStatus(
+                $campaign['campaign'],
+                $dataRows,
+                $indexes['campaign'],
+                $indexes['status'],
+                $systemCodes,
+                $dispositionScope,
+            );
         }
         unset($campaign);
 
@@ -540,7 +561,9 @@ class HistoricalTelephonyReportService
             'answered_calls' => $answeredCalls,
             'campaigns' => array_values($campaignMap),
             'status_totals' => $statusMap,
-            'status_state' => $hasStatuses ? ($totalCalls === 0 ? 'confirmed_zero' : 'data') : 'unsupported',
+            'status_state' => $hasStatuses
+                ? ($totalCalls === 0 ? 'confirmed_zero' : 'data')
+                : ($hasStatusData ? 'confirmed_zero' : 'unsupported'),
             'call_volume' => [
                 'labels' => $hasHourly ? $this->hourLabels() : [],
                 'values' => $hourlyValues,
@@ -768,14 +791,11 @@ class HistoricalTelephonyReportService
         if ($metricColumns === []) {
             return [...$empty, 'state' => 'unsupported'];
         }
-        $systemCodes = array_flip(array_map([$this, 'normalizeCode'], config('vicidial.report_system_disposition_codes', [])));
+        $systemCodes = $this->systemDispositionCodes();
         $scopedMetricColumns = array_values(array_filter(
             $metricColumns,
             function (array $metricColumn) use ($systemCodes, $scope): bool {
-                $isSystem = isset($systemCodes[$this->normalizeCode($metricColumn['label'])]);
-
-                return ($scope !== 'exclude_system' || ! $isSystem)
-                    && ($scope !== 'system_only' || $isSystem);
+                return $this->dispositionMatchesScope($metricColumn['label'], $systemCodes, $scope);
             },
         ));
         if ($scopedMetricColumns === []) {
@@ -814,7 +834,7 @@ class HistoricalTelephonyReportService
                 $label = $metricColumn['label'];
                 $code = $this->normalizeCode($label);
                 $isSystem = isset($systemCodes[$code]);
-                if (($scope === 'exclude_system' && $isSystem) || ($scope === 'system_only' && ! $isSystem)) {
+                if (! $this->dispositionMatchesScope($code, $systemCodes, $scope)) {
                     continue;
                 }
                 $value = $this->displayNumber($row[$metricIndex] ?? null);
@@ -1062,8 +1082,14 @@ class HistoricalTelephonyReportService
         return (string) array_key_first($values);
     }
 
-    protected function topCampaignStatus(string $campaign, array $rows, int $campaignIndex, ?int $statusIndex): ?string
-    {
+    protected function topCampaignStatus(
+        string $campaign,
+        array $rows,
+        int $campaignIndex,
+        ?int $statusIndex,
+        array $systemCodes = [],
+        string $dispositionScope = 'all',
+    ): ?string {
         if ($statusIndex === null) {
             return null;
         }
@@ -1075,6 +1101,9 @@ class HistoricalTelephonyReportService
             }
             foreach ($this->pairs($row[$statusIndex] ?? '', ',', '-') as $pair) {
                 $status = $this->normalizeCode($pair['label']);
+                if (! $this->dispositionMatchesScope($status, $systemCodes, $dispositionScope)) {
+                    continue;
+                }
                 $totals[$status] = ($totals[$status] ?? 0) + $pair['value'];
             }
         }
@@ -1084,6 +1113,33 @@ class HistoricalTelephonyReportService
         arsort($totals);
 
         return (string) array_key_first($totals);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function systemDispositionCodes(): array
+    {
+        $codes = array_map(
+            fn (mixed $code): string => $this->normalizeCode($code),
+            (array) config('vicidial.report_system_disposition_codes', []),
+        );
+
+        return array_fill_keys(array_values(array_filter($codes)), 'system');
+    }
+
+    /**
+     * @param  array<string, string>  $systemCodes
+     */
+    protected function dispositionMatchesScope(string $code, array $systemCodes, string $scope): bool
+    {
+        $isSystem = isset($systemCodes[$this->normalizeCode($code)]);
+
+        return match ($scope) {
+            'exclude_system' => ! $isSystem,
+            'system_only' => $isSystem,
+            default => true,
+        };
     }
 
     /**

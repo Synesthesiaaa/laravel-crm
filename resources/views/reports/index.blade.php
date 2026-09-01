@@ -174,7 +174,7 @@
             </div>
             <div class="form-field">
                 <label class="form-label" for="reports-disposition-scope">Disposition Scope</label>
-                <select class="form-input" x-model="filters.disposition_scope">
+                <select id="reports-disposition-scope" class="form-input" x-model="filters.disposition_scope" @change="refreshAll()">
                     <template x-for="option in dispositionScopeOptions" :key="option.value">
                         <option :value="option.value" x-text="option.label"></option>
                     </template>
