@@ -42,6 +42,11 @@ The historical report SHALL return campaign comparison rows, a descending dispos
 - **THEN** aggregation uses a normalized key while preserving a display label
 - **AND** Pareto ordering, report totals, contact rate, and table rows use the summed raw counts
 
+#### Scenario: VICIdial totals are excluded from disposition analysis
+- **WHEN** the disposition export includes a `TOTAL`, `TOTAL CALLS`, or equivalent aggregate row or column
+- **THEN** the aggregate is excluded from disposition codes, Pareto values, and table breakdowns
+- **AND** the disposition total equals the sum of the real disposition counts without double-counting
+
 ### Requirement: Historical agent aggregation
 The historical reporting service SHALL aggregate duplicate agent export/session rows by stable normalized VICIdial agent identifier and SHALL return agent calls, answered calls, contact rate when available, average talk time, total talk time, pause percentage when available, and supported ready/other time values. Display names SHALL NOT be used as the deduplication key. Each time metric SHALL remain unavailable when its source field is absent or unparseable, rather than being filled with zero.
 

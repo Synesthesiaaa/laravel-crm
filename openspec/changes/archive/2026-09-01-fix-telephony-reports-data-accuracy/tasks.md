@@ -22,10 +22,9 @@
 
 - [x] 4.1 Expand PHPUnit unit/feature tests for summary cards, hourly/status totals, multi-campaign aggregation, campaign isolation, weighted rates, comparison periods, disposition Pareto/contact/table, and agent time states. Browser-only last-good behavior remains in 4.3.
 - [x] 4.2 Run focused PHPUnit tests and Laravel Pint; fix regressions while preserving unrelated worktree changes.
-- [ ] 4.3 Start/use the local application and validate the Reports page with Playwright at representative desktop/mobile widths, including cards, charts, tables, empty/unavailable states, filter changes, and browser console/network errors.
-  - Blocked in this environment: the configured Playwright browser profile is already locked by another session; the session was not terminated.
+- [x] 4.3 Start/use the local application and validate the Reports page with Playwright at representative desktop/mobile widths, including cards, charts, tables, empty/unavailable states, filter changes, and browser console/network errors.
 
 ## 5. Specification and Final Review
 
 - [x] 5.1 Sync the implemented behavior into the main Telephony Operations and Reporting spec and record any intentional differences.
-- [ ] 5.2 Review the final diff, run the final focused validation, and archive the completed OpenSpec change.
+- [x] 5.2 Review the final diff, run the final focused validation, and archive the completed OpenSpec change.

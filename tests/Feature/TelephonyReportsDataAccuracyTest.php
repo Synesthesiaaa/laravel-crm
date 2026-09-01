@@ -169,6 +169,40 @@ class TelephonyReportsDataAccuracyTest extends TestCase
             ->assertJsonPath('data.availability.status', 'live');
     }
 
+    public function test_disposition_totals_rows_and_columns_are_not_reported_as_dispositions(): void
+    {
+        [$campaign, $server] = $this->campaignAndServer();
+        $this->mapCampaign($campaign, $server, 'CAMP_A');
+        $this->clearCampaignCache();
+
+        Http::fake(function ($request) {
+            return match ($request->data()['function'] ?? null) {
+                'call_status_stats' => Http::response("campaign_id|total calls|human answered calls|hourly breakdown|status breakdown\nCAMP_A|100|20|08-100|SALE-20,NA-80", 200),
+                'agent_stats_export' => Http::response("user|campaign|calls|total_talk_time\nagent-a|CAMP_A|100|100", 200),
+                'call_dispo_report' => Http::response(implode("\n", [
+                    'campaign|ingroup|TOTAL CALLS|NA|SALE',
+                    'CAMP_A|IN|100|80|20',
+                    'TOTAL CALLS|IN|100|80|20',
+                ]), 200),
+                default => Http::response('', 200),
+            };
+        });
+
+        $response = $this->actingAs($this->reportUser())
+            ->withSession(['campaign' => 'crm-campaign'])
+            ->getJson(route('api.reports.dashboard', ['campaign' => 'crm-campaign']));
+
+        $response->assertOk()
+            ->assertJsonPath('data.dispositions.labels', ['NA', 'SALE'])
+            ->assertJsonPath('data.dispositions.values', [80, 20])
+            ->assertJsonPath('data.dispositions.percentages', [80, 20])
+            ->assertJsonPath('data.disposition_summary.total_calls', 100)
+            ->assertJsonPath('data.disposition_rows.0.total_calls', 100)
+            ->assertJsonPath('data.disposition_rows.0.top_disposition', 'NA');
+
+        $this->assertStringNotContainsString('TOTAL CALLS', json_encode($response->json('data.dispositions')) ?: '');
+    }
+
     public function test_secondary_campaign_filter_cannot_escape_the_crm_scope(): void
     {
         [$campaign, $server] = $this->campaignAndServer();

@@ -760,7 +760,7 @@ class HistoricalTelephonyReportService
         }
         $metricColumns = [];
         foreach ($headers as $index => $header) {
-            if ($index === $campaignIndex || $index === $ingroupIndex || $header === '') {
+            if ($index === $campaignIndex || $index === $ingroupIndex || $header === '' || $this->isDispositionTotalColumn($header)) {
                 continue;
             }
             $metricColumns[] = ['index' => $index, 'label' => trim((string) ($rows[0][$index] ?? $header))];
@@ -800,7 +800,7 @@ class HistoricalTelephonyReportService
 
                 continue;
             }
-            if (strtoupper($campaign) === 'TOTAL') {
+            if ($this->isDispositionTotalRow($campaign)) {
                 continue;
             }
             $campaignCode = $this->canonicalCampaignCode($campaign, $allowed);
@@ -1260,6 +1260,26 @@ class HistoricalTelephonyReportService
     protected function normalizeCode(mixed $value): string
     {
         return strtoupper(trim((string) $value));
+    }
+
+    protected function isDispositionTotalColumn(mixed $value): bool
+    {
+        return in_array($this->key($value), [
+            'total',
+            'total_call',
+            'total_calls',
+            'grand_total',
+            'grand_total_call',
+            'grand_total_calls',
+        ], true);
+    }
+
+    protected function isDispositionTotalRow(mixed $value): bool
+    {
+        return $this->isDispositionTotalColumn($value) || in_array($this->key($value), [
+            'all',
+            'all_campaigns',
+        ], true);
     }
 
     /**
