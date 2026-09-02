@@ -73,3 +73,12 @@ Schedule::command('horizon:snapshot')
     ->everyFiveMinutes()
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/scheduler.log'));
+
+// Keep local call history warm without making the scheduler perform remote I/O.
+if ((bool) config('vicidial.call_history_sync.schedule_enabled', true)) {
+    Schedule::command('vicidial:sync-call-history --recent')
+        ->everyMinute()
+        ->withoutOverlapping(2)
+        ->runInBackground()
+        ->appendOutputTo(storage_path('logs/scheduler.log'));
+}

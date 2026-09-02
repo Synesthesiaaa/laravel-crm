@@ -9,6 +9,7 @@ import './soft-navigate';
 import './form-visibility';
 import './agent-capture-webform';
 import './telephony-media-path';
+import './call-history';
 import TelephonyCore from './telephony-core';
 
 function reportClientWarning(error, context) {
@@ -124,6 +125,7 @@ const TELEPHONY_POLL_ENDPOINTS = [
     '/api/notifications',
     '/api/call/status',
     '/api/vicidial/session/status',
+    '/api/vicidial/session/local-status',
     '/api/sip/credentials',
     '/api/supervisor/agents',
     '/api/telephony/active-lead',
@@ -354,10 +356,13 @@ Alpine.store('vicidial', {
     ingroupsRaw: '',
     ingroups: [],
     lastSyncAt: null,
-    async sync(campaign = null) {
+    async sync(campaign = null, options = {}) {
         try {
             const params = campaign ? { campaign } : {};
-            const { data } = await window.axios.get('/api/vicidial/session/status', { params });
+            const endpoint = options.remote === true
+                ? '/api/vicidial/session/status'
+                : '/api/vicidial/session/local-status';
+            const { data } = await window.axios.get(endpoint, { params });
             const session = data.local_session || {};
             const queue = data.queue?.data?.count ?? 0;
             const s = session.session_status || 'logged_out';

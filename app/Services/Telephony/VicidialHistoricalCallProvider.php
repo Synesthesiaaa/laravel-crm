@@ -8,6 +8,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use Throwable;
 
 class VicidialHistoricalCallProvider
@@ -98,11 +99,102 @@ class VicidialHistoricalCallProvider
 
             return HistoricalCallProviderResult::failure(
                 'VICIdial call history is currently unavailable. Please try again.',
-                [
-                    'classification' => 'REMOTE_DATABASE_ERROR',
+                array_merge($this->failureMeta($exception), [
                     'source' => 'vicidial_database',
                     'server_id' => $server->getKey(),
-                ],
+                ]),
+            );
+        } finally {
+            if ($connection !== null) {
+                $this->disconnect($connection);
+            }
+        }
+    }
+
+    /**
+     * Fetch a bounded synchronization window without pagination or metadata queries.
+     *
+     * @param  array<int, string>  $campaignCodes
+     */
+    public function fetchRange(
+        VicidialServer $server,
+        Campaign $campaign,
+        array $campaignCodes,
+        Carbon $from,
+        Carbon $to,
+    ): HistoricalCallProviderResult {
+        $campaignCodes = array_values(array_filter(array_map(
+            static fn (mixed $code): string => trim((string) $code),
+            $campaignCodes,
+        )));
+        if ($campaignCodes === []) {
+            return HistoricalCallProviderResult::success([], 0, meta: [
+                'source' => 'vicidial_database',
+                'server_id' => $server->getKey(),
+                'window_start' => $from->toIso8601String(),
+                'window_end' => $to->toIso8601String(),
+            ]);
+        }
+        if ($from->greaterThan($to)) {
+            return HistoricalCallProviderResult::failure('The synchronization window is invalid.', [
+                'classification' => 'INVALID_WINDOW',
+                'retryable' => false,
+            ]);
+        }
+
+        $startedAt = microtime(true);
+        $connection = null;
+
+        try {
+            $connection = $this->makeConnection($server);
+            $query = $this->combinedQuery($connection, $campaignCodes, $this->normalizeFilters([]), false)
+                ->whereBetween('call_date', [$from->toDateTimeString(), $to->toDateTimeString()])
+                ->orderBy('call_date')
+                ->orderBy('source_table')
+                ->orderBy('unique_call_id');
+            $rows = $query->get();
+            $records = $rows->map(
+                fn (object $row): HistoricalCallRecord => $this->normalizeRow($row, $campaign),
+            )->values()->all();
+            $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
+
+            $this->logger()->info('vicidial.call_history.sync_fetch', 'Bounded VICIdial call history window fetched.', [
+                'server_id' => $server->getKey(),
+                'crm_campaign' => (string) $campaign->code,
+                'mapped_campaign_count' => count($campaignCodes),
+                'rows_received' => count($records),
+                'duration_ms' => $durationMs,
+                'window_start' => $from->toIso8601String(),
+                'window_end' => $to->toIso8601String(),
+            ]);
+
+            return HistoricalCallProviderResult::success($records, count($records), meta: [
+                'source' => 'vicidial_database',
+                'server_id' => $server->getKey(),
+                'rows_received' => count($records),
+                'duration_ms' => $durationMs,
+                'window_start' => $from->toIso8601String(),
+                'window_end' => $to->toIso8601String(),
+            ]);
+        } catch (Throwable $exception) {
+            $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
+            $this->logger()->error('vicidial.call_history.sync_fetch', 'Bounded VICidial call history window is unavailable.', [
+                'server_id' => $server->getKey(),
+                'crm_campaign' => (string) $campaign->code,
+                'mapped_campaign_count' => count($campaignCodes),
+                'error_class' => $exception::class,
+                'duration_ms' => $durationMs,
+                'window_start' => $from->toIso8601String(),
+                'window_end' => $to->toIso8601String(),
+            ]);
+
+            return HistoricalCallProviderResult::failure(
+                'VICIdial call history is currently unavailable. Please try again.',
+                array_merge($this->failureMeta($exception), [
+                    'source' => 'vicidial_database',
+                    'server_id' => $server->getKey(),
+                    'duration_ms' => $durationMs,
+                ]),
             );
         } finally {
             if ($connection !== null) {
@@ -115,12 +207,19 @@ class VicidialHistoricalCallProvider
     {
         $sourceTable = (string) ($row->source_table ?? self::OUTBOUND_TABLE);
         $uniqueCallId = trim((string) ($row->unique_call_id ?? ''));
+        $leadId = $this->nullableInt($row->lead_id ?? null);
+        $phoneNumber = $this->nullableString($row->phone_number ?? null);
+        $callDate = $this->dateTime($row->call_date ?? null);
         if ($uniqueCallId === '') {
+            if ($leadId === null || $callDate === null || $phoneNumber === null) {
+                throw new InvalidArgumentException('VICIdial historical row does not contain a stable source identity.');
+            }
+
             $uniqueCallId = sha1(implode('|', [
                 $sourceTable,
-                (string) ($row->lead_id ?? ''),
-                (string) ($row->call_date ?? ''),
-                (string) ($row->phone_number ?? ''),
+                $leadId,
+                $callDate->toIso8601String(),
+                $phoneNumber,
             ]));
         }
         $vicidialUser = trim((string) ($row->vicidial_user ?? '')) ?: null;
@@ -132,13 +231,13 @@ class VicidialHistoricalCallProvider
             crmCampaignCode: (string) $campaign->code,
             vicidialCampaignId: (string) ($row->vicidial_campaign_id ?? ''),
             vicidialListId: $this->nullableString($row->vicidial_list_id ?? null),
-            leadId: $this->nullableInt($row->lead_id ?? null),
+            leadId: $leadId,
             vicidialUser: $vicidialUser,
             crmUserId: null,
             crmUserName: null,
             agentDisplayName: $vicidialUser ?? 'Unknown agent',
-            phoneNumber: $this->nullableString($row->phone_number ?? null),
-            callDate: $this->dateTime($row->call_date ?? null),
+            phoneNumber: $phoneNumber,
+            callDate: $callDate,
             callStartedAt: $this->epoch($row->start_epoch ?? null),
             callEndedAt: $this->epoch($row->end_epoch ?? null),
             callDirection: $sourceTable === self::INBOUND_TABLE ? 'INBOUND' : 'OUTBOUND',
@@ -334,6 +433,24 @@ class VicidialHistoricalCallProvider
         }
 
         return max(0, (int) $value);
+    }
+
+    /**
+     * @return array{classification: string, retryable: bool}
+     */
+    protected function failureMeta(Throwable $exception): array
+    {
+        if ($exception instanceof InvalidArgumentException) {
+            return [
+                'classification' => 'REMOTE_PARSE_ERROR',
+                'retryable' => false,
+            ];
+        }
+
+        return [
+            'classification' => 'REMOTE_DATABASE_ERROR',
+            'retryable' => true,
+        ];
     }
 
     protected function dateTime(mixed $value): ?Carbon

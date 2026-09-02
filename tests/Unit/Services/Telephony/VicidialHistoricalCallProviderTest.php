@@ -6,10 +6,12 @@ use App\Models\Campaign;
 use App\Models\VicidialServer;
 use App\Services\Telephony\HistoricalCallRecord;
 use App\Services\Telephony\VicidialHistoricalCallProvider;
+use Carbon\Carbon;
 use Illuminate\Database\Connection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use InvalidArgumentException;
 use Tests\TestCase;
 
 final class VicidialHistoricalCallProviderTest extends TestCase
@@ -176,6 +178,80 @@ final class VicidialHistoricalCallProviderTest extends TestCase
         $this->assertNull($record->talkSeconds);
         $this->assertSame('LEGACY_STATUS', $record->status);
         $this->assertSame('09 1212 34567', $record->phoneNumber);
+    }
+
+    public function test_normalize_row_uses_a_composite_fallback_only_when_identity_fields_are_present(): void
+    {
+        $campaign = Campaign::factory()->create(['code' => 'mbsales']);
+        $row = (object) [
+            'source_table' => 'vicidial_log',
+            'unique_call_id' => null,
+            'lead_id' => 44,
+            'phone_number' => '09121234567',
+            'call_date' => '2026-05-18 08:00:00',
+        ];
+
+        $record = $this->provider(DB::connection('sqlite'))->normalizeRow($row, $campaign);
+
+        $this->assertSame(
+            sha1(implode('|', [
+                'vicidial_log',
+                44,
+                Carbon::parse('2026-05-18 08:00:00', (string) config('vicidial.report_timezone', config('app.timezone', 'UTC')))->toIso8601String(),
+                '09121234567',
+            ])),
+            $record->uniqueCallId,
+        );
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->provider(DB::connection('sqlite'))->normalizeRow((object) [
+            'source_table' => 'vicidial_log',
+            'unique_call_id' => null,
+            'lead_id' => 44,
+            'call_date' => '2026-05-18 08:00:00',
+        ], $campaign);
+    }
+
+    public function test_fetch_range_reads_only_the_requested_window_without_metadata_queries(): void
+    {
+        $campaign = Campaign::factory()->create(['code' => 'mbsales']);
+        $server = VicidialServer::factory()->create(['campaign_code' => 'mbsales']);
+        $connection = DB::connection('sqlite');
+
+        foreach ([
+            ['uniqueid' => 'before-window', 'call_date' => '2026-05-18 08:59:59'],
+            ['uniqueid' => 'inside-window', 'call_date' => '2026-05-18 09:00:00'],
+            ['uniqueid' => 'after-window', 'call_date' => '2026-05-18 09:05:01'],
+        ] as $index => $call) {
+            $connection->table('vicidial_log')->insert([
+                'uniqueid' => $call['uniqueid'],
+                'campaign_id' => 'CAMP_A',
+                'list_id' => 'LIST_A',
+                'lead_id' => 400 + $index,
+                'user' => 'agent_one',
+                'phone_number' => '639121234567',
+                'call_date' => $call['call_date'],
+                'start_epoch' => 1779066000,
+                'end_epoch' => 1779066060,
+                'length_in_sec' => 60,
+                'status' => 'SALE',
+                'queue_seconds' => null,
+                'term_reason' => 'HANGUP',
+            ]);
+        }
+
+        $result = $this->provider($connection)->fetchRange(
+            $server,
+            $campaign,
+            ['CAMP_A'],
+            Carbon::parse('2026-05-18 09:00:00'),
+            Carbon::parse('2026-05-18 09:05:00'),
+        );
+
+        $this->assertTrue($result->success, (string) $result->message);
+        $this->assertSame(1, $result->total);
+        $this->assertSame('inside-window', $result->records[0]->uniqueCallId);
+        $this->assertSame(1, $result->meta['rows_received']);
     }
 
     private function provider(Connection $connection): TestableHistoricalCallProvider

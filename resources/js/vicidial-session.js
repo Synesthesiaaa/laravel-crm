@@ -68,7 +68,7 @@ function syncWidgetCampaignFromResponse(data, ctx) {
 
 async function syncStatus(campaign, ctx = null) {
     const effectiveCampaign = getCampaign(campaign);
-    const data = await window.Alpine.store('vicidial').sync(effectiveCampaign);
+    const data = await window.Alpine.store('vicidial').sync(effectiveCampaign, { remote: true });
     syncWidgetCampaignFromResponse(data, ctx);
     const localStatus = data?.local_session?.session_status || '';
 

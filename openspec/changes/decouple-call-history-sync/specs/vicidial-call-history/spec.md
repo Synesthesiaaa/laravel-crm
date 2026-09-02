@@ -1,8 +1,4 @@
-## Purpose
-
-Provide authoritative, campaign-scoped historical call data from VICIdial in the CRM Call History surfaces.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Authoritative scoped historical source
 
@@ -25,20 +21,20 @@ The system SHALL synchronize row-level VICIdial historical log data into the loc
 
 #### Scenario: Invalid secondary campaign scope is denied
 - **WHEN** a request selects a VICIdial campaign that is not mapped to the selected CRM campaign
-- **THEN** the system returns no authorized calls and does not issue an unrestricted remote query
+- **THEN** the system returns no authorized calls and does not query an unrestricted local or remote scope
 
 ### Requirement: Normalized historical call contract
 
-The system SHALL normalize each valid source row into a stable historical call record containing the source identifier, CRM campaign, VICIdial campaign/list, lead ID, VICIdial user, CRM user association when available, agent name, phone number, call timestamps, direction, raw status, CRM disposition mapping, duration seconds, and supported wait seconds.
+The system SHALL normalize each valid source row into a stable local historical call record containing the source identifier, VICIdial server, CRM campaign, VICIdial campaign/list, lead ID, VICIdial user, CRM user association when available, agent name, phone number, call timestamps, direction, raw status, CRM disposition mapping, duration seconds, and supported wait seconds.
 
 #### Scenario: Outbound row maps to the normalized contract
 - **WHEN** an outbound `vicidial_log` row contains its documented call fields
-- **THEN** the normalized record preserves its `uniqueid`, campaign, list, lead, user, phone number, `call_date`, `start_epoch`, `end_epoch`, `length_in_sec`, status, and termination reason
+- **THEN** the normalized local record preserves its `uniqueid`, campaign, list, lead, user, phone number, `call_date`, `start_epoch`, `end_epoch`, `length_in_sec`, status, and termination reason
 - **AND** its direction is `OUTBOUND`
 
 #### Scenario: Inbound closer row maps to the normalized contract
 - **WHEN** an inbound `vicidial_closer_log` row contains its documented call fields
-- **THEN** the normalized record preserves its `uniqueid`, campaign, list, lead, user, phone number, `call_date`, epochs, `length_in_sec`, status, `queue_seconds`, and termination reason
+- **THEN** the normalized local record preserves its `uniqueid`, campaign, list, lead, user, phone number, `call_date`, epochs, `length_in_sec`, status, `queue_seconds`, and termination reason
 - **AND** its direction is `INBOUND`
 
 #### Scenario: Unsupported values remain unavailable
@@ -47,11 +43,11 @@ The system SHALL normalize each valid source row into a stable historical call r
 
 ### Requirement: Stable CRM/VICIdial user association
 
-The system SHALL associate historical calls to CRM users by the stable `User.vici_user` login and SHALL retain calls when the VICIdial user is unknown, disabled, or deleted in CRM.
+The system SHALL associate locally stored historical calls to CRM users by the stable `User.vici_user` login and SHALL retain calls when the VICIdial user is unknown, disabled, or deleted in CRM.
 
 #### Scenario: Known VICIdial login maps to a CRM user
 - **WHEN** a historical row contains a VICIdial user login matching `users.vici_user`
-- **THEN** the response includes that CRM user ID and readable CRM name
+- **THEN** the local record or response includes that CRM user ID and readable CRM name
 
 #### Scenario: Unknown VICIdial login remains visible
 - **WHEN** a historical row contains a login with no CRM user mapping
@@ -63,7 +59,7 @@ The system SHALL associate historical calls to CRM users by the stable `User.vic
 
 ### Requirement: Status, disposition, phone, and time semantics
 
-The system SHALL preserve raw VICIdial status, resolve CRM disposition labels through the existing disposition mapping, display the source phone number under current CRM privacy behavior, use `length_in_sec` as numeric Call Duration, and interpret dates in the configured report timezone.
+The system SHALL preserve raw VICIdial status, resolve CRM disposition labels through the existing disposition mapping, display the source phone number under current CRM privacy behavior, use `length_in_sec` as numeric Call Duration, and interpret synchronized and displayed dates in the configured report timezone.
 
 #### Scenario: Mapped status has distinct status and disposition values
 - **WHEN** a historical row has a status that has an active CRM disposition mapping
@@ -80,7 +76,8 @@ The system SHALL preserve raw VICIdial status, resolve CRM disposition labels th
 
 #### Scenario: Date boundaries use the effective report timezone
 - **WHEN** the user selects a date range
-- **THEN** the query uses the configured report timezone's start and end of day and the returned timestamp is rendered in that same effective timezone
+- **THEN** the local query uses the configured report timezone's start and end of day
+- **AND** the returned timestamp is rendered in that same effective timezone
 
 ### Requirement: Server-side filters, sorting, and pagination
 
@@ -89,14 +86,15 @@ The system SHALL apply CRM campaign scope, date range, agent, phone, raw status,
 #### Scenario: Combined filters return only matching rows
 - **WHEN** a user supplies date, phone, agent, status, disposition, or mapped campaign filters
 - **THEN** every returned row satisfies all supplied filters
+- **AND** the request does not contact VICIdial
 
 #### Scenario: Phone search accepts common dialing forms
 - **WHEN** a user searches for an equivalent phone number written as `09...`, `639...`, or `9...`
-- **THEN** the provider searches compatible representations without rewriting stored source phone numbers
+- **THEN** the local query searches compatible representations without rewriting stored source phone numbers
 
 #### Scenario: Pagination does not load the full dataset
 - **WHEN** the user requests page 2 with a configured page size
-- **THEN** the provider returns only that page's rows plus server-calculated pagination metadata
+- **THEN** the local query returns only that page's rows plus server-calculated pagination metadata
 
 #### Scenario: Default ordering is newest first
 - **WHEN** no sort is requested
@@ -104,15 +102,15 @@ The system SHALL apply CRM campaign scope, date range, agent, phone, raw status,
 
 ### Requirement: API and user-facing states
 
-The system SHALL expose a stable authenticated Call History API/resource contract and SHALL distinguish loaded data, confirmed empty results, and VICIdial/database failure states.
+The system SHALL expose a stable authenticated Call History API/resource contract backed by local records and SHALL distinguish loaded data, confirmed empty results, delayed/stale synchronization, and unavailable local-source states.
 
 #### Scenario: Successful API response contains normalized data
-- **WHEN** the provider returns historical rows
-- **THEN** the API returns normalized rows, pagination metadata, effective scope/filter metadata, and safe source-health status without raw credentials
+- **WHEN** local records exist for the requested scope
+- **THEN** the API returns normalized rows, pagination metadata, effective scope/filter metadata, and safe sync-health status without raw credentials
 
 #### Scenario: Confirmed empty result is not an integration failure
-- **WHEN** the scoped VICIdial query succeeds and returns zero rows
-- **THEN** the UI says no calls were found for the selected filters and the response marks the source as healthy/confirmed empty
+- **WHEN** the local scoped query succeeds and returns zero rows
+- **THEN** the UI says no calls were found for the selected filters and the response marks the local source as healthy/confirmed empty
 
 #### Scenario: Stale synchronization preserves local data
 - **WHEN** the most recent VICIdial synchronization failed after earlier successful syncs

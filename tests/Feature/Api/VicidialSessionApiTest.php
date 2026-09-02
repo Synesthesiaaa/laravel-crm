@@ -707,6 +707,27 @@ class VicidialSessionApiTest extends TestCase
             ->assertJsonPath('local_session.session_status', 'paused');
     }
 
+    public function test_local_status_returns_session_state_without_calling_vicidial_services(): void
+    {
+        VicidialAgentSession::factory()->create([
+            'user_id' => $this->agent->id,
+            'campaign_code' => 'testcamp',
+            'session_status' => 'ready',
+        ]);
+        $this->mockAgentApi(false);
+
+        $mock = Mockery::mock(VicidialNonAgentApiService::class);
+        $mock->shouldNotReceive('execute');
+        $this->instance(VicidialNonAgentApiService::class, $mock);
+
+        $this->actingAs($this->agent)
+            ->withSession($this->campaignSession())
+            ->getJson('/api/vicidial/session/local-status?campaign=testcamp')
+            ->assertOk()
+            ->assertJsonPath('local_session.session_status', 'ready')
+            ->assertJsonPath('queue.data.count', 0);
+    }
+
     public function test_status_uses_synced_campaign_for_follow_up_calls_after_live_confirmation(): void
     {
         config(['vicidial.session_iframe_agent_api_only' => false]);

@@ -18,6 +18,15 @@ return [
     'report_timezone' => env('VICI_REPORT_TIMEZONE', env('APP_TIMEZONE', 'UTC')),
     'campaign_scope_cache_seconds' => (int) env('VICI_CAMPAIGN_SCOPE_CACHE_SECONDS', 60),
     'campaign_catalog_cache_seconds' => (int) env('VICI_CAMPAIGN_CATALOG_CACHE_SECONDS', 60),
+    'call_history_sync' => [
+        'recent_window_minutes' => (int) env('VICI_CALL_HISTORY_RECENT_WINDOW_MINUTES', 15),
+        'overlap_minutes' => (int) env('VICI_CALL_HISTORY_OVERLAP_MINUTES', 5),
+        'chunk_size' => (int) env('VICI_CALL_HISTORY_SYNC_CHUNK_SIZE', 500),
+        'job_timeout_seconds' => (int) env('VICI_CALL_HISTORY_JOB_TIMEOUT_SECONDS', 120),
+        'retry_times' => (int) env('VICI_CALL_HISTORY_RETRY_TIMES', 3),
+        'stale_after_minutes' => (int) env('VICI_CALL_HISTORY_STALE_AFTER_MINUTES', 5),
+        'schedule_enabled' => env('VICI_CALL_HISTORY_SYNC_ENABLED', true),
+    ],
 
     /*
     |--------------------------------------------------------------------------

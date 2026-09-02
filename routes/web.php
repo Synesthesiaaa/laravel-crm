@@ -62,6 +62,7 @@ Route::middleware('auth')->group(function () {
     Route::post('api/vicidial/session/logout', [\App\Http\Controllers\Api\VicidialSessionController::class, 'logout'])->name('api.vicidial.session.logout')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
     Route::post('api/vicidial/session/ingroups', [\App\Http\Controllers\Api\VicidialSessionController::class, 'ingroups'])->name('api.vicidial.session.ingroups')->middleware(['throttle:vicidial', 'telephony_feature:ingroup_management']);
     Route::get('api/vicidial/session/status', [\App\Http\Controllers\Api\VicidialSessionController::class, 'status'])->name('api.vicidial.session.status')->middleware(['throttle:telephony-poll', 'telephony_feature:session_controls', 'log_throttle']);
+    Route::get('api/vicidial/session/local-status', [\App\Http\Controllers\Api\VicidialSessionController::class, 'localStatus'])->name('api.vicidial.session.local-status')->middleware(['throttle:telephony-poll', 'telephony_feature:session_controls', 'log_throttle']);
     Route::get('api/vicidial/session/iframe-url', [\App\Http\Controllers\Api\VicidialSessionController::class, 'iframeUrl'])->name('api.vicidial.session.iframe-url')->middleware(['throttle:api', 'telephony_feature:session_controls']);
 });
 
@@ -69,6 +70,8 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('records', [RecordsController::class, 'index'])->name('records.index');
     Route::get('api/call-history', [CallHistoryController::class, 'index'])->name('api.call-history')->middleware('throttle:api');
+    Route::post('api/call-history/refresh', [CallHistoryController::class, 'refresh'])->name('api.call-history.refresh')->middleware('throttle:api');
+    Route::get('api/call-history/status', [CallHistoryController::class, 'status'])->name('api.call-history.status')->middleware('throttle:api');
     Route::get('agent', [AgentController::class, 'index'])
         ->name('agent.index')
         ->middleware('telephony_feature:agent_screen_access');

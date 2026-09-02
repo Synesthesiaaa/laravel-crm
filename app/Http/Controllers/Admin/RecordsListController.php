@@ -26,19 +26,8 @@ class RecordsListController extends Controller
             25,
         )->appends($request->except('page'));
 
-        $callHistory = $activeTab === 'calls'
-            ? $this->callHistoryService->getHistoricalHistory(
-                $request->user(),
-                $campaign,
-                $request->query(),
-                false,
-                25,
-            )
-            : null;
-
         return view('admin.records_list', [
             'submissions' => $submissions,
-            'callHistory' => $callHistory,
             'activeTab' => $activeTab,
             'campaign' => $campaign,
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),

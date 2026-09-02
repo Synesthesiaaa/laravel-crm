@@ -42,6 +42,7 @@ class VicidialSessionApiRequest extends FormRequest
             'api.vicidial.session.verify',
             'api.vicidial.session.iframe-url',
             'api.vicidial.session.logout',
+            'api.vicidial.session.local-status',
             'api.vicidial.session.status' => [
                 'campaign' => ['nullable', 'string', 'max:50'],
             ],

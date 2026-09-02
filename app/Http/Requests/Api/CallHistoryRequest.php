@@ -19,6 +19,7 @@ class CallHistoryRequest extends FormRequest
             'end_date' => ['nullable', 'date_format:Y-m-d'],
             'agent' => ['nullable', 'string', 'max:80'],
             'phone' => ['nullable', 'string', 'max:50'],
+            'lead_id' => ['nullable', 'integer', 'min:1'],
             'status' => ['nullable', 'string', 'max:80'],
             'disposition' => ['nullable', 'string', 'max:255'],
             'vicidial_campaign' => ['nullable', 'string', 'max:255'],

@@ -185,6 +185,35 @@ class VicidialSessionController extends Controller
         ]);
     }
 
+    public function localStatus(VicidialSessionApiRequest $request, VicidialSessionService $service): JsonResponse
+    {
+        $validated = $request->validated();
+        $campaign = TelephonyCampaignResolver::resolve($request, $validated['campaign'] ?? null);
+        $session = $service->getLocalSession($request->user(), $campaign);
+
+        return response()->json([
+            'success' => true,
+            'session_iframe_agent_api_only' => (bool) config('vicidial.session_iframe_agent_api_only', false),
+            'local_session' => $session,
+            'agent_status' => [
+                'success' => true,
+                'message' => 'Local VICIdial session state.',
+                'data' => [],
+            ],
+            'queue' => [
+                'success' => true,
+                'message' => 'Queue status is available on the agent screen.',
+                'data' => ['count' => 0],
+            ],
+            'ingroup_info' => [
+                'success' => true,
+                'message' => 'Local session state only.',
+                'data' => [],
+            ],
+            'pause_codes' => config('vicidial.pause_codes', []),
+        ]);
+    }
+
     public function ingroups(VicidialSessionApiRequest $request, VicidialSessionService $service): JsonResponse
     {
         $validated = $request->validated();
