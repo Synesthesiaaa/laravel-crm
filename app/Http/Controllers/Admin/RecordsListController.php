@@ -26,19 +26,19 @@ class RecordsListController extends Controller
             25,
         )->appends($request->except('page'));
 
-        $callSessions = $this->callHistoryService->getCallSessionsForCampaign(
-            $campaign,
-            $request->query('start_date'),
-            $request->query('end_date'),
-            $request->query('agent'),
-            $request->query('phone'),
-            $request->query('status'),
-            25,
-        )->appends($request->except('page'));
+        $callHistory = $activeTab === 'calls'
+            ? $this->callHistoryService->getHistoricalHistory(
+                $request->user(),
+                $campaign,
+                $request->query(),
+                false,
+                25,
+            )
+            : null;
 
         return view('admin.records_list', [
             'submissions' => $submissions,
-            'callSessions' => $callSessions,
+            'callHistory' => $callHistory,
             'activeTab' => $activeTab,
             'campaign' => $campaign,
             'campaignName' => $request->session()->get('campaign_name', 'CRM'),

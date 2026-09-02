@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AgentController;
+use App\Http\Controllers\Api\CallHistoryController;
 use App\Http\Controllers\Api\VicidialCallUrlController;
 use App\Http\Controllers\Api\VicidialProxyController;
 use App\Http\Controllers\AttendanceController;
@@ -67,6 +68,7 @@ Route::middleware('auth')->group(function () {
 Route::middleware(['auth', 'campaign'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('records', [RecordsController::class, 'index'])->name('records.index');
+    Route::get('api/call-history', [CallHistoryController::class, 'index'])->name('api.call-history')->middleware('throttle:api');
     Route::get('agent', [AgentController::class, 'index'])
         ->name('agent.index')
         ->middleware('telephony_feature:agent_screen_access');

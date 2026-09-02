@@ -15,18 +15,17 @@ class RecordsController extends Controller
     public function index(Request $request): View
     {
         $campaign = $request->session()->get('campaign', 'mbsales');
-        $history = $this->callHistoryService->getCallSessionsForAgent(
+        $history = $this->callHistoryService->getHistoricalHistory(
             $request->user(),
             $campaign,
-            $request->query('start_date'),
-            $request->query('end_date'),
-            $request->query('phone'),
-            $request->query('status'),
+            $request->query(),
+            true,
             15,
-        )->withQueryString();
+        );
 
         return view('records.index', [
-            'history' => $history,
+            'history' => $history->records,
+            'historyPage' => $history,
             'campaign' => $campaign,
         ]);
     }
