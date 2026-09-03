@@ -184,6 +184,14 @@ For production builds:
 npm run build
 ```
 
+After deploying queue or job configuration changes, reload long-running workers so they pick up the new topology:
+
+```bash
+php artisan horizon:terminate
+```
+
+For deployments using `queue:work` instead of Horizon, use `php artisan queue:restart` and ensure the worker includes `--queue=telephony,default`.
+
 ### 7. Start background services
 
 For local development, the easiest path is:
@@ -198,7 +206,7 @@ If you prefer separate processes, start them individually:
 
 ```bash
 php artisan serve
-php artisan queue:work
+php artisan queue:work --queue=telephony,default
 php artisan reverb:start
 php artisan ami:listen
 ```
@@ -231,7 +239,7 @@ Common commands used during development and operations:
 
 - `composer run dev` - local all-in-one developer workflow
 - `php artisan serve` - application server only
-- `php artisan queue:work` - queue worker
+- `php artisan queue:work --queue=telephony,default` - queue worker
 - `php artisan reverb:start` - realtime WebSocket server
 - `php artisan ami:listen` - telephony event listener
 - `php artisan horizon` - Horizon dashboard and queue worker manager

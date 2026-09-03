@@ -150,6 +150,7 @@ class LocalCallHistoryQueryService
             }
 
             $health = $this->sourceHealth($scope->server->getKey(), $scope->campaign->getKey(), $total);
+            $health['mapped_campaign_count'] = count($campaignCodes);
             $state = $total > 0 ? 'data' : ($health['sync_status'] === VicidialCallHistorySyncState::STATUS_HEALTHY ? 'confirmed_empty' : 'syncing');
             if ($health['status'] === 'stale' && $total === 0) {
                 $state = 'stale';
@@ -191,7 +192,10 @@ class LocalCallHistoryQueryService
             ];
         }
 
-        return $this->sourceHealth($scope->server->getKey(), $scope->campaign->getKey());
+        $health = $this->sourceHealth($scope->server->getKey(), $scope->campaign->getKey());
+        $health['mapped_campaign_count'] = count($scope->historicalCampaignCodes());
+
+        return $health;
     }
 
     private function toRecord(TelephonyCallHistory $history, Campaign $campaign, array $dispositionData): HistoricalCallRecord
@@ -250,9 +254,13 @@ class LocalCallHistoryQueryService
             'status' => $isStale ? 'stale' : 'healthy',
             'sync_status' => $state?->status ?? VicidialCallHistorySyncState::STATUS_NEVER_SYNCED,
             'stale' => $isStale,
+            'last_attempted_sync_at' => $state?->last_started_at?->toIso8601String(),
             'last_successful_sync_at' => $lastSuccess?->toIso8601String(),
             'last_failed_at' => $state?->last_failed_at?->toIso8601String(),
             'last_call_at' => $state?->last_call_at?->toIso8601String(),
+            'last_sync_duration_ms' => $state?->last_sync_duration_ms,
+            'current_window_start' => $state?->current_window_start?->toIso8601String(),
+            'current_window_end' => $state?->current_window_end?->toIso8601String(),
             'last_error_classification' => $state?->last_error_classification,
             'last_error_message' => $state?->last_error_message,
             'last_rows_received' => $state?->last_rows_received ?? 0,

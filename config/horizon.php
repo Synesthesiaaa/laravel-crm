@@ -100,6 +100,7 @@ return [
         'redis:default' => 60,
         'redis:imports' => 300,
         'redis:asterisk' => 60,
+        'redis:telephony' => 120,
     ],
 
     /*
@@ -242,6 +243,20 @@ return [
             'backoff' => [10, 30, 60],
             'nice' => 0,
         ],
+
+        'supervisor-telephony' => [
+            'connection' => 'redis',
+            'queue' => ['telephony'],
+            'balance' => false,
+            'maxProcesses' => 1,
+            'maxTime' => 0,
+            'maxJobs' => 0,
+            'memory' => 128,
+            'tries' => 3,
+            'timeout' => 120,
+            'backoff' => [60, 180, 300],
+            'nice' => 0,
+        ],
     ],
 
     'environments' => [
@@ -257,6 +272,9 @@ return [
             'supervisor-asterisk' => [
                 'maxProcesses' => 3,
             ],
+            'supervisor-telephony' => [
+                'maxProcesses' => 1,
+            ],
         ],
 
         'local' => [
@@ -267,6 +285,9 @@ return [
                 'maxProcesses' => 1,
             ],
             'supervisor-asterisk' => [
+                'maxProcesses' => 1,
+            ],
+            'supervisor-telephony' => [
                 'maxProcesses' => 1,
             ],
         ],

@@ -41,6 +41,7 @@ class VicidialCallHistorySyncService
         ], [
             'status' => VicidialCallHistorySyncState::STATUS_NEVER_SYNCED,
         ]);
+        $previousCheckpoint = $state->last_call_at;
         $window = $this->window($state, $from, $to);
         $state->update([
             'status' => VicidialCallHistorySyncState::STATUS_RUNNING,
@@ -77,7 +78,7 @@ class VicidialCallHistorySyncService
                 ->filter(fn (HistoricalCallRecord $record): bool => $record->callDate !== null)
                 ->sortBy(fn (HistoricalCallRecord $record): int => $record->callDate?->getTimestamp() ?? 0)
                 ->last();
-            $checkpoint = $state->last_call_at;
+            $checkpoint = $previousCheckpoint?->greaterThan($window['to']) ? null : $previousCheckpoint;
             if ($latest instanceof HistoricalCallRecord && $latest->callDate !== null && ($checkpoint === null || $latest->callDate->greaterThan($checkpoint))) {
                 $checkpoint = $latest->callDate;
             }
@@ -222,7 +223,17 @@ class VicidialCallHistorySyncService
         $end = ($to ?? Carbon::now($timezone))->copy();
         $start = $from?->copy();
         if ($start === null) {
-            $start = $state->last_call_at?->copy()->subMinutes((int) config('vicidial.call_history_sync.overlap_minutes', 5))
+            $checkpoint = $state->last_call_at?->copy();
+            if ($checkpoint?->greaterThan($end)) {
+                $this->logger->warning('vicidial.call_history.sync', 'Future Call History checkpoint ignored; using a bounded recent window.', [
+                    'sync_state_id' => $state->getKey(),
+                    'checkpoint' => $checkpoint->toIso8601String(),
+                    'sync_end' => $end->toIso8601String(),
+                ]);
+                $checkpoint = null;
+            }
+
+            $start = $checkpoint?->subMinutes((int) config('vicidial.call_history_sync.overlap_minutes', 5))
                 ?? $end->copy()->subMinutes((int) config('vicidial.call_history_sync.recent_window_minutes', 15));
         }
 

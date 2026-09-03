@@ -31,10 +31,12 @@ class QueueStabilizationTest extends TestCase
         $this->assertSame(['default'], $supervisors['supervisor-default']['queue']);
         $this->assertSame(['imports'], $supervisors['supervisor-imports']['queue']);
         $this->assertSame(['asterisk'], $supervisors['supervisor-asterisk']['queue']);
+        $this->assertSame(['telephony'], $supervisors['supervisor-telephony']['queue']);
 
         $this->assertGreaterThan(600, $supervisors['supervisor-imports']['timeout']);
         $this->assertSame(1, $supervisors['supervisor-imports']['maxProcesses']);
         $this->assertSame([10, 30, 60], $supervisors['supervisor-asterisk']['backoff']);
+        $this->assertSame([60, 180, 300], $supervisors['supervisor-telephony']['backoff']);
     }
 
     public function test_scheduler_lists_reconciliation_horizon_snapshot_and_dead_letter_processing(): void
