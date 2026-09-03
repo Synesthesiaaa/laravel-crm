@@ -19,6 +19,11 @@ The system SHALL configure its Horizon and local worker entry points to consume 
 - **THEN** it listens to both `telephony` and `default` queues
 - **AND** Call History jobs do not remain pending solely because of an omitted queue name
 
+#### Scenario: Queue worker constructs job middleware
+- **WHEN** a worker starts processing a Call History synchronization job
+- **THEN** the job middleware pipeline can be constructed from the installed Laravel queue middleware classes
+- **AND** the job does not fail before its handler runs because of an invalid middleware namespace
+
 ### Requirement: Invalid synchronization cursors recover safely
 
 The system SHALL detect a per-scope last-call checkpoint later than the current synchronization end, SHALL record a sanitized anomaly, and SHALL use a bounded configured recent window instead of issuing a future-to-now query. It SHALL preserve the prior checkpoint until a synchronization succeeds.

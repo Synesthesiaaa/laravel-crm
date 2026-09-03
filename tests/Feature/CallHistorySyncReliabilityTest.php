@@ -15,6 +15,7 @@ use App\Services\Telephony\VicidialCallHistorySyncService;
 use App\Services\Telephony\VicidialHistoricalCallProvider;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -102,6 +103,14 @@ final class CallHistorySyncReliabilityTest extends TestCase
         Queue::assertPushed(SyncVicidialCallHistoryJob::class, function (SyncVicidialCallHistoryJob $job): bool {
             return $job->queue === 'telephony';
         });
+    }
+
+    public function test_job_middleware_can_be_constructed_by_the_queue_worker(): void
+    {
+        $middleware = (new SyncVicidialCallHistoryJob(123))->middleware();
+
+        $this->assertCount(1, $middleware);
+        $this->assertInstanceOf(WithoutOverlapping::class, $middleware[0]);
     }
 }
 

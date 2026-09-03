@@ -6,10 +6,10 @@ use App\Models\Campaign;
 use App\Models\VicidialCallHistorySyncState;
 use App\Services\Telephony\VicidialCallHistorySyncService;
 use Carbon\Carbon;
-use Illuminate\Bus\Middleware\WithoutOverlapping;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Throwable;
 
 class SyncVicidialCallHistoryJob implements ShouldBeUnique, ShouldQueue

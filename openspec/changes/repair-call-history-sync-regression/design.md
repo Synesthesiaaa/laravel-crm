@@ -29,6 +29,8 @@ The Call History page must remain local and asynchronous. The repair is limited 
 
 4. **Expose diagnostics from persisted sync state.** The existing state row is the source of truth for last attempt, last success, current window, duration, and counters. No remote health call is added to the user request path.
 
+5. **Use Laravel's installed queue middleware namespace.** `WithoutOverlapping` is provided by `Illuminate\Queue\Middleware` in the deployed Laravel version. The job must instantiate that class successfully when a worker invokes its middleware pipeline.
+
 ## Risks / Trade-offs
 
 - [A worker is not reloaded after deployment] → Document and test the required Horizon/queue worker restart as a deployment step.

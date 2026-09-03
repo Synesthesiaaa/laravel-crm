@@ -5,6 +5,7 @@ The local Call History architecture is correct, but the deployment that introduc
 ## What Changes
 
 - Route the Call History synchronization queue through Horizon and local worker entry points.
+- Ensure queue middleware resolves against the installed Laravel queue middleware namespace.
 - Make queue and scheduler behavior explicit in the operational configuration and documentation.
 - Add recovery for invalid future checkpoints so one corrupted cursor cannot permanently suppress recent calls.
 - Expose safe last-attempt, active-window, duration, row-counter, and mapped-scope diagnostics.
