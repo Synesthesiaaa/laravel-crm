@@ -1,4 +1,4 @@
-@props(['name', 'title' => null, 'maxWidth' => 'md', 'pointerThroughBackdrop' => false])
+@props(['name', 'title' => null, 'maxWidth' => 'md', 'pointerThroughBackdrop' => false, 'closeOnBackdrop' => false])
 @php $widths = ['sm' => 'max-w-sm', 'md' => 'max-w-lg', 'lg' => 'max-w-2xl', 'xl' => 'max-w-4xl']; $w = $widths[$maxWidth] ?? $widths['md']; @endphp
 <div x-show="$store.modal.is('{{ $name }}')"
      x-trap.noscroll="$store.modal.is('{{ $name }}')"
@@ -9,6 +9,7 @@
      x-transition:leave-start="opacity-100"
      x-transition:leave-end="opacity-0"
      class="modal-backdrop"
+     @if($closeOnBackdrop) @click.self="$store.modal.hide()" @endif
      role="presentation"
      style="display: none;{{ $pointerThroughBackdrop ? ' pointer-events: none;' : '' }}">
     <div class="modal-box {{ $w }}"

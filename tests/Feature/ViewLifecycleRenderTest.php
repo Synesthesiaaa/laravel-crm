@@ -50,15 +50,15 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertOk();
         $response->assertSee('window.crmSoftNav?.register?.(scope', false);
         $response->assertSee('window.crmSoftNav?.isRehydrating?.()', false);
-        $response->assertSee('window.crmSoftNav.refresh()', false);
+        $response->assertSee('window.crmSoftNav.refresh({ shouldDefer: shouldDeferRefresh })', false);
         $response->assertSee('echo.subscribeDashboardChannel?.(campaignCode, scheduleRefresh)', false);
         $response->assertSee('const fallbackIntervalMs = 30_000;', false);
         $response->assertSee('window.crmCharts?.register?.(chartGroup, elId, chart);', false);
         $response->assertSee('window.resizeCrmDashboardCharts?.()', false);
         $response->assertSee('Total value:', false);
         $response->assertSee('Sales by form', false);
-        $response->assertSee('x-on:mouseenter="openSalesModal()"', false);
-        $response->assertSee('x-on:mouseleave="scheduleSalesModalClose()"', false);
+        $response->assertDontSee('x-on:mouseenter="openSalesModal()"', false);
+        $response->assertDontSee('x-on:mouseleave="scheduleSalesModalClose()"', false);
         $response->assertSee('x-transition:leave="transition ease-in duration-150"', false);
         $response->assertDontSee('Sales (24h)', false);
         $response->assertDontSee('Top agent (24h)', false);

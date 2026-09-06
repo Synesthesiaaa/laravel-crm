@@ -9,6 +9,9 @@ function getCsrfToken() {
 const softNavScopes = new Map();
 let currentSoftNavScope = '';
 let currentSoftNavPhase = 'initial';
+let navigationSequence = 0;
+let navigationController = null;
+let foregroundNavigationPending = false;
 
 function normalizeSoftNavScope(value) {
     return String(value || '').trim() || 'default';
@@ -60,8 +63,8 @@ window.crmSoftNav = {
     isRehydrating() {
         return currentSoftNavPhase === 'rehydrating';
     },
-    refresh() {
-        return softNavigate(window.location.href, { push: false });
+    refresh({ shouldDefer = () => false } = {}) {
+        return softNavigate(window.location.href, { push: false, background: true, shouldDefer });
     },
     run(scope, phase, detail = {}) {
         runSoftNavHandler(normalizeSoftNavScope(scope), phase, detail);
@@ -173,7 +176,16 @@ function executeScriptsAfterMarker(doc) {
     }
 }
 
-async function softNavigate(url, { push = true } = {}) {
+async function softNavigate(url, { push = true, background = false, shouldDefer = () => false } = {}) {
+    if (background && (foregroundNavigationPending || shouldDefer())) {
+        return false;
+    }
+
+    const sequence = ++navigationSequence;
+    navigationController?.abort();
+    const controller = new AbortController();
+    navigationController = controller;
+    foregroundNavigationPending = !background;
     const mainLayout = document.getElementById('main-layout');
     if (!mainLayout) {
         window.location.href = url;
@@ -187,8 +199,11 @@ async function softNavigate(url, { push = true } = {}) {
     }
 
     let res;
+    let html;
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
     try {
         res = await fetch(url, {
+            signal: controller.signal,
             method: 'GET',
             credentials: 'same-origin',
             headers: {
@@ -197,9 +212,21 @@ async function softNavigate(url, { push = true } = {}) {
                 'X-CSRF-TOKEN': getCsrfToken(),
             },
         });
+        html = await res.text();
     } catch (_) {
-        window.location.href = url;
-        return;
+        if (sequence === navigationSequence && !background) {
+            window.Alpine?.store('toast')?.error?.('Could not load page. Please try again.');
+        }
+        return null;
+    } finally {
+        window.clearTimeout(timeout);
+        if (sequence === navigationSequence) {
+            foregroundNavigationPending = false;
+        }
+    }
+
+    if (sequence !== navigationSequence || (background && shouldDefer())) {
+        return false;
     }
 
     if (res.redirected || res.status === 401 || res.status === 403) {
@@ -212,7 +239,6 @@ async function softNavigate(url, { push = true } = {}) {
         return;
     }
 
-    const html = await res.text();
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
 
@@ -226,6 +252,17 @@ async function softNavigate(url, { push = true } = {}) {
 
     const previousScope = currentSoftNavScope || normalizeSoftNavScope(window.location.pathname);
     const nextScope = getSoftNavScopeFromUrl(url);
+    const scrollPosition = { x: window.scrollX, y: window.scrollY };
+    const scrollContainers = background
+        ? Array.from(mainLayout.querySelectorAll('[id]')).filter((element) => element.scrollTop || element.scrollLeft)
+            .map((element) => ({ id: element.id, top: element.scrollTop, left: element.scrollLeft }))
+        : [];
+
+    Alpine.store('modal')?.hide?.();
+    await Alpine.nextTick();
+    if (sequence !== navigationSequence) {
+        return false;
+    }
 
     try {
         window.dispatchEvent(new CustomEvent('soft-navigate:before', {
@@ -277,7 +314,7 @@ async function softNavigate(url, { push = true } = {}) {
     }));
 
     const nextMainContent = mainLayout.querySelector('#main-content');
-    if (nextMainContent && typeof nextMainContent.focus === 'function') {
+    if (!background && nextMainContent && typeof nextMainContent.focus === 'function') {
         nextMainContent.focus({ preventScroll: true });
     }
 
@@ -291,8 +328,21 @@ async function softNavigate(url, { push = true } = {}) {
 
     window.dispatchEvent(new CustomEvent('soft-navigate', { detail: { url } }));
 
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
+    if (background) {
+        scrollContainers.forEach(({ id, top, left }) => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.scrollTop = top;
+                element.scrollLeft = left;
+            }
+        });
+        window.scrollTo(scrollPosition.x, scrollPosition.y);
+    } else {
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+    }
+
+    return true;
 }
 
 function shouldInterceptAnchor(anchor, event) {

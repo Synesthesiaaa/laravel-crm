@@ -21,6 +21,12 @@ class DashboardLayoutUpdateRequest extends FormRequest
         $sectionKeys = array_keys(DashboardLayoutService::sectionDefinitions());
 
         return [
+            'amounts' => ['sometimes', 'array:enabled,total,change,charts,tables'],
+            'amounts.enabled' => ['sometimes', 'boolean'],
+            'amounts.total' => ['sometimes', 'boolean'],
+            'amounts.change' => ['sometimes', 'boolean'],
+            'amounts.charts' => ['sometimes', 'boolean'],
+            'amounts.tables' => ['sometimes', 'boolean'],
             'section_order' => ['required', 'array', 'size:'.count($sectionKeys)],
             'section_order.*' => ['required', 'string', 'distinct', Rule::in($sectionKeys)],
             'visible_sections' => ['nullable', 'array', 'min:1'],

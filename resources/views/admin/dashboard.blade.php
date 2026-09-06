@@ -200,6 +200,20 @@
             <form method="POST" action="{{ route('admin.dashboard-layout.update') }}" class="p-5 space-y-6">
                 @csrf
                 <input type="hidden" name="campaign_code" value="{{ $campaign }}">
+                <fieldset class="space-y-2" x-data="{ amountsEnabled: @js((bool) old('amounts.enabled', data_get($dashboardLayout, 'amounts.enabled', true))) }">
+                    <legend class="text-sm font-semibold text-[var(--color-on-surface)]">Dashboard amounts</legend>
+                    <p class="text-xs text-[var(--color-on-surface-dim)]">Turn off all amounts for this campaign, or choose the monetary displays to include. Sales counts remain visible.</p>
+                    @foreach(\App\Services\DashboardLayoutService::amountDefinitions() as $amountKey => $amountLabel)
+                        <label class="flex min-h-11 items-center gap-3 rounded-lg border border-[var(--color-border)] px-3 py-2"
+                               @if($amountKey !== 'enabled') x-show="amountsEnabled" @endif>
+                            <input type="hidden" name="amounts[{{ $amountKey }}]" value="0">
+                            <input type="checkbox" name="amounts[{{ $amountKey }}]" value="1" class="form-checkbox"
+                                   @checked(old('amounts.'.$amountKey, data_get($dashboardLayout, 'amounts.'.$amountKey, true)))
+                                   @if($amountKey === 'enabled') x-model="amountsEnabled" @endif>
+                            <span class="text-sm">{{ $amountLabel }}</span>
+                        </label>
+                    @endforeach
+                </fieldset>
                 <div class="space-y-2">
                     <template x-for="(section, index) in sections" :key="section">
                         <div class="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2">

@@ -7,6 +7,8 @@
 @section('content')
 @php
     $monthTitle = now()->format('F Y');
+    $amountsEnabled = (bool) data_get($dashboardLayout, 'amounts.enabled', true);
+    $amountVisible = static fn (string $key): bool => $amountsEnabled && (bool) data_get($dashboardLayout, 'amounts.'.$key, true);
     $dashboardSections = $dashboardLayout['sections'] ?? [];
     $sectionVisible = static fn (string $key): bool => ($dashboardSections[$key]['visible'] ?? true) === true;
     $sectionOrder = static fn (string $key): int => (int) ($dashboardSections[$key]['order'] ?? 0);
@@ -76,66 +78,15 @@
 
     @if($sectionVisible('kpis'))
     <section data-dashboard-section="kpis" style="order: {{ $sectionOrder('kpis') }}">
-    <div x-data="{
-        salesModalCloseTimer: null,
-        leaderboardModalCloseTimer: null,
-        openSalesModal() {
-            this.cancelSalesModalClose();
-            $store.modal.show('sales-summary');
-        },
-        scheduleSalesModalClose() {
-            this.cancelSalesModalClose();
-            this.salesModalCloseTimer = window.setTimeout(() => {
-                if ($store.modal.is('sales-summary')) {
-                    $store.modal.hide();
-                }
-                this.salesModalCloseTimer = null;
-            }, 300);
-        },
-        cancelSalesModalClose() {
-            if (this.salesModalCloseTimer !== null) {
-                window.clearTimeout(this.salesModalCloseTimer);
-                this.salesModalCloseTimer = null;
-            }
-        },
-        openLeaderboardModal() {
-            this.cancelLeaderboardModalClose();
-            $store.modal.show('agent-leaderboard');
-        },
-        scheduleLeaderboardModalClose() {
-            this.cancelLeaderboardModalClose();
-            this.leaderboardModalCloseTimer = window.setTimeout(() => {
-                if ($store.modal.is('agent-leaderboard')) {
-                    $store.modal.hide();
-                }
-                this.leaderboardModalCloseTimer = null;
-            }, 300);
-        },
-        cancelLeaderboardModalClose() {
-            if (this.leaderboardModalCloseTimer !== null) {
-                window.clearTimeout(this.leaderboardModalCloseTimer);
-                this.leaderboardModalCloseTimer = null;
-            }
-        },
-    }">
+    <div x-data="{}">
         {{-- KPI + context stat cards --}}
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 animate-stagger">
-            <div tabindex="0"
-                 class="rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                 x-on:mouseenter="openSalesModal()"
-                 x-on:mouseleave="scheduleSalesModalClose()"
-                 x-on:click="openSalesModal()"
-                 x-on:focusin="openSalesModal()">
-                <x-stat-card label="Sales" :value="number_format($kpis['sales'] ?? 0)" :secondary="$salesRangeLabel.' · Total value: '.number_format($kpis['sales_amount'] ?? 0, 2)" icon="check-circle" color="success" />
-            </div>
-            <div tabindex="0"
-                 class="rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                 x-on:mouseenter="openLeaderboardModal()"
-                 x-on:mouseleave="scheduleLeaderboardModalClose()"
-                 x-on:click="openLeaderboardModal()"
-                 x-on:focusin="openLeaderboardModal()">
-                <x-stat-card class="h-full" label="Top agent" :value="$kpis['top_agent'] ?? '—'" :secondary="($kpis['top_agent_sales'] ?? 0) > 0 ? number_format($kpis['top_agent_sales']).' sales · Total value: '.number_format($kpis['top_agent_sales_amount'] ?? 0, 2) : null" icon="user" color="warning" />
-            </div>
+            <button type="button" class="text-left cursor-pointer rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" aria-haspopup="dialog" x-on:click="$store.modal.show('sales-summary')">
+                <x-stat-card label="Sales" :value="number_format($kpis['sales'] ?? 0)" :secondary="$salesRangeLabel.($amountsEnabled ? ' · Total value: '.number_format($kpis['sales_amount'] ?? 0, 2) : '')" icon="check-circle" color="success" />
+            </button>
+            <button type="button" class="text-left cursor-pointer rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" aria-haspopup="dialog" x-on:click="$store.modal.show('agent-leaderboard')">
+                <x-stat-card class="h-full" label="Top agent" :value="$kpis['top_agent'] ?? '—'" :secondary="($kpis['top_agent_sales'] ?? 0) > 0 ? number_format($kpis['top_agent_sales']).' sales'.($amountsEnabled ? ' · Total value: '.number_format($kpis['top_agent_sales_amount'] ?? 0, 2) : '') : null" icon="user" color="warning" />
+            </button>
             <x-stat-card label="Active Forms" :value="count($forms ?? [])" icon="document-text" color="info" />
             <x-stat-card label="Campaign" :value="strtoupper($campaign ?? '—')" icon="building-office" color="info" />
         </div>
@@ -155,7 +106,7 @@
                 <span class="badge badge-info">{{ $summaryModeLabel }}</span>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 animate-stagger">
+            <div class="grid grid-cols-1 sm:grid-cols-2 {{ $amountVisible('total') && $amountVisible('change') ? 'xl:grid-cols-4' : ($amountVisible('total') || $amountVisible('change') ? 'xl:grid-cols-3' : '') }} gap-4 animate-stagger">
                 <x-stat-card
                     label="Transactions"
                     :value="number_format($summaryCurrent['count'])"
@@ -166,6 +117,7 @@
                     :trend-difference="$formatSignedCount($summaryCountComparison['difference'] ?? 0)"
                     :trend-label="$summaryCountComparison['message'] ?? 'vs last month'"
                     :trend-status="$summaryCountComparison['status'] ?? 'unchanged'" />
+                @if($amountVisible('total'))
                 <x-stat-card
                     label="Total amount"
                     :value="$formatSummaryAmount($summaryCurrent['amount'] ?? 0, true)"
@@ -176,6 +128,7 @@
                     :trend-difference="$formatSignedAmount($summaryAmountComparison['difference'] ?? 0, true)"
                     :trend-label="$summaryAmountComparison['message'] ?? 'vs last month'"
                     :trend-status="$summaryAmountComparison['status'] ?? 'unchanged'" />
+                @endif
                 <x-stat-card
                     label="Transaction change"
                     :value="$formatSignedCount($summaryCountComparison['difference'] ?? 0)"
@@ -185,6 +138,7 @@
                     :trend="$summaryCountComparison['percentage'] ?? null"
                     :trend-label="$summaryCountComparison['message'] ?? 'vs last month'"
                     :trend-status="$summaryCountComparison['status'] ?? 'unchanged'" />
+                @if($amountVisible('change'))
                 <x-stat-card
                     label="Amount change"
                     :value="$formatSignedAmount($summaryAmountComparison['difference'] ?? 0, true)"
@@ -194,6 +148,7 @@
                     :trend="$summaryAmountComparison['percentage'] ?? null"
                     :trend-label="$summaryAmountComparison['message'] ?? 'vs last month'"
                     :trend-status="$summaryAmountComparison['status'] ?? 'unchanged'" />
+                @endif
             </div>
 
             <div class="chart-container" data-dashboard-summary-chart>
@@ -201,9 +156,11 @@
                     <div>
                         <h4 class="chart-title mb-1">Daily comparison</h4>
                         <p class="text-xs text-[var(--color-on-surface-muted)]">Current period versus the equivalent previous-month days.</p>
+                        @if($amountsEnabled)
                         <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">{{ data_get($summary, 'amount_definition', 'Amount attribution follows the campaign configuration.') }}</p>
+                        @endif
                     </div>
-                    @if($summaryHasActivity)
+                    @if($summaryHasActivity && $amountVisible('charts'))
                         <div x-data="{ mode: 'volume' }" x-init="$watch('mode', value => window.setDashboardSummaryMode?.(value))" class="inline-flex rounded-lg border border-[var(--color-border)] p-1" role="group" aria-label="Chart measure">
                             <button type="button" class="min-h-11 rounded-md px-3 text-xs font-semibold transition-colors" :class="mode === 'volume' ? 'bg-[var(--color-primary-muted)] text-[var(--color-primary)]' : 'text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'" :aria-pressed="mode === 'volume'" x-on:click="mode = 'volume'">Volume</button>
                             <button type="button" class="min-h-11 rounded-md px-3 text-xs font-semibold transition-colors" :class="mode === 'amount' ? 'bg-[var(--color-primary-muted)] text-[var(--color-primary)]' : 'text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'" :aria-pressed="mode === 'amount'" x-on:click="mode = 'amount'">Amount</button>
@@ -215,21 +172,25 @@
                     <div id="chart-dashboard-summary" class="mt-4 min-h-[280px]" role="img" aria-describedby="dashboard-summary-description" aria-busy="true">
                         <div class="skeleton h-[280px] w-full" data-summary-chart-loading aria-hidden="true"></div>
                     </div>
-                    <p id="dashboard-summary-description" class="sr-only">A line chart compares daily transaction volume or amount for the current period and the equivalent previous-month period. The previous period uses a dashed line.</p>
+                    <p id="dashboard-summary-description" class="sr-only">A line chart compares daily transaction {{ $amountVisible('charts') ? 'volume or amount' : 'volume' }} for the current period and the equivalent previous-month period. The previous period uses a dashed line.</p>
                     <p data-summary-chart-status class="mt-2 text-xs text-[var(--color-on-surface-dim)]" role="status" aria-live="polite">Loading comparison chart...</p>
 
                     <details class="mt-4 border-t border-[var(--color-border)] pt-3">
                         <summary class="cursor-pointer text-xs font-semibold text-[var(--color-on-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">View daily summary data</summary>
                         <div class="md-table-wrap mt-3">
                             <table>
-                                <caption class="sr-only">Daily current and previous period transaction and amount comparison</caption>
+                                <caption class="sr-only">Daily current and previous period {{ $amountVisible('tables') ? 'transaction and amount' : 'transaction' }} comparison</caption>
                                 <thead>
                                     <tr>
                                         <th>Day</th>
                                         <th class="text-right">Current volume</th>
-                                        <th class="text-right">Current amount</th>
+                                        @if($amountVisible('tables'))
+                                            <th class="text-right">Current amount</th>
+                                        @endif
                                         <th class="text-right">Previous volume</th>
-                                        <th class="text-right">Previous amount</th>
+                                        @if($amountVisible('tables'))
+                                            <th class="text-right">Previous amount</th>
+                                        @endif
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -237,9 +198,13 @@
                                         <tr>
                                             <td class="font-medium text-[var(--color-on-surface)]" title="{{ $summaryDay['current_date'] }}">{{ $summaryDay['label'] }}</td>
                                             <td class="text-right tabular-nums">{{ number_format($summaryDay['current']['count']) }}</td>
-                                            <td class="text-right tabular-nums">{{ $formatSummaryAmount($summaryDay['current']['amount']) }}</td>
+                                            @if($amountVisible('tables'))
+                                                <td class="text-right tabular-nums">{{ $formatSummaryAmount($summaryDay['current']['amount']) }}</td>
+                                            @endif
                                             <td class="text-right tabular-nums" title="{{ $summaryDay['previous_date'] ?? 'No equivalent date' }}">{{ $summaryDay['previous']['count'] === null ? '—' : number_format($summaryDay['previous']['count']) }}</td>
-                                            <td class="text-right tabular-nums">{{ $summaryDay['previous']['amount'] === null ? '—' : $formatSummaryAmount($summaryDay['previous']['amount']) }}</td>
+                                            @if($amountVisible('tables'))
+                                                <td class="text-right tabular-nums">{{ $summaryDay['previous']['amount'] === null ? '—' : $formatSummaryAmount($summaryDay['previous']['amount']) }}</td>
+                                            @endif
                                         </tr>
                                     @endforeach
                                 </tbody>
@@ -258,10 +223,9 @@
 
         <x-modal name="sales-summary"
                  title="Sales by form"
+                 :close-on-backdrop="true"
                  maxWidth="lg"
-                 :pointer-through-backdrop="true"
-                 x-on:mouseenter="cancelSalesModalClose()"
-                 x-on:mouseleave="scheduleSalesModalClose()">
+                 x-on:keydown.escape.window="if ($store.modal.is('sales-summary') || $store.modal.is('agent-leaderboard')) $store.modal.hide()">
             <form method="GET" action="{{ route('dashboard') }}" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <label class="text-sm font-medium text-[var(--color-on-surface)]">
                     Date
@@ -280,7 +244,7 @@
                 </div>
             </form>
 
-            <p class="mt-5 text-sm text-[var(--color-on-surface-muted)]">{{ $salesRangeLabel }}. {{ $salesAttributionLabel }}</p>
+            <p class="mt-5 text-sm text-[var(--color-on-surface-muted)]">{{ $salesRangeLabel }}. @if($amountsEnabled) {{ $salesAttributionLabel }} @endif</p>
 
             <div class="md-table-wrap mt-4">
                 @if(!empty($kpis['sales_by_form']))
@@ -289,7 +253,9 @@
                             <tr>
                                 <th>Form</th>
                                 <th class="text-right">Sales</th>
-                                <th class="text-right">Total amount</th>
+                                @if($amountVisible('tables'))
+                                    <th class="text-right">Total amount</th>
+                                @endif
                             </tr>
                         </thead>
                         <tbody>
@@ -297,7 +263,9 @@
                                 <tr>
                                     <td class="font-medium text-[var(--color-on-surface)]">{{ $formSale['form_name'] }}</td>
                                     <td class="text-right tabular-nums">{{ number_format($formSale['sales']) }}</td>
-                                    <td class="text-right tabular-nums">{{ number_format($formSale['sales_amount'], 2) }}</td>
+                                    @if($amountVisible('tables'))
+                                        <td class="text-right tabular-nums">{{ number_format($formSale['sales_amount'], 2) }}</td>
+                                    @endif
                                 </tr>
                             @endforeach
                         </tbody>
@@ -310,10 +278,9 @@
 
         <x-modal name="agent-leaderboard"
                  title="Daily agent leaderboard"
+                 :close-on-backdrop="true"
                  maxWidth="lg"
-                 :pointer-through-backdrop="true"
-                 x-on:mouseenter="cancelLeaderboardModalClose()"
-                 x-on:mouseleave="scheduleLeaderboardModalClose()">
+                 x-on:keydown.escape.window="if ($store.modal.is('sales-summary') || $store.modal.is('agent-leaderboard')) $store.modal.hide()">
             <form method="GET" action="{{ route('dashboard') }}" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <label class="text-sm font-medium text-[var(--color-on-surface)]">
                     Date
@@ -332,7 +299,7 @@
                 </div>
             </form>
 
-            <p class="mt-5 text-sm text-[var(--color-on-surface-muted)]">{{ $salesRangeLabel }}. Ranked by total sale amount, then qualifying sales count and agent name.</p>
+            <p class="mt-5 text-sm text-[var(--color-on-surface-muted)]">{{ $salesRangeLabel }}. {{ $amountsEnabled ? 'Ranked by total sale amount, then qualifying sales count and agent name.' : 'Ranked using campaign sales rules.' }}</p>
 
             <div class="md-table-wrap mt-4">
                 @if(!empty($agentLeaderboard))
@@ -342,7 +309,9 @@
                                 <th class="w-12">#</th>
                                 <th>Agent</th>
                                 <th class="text-right">Sales</th>
-                                <th class="text-right">Sale amount</th>
+                                @if($amountVisible('tables'))
+                                    <th class="text-right">Sale amount</th>
+                                @endif
                             </tr>
                         </thead>
                         <tbody>
@@ -351,7 +320,9 @@
                                     <td class="text-[var(--color-on-surface-dim)]">{{ $idx + 1 }}</td>
                                     <td class="font-medium text-[var(--color-on-surface)]">{{ $row['agent'] }}</td>
                                     <td class="text-right tabular-nums">{{ number_format($row['sales_count']) }}</td>
-                                    <td class="text-right tabular-nums">{{ number_format($row['sales_amount'], 2) }}</td>
+                                    @if($amountVisible('tables'))
+                                        <td class="text-right tabular-nums">{{ number_format($row['sales_amount'], 2) }}</td>
+                                    @endif
                                 </tr>
                             @endforeach
                         </tbody>
@@ -359,7 +330,9 @@
                             <tr>
                                 <td colspan="2" class="font-semibold text-[var(--color-on-surface)]">Total</td>
                                 <td class="text-right font-semibold tabular-nums">{{ number_format($leaderboardTotalSales) }}</td>
-                                <td class="text-right font-semibold tabular-nums">{{ number_format($leaderboardTotalAmount, 2) }}</td>
+                                @if($amountVisible('tables'))
+                                    <td class="text-right font-semibold tabular-nums">{{ number_format($leaderboardTotalAmount, 2) }}</td>
+                                @endif
                             </tr>
                         </tfoot>
                     </table>
@@ -398,7 +371,7 @@
     <div class="md-card overflow-hidden">
         <div class="px-5 py-4 border-b border-[var(--color-border)]">
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Agent leaderboard — {{ $salesRangeLabel }}</h3>
-            <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">Ranked by total sale amount, then qualifying sales count and agent name.</p>
+            <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">{{ $amountsEnabled ? 'Ranked by total sale amount, then qualifying sales count and agent name.' : 'Ranked using campaign sales rules.' }}</p>
         </div>
         <div class="md-table-wrap">
             @if(!empty($agentLeaderboard))
@@ -408,7 +381,9 @@
                             <th class="w-12">#</th>
                             <th>Agent</th>
                             <th class="text-right">Sales</th>
-                            <th class="text-right">Sale amount</th>
+                            @if($amountVisible('tables'))
+                                <th class="text-right">Sale amount</th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody>
@@ -417,7 +392,9 @@
                                 <td class="text-[var(--color-on-surface-dim)]">{{ $idx + 1 }}</td>
                                 <td class="font-medium text-[var(--color-on-surface)]">{{ $row['agent'] }}</td>
                                 <td class="text-right tabular-nums">{{ number_format($row['sales_count']) }}</td>
-                                <td class="text-right tabular-nums">{{ number_format($row['sales_amount'], 2) }}</td>
+                                @if($amountVisible('tables'))
+                                    <td class="text-right tabular-nums">{{ number_format($row['sales_amount'], 2) }}</td>
+                                @endif
                             </tr>
                         @endforeach
                     </tbody>
@@ -425,7 +402,9 @@
                         <tr>
                             <td colspan="2" class="font-semibold text-[var(--color-on-surface)]">Total</td>
                             <td class="text-right font-semibold tabular-nums">{{ number_format($leaderboardTotalSales) }}</td>
-                            <td class="text-right font-semibold tabular-nums">{{ number_format($leaderboardTotalAmount, 2) }}</td>
+                            @if($amountVisible('tables'))
+                                <td class="text-right font-semibold tabular-nums">{{ number_format($leaderboardTotalAmount, 2) }}</td>
+                            @endif
                         </tr>
                     </tfoot>
                 </table>
@@ -487,6 +466,7 @@
 
         <div class="grid gap-5 animate-stagger campaign-report-grid">
             @foreach($reportTables as $reportTable)
+                @continue($reportTable['mode'] === 'amounts' && ! $amountVisible('tables'))
                 <section class="md-card md-card--static overflow-hidden" data-report-table="{{ Illuminate\Support\Str::slug($reportTable['title']) }}">
                     <div class="px-5 py-4 border-b border-[var(--color-border)]">
                         <h4 class="text-sm font-semibold text-[var(--color-on-surface)]">{{ $reportTable['title'] }}</h4>
@@ -615,6 +595,9 @@
     let fallbackTimer = null;
     let refreshTimer = null;
     let refreshInFlight = false;
+    let lastInteractionAt = 0;
+    let liveUpdatesStopped = false;
+    const markInteraction = () => { lastInteractionAt = Date.now(); };
     let echo = null;
     let echoReadyHandler = null;
     let summaryChart = null;
@@ -631,21 +614,42 @@
         summaryChartConfig = null;
     }
 
+    function shouldDeferRefresh() {
+        return document.hidden
+            || Boolean(window.Alpine?.store('modal')?.open)
+            || Boolean(window.Alpine?.store('confirm')?.visible)
+            || Boolean(document.activeElement?.matches('input, select, textarea, [contenteditable="true"]'))
+            || Date.now() - lastInteractionAt < 1500;
+    }
+
     function scheduleRefresh() {
         window.clearTimeout(refreshTimer);
         refreshTimer = window.setTimeout(() => {
-            if (refreshInFlight || typeof window.crmSoftNav?.refresh !== 'function') {
+            if (liveUpdatesStopped || refreshInFlight || typeof window.crmSoftNav?.refresh !== 'function') {
+                return;
+            }
+
+            if (shouldDeferRefresh()) {
+                scheduleRefresh();
                 return;
             }
 
             refreshInFlight = true;
-            Promise.resolve(window.crmSoftNav.refresh()).finally(() => {
+            Promise.resolve(window.crmSoftNav.refresh({ shouldDefer: shouldDeferRefresh })).then((refreshed) => {
+                if (refreshed === false && !liveUpdatesStopped) scheduleRefresh();
+            }).catch(() => {
+                // The next fallback or campaign event retries a failed refresh.
+            }).finally(() => {
                 refreshInFlight = false;
             });
         }, 350);
     }
 
     function teardownLiveUpdates() {
+        liveUpdatesStopped = true;
+        document.removeEventListener('scroll', markInteraction, true);
+        document.removeEventListener('pointerdown', markInteraction, true);
+        document.removeEventListener('keydown', markInteraction, true);
         window.clearTimeout(refreshTimer);
         window.clearInterval(fallbackTimer);
         refreshTimer = null;
@@ -659,6 +663,9 @@
     }
 
     function startLiveUpdates() {
+        document.addEventListener('scroll', markInteraction, { capture: true, passive: true });
+        document.addEventListener('pointerdown', markInteraction, { capture: true, passive: true });
+        document.addEventListener('keydown', markInteraction, true);
         const initializeEcho = () => {
             echo = window.TelephonyEcho;
             if (!echo?.isBroadcastEnabled?.()) {
@@ -836,7 +843,7 @@
     }
 
     window.setDashboardSummaryMode = (mode) => {
-        summaryMode = mode === 'amount' ? 'amount' : 'volume';
+        summaryMode = @json($amountVisible('charts')) && mode === 'amount' ? 'amount' : 'volume';
         if (!summaryChart || !summaryChartConfig) {
             return;
         }

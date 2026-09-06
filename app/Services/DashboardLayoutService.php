@@ -6,6 +6,29 @@ use App\Models\DashboardLayout;
 
 class DashboardLayoutService
 {
+    /** @return array<string, string> */
+    public static function amountDefinitions(): array
+    {
+        return [
+            'enabled' => 'Show amounts on this campaign dashboard',
+            'total' => 'Total amount card',
+            'change' => 'Amount change card',
+            'charts' => 'Amount chart option',
+            'tables' => 'Amount tables and columns',
+        ];
+    }
+
+    /** @return array<string, bool> */
+    private function normalizeAmounts(mixed $settings): array
+    {
+        $settings = is_array($settings) ? $settings : [];
+
+        return array_map(
+            static fn (string $key): bool => (bool) ($settings[$key] ?? true),
+            array_combine(array_keys(self::amountDefinitions()), array_keys(self::amountDefinitions())),
+        );
+    }
+
     /** @var array<string, string> */
     private const SECTION_DEFINITIONS = [
         'welcome' => 'Welcome hero',
@@ -23,13 +46,14 @@ class DashboardLayoutService
         return self::SECTION_DEFINITIONS;
     }
 
-    /** @return array{sections: array<string, array{visible: bool, order: int}>, sales?: array<string, mixed>} */
+    /** @return array{sections: array<string, array{visible: bool, order: int}>, sales?: array<string, mixed>, amounts: array<string, bool>} */
     public function defaultLayout(): array
     {
-        return $this->buildLayout(array_keys(self::SECTION_DEFINITIONS), array_keys(self::SECTION_DEFINITIONS));
+        return $this->buildLayout(array_keys(self::SECTION_DEFINITIONS), array_keys(self::SECTION_DEFINITIONS))
+            + ['amounts' => $this->normalizeAmounts(null)];
     }
 
-    /** @return array{sections: array<string, array{visible: bool, order: int}>} */
+    /** @return array{sections: array<string, array{visible: bool, order: int}>, amounts: array<string, bool>, sales?: array<string, mixed>} */
     public function getForCampaign(string $campaignCode): array
     {
         $record = DashboardLayout::query()
@@ -59,6 +83,7 @@ class DashboardLayoutService
         ));
 
         $layout = $this->buildLayout($sectionOrder, $visibleSections);
+        $layout['amounts'] = $this->normalizeAmounts($record->layout['amounts'] ?? null);
         if (is_array($record->layout['sales'] ?? null)) {
             $layout['sales'] = $record->layout['sales'];
         }
@@ -70,7 +95,8 @@ class DashboardLayoutService
      * @param  array<int, string>  $sectionOrder
      * @param  array<int, string>  $visibleSections
      * @param  array<string, mixed>|null  $salesConfig
-     * @return array{sections: array<string, array{visible: bool, order: int}>, sales?: array<string, mixed>}
+     * @param  array<string, bool|int|string>|null  $amountConfig
+     * @return array{sections: array<string, array{visible: bool, order: int}>, sales?: array<string, mixed>, amounts: array<string, bool>}
      */
     public function saveForCampaign(
         string $campaignCode,
@@ -78,11 +104,17 @@ class DashboardLayoutService
         array $visibleSections,
         ?array $salesConfig = null,
         bool $replaceSalesConfig = false,
+        ?array $amountConfig = null,
     ): array {
         $layout = $this->buildLayout($sectionOrder, $visibleSections);
         $record = DashboardLayout::query()
             ->where('campaign_code', $campaignCode)
             ->first();
+
+        $layout['amounts'] = $this->normalizeAmounts(array_replace(
+            $this->normalizeAmounts($record?->layout['amounts'] ?? null),
+            $amountConfig ?? [],
+        ));
 
         if ($replaceSalesConfig && $salesConfig === null) {
             unset($layout['sales']);

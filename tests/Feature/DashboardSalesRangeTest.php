@@ -259,17 +259,11 @@ class DashboardSalesRangeTest extends TestCase
         $response->assertSee('value="07:30"', false);
         $response->assertSee('value="16:45"', false);
         $response->assertSee('Sales by form', false);
-        $response->assertSee('x-on:mouseenter="openSalesModal()"', false);
-        $response->assertSee('x-on:click="openSalesModal()"', false);
-        $response->assertSee('x-on:focusin="openSalesModal()"', false);
-        $response->assertSee('x-on:mouseleave="scheduleSalesModalClose()"', false);
-        $response->assertSee('openSalesModal() {', false);
-        $response->assertSee('x-transition:leave="transition ease-in duration-150"', false);
-        $response->assertSee('pointer-events: none;', false);
-        $response->assertSee('pointer-events: auto;', false);
-        $response->assertSee('Ranked by total sale amount, then qualifying sales count and agent name.', false);
-        $response->assertSee('x-on:mouseenter="openLeaderboardModal()"', false);
-        $response->assertSee('x-on:click="openLeaderboardModal()"', false);
+        $response->assertDontSee('x-on:mouseenter=', false);
+        $response->assertDontSee('x-on:focusin=', false);
+        $response->assertSee('x-on:click="$store.modal.show(\'sales-summary\')"', false);
+        $response->assertSee('x-on:click="$store.modal.show(\'agent-leaderboard\')"', false);
+        $response->assertSee('aria-haspopup="dialog"', false);
         $response->assertSee('Daily agent leaderboard', false);
         $response->assertSee('Agent leaderboard', false);
         $response->assertSee('class="stat-card h-full"', false);
@@ -304,6 +298,31 @@ class DashboardSalesRangeTest extends TestCase
         $this->assertSame(2, substr_count($content, '>Total</td>'));
         $this->assertSame(2, substr_count($content, '<td class="text-right font-semibold tabular-nums">2</td>'));
         $this->assertSame(2, substr_count($content, '<td class="text-right font-semibold tabular-nums">350.00</td>'));
+    }
+
+    public function test_amount_tables_and_chart_mode_can_be_hidden_with_populated_sales(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        $this->registerSalesForm('cash', 'Cash Sale', 'cash_sales');
+        $this->insertSale('cash_sales', 'Alice', 1234.56, '2026-05-15 07:00:00');
+        $service = app(\App\Services\DashboardLayoutService::class);
+        $sections = array_keys($service::sectionDefinitions());
+        $service->saveForCampaign('mbsales', $sections, $sections, amountConfig: ['charts' => false, 'tables' => false]);
+
+        $this->actingAs(User::factory()->create())
+            ->withSession(['campaign' => 'mbsales'])
+            ->get(route('dashboard'))->assertOk()
+            ->assertSee('Alice')
+            ->assertSee('Total amount')
+            ->assertSee('Current volume')
+            ->assertDontSee('Current amount')
+            ->assertDontSee('Previous amount')
+            ->assertDontSee('>Sale amount</th>', false)
+            ->assertDontSee('>Total amount</th>', false)
+            ->assertDontSee('>1,234.56</td>', false)
+            ->assertDontSee('aria-label="Chart measure"', false)
+            ->assertDontSee('data-report-table="daily-amounts"', false)
+            ->assertSee('data-report-table="daily-counts"', false);
     }
 
     public function test_daily_campaign_report_aggregates_daily_and_month_to_date_rows_by_agent(): void
