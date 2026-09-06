@@ -1,6 +1,10 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
+
+const viteHotFile = path.resolve('storage/vite.hot');
 
 export default defineConfig({
     plugins: [
@@ -10,9 +14,17 @@ export default defineConfig({
                 'resources/js/app.js',
                 'resources/js/agent-capture-webform-entry.js',
             ],
+            hotFile: 'storage/vite.hot',
             refresh: true,
         }),
         tailwindcss(),
+        {
+            name: 'remove-vite-hot-file-after-build',
+            apply: 'build',
+            closeBundle() {
+                fs.rmSync(viteHotFile, { force: true });
+            },
+        },
     ],
     build: {
         rollupOptions: {

@@ -15,6 +15,7 @@
 /node_modules
 /public/build
 /public/hot
+/storage/vite.hot
 /public/storage
 /storage/*.key
 /storage/pail

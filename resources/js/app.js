@@ -455,6 +455,13 @@ window.crmGracefulLogout = async function () {
 
 Alpine.start();
 
+window.crmUiRuntime = {
+    ready: true,
+    alpine: window.Alpine === Alpine,
+    softNavigation: typeof window.crmSoftNav?.register === 'function',
+};
+document.documentElement.dataset.crmUiReady = 'true';
+
 // Global keyboard shortcuts
 document.addEventListener('keydown', (e) => {
     // Cmd+K / Ctrl+K → open global search
