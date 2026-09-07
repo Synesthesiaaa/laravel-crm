@@ -39,6 +39,31 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertSee('window.TelephonyMediaPath?.isDual?.() === true', false);
     }
 
+    public function test_authenticated_layout_renders_accessible_actionable_notifications_panel(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertSee('class="notif-item w-full text-left"', false);
+        $response->assertSee('Notifications could not be loaded.', false);
+        $response->assertSee('Couldn’t refresh notifications.', false);
+        $response->assertSee('Retry', false);
+        $response->assertSee('role="status" aria-live="polite"', false);
+        $response->assertSee('modal-title-notification-details', false);
+        $response->assertSee('aria-describedby="notification-detail-description"', false);
+        $response->assertSee('Review the selected notification details.', false);
+        $response->assertSee('Business hours:', false);
+        $response->assertSee('x-text="detail.range.label"', false);
+        $response->assertSee('aria-label="Close dialog"', false);
+        $response->assertSee('x-text="n.read ? \'Read\' : \'Unread\'"', false);
+        $response->assertDontSee('n.campaign_code', false);
+        $response->assertDontSee('n.form_type', false);
+    }
+
     public function test_dashboard_renders_soft_nav_chart_lifecycle_hooks(): void
     {
         $user = User::factory()->create();
@@ -94,6 +119,22 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertSee('Showing the last successful report snapshot', false);
         $response->assertSee("status: 'stale'", false);
         $response->assertSee('The last live snapshot could not be refreshed', false);
+    }
+
+    public function test_reports_omit_campaign_comparison_chart(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_TEAM_LEADER]);
+
+        $response = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('reports.index'));
+
+        $response->assertOk();
+        $response->assertDontSee('Campaign Comparison', false);
+        $response->assertDontSee('chart-campaign-comparison', false);
+        $response->assertSee('Call Volume Trend', false);
+        $response->assertSee('Agent Performance', false);
+        $response->assertSee('Disposition Pareto', false);
     }
 
     public function test_top_agent_stat_card_renders_sales_summary(): void

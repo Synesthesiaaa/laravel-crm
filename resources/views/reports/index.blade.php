@@ -389,19 +389,6 @@
         </div>
     </section>
 
-    <!-- <section class="space-y-4">
-        <div>
-            <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Campaign Comparison</h3>
-            <p class="text-xs text-[var(--color-on-surface-dim)]">Compare total calls, answered calls, answer rate, and contact rate by VICIdial campaign.</p>
-        </div>
-        <div class="chart-container">
-            <div x-show="dashboard.campaigns.labels.length" id="chart-campaign-comparison" class="w-full" style="min-height: 260px;"></div>
-            <div x-show="!dashboard.campaigns.labels.length" class="table-empty py-10 text-center text-sm text-[var(--color-on-surface-dim)]">
-                <span x-text="reportSectionMessage(dashboard.campaigns.state, 'Campaign activity')">Campaign activity unavailable.</span>
-            </div>
-        </div>
-    </section> -->
-
     <section class="space-y-4">
         <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
@@ -738,11 +725,6 @@ window.telephonyReports = function () {
                     topDisposition: '—',
                     topDispositionCount: null,
                 },
-            },
-            campaigns: {
-                labels: [],
-                values: [],
-                state: 'loading',
             },
             funnel: [],
             timeDistribution: [
@@ -1099,11 +1081,6 @@ window.telephonyReports = function () {
                     dispositionRow.breakdownSummary = 'Unavailable';
                 }
             });
-            this.dashboard.campaigns = {
-                labels: campaigns.map((row) => row.campaign),
-                values: campaigns.map((row) => row.total_calls ?? null),
-                state: data.campaign_state || (campaigns.length ? 'data' : 'unavailable'),
-            };
             this.dashboard.funnel = Array.isArray(data.funnel) ? data.funnel : [];
             const time = data.time_distribution || {};
             this.dashboard.timeDistribution = [
@@ -1439,9 +1416,8 @@ window.telephonyReports = function () {
             const statusMixEl = document.getElementById('chart-status-mix');
             const agentCallsEl = document.getElementById('chart-agent-calls');
             const dispoEl = document.getElementById('chart-dispo-breakdown');
-            const campaignEl = document.getElementById('chart-campaign-comparison');
 
-            if (!statusHourlyEl && !statusMixEl && !agentCallsEl && !dispoEl && !campaignEl) {
+            if (!statusHourlyEl && !statusMixEl && !agentCallsEl && !dispoEl) {
                 return;
             }
 
@@ -1503,23 +1479,6 @@ window.telephonyReports = function () {
                     theme: { mode: isDark ? 'dark' : 'light' },
                 });
                 window.crmCharts?.register?.(CHART_GROUP, 'agent-calls', chart);
-                await chart.render();
-            }
-
-            if (campaignEl && this.dashboard.campaigns.labels.length) {
-                const chart = new ApexCharts(campaignEl, {
-                    series: [{ name: 'Total Calls', data: this.dashboard.campaigns.values }],
-                    chart: { type: 'bar', height: 260, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
-                    colors: ['#e91e8c'],
-                    plotOptions: { bar: { horizontal: true, borderRadius: 5, barHeight: '55%' } },
-                    xaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
-                    yaxis: { categories: this.dashboard.campaigns.labels, labels: { style: { colors: textColor, fontSize: '11px' }, maxWidth: 160 } },
-                    grid: { borderColor: gridColor, strokeDashArray: 3 },
-                    dataLabels: { enabled: true, style: { colors: [textColor] } },
-                    tooltip: { theme: isDark ? 'dark' : 'light' },
-                    theme: { mode: isDark ? 'dark' : 'light' },
-                });
-                window.crmCharts?.register?.(CHART_GROUP, 'campaign-comparison', chart);
                 await chart.render();
             }
 

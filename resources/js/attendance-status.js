@@ -36,7 +36,10 @@ document.addEventListener('alpine:init', () => {
         async start(code) {
             this.loading = true;
             try {
-                await window.axios.post('/api/attendance/start', { code });
+                const { data } = await window.axios.post('/api/attendance/start', { code });
+                window.dispatchEvent(new CustomEvent('attendance-updated', {
+                    detail: { action: 'start', log: data?.log ?? null },
+                }));
                 window.Alpine?.store('toast')?.success?.('Status started.');
                 await this.refresh();
                 window.location.reload();
@@ -53,7 +56,10 @@ document.addEventListener('alpine:init', () => {
         async end() {
             this.loading = true;
             try {
-                await window.axios.post('/api/attendance/end', {});
+                const { data } = await window.axios.post('/api/attendance/end', {});
+                window.dispatchEvent(new CustomEvent('attendance-updated', {
+                    detail: { action: 'end', log: data?.log ?? null },
+                }));
                 window.Alpine?.store('toast')?.success?.('Status ended.');
                 await this.refresh();
                 window.location.reload();

@@ -117,4 +117,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(UserWidgetLayout::class);
     }
+
+    public function notificationReadStates(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(NotificationReadState::class);
+    }
 }

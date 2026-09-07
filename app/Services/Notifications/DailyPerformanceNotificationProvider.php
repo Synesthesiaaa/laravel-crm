@@ -1,0 +1,226 @@
+<?php
+
+namespace App\Services\Notifications;
+
+use App\Models\User;
+use App\Services\DashboardLayoutService;
+use App\Services\DashboardSalesRangeService;
+use App\Services\DashboardStatsService;
+use Carbon\Carbon;
+
+class DailyPerformanceNotificationProvider
+{
+    public function __construct(
+        protected DashboardSalesRangeService $salesRangeService,
+        protected DashboardStatsService $dashboardStats,
+        protected DashboardLayoutService $dashboardLayout,
+        protected NotificationLabelResolver $labels,
+    ) {}
+
+    public function item(User $user, string $campaignCode): NotificationItem
+    {
+        $details = $this->build($user, $campaignCode);
+        $kpis = $details['kpis'];
+        $amounts = $details['amounts'];
+        $personalCount = $details['personal']['sales_count'];
+        $teamCount = (int) ($kpis['sales'] ?? 0);
+        $topAgent = $kpis['top_agent'] ?? null;
+        $message = $teamCount > 0
+            ? "You have {$personalCount} sales today; team total is {$teamCount}."
+            : "No sales yet. You have {$personalCount} sales today; team total is 0.";
+        if ($topAgent !== null) {
+            $topAgentSummary = ' Top agent: '.$this->labels->agent((string) $topAgent)
+                .' ('.number_format((int) ($kpis['top_agent_sales'] ?? 0)).' sales';
+            if ($amounts['total']) {
+                $topAgentSummary .= ', '.$this->formatAmount((float) ($kpis['top_agent_sales_amount'] ?? 0.0));
+            }
+            $message .= $topAgentSummary.').';
+        }
+        if ($amounts['total']) {
+            $message .= ' Your value: '.$this->formatAmount((float) $details['personal']['sales_amount'])
+                .'; team value: '.$this->formatAmount((float) ($kpis['sales_amount'] ?? 0.0)).'.';
+        }
+
+        return new NotificationItem(
+            key: $this->key($campaignCode, $details['date']),
+            category: 'performance',
+            source: 'Daily performance',
+            title: "Today's performance",
+            message: $message,
+            occurredAt: now(config('app.timezone')),
+            type: $teamCount > 0 ? 'success' : 'info',
+            meta: [
+                'preview' => [
+                    'personal_sales' => $personalCount,
+                    'team_sales' => $teamCount,
+                    'top_agent' => $topAgent === null ? null : $this->labels->agent((string) $topAgent),
+                    'top_agent_sales' => (int) ($kpis['top_agent_sales'] ?? 0),
+                    ...($amounts['total'] ? [
+                        'personal_amount' => round((float) $details['personal']['sales_amount'], 2),
+                        'team_amount' => round((float) ($kpis['sales_amount'] ?? 0.0), 2),
+                        'currency' => $details['currency'],
+                    ] : []),
+                ],
+            ],
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function details(User $user, string $campaignCode, ?string $expectedDate = null): array
+    {
+        $details = $this->build($user, $campaignCode);
+        if ($expectedDate !== null && $details['date'] !== $expectedDate) {
+            return [];
+        }
+
+        $kpis = $details['kpis'];
+        $amounts = $details['amounts'];
+        $personal = $details['personal'];
+        $personalMetrics = [
+            ['label' => 'Sales count', 'value' => number_format((int) $personal['sales_count'])],
+        ];
+        if ($amounts['total']) {
+            $personalMetrics[] = [
+                'label' => 'Sales amount',
+                'value' => $this->formatAmount((float) $personal['sales_amount']),
+            ];
+        }
+
+        $teamMetrics = [
+            ['label' => 'Sales count', 'value' => number_format((int) ($kpis['sales'] ?? 0))],
+        ];
+        if ($amounts['total']) {
+            $teamMetrics[] = [
+                'label' => 'Sales amount',
+                'value' => $this->formatAmount((float) ($kpis['sales_amount'] ?? 0.0)),
+            ];
+        }
+
+        $topAgent = $kpis['top_agent'] ?? null;
+        $topMetrics = [
+            ['label' => 'Top agent', 'value' => $topAgent === null ? 'No sales yet' : $this->labels->agent((string) $topAgent)],
+            ['label' => 'Sales count', 'value' => number_format((int) ($kpis['top_agent_sales'] ?? 0))],
+        ];
+        if ($amounts['total']) {
+            $topMetrics[] = [
+                'label' => 'Sales amount',
+                'value' => $this->formatAmount((float) ($kpis['top_agent_sales_amount'] ?? 0.0)),
+            ];
+        }
+
+        $formRows = [];
+        foreach (($kpis['sales_by_form'] ?? []) as $form) {
+            $formCode = (string) ($form['form_code'] ?? '');
+            $row = [
+                'name' => $this->labels->form($formCode, $campaignCode),
+                'sales_count' => (int) ($form['sales'] ?? 0),
+            ];
+            if ($amounts['tables']) {
+                $row['sales_amount'] = $this->formatAmount((float) ($form['sales_amount'] ?? 0.0));
+            }
+            $formRows[] = $row;
+        }
+
+        $leaderboard = [];
+        foreach (($kpis['agent_leaderboard'] ?? []) as $row) {
+            $leaderboardRow = [
+                'agent' => $this->labels->agent((string) ($row['agent'] ?? '')),
+                'sales_count' => (int) ($row['sales_count'] ?? 0),
+            ];
+            if ($amounts['tables']) {
+                $leaderboardRow['sales_amount'] = $this->formatAmount((float) ($row['sales_amount'] ?? 0.0));
+            }
+            $leaderboard[] = $leaderboardRow;
+        }
+
+        return [
+            'key' => $this->key($campaignCode, $details['date']),
+            'category' => 'performance',
+            'title' => "Today's performance",
+            'description' => 'Live dashboard totals for '.$details['campaign_name'].'.',
+            'date' => $details['date'],
+            'range' => [
+                'start' => $details['range']['start'],
+                'end' => $details['range']['end'],
+                'label' => $details['range']['label'],
+            ],
+            'updated_at' => now(config('app.timezone'))->toIso8601String(),
+            'sections' => [
+                ['title' => 'Your performance', 'metrics' => $personalMetrics],
+                ['title' => 'Team total', 'metrics' => $teamMetrics],
+                ['title' => 'Top agent', 'metrics' => $topMetrics],
+                ...($formRows === [] ? [] : [['title' => 'Sales by form', 'rows' => $formRows]]),
+                ...($leaderboard === [] ? [] : [['title' => 'Agent leaderboard', 'rows' => $leaderboard]]),
+            ],
+        ];
+    }
+
+    public function key(string $campaignCode, string $date): string
+    {
+        return 'daily:'.rawurlencode($campaignCode).':'.$date;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function build(User $user, string $campaignCode): array
+    {
+        $range = $this->salesRangeService->default();
+        $kpis = $this->dashboardStats->getSalesKpisForCampaign(
+            $campaignCode,
+            $range['from'],
+            $range['until'],
+        );
+        $layout = $this->dashboardLayout->getForCampaign($campaignCode);
+        $amountsEnabled = (bool) data_get($layout, 'amounts.enabled', true);
+        $personal = $this->resolvePersonalRow($user, $kpis['agent_leaderboard'] ?? []);
+
+        return [
+            'date' => $range['date'],
+            'range' => [
+                'start' => $range['start'],
+                'end' => $range['end'],
+                'label' => Carbon::parse($range['from'])->format('M j, Y').' · '.$range['start'].'–'.$range['end'],
+            ],
+            'campaign_name' => $this->labels->campaign($campaignCode),
+            'currency' => [
+                'code' => (string) config('dashboard.currency_code', 'PHP'),
+                'symbol' => (string) config('dashboard.currency_symbol', '₱'),
+            ],
+            'amounts' => [
+                'total' => $amountsEnabled && (bool) data_get($layout, 'amounts.total', true),
+                'tables' => $amountsEnabled && (bool) data_get($layout, 'amounts.tables', true),
+            ],
+            'personal' => $personal,
+            'kpis' => $kpis,
+        ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $leaderboard
+     * @return array{sales_count: int, sales_amount: float}
+     */
+    private function resolvePersonalRow(User $user, array $leaderboard): array
+    {
+        $aliases = array_map('strtolower', $this->labels->aliases($user));
+        $count = 0;
+        $amount = 0.0;
+        foreach ($leaderboard as $row) {
+            $agent = strtolower(trim((string) ($row['agent'] ?? '')));
+            if ($agent === '' || ! in_array($agent, $aliases, true)) {
+                continue;
+            }
+            $count += (int) ($row['sales_count'] ?? 0);
+            $amount += (float) ($row['sales_amount'] ?? 0.0);
+        }
+
+        return ['sales_count' => $count, 'sales_amount' => round($amount, 2)];
+    }
+
+    private function formatAmount(float $amount): string
+    {
+        return (string) config('dashboard.currency_symbol', '₱').number_format($amount, 2);
+    }
+}

@@ -38,7 +38,8 @@
       data-campaign="{{ $layoutTelephonyCampaign }}"
       data-campaign-name="{{ $layoutCampaignName }}"
       data-telephony-campaign="{{ $layoutTelephonyCampaign }}"
-      data-user-id="{{ auth()->id() }}">
+      data-user-id="{{ auth()->id() }}"
+      data-notification-poll-seconds="{{ config('notifications.summary_poll_seconds', 60) }}">
 
     <a class="skip-link" href="#main-content">Skip to main content</a>
 
@@ -113,7 +114,7 @@
                             aria-controls="notifications-menu">
                         <x-icon name="bell" class="w-4 h-4" />
                         <span x-show="unread > 0"
-                              x-text="unread > 9 ? '9+' : unread"
+                              x-text="unread > 99 ? '99+' : unread"
                               class="notification-badge">
                         </span>
                     </button>
@@ -130,33 +131,112 @@
                          class="notifications-dropdown"
                          style="display: none;">
                         <div class="flex items-center justify-between p-4 border-b border-[var(--color-border)]">
-                            <span class="font-semibold text-sm text-[var(--color-on-surface)]">Notifications</span>
-                            <button x-show="unread > 0" @click="markAllRead()" class="text-xs text-[var(--color-primary)] hover:underline">
+                            <div>
+                                <span class="font-semibold text-sm text-[var(--color-on-surface)]">Notifications</span>
+                                <p x-show="stale" class="text-[11px] text-amber-500 mt-0.5">Showing the last saved update</p>
+                            </div>
+                            <button type="button" x-show="unread > 0" @click="markAllRead()" class="btn-link text-xs">
                                 Mark all read
                             </button>
                         </div>
-                        <div class="max-h-80 overflow-y-auto">
-                            <template x-if="items.length === 0">
-                                <div class="p-6 text-center text-sm text-[var(--color-on-surface-dim)]">
-                                    <x-icon name="bell-slash" class="w-8 h-8 mx-auto mb-2 opacity-40" />
-                                    No notifications
+                        <div class="notifications-list max-h-96 overflow-y-auto" :aria-busy="loading">
+                            <div x-show="loading && !hasLoaded" class="notification-state" role="status" aria-live="polite">
+                                <x-icon name="arrow-path" class="w-5 h-5 animate-spin" aria-hidden="true" />
+                                <span>Loading notifications…</span>
+                            </div>
+                            <div x-show="error && !hasLoaded" class="notification-state notification-state-error" role="alert">
+                                <x-icon name="exclamation-triangle" class="w-5 h-5" aria-hidden="true" />
+                                <span class="flex-1">Notifications could not be loaded.</span>
+                                <button type="button" class="btn-ghost btn-xs" @click="load(true)">Retry</button>
+                            </div>
+                            <div x-show="error && hasLoaded" class="notification-state notification-state-error" role="alert">
+                                <span class="flex-1">Couldn’t refresh notifications.</span>
+                                <button type="button" class="btn-ghost btn-xs" @click="load(true)">Retry</button>
+                            </div>
+                            <template x-if="hasLoaded && !error && items.length === 0">
+                                <div class="notification-state notification-state-empty">
+                                    <x-icon name="bell-slash" class="w-8 h-8 opacity-40" aria-hidden="true" />
+                                    <span>No notifications yet</span>
                                 </div>
                             </template>
                             <template x-for="n in items" :key="n.id">
-                                <div class="notif-item" :class="{ 'notif-unread': !n.read }">
+                                <button type="button"
+                                        class="notif-item w-full text-left"
+                                        :class="{ 'notif-unread': !n.read }"
+                                        :aria-label="(n.read ? 'Read: ' : 'Unread: ') + (n.title || 'Notification')"
+                                        @click="openItem(n, $event)">
                                     <div class="flex items-start gap-3">
-                                        <div class="notif-dot shrink-0 mt-1.5" :class="n.type === 'error' ? 'bg-red-500' : n.type === 'warning' ? 'bg-amber-500' : n.type === 'success' ? 'bg-emerald-500' : 'bg-[var(--color-primary)]'"></div>
+                                        <div class="notif-category-icon shrink-0" :class="n.type === 'error' ? 'notif-icon-error' : n.type === 'warning' ? 'notif-icon-warning' : n.type === 'success' ? 'notif-icon-success' : 'notif-icon-info'" aria-hidden="true">
+                                            <template x-if="n.category === 'performance'"><x-icon name="chart-bar" class="w-4 h-4" /></template>
+                                            <template x-if="n.category === 'attendance'"><x-icon name="clock" class="w-4 h-4" /></template>
+                                            <template x-if="n.category === 'call_form'"><x-icon name="document-text" class="w-4 h-4" /></template>
+                                            <template x-if="n.category === 'supervisor' || !n.category"><x-icon name="bell" class="w-4 h-4" /></template>
+                                        </div>
                                         <div class="flex-1 min-w-0">
-                                            <p class="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]" x-text="n.source || 'Notification'"></p>
+                                            <div class="flex items-center justify-between gap-2">
+                                                <p class="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]" x-text="n.source || 'Notification'"></p>
+                                                <span class="text-[10px] font-semibold uppercase tracking-wide" :class="n.read ? 'text-[var(--color-on-surface-dim)]' : 'text-[var(--color-primary)]'" x-text="n.read ? 'Read' : 'Unread'"></span>
+                                            </div>
                                             <p class="text-sm font-medium text-[var(--color-on-surface)] leading-snug mt-0.5" x-text="n.title || 'Update'"></p>
                                             <p class="text-xs text-[var(--color-on-surface-muted)] leading-snug mt-0.5" x-text="n.message"></p>
                                             <p class="text-[11px] text-[var(--color-on-surface-dim)] mt-1" x-text="n.time"></p>
                                         </div>
                                     </div>
-                                </div>
+                                </button>
                             </template>
                         </div>
                     </div>
+
+                    <x-modal name="notification-details" title="Notification details" maxWidth="xl" aria-describedby="notification-detail-description" @keydown.escape="$store.modal.hide()">
+                        <p id="notification-detail-description" class="sr-only">Review the selected notification details.</p>
+                        <div x-show="detailLoading" class="notification-modal-state" role="status" aria-live="polite">
+                            <x-icon name="arrow-path" class="w-5 h-5 animate-spin" aria-hidden="true" />
+                            <span>Loading details…</span>
+                        </div>
+                        <div x-show="detailError" class="notification-modal-state notification-state-error" role="alert">
+                            <span class="flex-1" x-text="detailError"></span>
+                            <button type="button" class="btn-ghost btn-xs" @click="retryDetail()">Retry</button>
+                        </div>
+                        <div x-show="!detailLoading && !detailError && detail" class="space-y-5">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]" x-text="detail?.category?.replace('_', ' ') || 'Notification'"></p>
+                                <p class="text-sm text-[var(--color-on-surface-muted)] mt-1" x-text="detail?.description || ''"></p>
+                                <div x-show="detail?.date || detail?.range?.label" class="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-[var(--color-on-surface-dim)]">
+                                    <span x-show="detail?.date"><span class="font-semibold">Date:</span> <span x-text="detail.date"></span></span>
+                                    <span x-show="detail?.range?.label"><span class="font-semibold">Business hours:</span> <span x-text="detail.range.label"></span></span>
+                                </div>
+                            </div>
+                            <template x-for="(section, sectionIndex) in (detail?.sections || [])" :key="section.title + sectionIndex">
+                                <section class="notification-detail-section">
+                                    <h4 class="text-sm font-semibold text-[var(--color-on-surface)]" x-text="section.title"></h4>
+                                    <p x-show="section.message" class="text-sm text-[var(--color-on-surface-muted)] mt-2 whitespace-pre-wrap" x-text="section.message"></p>
+                                    <div x-show="section.metrics?.length" class="notification-metrics-grid mt-3">
+                                        <template x-for="metric in (section.metrics || [])" :key="metric.label">
+                                            <div class="notification-metric">
+                                                <span class="text-xs text-[var(--color-on-surface-dim)]" x-text="metric.label"></span>
+                                                <strong class="text-sm text-[var(--color-on-surface)]" x-text="metric.value"></strong>
+                                            </div>
+                                        </template>
+                                    </div>
+                                    <dl x-show="section.fields?.length" class="notification-fields mt-3">
+                                        <template x-for="field in (section.fields || [])" :key="field.label">
+                                            <div><dt x-text="field.label"></dt><dd x-text="field.value"></dd></div>
+                                        </template>
+                                    </dl>
+                                    <div x-show="section.rows?.length" class="notification-table-wrap mt-3">
+                                        <table class="notification-table">
+                                            <thead><tr><th scope="col">Name</th><th scope="col">Sales</th><th x-show="section.rows?.[0]?.sales_amount !== undefined" scope="col" class="text-right">Amount</th></tr></thead>
+                                            <tbody>
+                                                <template x-for="row in (section.rows || [])" :key="row.name || row.agent">
+                                                    <tr><th scope="row" x-text="row.name || row.agent"></th><td x-text="row.sales_count ?? 0"></td><td x-show="row.sales_amount !== undefined" class="text-right tabular-nums" x-text="row.sales_amount"></td></tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </section>
+                            </template>
+                        </div>
+                    </x-modal>
                 </div>
 
                 {{-- Call status indicator (telephony) --}}

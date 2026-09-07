@@ -346,6 +346,19 @@ html[data-theme="light"] {
   .btn-ghost:hover:not(:disabled) { background: var(--color-surface-2); color: var(--color-on-surface); border-color: var(--color-border-strong); }
   .btn-ghost:disabled { opacity: .5; cursor: not-allowed; }
 
+  .btn-link {
+    min-height: 2.75rem;
+    padding: .25rem .5rem;
+    border: 0;
+    background: transparent;
+    color: var(--color-primary);
+    font-size: .75rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-link:hover { text-decoration: underline; }
+  .btn-xs { padding: .375rem .625rem; font-size: .75rem; }
+
   .btn-danger {
     display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
     padding: .5rem 1rem;
@@ -803,18 +816,70 @@ html[data-theme="light"] {
   }
   .notification-badge {
     position: absolute; top: .1rem; right: .1rem;
-    width: .875rem; height: .875rem;
+    width: auto; min-width: .875rem; height: .875rem;
     background: var(--color-primary);
     color: #fff;
     border-radius: 999px;
+    padding: 0 .125rem;
     font-size: .5rem; font-weight: 700;
     display: flex; align-items: center; justify-content: center;
   }
-  .notif-item { padding: .75rem 1rem; border-bottom: 1px solid var(--color-border); cursor: pointer; transition: background .15s; }
+  .notif-item {
+    min-height: 2.75rem;
+    padding: .75rem 1rem;
+    border: 0;
+    border-bottom: 1px solid var(--color-border);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    transition: background .15s;
+  }
   .notif-item:hover { background: var(--color-surface-3); }
   .notif-item:last-child { border-bottom: none; }
   .notif-unread { background: var(--color-primary-muted); }
-  .notif-dot { width: .5rem; height: .5rem; border-radius: 50%; margin-top: .375rem; flex-shrink: 0; }
+  .notif-item:focus-visible { position: relative; z-index: 1; background: var(--color-surface-3); }
+  .notif-category-icon {
+    width: 2rem; height: 2rem; border-radius: 999px;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .notif-icon-info { background: var(--color-info-muted); color: var(--color-info-fg); }
+  .notif-icon-success { background: var(--color-success-muted); color: var(--color-success-fg); }
+  .notif-icon-warning { background: var(--color-warning-muted); color: var(--color-warning-fg); }
+  .notif-icon-error { background: var(--color-danger-muted); color: var(--color-danger-fg); }
+  .notification-state,
+  .notification-modal-state {
+    display: flex; align-items: center; justify-content: center; gap: .625rem;
+    min-height: 7rem; padding: 1.5rem;
+    color: var(--color-on-surface-dim); font-size: .875rem;
+  }
+  .notification-state-error { justify-content: flex-start; color: var(--color-warning-fg); background: var(--color-warning-muted); }
+  .notification-state-empty { flex-direction: column; text-align: center; }
+  .notification-modal-state { min-height: 10rem; }
+  .notification-detail-section {
+    border: 1px solid var(--color-border);
+    border-radius: .75rem;
+    padding: 1rem;
+    background: var(--color-surface-2);
+  }
+  .notification-metrics-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: .625rem;
+  }
+  .notification-metric {
+    display: flex; flex-direction: column; gap: .25rem;
+    min-width: 0; padding: .625rem .75rem;
+    border-radius: .5rem; background: var(--color-surface-3);
+  }
+  .notification-metric strong { overflow-wrap: anywhere; }
+  .notification-fields { display: grid; gap: .5rem; }
+  .notification-fields > div { display: flex; justify-content: space-between; gap: 1rem; font-size: .8125rem; }
+  .notification-fields dt { color: var(--color-on-surface-dim); }
+  .notification-fields dd { color: var(--color-on-surface); text-align: right; overflow-wrap: anywhere; }
+  .notification-table-wrap { max-width: 100%; overflow-x: auto; }
+  .notification-table { width: 100%; min-width: 20rem; border-collapse: collapse; font-size: .8125rem; }
+  .notification-table th, .notification-table td { padding: .5rem .375rem; border-bottom: 1px solid var(--color-border); text-align: left; }
+  .notification-table th { color: var(--color-on-surface); font-weight: 600; }
+  .notification-table td { color: var(--color-on-surface-muted); }
 
   /* ---- Global search overlay ---- */
   .search-overlay-box {
@@ -1827,8 +1892,16 @@ body.crm-app-shell {
   }
 
   .notifications-dropdown {
-    right: -.5rem;
+    position: fixed;
+    top: max(3.75rem, env(safe-area-inset-top));
+    right: .5rem;
+    left: .5rem;
+    width: auto;
+    max-width: none;
+    max-height: calc(100dvh - max(4.25rem, env(safe-area-inset-top) + 1rem));
   }
+
+  .notifications-list { max-height: calc(100dvh - 9rem); }
 
   .modal-backdrop {
     align-items: flex-start;

@@ -146,6 +146,19 @@ The historical report SHALL return campaign comparison rows, a descending dispos
 - **WHEN** the disposition scope control changes on the historical Reports page
 - **THEN** the dashboard requests the selected `disposition_scope` without requiring a separate manual refresh action
 
+### Requirement: Reports omit campaign comparison visualization
+The historical Reports page SHALL omit the standalone VICIdial campaign-comparison chart and its client-side presentation state while preserving campaign-scoped data required by active status and disposition sections. The reporting API SHALL remain unchanged by this presentation-only removal.
+
+#### Scenario: Historical Reports render without campaign comparison
+- **WHEN** an authorized user opens the historical Reports page
+- **THEN** the page does not render a `Campaign Comparison` section or `chart-campaign-comparison` element
+- **AND** the page continues to render the active call-status, agent-performance, and disposition sections
+
+#### Scenario: Active campaign reporting remains available
+- **WHEN** historical report data contains multiple mapped VICIdial campaigns
+- **THEN** campaign rows remain available to the status and disposition projections
+- **AND** removing the standalone comparison visualization does not change campaign filters, report totals, or API response data
+
 ### Requirement: Historical agent aggregation
 The historical reporting service SHALL aggregate duplicate agent export/session rows by stable normalized VICIdial agent identifier and SHALL return agent calls, answered calls, contact rate when available, average talk time, total talk time, pause percentage when available, and supported ready/other time values. Display names SHALL NOT be used as the deduplication key. Each time metric SHALL remain unavailable when its source field is absent or unparseable rather than being filled with zero.
 

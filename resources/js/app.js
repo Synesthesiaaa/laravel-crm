@@ -123,6 +123,7 @@ import './attendance-status';
 
 const TELEPHONY_POLL_ENDPOINTS = [
     '/api/notifications',
+    '/api/notifications/summary',
     '/api/call/status',
     '/api/vicidial/session/status',
     '/api/vicidial/session/local-status',

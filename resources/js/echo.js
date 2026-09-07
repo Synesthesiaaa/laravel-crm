@@ -172,12 +172,6 @@ export function subscribeUserNotifications(userId, handler) {
         return () => {};
     }
 
-    const sig = `${userId}`;
-    if (typeof _teardownUserNotifications === 'function' && _userNotificationsSig === sig) {
-        TelephonyLogger.debug('TelephonyEcho', 'User notification subscription unchanged (deduped)', { user_id: userId });
-        return _teardownUserNotifications;
-    }
-
     if (typeof _teardownUserNotifications === 'function') {
         try {
             _teardownUserNotifications();
@@ -191,7 +185,7 @@ export function subscribeUserNotifications(userId, handler) {
 
     TelephonyLogger.info('TelephonyEcho', 'Subscribed to user notifications', { user_id: userId });
 
-    _userNotificationsSig = sig;
+    _userNotificationsSig = `${userId}:${Date.now()}`;
 
     const teardown = () => {
         if (typeof channel.stopListeningForNotification === 'function') {

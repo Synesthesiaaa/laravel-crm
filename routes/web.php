@@ -136,6 +136,9 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::get('api/leads/next', \App\Http\Controllers\Api\NextLeadController::class)->name('api.leads.next')->middleware('throttle:api');
     Route::get('api/disposition-codes', \App\Http\Controllers\Api\DispositionController::class)->name('api.disposition.codes')->middleware('throttle:api');
     Route::get('api/notifications', \App\Http\Controllers\Api\NotificationsController::class)->name('api.notifications')->middleware(['throttle:telephony-poll', 'log_throttle']);
+    Route::get('api/notifications/summary', \App\Http\Controllers\Api\NotificationSummaryController::class)->name('api.notifications.summary')->middleware(['throttle:telephony-poll', 'log_throttle']);
+    Route::get('api/notifications/detail', \App\Http\Controllers\Api\NotificationDetailController::class)->name('api.notifications.detail')->middleware('throttle:api');
+    Route::post('api/notifications/read', \App\Http\Controllers\Api\MarkNotificationReadController::class)->name('api.notifications.read')->middleware('throttle:api');
     Route::get('api/search', \App\Http\Controllers\Api\GlobalSearchController::class)->name('api.search')->middleware('throttle:api');
     Route::get('api/supervisor/agents', \App\Http\Controllers\Api\SupervisorAgentsController::class)->name('api.supervisor.agents')->middleware(['role:Team Leader,Admin,Super Admin', 'throttle:telephony-poll', 'log_throttle']);
     Route::post('api/notifications/read-all', \App\Http\Controllers\Api\MarkNotificationsReadController::class)->name('api.notifications.read-all')->middleware('throttle:api');

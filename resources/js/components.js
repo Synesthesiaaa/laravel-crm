@@ -10,35 +10,117 @@ window.notificationDropdown = function() {
         items: [],
         unread: 0,
         loaded: false,
+        hasLoaded: false,
+        loading: false,
+        error: null,
+        stale: false,
+        detail: null,
+        detailKey: null,
+        detailLoading: false,
+        detailError: null,
+        focusedElement: null,
+        pollTimer: null,
+        visibilityHandler: null,
+        attendanceHandler: null,
+        listController: null,
+        summaryController: null,
+        detailController: null,
+        listSequence: 0,
+        detailSequence: 0,
         _unsubscribeNotifications: null,
+        _modalStop: null,
         init() {
-            // Badge count without opening the panel (runs again after soft-nav Alpine.initTree)
+            this.visibilityHandler = () => {
+                if (document.hidden) {
+                    return;
+                }
+                this.refreshSummary();
+                if (this.open) {
+                    this.load(true);
+                }
+            };
+            this.attendanceHandler = () => {
+                if (this.open) {
+                    this.load(true);
+                } else {
+                    this.refreshSummary();
+                }
+            };
+            document.addEventListener('visibilitychange', this.visibilityHandler);
+            window.addEventListener('attendance-updated', this.attendanceHandler);
+            const configuredPollSeconds = Number(document.body?.dataset.notificationPollSeconds || 60);
+            const pollSeconds = Number.isFinite(configuredPollSeconds) ? Math.max(30, configuredPollSeconds) : 60;
+            this.pollTimer = window.setInterval(() => {
+                if (document.hidden) {
+                    return;
+                }
+                this.refreshSummary();
+                if (this.open) {
+                    this.load();
+                }
+            }, pollSeconds * 1000);
+            this._modalStop = this.$watch?.('$store.modal.open', (value, previous) => {
+                if (previous === 'notification-details' && value !== 'notification-details') {
+                    this.restoreFocus();
+                }
+            });
             this.refreshSummary();
             this.subscribeRealtime();
         },
         toggle() {
             this.open = !this.open;
-            if (this.open && !this.loaded) this.load();
-        },
-        async refreshSummary() {
-            try {
-                const res = await window.axios.get('/api/notifications');
-                this.unread = res.data.unread ?? 0;
-                if (this.open && this.loaded) {
-                    this.items = res.data.items ?? [];
-                }
-            } catch {
-                /* keep prior state */
+            if (this.open) {
+                this.load(true);
             }
         },
-        async load() {
+        async refreshSummary() {
+            if (this.summaryController) {
+                this.summaryController.abort();
+            }
+            this.summaryController = typeof AbortController === 'function' ? new AbortController() : null;
             try {
-                const res = await window.axios.get('/api/notifications');
-                this.items = res.data.items ?? [];
-                this.unread = res.data.unread ?? 0;
+                const res = await window.axios.get('/api/notifications/summary', {
+                    signal: this.summaryController?.signal,
+                });
+                this.unread = Math.max(0, Number(res.data.unread ?? 0));
+            } catch (error) {
+                if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+                    return;
+                }
+            }
+        },
+        async load(force = false) {
+            if (this.loading && !force) {
+                return;
+            }
+            this.listController?.abort?.();
+            const sequence = ++this.listSequence;
+            this.listController = typeof AbortController === 'function' ? new AbortController() : null;
+            this.loading = true;
+            this.error = null;
+            try {
+                const res = await window.axios.get('/api/notifications', {
+                    signal: this.listController?.signal,
+                });
+                if (sequence !== this.listSequence) {
+                    return;
+                }
+                this.items = Array.isArray(res.data.items) ? res.data.items : [];
+                this.unread = Math.max(0, Number(res.data.unread ?? 0));
                 this.loaded = true;
-            } catch {
-                this.items = [];
+                this.hasLoaded = true;
+                this.stale = false;
+                this.error = null;
+            } catch (error) {
+                if (sequence !== this.listSequence || error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+                    return;
+                }
+                this.error = 'Notifications could not be refreshed.';
+                this.stale = this.hasLoaded;
+            } finally {
+                if (sequence === this.listSequence) {
+                    this.loading = false;
+                }
             }
         },
         async markAllRead() {
@@ -46,7 +128,92 @@ window.notificationDropdown = function() {
                 await window.axios.post('/api/notifications/read-all');
                 this.items = this.items.map(n => ({ ...n, read: true }));
                 this.unread = 0;
-            } catch {}
+            } catch {
+                this.error = 'Notifications could not be marked as read.';
+                this.stale = this.hasLoaded;
+            }
+        },
+        async markItemRead(item) {
+            const key = item?.key || item?.id;
+            if (!key || item.read) {
+                return;
+            }
+            try {
+                const response = await window.axios.post('/api/notifications/read', { key });
+                this.items = this.items.map(n => (n.key === key || n.id === key ? { ...n, read: true } : n));
+                this.unread = Math.max(0, Number(response.data?.unread ?? this.unread - 1));
+            } catch (error) {
+                if (error?.response?.status !== 404) {
+                    this.error = 'This notification could not be marked as read.';
+                }
+            }
+        },
+        async openItem(item, event) {
+            const key = item?.key || item?.id;
+            if (!key || (this.detailLoading && this.detailKey === key)) {
+                return;
+            }
+            this.focusedElement = event?.currentTarget || null;
+            this.detailKey = key;
+            this.detail = null;
+            this.detailError = null;
+            this.detailLoading = true;
+            this.detailController?.abort?.();
+            const detailSequence = ++this.detailSequence;
+            this.detailController = typeof AbortController === 'function' ? new AbortController() : null;
+            window.Alpine?.store('modal')?.show?.('notification-details');
+            this.$nextTick?.(() => {
+                const close = document.querySelector('[aria-labelledby="modal-title-notification-details"] button[aria-label="Close dialog"]');
+                close?.focus?.();
+            });
+            try {
+                if (!item?.read) {
+                    await this.markItemRead(item);
+                    if (this.detailKey !== key || detailSequence !== this.detailSequence) {
+                        return;
+                    }
+                }
+                const response = await window.axios.get('/api/notifications/detail', {
+                    params: { key },
+                    signal: this.detailController?.signal,
+                });
+                if (this.detailKey !== key || detailSequence !== this.detailSequence) {
+                    return;
+                }
+                this.detail = response.data?.detail || null;
+                if (!this.detail) {
+                    this.detailError = 'This notification is no longer available.';
+                }
+            } catch (error) {
+                if (this.detailKey !== key || detailSequence !== this.detailSequence) {
+                    return;
+                }
+                if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+                    return;
+                }
+                this.detailError = error?.response?.status === 404
+                    ? 'This notification is no longer available.'
+                    : 'Notification details could not be loaded.';
+            } finally {
+                if (this.detailKey === key && detailSequence === this.detailSequence) {
+                    this.detailLoading = false;
+                }
+            }
+        },
+        async retryDetail() {
+            const key = this.detailKey;
+            if (!key) {
+                return;
+            }
+            const item = this.items.find(n => (n.key || n.id) === key) || { key, id: key, read: true };
+            await this.openItem(item);
+        },
+        restoreFocus() {
+            const target = this.focusedElement;
+            this.focusedElement = null;
+            if (target && document.contains(target)) {
+                window.requestAnimationFrame?.(() => target.focus?.());
+            }
         },
         subscribeRealtime() {
             const userId = parseInt(document.body?.dataset.userId || '', 10);
@@ -62,12 +229,16 @@ window.notificationDropdown = function() {
         },
         receiveRealtime(notification) {
             const item = this.formatRealtimeNotification(notification);
-            const isNew = !this.items.some(n => n.id === item.id);
-            this.items = [item, ...this.items.filter(n => n.id !== item.id)].slice(0, 25);
+            const itemKey = item.key || item.id;
+            const isNew = !this.items.some(n => (n.key || n.id) === itemKey);
+            this.items = [item, ...this.items.filter(n => (n.key || n.id) !== itemKey)].slice(0, 25);
             if (isNew) {
-                this.unread += 1;
+                this.unread = Math.max(0, this.unread) + 1;
             }
             this.loaded = true;
+            this.hasLoaded = true;
+            this.error = null;
+            this.stale = false;
 
             if (window.Alpine?.store?.('toast')) {
                 Alpine.store('toast').info(item.message || item.title || 'New notification', 5000, item.source || 'Notification');
@@ -76,12 +247,19 @@ window.notificationDropdown = function() {
             if (item.show_confetti && typeof window.confetti === 'function') {
                 window.confetti({ particleCount: 80, spread: 60, origin: { y: 0.2 } });
             }
+            if (this.open) {
+                this.load();
+            }
         },
         formatRealtimeNotification(notification) {
             const createdAt = notification.sent_at || notification.created_at || new Date().toISOString();
+            const rawId = notification.key || notification.id || `${Date.now()}-${Math.random()}`;
+            const itemKey = String(rawId).includes(':') ? String(rawId) : `database:${rawId}`;
 
             return {
-                id: notification.id || `${Date.now()}-${Math.random()}`,
+                id: itemKey,
+                key: itemKey,
+                category: notification.category || 'supervisor',
                 source: notification.source || 'Notification',
                 title: notification.title || 'Update',
                 message: notification.message || '',
@@ -95,6 +273,28 @@ window.notificationDropdown = function() {
                 sent_at: notification.sent_at || createdAt,
                 show_confetti: !!notification.show_confetti,
             };
+        },
+        destroy() {
+            if (this.pollTimer) {
+                window.clearInterval(this.pollTimer);
+                this.pollTimer = null;
+            }
+            if (this.visibilityHandler) {
+                document.removeEventListener('visibilitychange', this.visibilityHandler);
+            }
+            if (this.attendanceHandler) {
+                window.removeEventListener('attendance-updated', this.attendanceHandler);
+            }
+            this.listController?.abort?.();
+            this.summaryController?.abort?.();
+            this.detailController?.abort?.();
+            this._unsubscribeNotifications?.();
+            this._unsubscribeNotifications = null;
+            this._modalStop?.();
+            if (window.Alpine?.store('modal')?.is?.('notification-details')) {
+                window.Alpine.store('modal').hide();
+            }
+            this.restoreFocus();
         },
     };
 };

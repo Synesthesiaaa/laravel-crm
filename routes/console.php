@@ -29,6 +29,12 @@ Schedule::command('activitylog:clean --days=90')
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/scheduler.log'));
 
+// Prune durable read receipts for derived notification items.
+Schedule::call(function (): void {
+    app(\App\Services\Notifications\NotificationReadService::class)
+        ->prune((int) config('notifications.read_state_retention_days', 90));
+})->daily()->at('01:30')->name('prune-notification-read-states')->withoutOverlapping();
+
 // Prune stale queue jobs and failed jobs (keep 7 days)
 Schedule::command('queue:prune-failed --hours=168')
     ->daily()
