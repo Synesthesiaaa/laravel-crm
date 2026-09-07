@@ -389,7 +389,7 @@
         </div>
     </section>
 
-    <section class="space-y-4">
+    <!-- <section class="space-y-4">
         <div>
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Campaign Comparison</h3>
             <p class="text-xs text-[var(--color-on-surface-dim)]">Compare total calls, answered calls, answer rate, and contact rate by VICIdial campaign.</p>
@@ -400,7 +400,7 @@
                 <span x-text="reportSectionMessage(dashboard.campaigns.state, 'Campaign activity')">Campaign activity unavailable.</span>
             </div>
         </div>
-    </section>
+    </section> -->
 
     <section class="space-y-4">
         <div class="flex flex-wrap items-end justify-between gap-3">
