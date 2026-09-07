@@ -64,6 +64,8 @@ The shared modal renders category-specific sections:
 
 The modal uses the existing modal store/component, moves focus to its heading or first control when opened, traps focus according to the existing component behavior, closes with Escape or its visible close button, and restores focus to the originating notification row. Decorative icons are hidden from assistive technology; unread and severity are communicated with text/semantics in addition to color.
 
+Because the shared header uses `backdrop-filter`, the modal markup is wrapped in Alpine's `x-teleport="body"`. This preserves the notification component's reactive scope while keeping the fixed modal backdrop viewport-relative instead of contained by the header.
+
 Alternative considered: navigate every item to an existing page. Some sources have no appropriate destination, and navigation would lose the requested quick-view behavior. The modal can still include a named-route link when a safe relevant page exists.
 
 ### 5. Add explicit index, detail, and read contracts

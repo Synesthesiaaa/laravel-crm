@@ -41,6 +41,7 @@
 - [x] 5.4 Update `resources/css/app.css` with existing semantic tokens for the desktop popover, small-screen viewport-safe panel, 44px minimum interaction targets, wrapping/overflow protection, tabular numeric metrics, visible focus, stale state, reduced motion, and 375/768/1024/1440 layouts.
 - [x] 5.5 Update `resources/js/components.js` so row activation marks one item read, opens/fetches detail exactly once, prevents negative badge counts, manages modal focus/restoration, and does not rely on hover.
 - [x] 5.6 Run `php artisan test --compact tests/Feature/ViewLifecycleRenderTest.php tests/Feature/Api/NotificationsApiTest.php` and `npm run build`.
+- [x] 5.7 Teleport the notification details modal to `body` so the sticky header's backdrop-filter cannot contain the fixed modal backdrop.
 
 ## 6. Fix refresh, failure, and soft-navigation lifecycle bugs
 

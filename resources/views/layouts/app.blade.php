@@ -187,56 +187,58 @@
                         </div>
                     </div>
 
-                    <x-modal name="notification-details" title="Notification details" maxWidth="xl" aria-describedby="notification-detail-description" @keydown.escape="$store.modal.hide()">
-                        <p id="notification-detail-description" class="sr-only">Review the selected notification details.</p>
-                        <div x-show="detailLoading" class="notification-modal-state" role="status" aria-live="polite">
-                            <x-icon name="arrow-path" class="w-5 h-5 animate-spin" aria-hidden="true" />
-                            <span>Loading details…</span>
-                        </div>
-                        <div x-show="detailError" class="notification-modal-state notification-state-error" role="alert">
-                            <span class="flex-1" x-text="detailError"></span>
-                            <button type="button" class="btn-ghost btn-xs" @click="retryDetail()">Retry</button>
-                        </div>
-                        <div x-show="!detailLoading && !detailError && detail" class="space-y-5">
-                            <div>
-                                <p class="text-xs font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]" x-text="detail?.category?.replace('_', ' ') || 'Notification'"></p>
-                                <p class="text-sm text-[var(--color-on-surface-muted)] mt-1" x-text="detail?.description || ''"></p>
-                                <div x-show="detail?.date || detail?.range?.label" class="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-[var(--color-on-surface-dim)]">
-                                    <span x-show="detail?.date"><span class="font-semibold">Date:</span> <span x-text="detail.date"></span></span>
-                                    <span x-show="detail?.range?.label"><span class="font-semibold">Business hours:</span> <span x-text="detail.range.label"></span></span>
-                                </div>
+                    <template x-teleport="body">
+                        <x-modal name="notification-details" title="Notification details" maxWidth="xl" aria-describedby="notification-detail-description" @keydown.escape="$store.modal.hide()">
+                            <p id="notification-detail-description" class="sr-only">Review the selected notification details.</p>
+                            <div x-show="detailLoading" class="notification-modal-state" role="status" aria-live="polite">
+                                <x-icon name="arrow-path" class="w-5 h-5 animate-spin" aria-hidden="true" />
+                                <span>Loading details…</span>
                             </div>
-                            <template x-for="(section, sectionIndex) in (detail?.sections || [])" :key="section.title + sectionIndex">
-                                <section class="notification-detail-section">
-                                    <h4 class="text-sm font-semibold text-[var(--color-on-surface)]" x-text="section.title"></h4>
-                                    <p x-show="section.message" class="text-sm text-[var(--color-on-surface-muted)] mt-2 whitespace-pre-wrap" x-text="section.message"></p>
-                                    <div x-show="section.metrics?.length" class="notification-metrics-grid mt-3">
-                                        <template x-for="metric in (section.metrics || [])" :key="metric.label">
-                                            <div class="notification-metric">
-                                                <span class="text-xs text-[var(--color-on-surface-dim)]" x-text="metric.label"></span>
-                                                <strong class="text-sm text-[var(--color-on-surface)]" x-text="metric.value"></strong>
-                                            </div>
-                                        </template>
+                            <div x-show="detailError" class="notification-modal-state notification-state-error" role="alert">
+                                <span class="flex-1" x-text="detailError"></span>
+                                <button type="button" class="btn-ghost btn-xs" @click="retryDetail()">Retry</button>
+                            </div>
+                            <div x-show="!detailLoading && !detailError && detail" class="space-y-5">
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]" x-text="detail?.category?.replace('_', ' ') || 'Notification'"></p>
+                                    <p class="text-sm text-[var(--color-on-surface-muted)] mt-1" x-text="detail?.description || ''"></p>
+                                    <div x-show="detail?.date || detail?.range?.label" class="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-[var(--color-on-surface-dim)]">
+                                        <span x-show="detail?.date"><span class="font-semibold">Date:</span> <span x-text="detail.date"></span></span>
+                                        <span x-show="detail?.range?.label"><span class="font-semibold">Business hours:</span> <span x-text="detail.range.label"></span></span>
                                     </div>
-                                    <dl x-show="section.fields?.length" class="notification-fields mt-3">
-                                        <template x-for="field in (section.fields || [])" :key="field.label">
-                                            <div><dt x-text="field.label"></dt><dd x-text="field.value"></dd></div>
-                                        </template>
-                                    </dl>
-                                    <div x-show="section.rows?.length" class="notification-table-wrap mt-3">
-                                        <table class="notification-table">
-                                            <thead><tr><th scope="col">Name</th><th scope="col">Sales</th><th x-show="section.rows?.[0]?.sales_amount !== undefined" scope="col" class="text-right">Amount</th></tr></thead>
-                                            <tbody>
-                                                <template x-for="row in (section.rows || [])" :key="row.name || row.agent">
-                                                    <tr><th scope="row" x-text="row.name || row.agent"></th><td x-text="row.sales_count ?? 0"></td><td x-show="row.sales_amount !== undefined" class="text-right tabular-nums" x-text="row.sales_amount"></td></tr>
-                                                </template>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </section>
-                            </template>
-                        </div>
-                    </x-modal>
+                                </div>
+                                <template x-for="(section, sectionIndex) in (detail?.sections || [])" :key="section.title + sectionIndex">
+                                    <section class="notification-detail-section">
+                                        <h4 class="text-sm font-semibold text-[var(--color-on-surface)]" x-text="section.title"></h4>
+                                        <p x-show="section.message" class="text-sm text-[var(--color-on-surface-muted)] mt-2 whitespace-pre-wrap" x-text="section.message"></p>
+                                        <div x-show="section.metrics?.length" class="notification-metrics-grid mt-3">
+                                            <template x-for="metric in (section.metrics || [])" :key="metric.label">
+                                                <div class="notification-metric">
+                                                    <span class="text-xs text-[var(--color-on-surface-dim)]" x-text="metric.label"></span>
+                                                    <strong class="text-sm text-[var(--color-on-surface)]" x-text="metric.value"></strong>
+                                                </div>
+                                            </template>
+                                        </div>
+                                        <dl x-show="section.fields?.length" class="notification-fields mt-3">
+                                            <template x-for="field in (section.fields || [])" :key="field.label">
+                                                <div><dt x-text="field.label"></dt><dd x-text="field.value"></dd></div>
+                                            </template>
+                                        </dl>
+                                        <div x-show="section.rows?.length" class="notification-table-wrap mt-3">
+                                            <table class="notification-table">
+                                                <thead><tr><th scope="col">Name</th><th scope="col">Sales</th><th x-show="section.rows?.[0]?.sales_amount !== undefined" scope="col" class="text-right">Amount</th></tr></thead>
+                                                <tbody>
+                                                    <template x-for="row in (section.rows || [])" :key="row.name || row.agent">
+                                                        <tr><th scope="row" x-text="row.name || row.agent"></th><td x-text="row.sales_count ?? 0"></td><td x-show="row.sales_amount !== undefined" class="text-right tabular-nums" x-text="row.sales_amount"></td></tr>
+                                                    </template>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </section>
+                                </template>
+                            </div>
+                        </x-modal>
+                    </template>
                 </div>
 
                 {{-- Call status indicator (telephony) --}}

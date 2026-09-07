@@ -54,6 +54,7 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertSee('Retry', false);
         $response->assertSee('role="status" aria-live="polite"', false);
         $response->assertSee('modal-title-notification-details', false);
+        $response->assertSee('x-teleport="body"', false);
         $response->assertSee('aria-describedby="notification-detail-description"', false);
         $response->assertSee('Review the selected notification details.', false);
         $response->assertSee('Business hours:', false);
