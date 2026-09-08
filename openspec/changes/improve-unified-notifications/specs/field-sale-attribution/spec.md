@@ -22,3 +22,7 @@ The current-day performance notification SHALL consume the same active-campaign 
 - **THEN** the notification shows zero team and individual counts, no Top Agent, and an explicit no-sales-yet state
 - **AND** it does not derive sales from call dispositions or lead history
 
+#### Scenario: Notification monthly comparison matches the dashboard
+- **WHEN** the current-day performance details are opened for an active campaign
+- **THEN** current and equivalent previous-month sales counts, amounts, differences, and percentages use the dashboard's existing monthly summary result
+- **AND** monetary comparison fields are omitted when the dashboard hides monetary totals

@@ -22,4 +22,4 @@
 - [x] 4.1 Add PHPUnit coverage for month boundaries, February/leap-year and completed-month ranges, comparison formulas, and zero baselines.
 - [x] 4.2 Add PHPUnit coverage for legacy/custom attribution, campaign isolation, null/zero/negative amounts, daily alignment, missing days, and independent count/amount trends.
 - [x] 4.3 Add feature assertions for rendered summary labels, period context, trend cues, currency formatting, mode controls, empty state, and existing dashboard filters.
-- [ ] 4.4 Run Pint, focused PHPUnit tests, the frontend build, and Playwright checks at representative responsive widths; resolve regressions.
+- [x] 4.4 Run Pint, focused PHPUnit tests, the frontend build, and Playwright checks at representative responsive widths; resolve regressions.

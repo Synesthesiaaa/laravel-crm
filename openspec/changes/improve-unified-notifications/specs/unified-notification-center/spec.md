@@ -61,6 +61,12 @@ Each notification row SHALL be a semantic button operable by pointer, touch, Ent
 - **WHEN** the user activates the current-day performance row
 - **THEN** the modal shows campaign name, date and business range, personal sales, team totals, Top Agent, per-form totals, and leaderboard subject to amount visibility
 
+#### Scenario: Performance notification compares monthly totals
+- **WHEN** the user opens the current-day performance details
+- **THEN** the modal shows current-period and equivalent previous-month sales counts, the count change, and the comparison periods
+- **AND** it shows current-period and equivalent previous-month sales amounts and the amount change when dashboard amount visibility permits monetary totals
+- **AND** zero-baseline comparisons use a readable new-activity state instead of an infinite percentage
+
 #### Scenario: Attendance notification is activated
 - **WHEN** the user activates an attendance row
 - **THEN** the modal shows the attendance label, action, timestamp, current/open state, and reliable paired duration when available

@@ -5,7 +5,7 @@ The notification dropdown currently exposes only supervisor messages and campaig
 ## What Changes
 
 - Introduce a unified, user-scoped notification feed containing supervisor messages, the user's campaign call/form activity, the user's attendance events, and one current-day performance summary.
-- Reuse the dashboard's selected campaign sales attribution and default business-day range for personal sales count and amount, team totals, and the top agent; do not create a second KPI calculation path.
+- Reuse the dashboard's selected campaign sales attribution, default business-day range, and monthly summary periods for personal sales count and amount, team totals, Top Agent, and current-versus-equivalent-previous-month comparisons; do not create a second KPI calculation path.
 - Make every notification an accessible button that marks the item read and opens a shared details modal with category-appropriate information.
 - Resolve campaign, form, attendance-status, and agent display names before returning notification copy; internal codes and identifiers remain metadata and are never rendered as user-facing labels.
 - Replace cache-only read tracking for derived notifications with durable per-user read state while preserving Laravel database notification compatibility.

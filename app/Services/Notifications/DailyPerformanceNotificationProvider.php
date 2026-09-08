@@ -74,6 +74,7 @@ class DailyPerformanceNotificationProvider
         if ($expectedDate !== null && $details['date'] !== $expectedDate) {
             return [];
         }
+        $monthlySummary = $this->dashboardStats->getDashboardSummaryForCampaign($campaignCode);
 
         $kpis = $details['kpis'];
         $amounts = $details['amounts'];
@@ -109,6 +110,12 @@ class DailyPerformanceNotificationProvider
                 'value' => $this->formatAmount((float) ($kpis['top_agent_sales_amount'] ?? 0.0)),
             ];
         }
+
+        $comparisonSection = $this->monthlyComparisonSection(
+            $monthlySummary,
+            $amounts['total'],
+            $amounts['change'],
+        );
 
         $formRows = [];
         foreach (($kpis['sales_by_form'] ?? []) as $form) {
@@ -151,10 +158,66 @@ class DailyPerformanceNotificationProvider
                 ['title' => 'Your performance', 'metrics' => $personalMetrics],
                 ['title' => 'Team total', 'metrics' => $teamMetrics],
                 ['title' => 'Top agent', 'metrics' => $topMetrics],
+                $comparisonSection,
                 ...($formRows === [] ? [] : [['title' => 'Sales by form', 'rows' => $formRows]]),
                 ...($leaderboard === [] ? [] : [['title' => 'Agent leaderboard', 'rows' => $leaderboard]]),
             ],
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $summary
+     * @return array{title: string, message: string, metrics: list<array{label: string, value: string}>}
+     */
+    private function monthlyComparisonSection(
+        array $summary,
+        bool $amountsTotalVisible,
+        bool $amountsChangeVisible,
+    ): array {
+        $current = data_get($summary, 'summary.current', ['count' => 0, 'amount' => 0.0]);
+        $previous = data_get($summary, 'summary.previous', ['count' => 0, 'amount' => 0.0]);
+        $countComparison = data_get($summary, 'comparison.count', []);
+        $amountComparison = data_get($summary, 'comparison.amount', []);
+        $currentLabel = (string) data_get($summary, 'period.current.label', 'Current month');
+        $previousLabel = (string) data_get($summary, 'period.previous.label', 'Previous month');
+        $metrics = [
+            ['label' => 'Current sales count', 'value' => number_format((int) ($current['count'] ?? 0))],
+            ['label' => 'Previous sales count', 'value' => number_format((int) ($previous['count'] ?? 0))],
+            ['label' => 'Sales count change', 'value' => $this->formatComparison($countComparison, false)],
+        ];
+        if ($amountsTotalVisible || $amountsChangeVisible) {
+            $metrics[] = ['label' => 'Current sales amount', 'value' => $this->formatAmount((float) ($current['amount'] ?? 0.0))];
+            $metrics[] = ['label' => 'Previous sales amount', 'value' => $this->formatAmount((float) ($previous['amount'] ?? 0.0))];
+        }
+        if ($amountsChangeVisible) {
+            $metrics[] = ['label' => 'Sales amount change', 'value' => $this->formatComparison($amountComparison, true)];
+        }
+
+        return [
+            'title' => 'Monthly comparison',
+            'message' => $currentLabel.' compared with '.$previousLabel.'.',
+            'metrics' => $metrics,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $comparison
+     */
+    private function formatComparison(array $comparison, bool $amount): string
+    {
+        $difference = (float) ($comparison['difference'] ?? 0);
+        $differenceText = $amount
+            ? $this->formatSignedAmount($difference)
+            : $this->formatSignedCount($difference);
+        $percentage = $comparison['percentage'] ?? null;
+        if ($percentage === null) {
+            return $differenceText.' (New activity)';
+        }
+
+        $percentage = (float) $percentage;
+        $percentageText = ($percentage > 0 ? '+' : '').number_format($percentage, 2).'%';
+
+        return $differenceText.' ('.$percentageText.')';
     }
 
     public function key(string $campaignCode, string $date): string
@@ -191,6 +254,7 @@ class DailyPerformanceNotificationProvider
             ],
             'amounts' => [
                 'total' => $amountsEnabled && (bool) data_get($layout, 'amounts.total', true),
+                'change' => $amountsEnabled && (bool) data_get($layout, 'amounts.change', true),
                 'tables' => $amountsEnabled && (bool) data_get($layout, 'amounts.tables', true),
             ],
             'personal' => $personal,
@@ -221,6 +285,18 @@ class DailyPerformanceNotificationProvider
 
     private function formatAmount(float $amount): string
     {
-        return (string) config('dashboard.currency_symbol', '₱').number_format($amount, 2);
+        $sign = $amount < 0 ? '-' : '';
+
+        return $sign.(string) config('dashboard.currency_symbol', '₱').number_format(abs($amount), 2);
+    }
+
+    private function formatSignedAmount(float $amount): string
+    {
+        return ($amount > 0 ? '+' : ($amount < 0 ? '-' : '')).$this->formatAmount(abs($amount));
+    }
+
+    private function formatSignedCount(float $count): string
+    {
+        return ($count > 0 ? '+' : ($count < 0 ? '-' : '')).number_format(abs($count));
     }
 }

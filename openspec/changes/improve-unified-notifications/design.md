@@ -2,7 +2,7 @@
 
 The shared application layout owns an Alpine `notificationDropdown` that calls `GET /api/notifications`, combines Laravel database notifications with `crm_call_history`, and marks all visible items read. The backend currently concatenates database notifications before history instead of ordering the combined feed, uses a cache list for history read IDs, formats titles from `form_type` and `campaign_code`, and has no attendance or daily sales provider. The frontend loads the list only the first time the panel opens, clears the list on request failure, gives notification rows a pointer cursor without a click action, and has no Alpine destroy hook even though `#main-layout` is replaced during soft navigation.
 
-The dashboard already has the authoritative selected-range calculation in `DashboardStatsService::getSalesKpisForCampaign()`. Its default range is the current application-timezone date from 06:00 inclusive to 18:00 exclusive, and its result contains team sales count/amount, top agent, per-form totals, and a complete leaderboard. Campaign amount visibility is stored in the dashboard layout. Attendance events are stored in `attendance_logs`, with user-facing custom labels in `attendance_status_types`.
+The dashboard already has the authoritative selected-range calculation in `DashboardStatsService::getSalesKpisForCampaign()`. Its default range is the current application-timezone date from 06:00 inclusive to 18:00 exclusive, and its result contains team sales count/amount, top agent, per-form totals, and a complete leaderboard. The dashboard's monthly summary also exposes current and equivalent previous-month totals and comparisons; performance details reuse that result so notification comparisons cannot drift. Campaign amount visibility is stored in the dashboard layout. Attendance events are stored in `attendance_logs`, with user-facing custom labels in `attendance_status_types`.
 
 The current worktree has unrelated in-progress report/OpenSpec changes. This change must not modify or reformat those files except where an implementation task explicitly intersects the shared notification shell.
 
@@ -57,7 +57,7 @@ The bell opens a responsive popover on desktop and a viewport-safe sheet-like pa
 
 The shared modal renders category-specific sections:
 
-- Performance: campaign name, date/business range, personal count/amount, team count/amount, Top Agent, per-form totals, and leaderboard.
+- Performance: campaign name, date/business range, personal count/amount, team count/amount, Top Agent, current/equivalent previous-month count comparison, permitted amount comparison, per-form totals, and leaderboard.
 - Attendance: human status/action label, date/time, current/open state, and paired duration when it can be determined reliably.
 - Call/form activity: campaign name, form name, readable status, timestamp, record/lead context, phone number, and remarks already authorized for the user.
 - Supervisor: message, sender display name when resolvable, sent time, and recipient label without recipient codes.

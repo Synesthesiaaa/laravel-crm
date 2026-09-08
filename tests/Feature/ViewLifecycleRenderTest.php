@@ -58,7 +58,8 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertSee('aria-describedby="notification-detail-description"', false);
         $response->assertSee('Review the selected notification details.', false);
         $response->assertSee('Business hours:', false);
-        $response->assertSee('x-text="detail.range.label"', false);
+        $response->assertSee('x-text="detail?.date || \'\'"', false);
+        $response->assertSee('x-text="detail?.range?.label || \'\'"', false);
         $response->assertSee('aria-label="Close dialog"', false);
         $response->assertSee('x-text="n.read ? \'Read\' : \'Unread\'"', false);
         $response->assertDontSee('n.campaign_code', false);

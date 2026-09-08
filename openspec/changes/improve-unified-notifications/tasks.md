@@ -24,6 +24,7 @@
 - [x] 3.5 Implement `app/Services/Notifications/DailyPerformanceNotificationProvider.php` so it delegates range resolution to `DashboardSalesRangeService`, KPI calculation to `DashboardStatsService::getSalesKpisForCampaign()`, and visibility to `DashboardLayoutService`; produce one stable `daily:` key per user/campaign/date and map the user's row without recreating aggregation or ranking logic.
 - [x] 3.6 Return concise current-user, team-total, and Top Agent preview copy plus detailed personal metrics, per-form totals, and leaderboard data using resolved display names and the existing currency/number formatting conventions.
 - [x] 3.7 Run the focused sales-range service test, `php artisan test --compact tests/Feature/DashboardSalesRangeTest.php tests/Feature/Api/NotificationsApiTest.php`, and `vendor/bin/pint --dirty --format agent`.
+- [x] 3.8 Add dashboard-aligned current/previous month count and amount comparisons to performance details, including signed changes, percentages, zero-baseline handling, visibility rules, and regression coverage.
 
 ## 4. Complete authenticated notification API behavior
 

@@ -270,6 +270,83 @@ class NotificationsApiTest extends TestCase
         $this->assertContains('₱300.00', $metrics->where('label', 'Sales amount')->pluck('value')->all());
     }
 
+    public function test_daily_performance_detail_includes_current_and_previous_month_total_comparison(): void
+    {
+        Carbon::setTestNow('2026-09-07 12:00:00');
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount',
+            'field_label' => 'Amount',
+            'field_type' => 'number',
+            'is_sale_amount' => true,
+        ]);
+        DB::table('ezycash')->insert([
+            $this->ezycashComparisonRow('current-1', 'Agent One', 100, '2026-09-01 10:00:00'),
+            $this->ezycashComparisonRow('current-2', 'Agent Two', 50, '2026-09-03 11:00:00'),
+            $this->ezycashComparisonRow('previous-1', 'Agent Two', 80, '2026-08-01 10:00:00'),
+        ]);
+        $user = User::factory()->create(['full_name' => 'Agent One']);
+
+        $daily = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales'])
+            ->getJson(route('api.notifications'))
+            ->assertOk()
+            ->json('items');
+        $daily = collect($daily)->firstWhere('category', 'performance');
+
+        $detail = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales'])
+            ->getJson(route('api.notifications.detail', ['key' => $daily['key']]))
+            ->assertOk()
+            ->json('detail');
+        $comparison = collect($detail['sections'])->firstWhere('title', 'Monthly comparison');
+        $metrics = collect($comparison['metrics'])->keyBy('label');
+
+        $this->assertSame('Sep 1, 2026 - Sep 7, 2026 compared with Aug 1, 2026 - Aug 7, 2026.', $comparison['message']);
+        $this->assertSame('2', $metrics['Current sales count']['value']);
+        $this->assertSame('1', $metrics['Previous sales count']['value']);
+        $this->assertSame('+1 (+100.00%)', $metrics['Sales count change']['value']);
+        $this->assertSame('₱150.00', $metrics['Current sales amount']['value']);
+        $this->assertSame('₱80.00', $metrics['Previous sales amount']['value']);
+        $this->assertSame('+₱70.00 (+87.50%)', $metrics['Sales amount change']['value']);
+    }
+
+    public function test_daily_performance_monthly_comparison_handles_a_zero_previous_month(): void
+    {
+        Carbon::setTestNow('2026-09-07 12:00:00');
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount',
+            'field_label' => 'Amount',
+            'field_type' => 'number',
+            'is_sale_amount' => true,
+        ]);
+        DB::table('ezycash')->insert([
+            $this->ezycashComparisonRow('current-1', 'Agent One', 100, '2026-09-01 10:00:00'),
+        ]);
+        $user = User::factory()->create(['full_name' => 'Agent One']);
+
+        $daily = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales'])
+            ->getJson(route('api.notifications'))
+            ->assertOk()
+            ->json('items');
+        $daily = collect($daily)->firstWhere('category', 'performance');
+
+        $detail = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales'])
+            ->getJson(route('api.notifications.detail', ['key' => $daily['key']]))
+            ->assertOk()
+            ->json('detail');
+        $comparison = collect($detail['sections'])->firstWhere('title', 'Monthly comparison');
+        $metrics = collect($comparison['metrics'])->keyBy('label');
+
+        $this->assertSame('+1 (New activity)', $metrics['Sales count change']['value']);
+        $this->assertSame('+₱100.00 (New activity)', $metrics['Sales amount change']['value']);
+    }
+
     public function test_notification_endpoints_require_authentication(): void
     {
         $this->getJson('/api/notifications')->assertUnauthorized();
@@ -297,6 +374,18 @@ class NotificationsApiTest extends TestCase
 
     public function test_daily_performance_omits_amounts_when_dashboard_amounts_are_disabled(): void
     {
+        Carbon::setTestNow('2026-09-07 12:00:00');
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount',
+            'field_label' => 'Amount',
+            'field_type' => 'number',
+            'is_sale_amount' => true,
+        ]);
+        DB::table('ezycash')->insert([
+            $this->ezycashComparisonRow('hidden-amount', 'Agent One', 100, '2026-09-01 10:00:00'),
+        ]);
         app(DashboardLayoutService::class)->saveForCampaign(
             'mbsales',
             array_keys(DashboardLayoutService::sectionDefinitions()),
@@ -319,6 +408,77 @@ class NotificationsApiTest extends TestCase
             ->assertOk()
             ->json('detail');
         $labels = collect($detail['sections'])->flatMap(fn (array $section): array => $section['metrics'] ?? [])->pluck('label');
-        $this->assertFalse($labels->contains('Sales amount'));
+        $this->assertTrue($labels->contains('Current sales count'));
+        $this->assertFalse($labels->contains(fn (string $label): bool => str_contains(strtolower($label), 'amount')));
+    }
+
+    public function test_daily_performance_monthly_amount_change_respects_independent_visibility(): void
+    {
+        Carbon::setTestNow('2026-09-07 12:00:00');
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount',
+            'field_label' => 'Amount',
+            'field_type' => 'number',
+            'is_sale_amount' => true,
+        ]);
+        DB::table('ezycash')->insert([
+            $this->ezycashComparisonRow('visible-total', 'Agent One', 100, '2026-09-01 10:00:00'),
+            $this->ezycashComparisonRow('visible-previous', 'Agent One', 80, '2026-08-01 10:00:00'),
+        ]);
+        app(DashboardLayoutService::class)->saveForCampaign(
+            'mbsales',
+            array_keys(DashboardLayoutService::sectionDefinitions()),
+            array_keys(DashboardLayoutService::sectionDefinitions()),
+            amountConfig: ['total' => true, 'change' => false],
+        );
+        $user = User::factory()->create(['full_name' => 'Agent One']);
+
+        $daily = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales'])
+            ->getJson(route('api.notifications'))
+            ->assertOk()
+            ->json('items');
+        $daily = collect($daily)->firstWhere('category', 'performance');
+
+        $detail = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales'])
+            ->getJson(route('api.notifications.detail', ['key' => $daily['key']]))
+            ->assertOk()
+            ->json('detail');
+        $labels = collect($detail['sections'])->flatMap(fn (array $section): array => $section['metrics'] ?? [])->pluck('label');
+
+        $this->assertTrue($labels->contains('Current sales amount'));
+        $this->assertTrue($labels->contains('Previous sales amount'));
+        $this->assertFalse($labels->contains('Sales amount change'));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function ezycashComparisonRow(string $requestId, string $agent, float $amount, string $createdAt): array
+    {
+        $timestamp = Carbon::parse($createdAt);
+
+        return [
+            'date' => $timestamp->toDateString(),
+            'request_id' => $requestId,
+            'cardholder_name' => 'Test',
+            'mpi_credit_card_no' => '0000',
+            'bank' => 'Test',
+            'account_type' => 'Savings',
+            'account_number' => '0000',
+            'surname' => 'Test',
+            'first_name' => 'Test',
+            'middle_name' => null,
+            'ezycash_amount' => $amount,
+            'term' => '1',
+            'rate' => 1,
+            'amenable' => null,
+            'agent' => $agent,
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ];
     }
 }

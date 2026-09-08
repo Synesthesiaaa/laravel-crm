@@ -203,8 +203,8 @@
                                     <p class="text-xs font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]" x-text="detail?.category?.replace('_', ' ') || 'Notification'"></p>
                                     <p class="text-sm text-[var(--color-on-surface-muted)] mt-1" x-text="detail?.description || ''"></p>
                                     <div x-show="detail?.date || detail?.range?.label" class="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-[var(--color-on-surface-dim)]">
-                                        <span x-show="detail?.date"><span class="font-semibold">Date:</span> <span x-text="detail.date"></span></span>
-                                        <span x-show="detail?.range?.label"><span class="font-semibold">Business hours:</span> <span x-text="detail.range.label"></span></span>
+                                        <span x-show="detail?.date"><span class="font-semibold">Date:</span> <span x-text="detail?.date || ''"></span></span>
+                                        <span x-show="detail?.range?.label"><span class="font-semibold">Business hours:</span> <span x-text="detail?.range?.label || ''"></span></span>
                                     </div>
                                 </div>
                                 <template x-for="(section, sectionIndex) in (detail?.sections || [])" :key="section.title + sectionIndex">
