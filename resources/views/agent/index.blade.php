@@ -1234,6 +1234,12 @@ window.agentScreen = function() {
                     visible_fields: visibleFields,
                 });
                 Alpine.store('toast').success('Record saved.');
+                window.dispatchEvent(new CustomEvent('form-submitted', {
+                    detail: {
+                        campaign: this.crmCampaign(),
+                        formType: 'campaign-capture',
+                    },
+                }));
                 this.clearForm();
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Failed to save record.');

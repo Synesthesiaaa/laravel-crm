@@ -37,7 +37,7 @@ class FormSubmissionService
         protected CallHistoryService $callHistoryService,
     ) {}
 
-    public function submit(string $campaign, string $formType, array $data, string $agent): OperationResult
+    public function submit(string $campaign, string $formType, array $data, string $agent, ?int $userId = null): OperationResult
     {
         $formConfig = $this->campaignService->getFormConfig($campaign, $formType);
         if (! $formConfig) {
@@ -59,7 +59,7 @@ class FormSubmissionService
         }
 
         try {
-            $recordId = DB::transaction(function () use ($tableName, $fields, $data, $agent, $campaign, $formType, $date): int {
+            $recordId = DB::transaction(function () use ($tableName, $fields, $data, $agent, $userId, $campaign, $formType, $date): int {
                 $merged = array_merge($data, [
                     'date' => $date,
                     'request_id' => $this->generateUniqueRequestId($tableName),
@@ -70,14 +70,20 @@ class FormSubmissionService
                 }
 
                 $id = $this->formSubmissionRepository->insert($tableName, $prepared);
-                $this->callHistoryService->logFormSubmission(
+                $historyResult = $this->callHistoryService->logFormSubmission(
                     $campaign,
                     $formType,
                     $id,
                     $agent,
                     isset($data['lead_id']) && $data['lead_id'] !== '' ? (int) $data['lead_id'] : null,
                     $data['phone_number'] ?? null,
+                    'RECORDED',
+                    null,
+                    $userId,
                 );
+                if (! $historyResult->success) {
+                    throw new \RuntimeException($historyResult->message ?? 'Unable to record form activity.');
+                }
 
                 return $id;
             });

@@ -2,34 +2,46 @@
 
 ## Purpose
 
-Provide an authenticated, label-safe notification feed that combines supervisor messages, personal campaign activity, attendance events, and live daily performance in the shared CRM shell.
+Provide an authenticated, label-safe notification feed that combines supervisor messages, personal campaign activity, attendance events, and current plus bounded historical daily performance in the shared CRM shell.
 
 ## Requirements
 
 ### Requirement: Authenticated users receive a unified scoped notification feed
 
-The system SHALL return one normalized notification feed containing the authenticated user's supervisor messages, active-campaign call/form activity, attendance activity, and one current-day performance summary. Personal activity SHALL be matched only through the authenticated user's supported agent aliases, attendance SHALL be limited to that user's records, campaign activity SHALL be limited to the active accessible campaign, and the system SHALL NOT expose another user's private activity through item IDs or detail requests.
+The system SHALL return one normalized notification feed containing the authenticated user's supervisor messages, active-campaign call/form activity (including standard campaign form submissions and agent capture-form records), attendance activity, and one current/live plus bounded historical performance summary for each available application-timezone business date. Personal activity SHALL use exact authenticated-user ownership when available and supported agent aliases only for legacy unowned rows, attendance SHALL be limited to that user's records, campaign activity SHALL be limited to the active accessible campaign, and the system SHALL NOT expose another user's private activity through item IDs or detail requests.
 
 #### Scenario: Mixed activity is available
 
-- **WHEN** the authenticated user has a supervisor message, personal form history, an attendance event, and a current-day performance summary
+- **WHEN** the authenticated user has a supervisor message, campaign form activity, an attendance event, and current and historical performance summaries
 - **THEN** the notification response contains all four categories in the normalized item contract
 - **AND** each item can be resolved only by that authenticated user in its authorized campaign scope
 
+#### Scenario: Campaign form activity is recorded
+
+- **WHEN** the authenticated user submits a standard campaign form or saves an agent capture form
+- **THEN** the notification feed contains a scoped call/form item for that submission
+- **AND** the item contains a stable source-qualified key and authorized detail context
+
 #### Scenario: Another user's source ID is requested
 
-- **WHEN** an authenticated user requests notification details for an attendance, history, or database-notification record owned by another user
+- **WHEN** an authenticated user requests notification details for an attendance, history, capture-form, or database-notification record owned by another user
 - **THEN** the system returns a non-disclosing not-found response
 
 ### Requirement: Mixed notification items are stable, deduplicated, and correctly ordered
 
-Every notification item SHALL have a stable source-qualified key and occurrence/update timestamp. The service SHALL deduplicate equal keys, order the live daily summary and activity deterministically newest-first, limit the visible response to 25 items, calculate unread count across the bounded 30-day notification window, and indicate when additional items exist.
+Every notification item SHALL have a stable source-qualified key and occurrence/update timestamp. Daily performance SHALL use a date-qualified key and one item per available business date. The service SHALL deduplicate equal keys, order dated performance summaries and activity deterministically newest-first, limit the visible response to 25 items, calculate unread count across the bounded 30-day notification window, and indicate when additional items exist.
 
 #### Scenario: A newer history item follows an older supervisor item
 
 - **WHEN** providers return an older supervisor message and a newer call/form item
 - **THEN** the newer call/form item appears first after the live daily summary
 - **AND** provider concatenation order does not override chronological order
+
+#### Scenario: Daily performance has historical entries
+
+- **WHEN** the current date and one or more prior dates are within the configured activity window
+- **THEN** the feed contains separate date-qualified daily performance items for those dates
+- **AND** each historical item uses the business range and totals for its own date
 
 #### Scenario: Realtime item is reconciled with REST
 
@@ -38,7 +50,7 @@ Every notification item SHALL have a stable source-qualified key and occurrence/
 
 ### Requirement: Derived notification read state is durable and item-specific
 
-The system SHALL persist per-user read state for call/form, attendance, and daily-performance items in durable database storage, SHALL use Laravel database notification read state for database notifications, and SHALL expose idempotent single-item and mark-all-read operations. Clearing application cache SHALL NOT make a read derived item unread again.
+The system SHALL persist per-user read state for call/form, attendance, and current daily-performance items in durable database storage, SHALL use Laravel database notification read state for database notifications, and SHALL expose idempotent single-item and mark-all-read operations. Historical generated daily items SHALL be presented as read by default and SHALL NOT inflate the unread badge. Clearing application cache SHALL NOT make a read derived item unread again.
 
 #### Scenario: User opens one notification
 
@@ -77,10 +89,16 @@ Notification previews and details SHALL resolve configured campaign names, form 
 
 Each notification row SHALL be a semantic button operable by pointer, touch, Enter, and Space. Activating it SHALL mark the item read and open a shared modal containing category-appropriate details, with a visible close control, Escape dismissal, visible focus styling, modal focus management, focus restoration to the originating row, and non-color text or semantics for unread/severity state.
 
-#### Scenario: Performance notification is activated
+#### Scenario: Current performance notification is activated
 
-- **WHEN** the user activates the current-day performance row
+- **WHEN** the user activates the current/live performance row
 - **THEN** the modal shows campaign name, date and business range, personal sales, team totals, Top Agent, per-form totals, and leaderboard subject to amount visibility
+
+#### Scenario: Historical performance notification is activated
+
+- **WHEN** the user activates a historical performance row for an available date
+- **THEN** the modal shows that date, its business range, and the personal, team, per-form, and leaderboard totals calculated for that date
+- **AND** the detail does not substitute the current day's live range or timestamp
 
 #### Scenario: Performance notification compares monthly totals
 
@@ -98,6 +116,7 @@ Each notification row SHALL be a semantic button operable by pointer, touch, Ent
 
 - **WHEN** the user activates a call/form row
 - **THEN** the modal shows resolved campaign/form labels, readable status, time, and authorized record context without raw configuration codes
+- **AND** standard and campaign capture-form records use the same accessible detail pattern
 
 #### Scenario: Keyboard user closes details
 
@@ -134,6 +153,11 @@ The notification panel SHALL refresh on every opening, prevent overlapping or st
 - **WHEN** a user closes a previously loaded panel, new attendance or history activity occurs, and the panel is opened again
 - **THEN** the panel requests fresh data and shows the new activity without a full page reload
 
+#### Scenario: Campaign form success refreshes the panel
+
+- **WHEN** a standard campaign form or campaign capture form is saved while the panel is open
+- **THEN** the panel refreshes its list immediately and includes the new form activity when authorized
+
 #### Scenario: Soft navigation replaces the shell instance
 
 - **WHEN** `#main-layout` is destroyed and initialized during soft navigation
@@ -155,6 +179,12 @@ The notification implementation SHALL use bounded source queries, avoid N+1 labe
 - **WHEN** more than the configured visible and 30-day window limits exist
 - **THEN** source queries and the response remain bounded
 - **AND** the response indicates additional items without loading unbounded records
+
+#### Scenario: Historical performance is bounded
+
+- **WHEN** the notification feed is requested
+- **THEN** it calculates at most one daily performance item per date in the configured 30-day activity window
+- **AND** historical details calculate only the selected business date and its corresponding comparison context
 
 #### Scenario: Old read states are pruned
 

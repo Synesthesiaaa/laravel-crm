@@ -19,6 +19,7 @@ class CrmCallHistory extends Model
         'form_type',
         'record_id',
         'agent',
+        'user_id',
         'status',
         'remarks',
     ];
@@ -26,6 +27,11 @@ class CrmCallHistory extends Model
     public function campaign(): BelongsTo
     {
         return $this->belongsTo(Campaign::class, 'campaign_code', 'code');
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 
     public function scopeForCampaign(Builder $query, string $campaignCode): Builder

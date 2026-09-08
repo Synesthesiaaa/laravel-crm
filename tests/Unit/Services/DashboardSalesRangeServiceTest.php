@@ -46,6 +46,18 @@ class DashboardSalesRangeServiceTest extends TestCase
         $this->assertSame('17:45', $range['end']);
     }
 
+    public function test_historical_date_uses_the_same_business_boundaries(): void
+    {
+        config(['app.timezone' => 'Asia/Manila']);
+
+        $range = app(DashboardSalesRangeService::class)->forDate('2026-05-15');
+
+        $this->assertSame('2026-05-15', $range['date']);
+        $this->assertSame('2026-05-15 06:00:00', $range['from']->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-05-15 18:00:00', $range['until']->format('Y-m-d H:i:s'));
+        $this->assertSame('Asia/Manila', $range['from']->getTimezone()->getName());
+    }
+
     public function test_invalid_or_non_increasing_range_falls_back_to_default(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-09-07 12:00:00'));

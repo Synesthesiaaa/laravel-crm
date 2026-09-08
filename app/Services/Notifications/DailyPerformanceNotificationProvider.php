@@ -7,6 +7,7 @@ use App\Services\DashboardLayoutService;
 use App\Services\DashboardSalesRangeService;
 use App\Services\DashboardStatsService;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 
 class DailyPerformanceNotificationProvider
 {
@@ -19,15 +20,92 @@ class DailyPerformanceNotificationProvider
 
     public function item(User $user, string $campaignCode): NotificationItem
     {
-        $details = $this->build($user, $campaignCode);
+        return $this->forDate(
+            $user,
+            $campaignCode,
+            now(config('app.timezone'))->startOfDay(),
+        );
+    }
+
+    /**
+     * @return Collection<int, NotificationItem>
+     */
+    public function items(User $user, string $campaignCode, ?int $days = null): Collection
+    {
+        $days = max(1, min(
+            $days ?? (int) config('notifications.activity_days', 30),
+            (int) config('notifications.activity_days', 30),
+        ));
+        $today = now(config('app.timezone'))->startOfDay();
+
+        return collect(range(0, $days - 1))
+            ->map(fn (int $offset): NotificationItem => $this->forDate(
+                $user,
+                $campaignCode,
+                $today->copy()->subDays($offset),
+            ))
+            ->values();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function keys(string $campaignCode, ?int $days = null): array
+    {
+        $days = max(1, min(
+            $days ?? (int) config('notifications.activity_days', 30),
+            (int) config('notifications.activity_days', 30),
+        ));
+        $today = now(config('app.timezone'))->startOfDay();
+
+        return collect(range(0, $days - 1))
+            ->map(fn (int $offset): string => $this->key(
+                $campaignCode,
+                $today->copy()->subDays($offset)->toDateString(),
+            ))
+            ->all();
+    }
+
+    public function isDateAvailable(string $date): bool
+    {
+        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return false;
+        }
+
+        try {
+            $resolved = Carbon::createFromFormat('!Y-m-d', $date, config('app.timezone'));
+        } catch (\Throwable) {
+            return false;
+        }
+
+        if ($resolved->format('Y-m-d') !== $date) {
+            return false;
+        }
+
+        $today = now(config('app.timezone'))->startOfDay();
+        $oldest = $today->copy()->subDays($this->historyDays() - 1);
+
+        return $resolved->betweenIncluded($oldest, $today);
+    }
+
+    public function isCurrentDate(string $date): bool
+    {
+        return $date === now(config('app.timezone'))->toDateString();
+    }
+
+    private function forDate(User $user, string $campaignCode, Carbon $date): NotificationItem
+    {
+        $details = $this->build($user, $campaignCode, $date);
         $kpis = $details['kpis'];
         $amounts = $details['amounts'];
         $personalCount = $details['personal']['sales_count'];
         $teamCount = (int) ($kpis['sales'] ?? 0);
         $topAgent = $kpis['top_agent'] ?? null;
+        $isToday = $details['is_today'];
+        $period = $isToday ? 'today' : 'on '.$date->format('M j');
         $message = $teamCount > 0
-            ? "You have {$personalCount} sales today; team total is {$teamCount}."
-            : "No sales yet. You have {$personalCount} sales today; team total is 0.";
+            ? "You have {$personalCount} sales {$period}; team total is {$teamCount}."
+            : "No sales yet. You have {$personalCount} sales {$period}; team total is 0.";
         if ($topAgent !== null) {
             $topAgentSummary = ' Top agent: '.$this->labels->agent((string) $topAgent)
                 .' ('.number_format((int) ($kpis['top_agent_sales'] ?? 0)).' sales';
@@ -45,11 +123,13 @@ class DailyPerformanceNotificationProvider
             key: $this->key($campaignCode, $details['date']),
             category: 'performance',
             source: 'Daily performance',
-            title: "Today's performance",
+            title: $isToday ? "Today's performance" : 'Daily performance · '.$date->format('M j, Y'),
             message: $message,
-            occurredAt: now(config('app.timezone')),
+            occurredAt: $details['occurred_at'],
             type: $teamCount > 0 ? 'success' : 'info',
             meta: [
+                'date' => $details['date'],
+                'historical' => ! $isToday,
                 'preview' => [
                     'personal_sales' => $personalCount,
                     'team_sales' => $teamCount,
@@ -70,11 +150,16 @@ class DailyPerformanceNotificationProvider
      */
     public function details(User $user, string $campaignCode, ?string $expectedDate = null): array
     {
-        $details = $this->build($user, $campaignCode);
-        if ($expectedDate !== null && $details['date'] !== $expectedDate) {
+        $date = $expectedDate ?? now(config('app.timezone'))->toDateString();
+        if (! $this->isDateAvailable($date)) {
             return [];
         }
-        $monthlySummary = $this->dashboardStats->getDashboardSummaryForCampaign($campaignCode);
+        $businessDate = Carbon::createFromFormat('!Y-m-d', $date, config('app.timezone'));
+        $details = $this->build($user, $campaignCode, $businessDate);
+        $summaryAsOf = $details['is_today']
+            ? now(config('app.timezone'))
+            : $details['range']['until']->copy()->subSecond();
+        $monthlySummary = $this->dashboardStats->getDashboardSummaryForCampaign($campaignCode, $summaryAsOf);
 
         $kpis = $details['kpis'];
         $amounts = $details['amounts'];
@@ -145,15 +230,17 @@ class DailyPerformanceNotificationProvider
         return [
             'key' => $this->key($campaignCode, $details['date']),
             'category' => 'performance',
-            'title' => "Today's performance",
-            'description' => 'Live dashboard totals for '.$details['campaign_name'].'.',
+            'title' => $details['is_today']
+                ? "Today's performance"
+                : 'Daily performance · '.Carbon::parse($details['date'], config('app.timezone'))->format('M j, Y'),
+            'description' => ($details['is_today'] ? 'Live' : 'Historical').' dashboard totals for '.$details['campaign_name'].'.',
             'date' => $details['date'],
             'range' => [
                 'start' => $details['range']['start'],
                 'end' => $details['range']['end'],
                 'label' => $details['range']['label'],
             ],
-            'updated_at' => now(config('app.timezone'))->toIso8601String(),
+            'updated_at' => $details['occurred_at']->toIso8601String(),
             'sections' => [
                 ['title' => 'Your performance', 'metrics' => $personalMetrics],
                 ['title' => 'Team total', 'metrics' => $teamMetrics],
@@ -228,9 +315,9 @@ class DailyPerformanceNotificationProvider
     /**
      * @return array<string, mixed>
      */
-    private function build(User $user, string $campaignCode): array
+    private function build(User $user, string $campaignCode, Carbon $date): array
     {
-        $range = $this->salesRangeService->default();
+        $range = $this->salesRangeService->forDate($date);
         $kpis = $this->dashboardStats->getSalesKpisForCampaign(
             $campaignCode,
             $range['from'],
@@ -239,6 +326,10 @@ class DailyPerformanceNotificationProvider
         $layout = $this->dashboardLayout->getForCampaign($campaignCode);
         $amountsEnabled = (bool) data_get($layout, 'amounts.enabled', true);
         $personal = $this->resolvePersonalRow($user, $kpis['agent_leaderboard'] ?? []);
+        $isToday = $range['date'] === now(config('app.timezone'))->toDateString();
+        $occurredAt = $isToday
+            ? now(config('app.timezone'))
+            : $range['until']->copy()->subSecond();
 
         return [
             'date' => $range['date'],
@@ -246,7 +337,10 @@ class DailyPerformanceNotificationProvider
                 'start' => $range['start'],
                 'end' => $range['end'],
                 'label' => Carbon::parse($range['from'])->format('M j, Y').' · '.$range['start'].'–'.$range['end'],
+                'until' => $range['until'],
             ],
+            'is_today' => $isToday,
+            'occurred_at' => $occurredAt,
             'campaign_name' => $this->labels->campaign($campaignCode),
             'currency' => [
                 'code' => (string) config('dashboard.currency_code', 'PHP'),
@@ -260,6 +354,11 @@ class DailyPerformanceNotificationProvider
             'personal' => $personal,
             'kpis' => $kpis,
         ];
+    }
+
+    private function historyDays(): int
+    {
+        return max(1, (int) config('notifications.activity_days', 30));
     }
 
     /**

@@ -22,6 +22,7 @@ window.notificationDropdown = function() {
         pollTimer: null,
         visibilityHandler: null,
         attendanceHandler: null,
+        formSubmittedHandler: null,
         listController: null,
         summaryController: null,
         detailController: null,
@@ -46,8 +47,16 @@ window.notificationDropdown = function() {
                     this.refreshSummary();
                 }
             };
+            this.formSubmittedHandler = () => {
+                if (this.open) {
+                    this.load(true);
+                } else {
+                    this.refreshSummary();
+                }
+            };
             document.addEventListener('visibilitychange', this.visibilityHandler);
             window.addEventListener('attendance-updated', this.attendanceHandler);
+            window.addEventListener('form-submitted', this.formSubmittedHandler);
             const configuredPollSeconds = Number(document.body?.dataset.notificationPollSeconds || 60);
             const pollSeconds = Number.isFinite(configuredPollSeconds) ? Math.max(30, configuredPollSeconds) : 60;
             this.pollTimer = window.setInterval(() => {
@@ -284,6 +293,9 @@ window.notificationDropdown = function() {
             }
             if (this.attendanceHandler) {
                 window.removeEventListener('attendance-updated', this.attendanceHandler);
+            }
+            if (this.formSubmittedHandler) {
+                window.removeEventListener('form-submitted', this.formSubmittedHandler);
             }
             this.listController?.abort?.();
             this.summaryController?.abort?.();

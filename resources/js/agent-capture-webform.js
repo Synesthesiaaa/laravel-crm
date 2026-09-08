@@ -52,6 +52,12 @@ window.agentCaptureWebform = function agentCaptureWebform(initial = {}) {
                 });
                 this.feedback = { message: 'Capture saved successfully.', success: true };
                 this.isDirty = false;
+                window.dispatchEvent(new CustomEvent('form-submitted', {
+                    detail: {
+                        campaign: this.campaignCode,
+                        formType: 'campaign-capture',
+                    },
+                }));
             } catch (error) {
                 const responseErrors = error?.response?.data?.errors ?? {};
                 this.errors = Object.fromEntries(

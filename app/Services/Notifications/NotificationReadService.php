@@ -2,6 +2,7 @@
 
 namespace App\Services\Notifications;
 
+use App\Models\AgentCaptureRecord;
 use App\Models\AttendanceLog;
 use App\Models\CrmCallHistory;
 use App\Models\NotificationReadState;
@@ -10,6 +11,10 @@ use Illuminate\Support\Collection;
 
 class NotificationReadService
 {
+    public function __construct(
+        protected DailyPerformanceNotificationProvider $dailyPerformance,
+    ) {}
+
     /**
      * @param  list<string>  $keys
      * @return array<string, bool>
@@ -80,17 +85,46 @@ class NotificationReadService
                 static fn (mixed $alias): string => trim((string) $alias),
                 [$user->full_name, $user->name, $user->username, $user->vici_user],
             )));
-            if ($aliases === []) {
-                return false;
-            }
 
             return CrmCallHistory::query()
                 ->whereKey((int) $value)
                 ->where('campaign_code', (string) session('campaign', 'mbsales'))
                 ->where('created_at', '>=', now()->subDays((int) config('notifications.activity_days', 30)))
-                ->where(function ($query) use ($aliases): void {
-                    foreach ($aliases as $alias) {
-                        $query->orWhereRaw('LOWER(agent) = ?', [strtolower($alias)]);
+                ->where(function ($query) use ($user, $aliases): void {
+                    $query->where('user_id', $user->id);
+                    if ($aliases !== []) {
+                        $query->orWhere(function ($legacy) use ($aliases): void {
+                            $legacy->whereNull('user_id')->where(function ($agentQuery) use ($aliases): void {
+                                foreach ($aliases as $alias) {
+                                    $agentQuery->orWhereRaw('LOWER(agent) = ?', [strtolower($alias)]);
+                                }
+                            });
+                        });
+                    }
+                })
+                ->exists();
+        }
+
+        if ($prefix === 'capture' && ctype_digit((string) $value)) {
+            $aliases = array_values(array_filter(array_map(
+                static fn (mixed $alias): string => trim((string) $alias),
+                [$user->full_name, $user->name, $user->username, $user->vici_user],
+            )));
+
+            return AgentCaptureRecord::query()
+                ->whereKey((int) $value)
+                ->where('campaign_code', (string) session('campaign', 'mbsales'))
+                ->where('created_at', '>=', now()->subDays((int) config('notifications.activity_days', 30)))
+                ->where(function ($query) use ($user, $aliases): void {
+                    $query->where('user_id', $user->id);
+                    if ($aliases !== []) {
+                        $query->orWhere(function ($legacy) use ($aliases): void {
+                            $legacy->whereNull('user_id')->where(function ($agentQuery) use ($aliases): void {
+                                foreach ($aliases as $alias) {
+                                    $agentQuery->orWhereRaw('LOWER(agent) = ?', [strtolower($alias)]);
+                                }
+                            });
+                        });
                     }
                 })
                 ->exists();
@@ -100,7 +134,7 @@ class NotificationReadService
             [$encodedCampaign, $date] = array_pad(explode(':', $value, 2), 2, null);
 
             return rawurldecode((string) $encodedCampaign) === (string) session('campaign', 'mbsales')
-                && $date === now(config('app.timezone'))->toDateString();
+                && $this->dailyPerformance->isDateAvailable((string) $date);
         }
 
         return false;
@@ -134,7 +168,7 @@ class NotificationReadService
             }
             if (str_starts_with($key, 'database:')) {
                 $databaseIds[] = substr($key, strlen('database:'));
-            } elseif (in_array(explode(':', $key, 2)[0], ['history', 'attendance', 'daily'], true)) {
+            } elseif (in_array(explode(':', $key, 2)[0], ['history', 'capture', 'attendance', 'daily'], true)) {
                 $derivedRows[] = [
                     'user_id' => $user->id,
                     'item_key' => $key,

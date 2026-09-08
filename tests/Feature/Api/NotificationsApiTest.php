@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api;
 
+use App\Models\AgentCaptureRecord;
 use App\Models\AttendanceLog;
 use App\Models\AttendanceStatusType;
 use App\Models\Campaign;
@@ -69,11 +70,14 @@ class NotificationsApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('unread', 3)
-            ->assertJsonPath('has_more', false)
+            ->assertJsonPath('has_more', true)
             ->assertJsonStructure(['items', 'unread', 'has_more', 'refreshed_at']);
 
         $items = $response->json('items');
-        $this->assertSame(['Daily performance', 'Supervisor', 'Call & form history'], array_column($items, 'source'));
+        $this->assertSame(
+            ['Daily performance', 'Supervisor', 'Call & form history'],
+            array_slice(array_column($items, 'source'), 0, 3),
+        );
         $this->assertSame('Supervisor notification', $items[1]['title']);
         $this->assertSame('EzyCash application', $items[2]['title']);
         $this->assertStringNotContainsString('mbsales', json_encode($items[2]['title']));
@@ -268,6 +272,112 @@ class NotificationsApiTest extends TestCase
         $metrics = collect($detail['sections'])->flatMap(fn (array $section): array => $section['metrics'] ?? []);
         $this->assertSame('Agent Two', $metrics->firstWhere('label', 'Top agent')['value']);
         $this->assertContains('₱300.00', $metrics->where('label', 'Sales amount')->pluck('value')->all());
+    }
+
+    public function test_daily_performance_feed_contains_historical_dates_and_date_specific_details(): void
+    {
+        Carbon::setTestNow('2026-09-07 12:00:00');
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount',
+            'field_label' => 'Amount',
+            'field_type' => 'number',
+            'is_sale_amount' => true,
+        ]);
+        DB::table('ezycash')->insert([
+            $this->ezycashComparisonRow('historical-sale', 'Agent One', 75, '2026-09-06 10:00:00'),
+            $this->ezycashComparisonRow('current-sale', 'Agent One', 100, '2026-09-07 10:00:00'),
+        ]);
+        $user = User::factory()->create(['full_name' => 'Agent One']);
+
+        $items = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales'])
+            ->getJson(route('api.notifications'))
+            ->assertOk()
+            ->json('items');
+        $performance = collect($items)->where('category', 'performance');
+
+        $this->assertTrue($performance->pluck('key')->contains('daily:mbsales:2026-09-07'));
+        $this->assertTrue($performance->pluck('key')->contains('daily:mbsales:2026-09-06'));
+        $historical = $performance->firstWhere('key', 'daily:mbsales:2026-09-06');
+        $this->assertSame('Daily performance · Sep 6, 2026', $historical['title']);
+        $this->assertTrue($historical['read']);
+        $this->assertSame(1, $historical['preview']['team_sales']);
+
+        $detail = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales'])
+            ->getJson(route('api.notifications.detail', ['key' => 'daily:mbsales:2026-09-06']))
+            ->assertOk()
+            ->json('detail');
+        $this->assertSame('2026-09-06', $detail['date']);
+        $this->assertSame('Historical dashboard totals for MB Sales.', $detail['description']);
+        $team = collect($detail['sections'])->firstWhere('title', 'Team total');
+        $this->assertSame('1', collect($team['metrics'])->firstWhere('label', 'Sales count')['value']);
+    }
+
+    public function test_standard_and_campaign_capture_forms_are_user_scoped_notification_activity(): void
+    {
+        $user = User::factory()->create(['full_name' => 'Agent One']);
+        $other = User::factory()->create(['full_name' => 'Agent Two']);
+        $history = CrmCallHistory::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'agent' => 'Agent One',
+            'user_id' => $user->id,
+            'status' => 'RECORDED',
+        ]);
+        $capture = AgentCaptureRecord::query()->create([
+            'campaign_code' => 'mbsales',
+            'lead_id' => 42,
+            'phone_number' => '09170000000',
+            'agent' => 'Agent One',
+            'user_id' => $user->id,
+            'capture_data' => ['customer_name' => 'Ada'],
+        ]);
+        $otherCapture = AgentCaptureRecord::query()->create([
+            'campaign_code' => 'mbsales',
+            'agent' => 'Agent Two',
+            'user_id' => $other->id,
+            'capture_data' => ['customer_name' => 'Other'],
+        ]);
+
+        $items = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales'])
+            ->getJson(route('api.notifications'))
+            ->assertOk()
+            ->json('items');
+        $byKey = collect($items)->keyBy('key');
+
+        $this->assertSame('EzyCash application', $byKey['history:'.$history->id]['title']);
+        $this->assertSame('Campaign forms', $byKey['capture:'.$capture->id]['source']);
+        $this->assertSame('MB Sales', $byKey['capture:'.$capture->id]['preview']['campaign']);
+        $this->assertArrayNotHasKey('capture:'.$otherCapture->id, $byKey->all());
+
+        $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales'])
+            ->postJson(route('api.notifications.read'), ['key' => 'capture:'.$capture->id])
+            ->assertOk()
+            ->assertJsonPath('success', true);
+        Cache::flush();
+        $afterRead = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales'])
+            ->getJson(route('api.notifications'))
+            ->assertOk()
+            ->json('items');
+        $this->assertTrue(collect($afterRead)->firstWhere('key', 'capture:'.$capture->id)['read']);
+
+        $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales'])
+            ->getJson(route('api.notifications.detail', ['key' => 'capture:'.$capture->id]))
+            ->assertOk()
+            ->assertJsonPath('detail.category', 'call_form')
+            ->assertJsonPath('detail.sections.0.title', 'Campaign form');
+
+        $this->actingAs($other)
+            ->withSession(['campaign' => 'mbsales'])
+            ->getJson(route('api.notifications.detail', ['key' => 'capture:'.$capture->id]))
+            ->assertNotFound();
     }
 
     public function test_daily_performance_detail_includes_current_and_previous_month_total_comparison(): void

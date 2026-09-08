@@ -1,10 +1,10 @@
 ## Why
 
-The notification dropdown currently exposes only supervisor messages and campaign call/form history, while attendance activity and the dashboard's daily sales performance are absent. The feed also leaks internal campaign/form codes, appears clickable without performing an action, can become stale after its first load, silently treats request failures as an empty feed, and keeps derived-history read state in cache instead of durable storage.
+The notification dropdown currently exposes only supervisor messages and campaign call/form history, while attendance activity and the dashboard's daily sales performance are absent. Once performance is exposed, it is represented as a single live item rather than a per-day history, and campaign capture-form activity is not included as a notification source. The feed also leaks internal campaign/form codes, appears clickable without performing an action, can become stale after its first load, silently treats request failures as an empty feed, and keeps derived-history read state in cache instead of durable storage.
 
 ## What Changes
 
-- Introduce a unified, user-scoped notification feed containing supervisor messages, the user's campaign call/form activity, the user's attendance events, and one current-day performance summary.
+- Introduce a unified, user-scoped notification feed containing supervisor messages, the user's campaign/form activity (including campaign capture forms), the user's attendance events, and one daily performance summary for each date in the bounded history window.
 - Reuse the dashboard's selected campaign sales attribution, default business-day range, and monthly summary periods for personal sales count and amount, team totals, Top Agent, and current-versus-equivalent-previous-month comparisons; do not create a second KPI calculation path.
 - Make every notification an accessible button that marks the item read and opens a shared details modal with category-appropriate information.
 - Resolve campaign, form, attendance-status, and agent display names before returning notification copy; internal codes and identifiers remain metadata and are never rendered as user-facing labels.
@@ -28,6 +28,6 @@ The notification dropdown currently exposes only supervisor messages and campaig
 
 - Backend: notification aggregation/formatting, durable derived-item read tracking, display-name resolution, daily dashboard KPI reuse, and authenticated notification detail/read endpoints.
 - Frontend: the shared Blade application shell, Alpine notification component, notification styling, modal focus management, polling/realtime lifecycle, and error/loading states.
-- Data: one additive read-state table for virtual notification sources; existing activity, attendance, campaign/form, user, and Laravel notification records remain authoritative and are not duplicated.
+- Data: one additive read-state table and a nullable activity-owner column for virtual notification sources; existing activity, attendance, campaign/form, user, and Laravel notification records remain authoritative and are not duplicated.
 - Tests: notification API/service tests, label/privacy and authorization tests, daily KPI consistency tests, frontend build checks, and Playwright coverage for mouse, keyboard, failure, realtime/fallback, and responsive flows.
 - Dependencies: no new Composer or npm packages are planned.

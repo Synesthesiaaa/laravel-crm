@@ -10,7 +10,8 @@ The current worktree has unrelated in-progress report/OpenSpec changes. This cha
 
 **Goals:**
 
-- Present one user-scoped feed for supervisor messages, personal call/form history, personal attendance, and a live current-day performance summary.
+- Present one user-scoped feed for supervisor messages, personal call/form history, personal attendance, and one performance summary for each application-timezone date in the bounded history window, with the current date remaining live.
+- Record standard form submissions and campaign capture-form submissions as user-scoped notification activity without creating duplicate Laravel notification rows.
 - Keep notification performance values identical to the dashboard by consuming its existing aggregation and layout visibility rules.
 - Show human-facing names and labels, never raw campaign, form, attendance, class, VICIdial, or recipient codes as display copy.
 - Make each row operable by mouse, touch, and keyboard and show useful details in one accessible shared modal.
@@ -21,23 +22,23 @@ The current worktree has unrelated in-progress report/OpenSpec changes. This cha
 
 - Email, SMS, push, or mobile notifications.
 - A standalone full-page notification inbox, search, filtering, or infinite history.
-- Historical daily-performance cards for prior dates; this change exposes one live card for the active campaign and current application-timezone day.
+- An unbounded notification archive, search, filtering, or infinite scrolling beyond the existing bounded activity window and visible-page limit.
 - Changing dashboard sales attribution, Top Agent ranking, default business hours, or amount-visibility policy.
-- Changing attendance rules, supervisor recipient selection, call-history capture, or repairing unrelated VICIdial report errors.
+- Changing attendance rules, supervisor recipient selection, form/capture validation, or repairing unrelated VICIdial report errors.
 
 ## Decisions
 
 ### 1. Build a derived feed over authoritative domain records
 
-`NotificationService` will become the façade for four focused providers: Laravel database notifications, personal CRM call/form history, personal attendance events, and current-day performance. Each provider returns the same immutable item shape with a stable key, category, display copy, occurrence/update timestamp, severity, read state, and detail capability. The façade merges candidates, deduplicates by key, globally orders them newest-first with a stable key tie-breaker, applies the configured page limit, and separately calculates the unread count for the bounded notification window.
+`NotificationService` will become the façade for focused source adapters: Laravel database notifications, personal CRM/campaign form activity, personal attendance events, and daily performance. Each adapter returns the same immutable item shape with a stable key, category, display copy, occurrence/update timestamp, severity, read state, and detail capability. The façade merges candidates, deduplicates by key, globally orders them newest-first with a stable key tie-breaker, applies the configured page limit, and separately calculates the unread count for the bounded notification window.
 
-The daily-performance item is regenerated from current data and uses one stable key per user, active campaign, and local date. Its `updated_at` is the calculation time so it remains the first live summary, but reading it once keeps it read for that date; normal metric refreshes do not repeatedly mark it unread. A new date or campaign creates a new key.
+The daily-performance adapter regenerates one stable key per user, active campaign, and local business date for the bounded history window. The current-date item uses the live dashboard range and calculation time; prior dates use the same dashboard aggregation for that date and an occurrence timestamp at the end of its business range. Historical rows are treated as already read until explicitly surfaced/read, while a new current date or campaign creates a new unread key.
 
 Alternative considered: create Laravel database notification rows for every attendance and form event plus a scheduled daily summary. This would provide native read state and broadcasting, but duplicates authoritative records, requires fan-out/backfill and idempotency, and delays in-progress daily information until a scheduler runs. The derived feed is smaller and keeps the requested data live.
 
 ### 2. Persist read receipts for derived items
 
-Add `notification_read_states` with `user_id`, `item_key`, `read_at`, timestamps, a unique `(user_id, item_key)` constraint, and an index suitable for user/read lookups. Existing Laravel database notifications continue to use their native `read_at`; call/form, attendance, and daily summary keys use the new table. `NotificationReadService` hides the storage distinction, supports one-item and mark-all operations, and performs idempotent upserts. Read states older than 90 days are pruned by the existing scheduler pattern.
+Add `notification_read_states` with `user_id`, `item_key`, `read_at`, timestamps, a unique `(user_id, item_key)` constraint, and an index suitable for user/read lookups. Existing Laravel database notifications continue to use their native `read_at`; call/form, attendance, and daily summary keys use the new table. `NotificationReadService` hides the storage distinction, supports one-item and mark-all operations, and performs idempotent upserts. Read states older than 90 days are pruned by the existing scheduler pattern. New CRM form-history rows carry a nullable `user_id` so ownership is exact for new submissions while legacy rows continue to use the established alias fallback.
 
 No domain records are altered when a notification is read. Existing cache-based history read IDs may be consulted once during a short compatibility period or migrated opportunistically, but cache is no longer authoritative after deployment.
 
@@ -59,7 +60,7 @@ The shared modal renders category-specific sections:
 
 - Performance: campaign name, date/business range, personal count/amount, team count/amount, Top Agent, current/equivalent previous-month count comparison, permitted amount comparison, per-form totals, and leaderboard.
 - Attendance: human status/action label, date/time, current/open state, and paired duration when it can be determined reliably.
-- Call/form activity: campaign name, form name, readable status, timestamp, record/lead context, phone number, and remarks already authorized for the user.
+- Call/form activity: campaign name, form name or campaign-form label, readable status, timestamp, record/lead context, phone number, and remarks already authorized for the user.
 - Supervisor: message, sender display name when resolvable, sent time, and recipient label without recipient codes.
 
 The modal uses the existing modal store/component, moves focus to its heading or first control when opened, traps focus according to the existing component behavior, closes with Escape or its visible close button, and restores focus to the originating notification row. Decorative icons are hidden from assistive technology; unread and severity are communicated with text/semantics in addition to color.
@@ -76,7 +77,7 @@ The index response does not expose raw identifiers as display fields. Internal s
 
 ### 6. Refresh safely across polling, realtime, and soft navigation
 
-The panel performs a fresh, deduplicated request every time it opens. While the document is visible, a bounded interval refreshes the unread summary; when the panel is open it refreshes the list. Supervisor broadcasts prepend/update by stable key and trigger a reconciliation fetch. Attendance success in the same browser triggers an immediate refresh, while form and other non-user-specific activity remains covered by open-time refresh and polling. Requests use an in-flight guard or cancellation so late responses cannot overwrite newer state.
+The panel performs a fresh, deduplicated request every time it opens. While the document is visible, a bounded interval refreshes the unread summary; when the panel is open it refreshes the list. Supervisor broadcasts prepend/update by stable key and trigger a reconciliation fetch. Attendance, standard form, and campaign capture-form success in the same browser trigger an immediate refresh, while other non-user-specific activity remains covered by open-time refresh and polling. Requests use an in-flight guard or cancellation so late responses cannot overwrite newer state.
 
 On refresh failure, the component retains the last successful items, marks them stale, shows an inline `role="alert"` recovery message with Retry, and does not display “No notifications.” Empty state is shown only after a successful empty response. Reverb connection failure does not block HTTP/database notifications; polling remains the fallback.
 
@@ -86,10 +87,10 @@ On refresh failure, the component retains the last successful items, marks them 
 
 - **Daily summary queries could make frequent polling expensive** → Cache the shared dashboard calculation at the existing service layer, use a lightweight unread-summary path, calculate full details only when the panel/detail is requested, and prohibit overlapping requests.
 - **Agent strings may not map cleanly to a user** → Centralize case-insensitive alias matching, test all supported aliases, and use neutral display fallbacks without merging two users.
-- **A live daily card can change after it is read** → Keep one read key per campaign/day and label it as live/updated; only the next day or campaign produces a new unread item.
+- **A live daily card can change after it is read** → Keep one read key per campaign/day, label the current item as live/updated, and keep historical dates stable/read by default; only a new current day or campaign produces a new unread performance item.
 - **Derived items can disappear when source data is retained/deleted** → Detail lookup returns a recoverable “no longer available” state and stale read receipts are pruned.
 - **Amount visibility can differ by campaign** → Resolve layout controls for every response and omit hidden amounts from preview and modal data rather than merely hiding them with CSS.
-- **Mixed source counts can grow** → Limit the visible page to 25, bound derived activity/unread calculations to 30 days, cap badge presentation at `99+`, and return `has_more` without implementing infinite history.
+- **Mixed source counts can grow** → Limit the visible page to 25, bound derived activity/unread calculations and daily performance history to 30 days, cap badge presentation at `99+`, and return `has_more` without implementing infinite history.
 - **Broadcast service outages can still produce noisy logs** → Treat broadcast as an enhancement; preserve database delivery, avoid surfacing transport internals to users, and verify the polling fallback. Infrastructure repair for Reverb itself remains outside this change.
 - **Existing active OpenSpec/dashboard work may alter KPI details** → Depend on the public dashboard KPI result and write consistency tests instead of copying current implementation internals.
 
@@ -103,4 +104,4 @@ On refresh failure, the component retains the last successful items, marks them 
 
 ## Open Questions
 
-No blocking product questions remain for planning. The plan assumes “daily” means the current application-timezone date using the dashboard's existing default 06:00–18:00 business range, that all authenticated users who can already see the dashboard may see the same campaign team totals/leaderboard, and that the notification modal must honor dashboard amount-visibility settings.
+No blocking product questions remain for planning. The plan assumes “daily” means each application-timezone date in the bounded activity window using the dashboard's existing default 06:00–18:00 business range, that all authenticated users who can already see the dashboard may see the same campaign team totals/leaderboard, that historical performance is calculated from the same date-specific dashboard result, and that the notification modal must honor dashboard amount-visibility settings.

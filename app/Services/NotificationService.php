@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Models\AgentCaptureRecord;
 use App\Models\AttendanceLog;
 use App\Models\CrmCallHistory;
 use App\Models\User;
 use App\Services\Notifications\DailyPerformanceNotificationProvider;
+use App\Services\Notifications\NotificationItem;
 use App\Services\Notifications\NotificationLabelResolver;
 use App\Services\Notifications\NotificationReadService;
 use Carbon\Carbon;
@@ -41,6 +43,12 @@ class NotificationService
         $database = $this->getDatabaseForUser($user, $sourceLimit, $cutoff)
             ->map(fn (DatabaseNotification $notification): array => $this->formatDatabaseNotification($notification));
         $history = $this->getForUser($user, $sourceLimit, $cutoff);
+        $captures = $this->captureQuery($user, $campaign, $cutoff)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit($sourceLimit)
+            ->get()
+            ->map(fn (AgentCaptureRecord $record): array => $this->formatCaptureRow($record));
         $attendance = AttendanceLog::query()
             ->forUser((int) $user->id)
             ->where('event_time', '>=', $cutoff)
@@ -50,11 +58,12 @@ class NotificationService
             ->limit($sourceLimit)
             ->get()
             ->map(fn (AttendanceLog $log): array => $this->formatAttendanceRow($log));
-        $daily = $this->dailyPerformance->item($user, $campaign);
+        $daily = $this->dailyPerformance->items($user, $campaign, (int) config('notifications.activity_days', 30));
 
         $derivedKeys = $history->map(fn (CrmCallHistory $row): string => 'history:'.$row->id)
+            ->concat($captures->map(fn (array $row): string => $row['key']))
             ->concat($attendance->map(fn (array $row): string => $row['key']))
-            ->push($daily->key)
+            ->concat($daily->map(fn (NotificationItem $item): string => $item->key))
             ->all();
         $readStates = $this->readService->states($user, $derivedKeys);
         foreach ($this->getReadIds($user) as $legacyId) {
@@ -69,17 +78,28 @@ class NotificationService
 
             return $this->formatHistoryRow($row, isset($readStates[$key]));
         });
+        $captureItems = $captures->map(function (array $row) use ($readStates): array {
+            $row['read'] = isset($readStates[$row['key']]);
+
+            return $row;
+        });
         $attendanceItems = $attendance->map(function (array $row) use ($readStates): array {
             $row['read'] = isset($readStates[$row['key']]);
 
             return $row;
         });
-        $dailyItem = $daily->withRead(isset($readStates[$daily->key]))->toArray();
+        $dailyItems = $daily->map(function (NotificationItem $item) use ($readStates): array {
+            $date = (string) ($item->meta['date'] ?? '');
+            $read = isset($readStates[$item->key]) || ! $this->dailyPerformance->isCurrentDate($date);
+
+            return $item->withRead($read)->toArray();
+        });
 
         $items = $database
             ->concat($historyItems)
+            ->concat($captureItems)
             ->concat($attendanceItems)
-            ->push($dailyItem)
+            ->concat($dailyItems)
             ->filter(fn (mixed $item): bool => is_array($item) && isset($item['key']))
             ->unique('key')
             ->sort(function (array $left, array $right): int {
@@ -118,6 +138,11 @@ class NotificationService
             ->pluck('id')
             ->map(static fn (mixed $id): string => 'history:'.$id)
             ->all();
+        $captureKeys = $this->captureQuery($user, $campaign, $cutoff)
+            ->limit($sourceLimit)
+            ->pluck('id')
+            ->map(static fn (mixed $id): string => 'capture:'.$id)
+            ->all();
         $attendanceKeys = AttendanceLog::query()
             ->forUser((int) $user->id)
             ->where('event_time', '>=', $cutoff)
@@ -125,15 +150,20 @@ class NotificationService
             ->pluck('id')
             ->map(static fn (mixed $id): string => 'attendance:'.$id)
             ->all();
-        $dailyKey = $this->dailyPerformance->key($campaign, now(config('app.timezone'))->toDateString());
-        $readStates = $this->readService->states($user, [...$historyKeys, ...$attendanceKeys, $dailyKey]);
+        $dailyKeys = $this->dailyPerformance->keys($campaign, (int) config('notifications.activity_days', 30));
+        $readStates = $this->readService->states($user, [...$historyKeys, ...$captureKeys, ...$attendanceKeys, ...$dailyKeys]);
         foreach ($this->getReadIds($user) as $legacyId) {
             $legacyKey = 'history:'.$legacyId;
             if (in_array($legacyKey, $historyKeys, true)) {
                 $readStates[$legacyKey] = true;
             }
         }
-        $derivedUnread = count($historyKeys) + count($attendanceKeys) + 1 - count($readStates);
+        $historyUnread = count(array_diff($historyKeys, array_keys($readStates)));
+        $captureUnread = count(array_diff($captureKeys, array_keys($readStates)));
+        $attendanceUnread = count(array_diff($attendanceKeys, array_keys($readStates)));
+        $todayKey = $this->dailyPerformance->key($campaign, now(config('app.timezone'))->toDateString());
+        $dailyUnread = isset($readStates[$todayKey]) ? 0 : 1;
+        $derivedUnread = $historyUnread + $captureUnread + $attendanceUnread + $dailyUnread;
 
         return [
             'unread' => max(0, $this->readService->unreadDatabaseCount($user, $cutoff->toDateTimeString()) + $derivedUnread),
@@ -147,11 +177,6 @@ class NotificationService
     public function getForUser(User $user, int $limit = 25, ?CarbonInterface $cutoff = null): Collection
     {
         $campaign = (string) session('campaign', 'mbsales');
-        $aliases = $this->labels->aliases($user);
-        if ($aliases === []) {
-            return collect();
-        }
-
         $query = $this->historyQuery($user, $campaign, $cutoff);
 
         return $query
@@ -163,14 +188,44 @@ class NotificationService
 
     private function historyQuery(User $user, string $campaign, ?CarbonInterface $cutoff = null): Builder
     {
-        $aliases = $this->labels->aliases($user);
         $query = CrmCallHistory::query()->where('campaign_code', $campaign);
-        if ($aliases === []) {
-            return $query->whereRaw('1 = 0');
+        $aliases = $this->labels->aliases($user);
+        $query->where(function ($q) use ($user, $aliases): void {
+            $q->where('user_id', $user->id);
+            if ($aliases !== []) {
+                $q->orWhere(function ($legacy) use ($aliases): void {
+                    $legacy->whereNull('user_id')->where(function ($agentQuery) use ($aliases): void {
+                        foreach ($aliases as $alias) {
+                            $agentQuery->orWhereRaw('LOWER(agent) = ?', [strtolower($alias)]);
+                        }
+                    });
+                });
+            }
+        });
+        if ($cutoff !== null) {
+            $query->where('created_at', '>=', $cutoff);
         }
-        $query->where(function ($q) use ($aliases): void {
-            foreach ($aliases as $alias) {
-                $q->orWhereRaw('LOWER(agent) = ?', [strtolower($alias)]);
+
+        return $query;
+    }
+
+    /**
+     * @return Builder<AgentCaptureRecord>
+     */
+    private function captureQuery(User $user, string $campaign, ?CarbonInterface $cutoff = null): Builder
+    {
+        $aliases = $this->labels->aliases($user);
+        $query = AgentCaptureRecord::query()->where('campaign_code', $campaign);
+        $query->where(function ($q) use ($user, $aliases): void {
+            $q->where('user_id', $user->id);
+            if ($aliases !== []) {
+                $q->orWhere(function ($legacy) use ($aliases): void {
+                    $legacy->whereNull('user_id')->where(function ($agentQuery) use ($aliases): void {
+                        foreach ($aliases as $alias) {
+                            $agentQuery->orWhereRaw('LOWER(agent) = ?', [strtolower($alias)]);
+                        }
+                    });
+                });
             }
         });
         if ($cutoff !== null) {
@@ -231,6 +286,19 @@ class NotificationService
             return $this->formatHistoryDetail($row);
         }
 
+        if ($prefix === 'capture' && ctype_digit((string) $value)) {
+            $record = $this->captureQuery(
+                $user,
+                (string) session('campaign', 'mbsales'),
+                now()->subDays((int) config('notifications.activity_days', 30)),
+            )->whereKey((int) $value)->first();
+            if (! $record) {
+                return null;
+            }
+
+            return $this->formatCaptureDetail($record);
+        }
+
         if ($prefix === 'attendance' && ctype_digit((string) $value)) {
             $log = AttendanceLog::query()
                 ->forUser((int) $user->id)
@@ -248,8 +316,7 @@ class NotificationService
             [$encodedCampaign, $date] = array_pad(explode(':', $value, 2), 2, null);
             $campaign = rawurldecode((string) $encodedCampaign);
             $activeCampaign = (string) session('campaign', 'mbsales');
-            $today = now(config('app.timezone'))->toDateString();
-            if ($campaign === '' || $date !== $today || $campaign !== $activeCampaign) {
+            if ($campaign === '' || $campaign !== $activeCampaign || ! $this->dailyPerformance->isDateAvailable((string) $date)) {
                 return null;
             }
 
@@ -334,6 +401,39 @@ class NotificationService
                 'campaign' => $campaignLabel,
                 'form' => $formLabel,
                 ...($status === null ? [] : ['status' => $status]),
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function formatCaptureRow(AgentCaptureRecord $record, bool $read = false): array
+    {
+        $campaignLabel = $this->labels->campaign((string) $record->campaign_code);
+        $parts = ['Recorded'];
+        if ($record->lead_id !== null) {
+            $parts[] = 'Lead #'.$record->lead_id;
+        }
+        if ($record->phone_number !== null && $record->phone_number !== '') {
+            $parts[] = (string) $record->phone_number;
+        }
+
+        return [
+            'id' => 'capture:'.$record->id,
+            'key' => 'capture:'.$record->id,
+            'category' => 'call_form',
+            'source' => 'Campaign forms',
+            'title' => 'Campaign form submission',
+            'message' => implode(' · ', $parts),
+            'time' => $record->created_at?->diffForHumans() ?? '',
+            'created_at' => $record->created_at?->toIso8601String(),
+            'type' => 'success',
+            'read' => $read,
+            'detail_available' => true,
+            'preview' => [
+                'campaign' => $campaignLabel,
+                'form' => 'Campaign form submission',
             ],
         ];
     }
@@ -451,6 +551,36 @@ class NotificationService
                 ...($row->remarks === null || trim((string) $row->remarks) === ''
                     ? []
                     : ['message' => (string) $row->remarks]),
+            ]],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function formatCaptureDetail(AgentCaptureRecord $record): array
+    {
+        $formatted = $this->formatCaptureRow($record, true);
+        $fields = [];
+        if ($record->lead_id !== null) {
+            $fields[] = ['label' => 'Lead', 'value' => '#'.$record->lead_id];
+        }
+        if ($record->phone_number !== null && $record->phone_number !== '') {
+            $fields[] = ['label' => 'Phone', 'value' => (string) $record->phone_number];
+        }
+
+        return [
+            'key' => $formatted['key'],
+            'category' => 'call_form',
+            'title' => $formatted['title'],
+            'description' => 'Campaign form activity for your campaign.',
+            'sections' => [[
+                'title' => 'Campaign form',
+                'metrics' => [
+                    ['label' => 'Campaign', 'value' => $this->labels->campaign((string) $record->campaign_code)],
+                    ['label' => 'Recorded', 'value' => $record->created_at?->format('M j, Y g:i A') ?? 'Unknown time'],
+                ],
+                'fields' => $fields,
             ]],
         ];
     }

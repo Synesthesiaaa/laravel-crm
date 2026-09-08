@@ -1,10 +1,10 @@
 ## ADDED Requirements
 
 ### Requirement: Notification daily performance uses the dashboard sales result
-The current-day performance notification SHALL consume the same active-campaign sales result used by the dashboard for its default current-date 06:00 inclusive to 18:00 exclusive application-timezone range. It SHALL use the same sales mode, qualifying submissions, counts, amounts, per-form totals, Top Agent result, leaderboard ordering, and dashboard amount-visibility settings, and SHALL NOT implement an independent sales query, attribution fallback, or ranking rule.
+Each daily performance notification SHALL consume the same active-campaign sales result used by the dashboard for the item's application-timezone date and its 06:00 inclusive to 18:00 exclusive business range. The current date may remain live; historical dates SHALL be calculated against their own date-specific range. It SHALL use the same sales mode, qualifying submissions, counts, amounts, per-form totals, Top Agent result, leaderboard ordering, and dashboard amount-visibility settings, and SHALL NOT implement an independent sales query, attribution fallback, or ranking rule.
 
 #### Scenario: Dashboard and notification are viewed for the same campaign and day
-- **WHEN** an authenticated user opens the dashboard and the performance notification for the same active campaign and current date
+- **WHEN** an authenticated user opens the dashboard and the performance notification for the same active campaign and date
 - **THEN** team sales count, permitted team sales amount, Top Agent, permitted Top Agent amount, per-form totals, and leaderboard ordering match
 
 #### Scenario: Current user has individual sales
@@ -23,6 +23,6 @@ The current-day performance notification SHALL consume the same active-campaign 
 - **AND** it does not derive sales from call dispositions or lead history
 
 #### Scenario: Notification monthly comparison matches the dashboard
-- **WHEN** the current-day performance details are opened for an active campaign
+- **WHEN** performance details are opened for an active campaign and available date
 - **THEN** current and equivalent previous-month sales counts, amounts, differences, and percentages use the dashboard's existing monthly summary result
 - **AND** monetary comparison fields are omitted when the dashboard hides monetary totals

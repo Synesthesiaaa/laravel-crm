@@ -83,6 +83,13 @@ class FormSubmissionTest extends TestCase
             $this->assertIsString($requestId);
             $this->assertNotSame('client-should-be-ignored', $requestId);
             $this->assertMatchesRegularExpression('/^20260721143015\d{6}$/', $requestId);
+            $recordId = DB::table('ezycash')->where('cardholder_name', 'John Doe')->value('id');
+            $this->assertDatabaseHas('crm_call_history', [
+                'record_id' => $recordId,
+                'campaign_code' => 'mbsales',
+                'form_type' => 'ezycash',
+                'user_id' => $user->id,
+            ]);
         } finally {
             Carbon::setTestNow();
         }

@@ -15,7 +15,7 @@
 - [x] 2.5 Add detail resolution for attendance pairing/open state, authorized call/form context, and supervisor sender/recipient labels without exposing another user's records or internal codes.
 - [x] 2.6 Run the focused notification service/API tests and `vendor/bin/pint --dirty --format agent`.
 
-## 3. Add the live daily performance notification from dashboard data
+## 3. Add daily performance notifications from dashboard data
 
 - [x] 3.1 Add failing cases to `tests/Feature/DashboardSalesRangeTest.php` and notification API tests proving the same active campaign and 06:00-inclusive/18:00-exclusive range produce identical team count/amount, Top Agent, per-form totals, and leaderboard ordering in the dashboard and notification detail.
 - [x] 3.2 Extract the dashboard's default/requested sales range behavior from `app/Http/Controllers/DashboardController.php` into a focused `app/Services/DashboardSalesRangeService.php`, with failing tests for valid/invalid filters and application-timezone 06:00-inclusive/18:00-exclusive day boundaries; keep rendered dashboard behavior unchanged.
@@ -60,3 +60,12 @@
 - [ ] 7.4 Use Playwright request interception or a controlled test response to verify initial-error Retry, stale-data retention, Reverb-unavailable HTTP fallback, rapid reopen deduplication, and one active subscription after soft navigation.
 - [x] 7.5 Run the minimum complete regression set: notification API/service/unit tests, dashboard sales-range tests, attendance status tests, supervisor notification tests, shell lifecycle/render tests, JavaScript notification/soft-navigation tests, `npm run build`, and `vendor/bin/pint --dirty --format agent`.
 - [ ] 7.6 Review authorization, PII exposure, query counts, indexes, cache behavior, timezone/range consistency, and migration rollback; then run `/openspec sync`, verify every requirement/scenario against the implemented result, and archive only after all checks pass.
+
+## 8. Extend performance history and campaign-form activity
+
+- [x] 8.1 Add regression coverage for multiple daily performance keys/date-specific details, standard form ownership, campaign capture-form feed items, cross-user exclusion, and durable reads for the new keys.
+- [x] 8.2 Extend `DashboardSalesRangeService` and `DailyPerformanceNotificationProvider` to calculate one current/live and bounded historical item per application-timezone business date, with stable keys and historical detail dates.
+- [x] 8.3 Add exact `user_id` ownership to new CRM form-history writes, include `AgentCaptureRecord` activity in the normalized feed/detail/read/summary paths, and preserve legacy agent-alias fallback for old rows.
+- [x] 8.4 Refresh the open notification panel after standard and campaign capture-form success events, and cover the event lifecycle in JavaScript tests.
+- [x] 8.5 Run the focused notification, dashboard-range, view, JavaScript, build, and Pint checks.
+- [ ] 8.6 Run browser validation for historical performance/form rows, responsive behavior, accessibility, errors, and soft-navigation lifecycle; sync the canonical specs and archive only after all checks pass.

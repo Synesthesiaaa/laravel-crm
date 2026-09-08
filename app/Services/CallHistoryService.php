@@ -123,6 +123,7 @@ class CallHistoryService
         ?string $phoneNumber = null,
         string $status = 'RECORDED',
         ?string $remarks = null,
+        ?int $userId = null,
     ): OperationResult {
         if ($campaignCode === '' || $formType === '' || $agent === '') {
             return OperationResult::failure('Campaign code, form type and agent are required.');
@@ -136,6 +137,7 @@ class CallHistoryService
                 'form_type' => $formType,
                 'record_id' => $recordId,
                 'agent' => $agent,
+                'user_id' => $userId,
                 'status' => $status,
                 'remarks' => $remarks,
             ]);

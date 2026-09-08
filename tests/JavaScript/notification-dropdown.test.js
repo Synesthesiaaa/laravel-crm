@@ -178,6 +178,20 @@ test('attendance updates trigger an immediate refresh and destroy removes listen
     assert.equal(app.requests[1].url, '/api/notifications/summary');
     app.component.destroy();
     assert.equal(app.listeners.has('window:attendance-updated'), false);
+    assert.equal(app.listeners.has('window:form-submitted'), false);
     assert.equal(app.listeners.has('document:visibilitychange'), false);
     assert.equal(app.intervals.size, 0);
+});
+
+test('form submissions trigger an immediate notification refresh', async () => {
+    const app = setup();
+    app.component.init();
+    app.respond(0, { unread: 0 });
+    await flush();
+
+    app.emit('form-submitted', { detail: { campaign: 'mbsales', formType: 'ezycash' } });
+    assert.equal(app.requests[1].url, '/api/notifications/summary');
+
+    app.component.toggle();
+    assert.equal(app.requests[2].url, '/api/notifications');
 });

@@ -793,6 +793,12 @@ window.formVisibility = function formVisibility(extraState = {}) {
                 if (window.Alpine?.store('toast')) {
                     window.Alpine.store('toast').success(data?.message || 'Record saved successfully.');
                 }
+                window.dispatchEvent(new CustomEvent('form-submitted', {
+                    detail: {
+                        campaign: form.dataset.campaign || null,
+                        formType: form.dataset.formType || null,
+                    },
+                }));
 
                 return true;
             } catch (error) {

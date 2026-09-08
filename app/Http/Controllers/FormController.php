@@ -62,13 +62,15 @@ class FormController extends Controller
     {
         $campaign = $request->string('campaign')->trim()->toString();
         $formType = $request->string('form_type')->trim()->toString();
-        $agent = $request->user()->full_name ?? $request->user()->name ?? $request->user()->username ?? '';
+        $user = $request->user();
+        $agent = trim((string) ($user->full_name ?: $user->name ?: $user->username ?: ''));
 
         $result = $this->formSubmissionService->submit(
             $campaign,
             $formType,
             $request->all(),
             $agent,
+            (int) $user->id,
         );
 
         if (! $result->success) {

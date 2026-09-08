@@ -1,23 +1,33 @@
 ## ADDED Requirements
 
 ### Requirement: Authenticated users receive a unified scoped notification feed
-The system SHALL return one normalized notification feed containing the authenticated user's supervisor messages, active-campaign call/form activity, attendance activity, and one current-day performance summary. Personal activity SHALL be matched only through the authenticated user's supported agent aliases, attendance SHALL be limited to that user's records, campaign activity SHALL be limited to the active accessible campaign, and the system SHALL NOT expose another user's private activity through item IDs or detail requests.
+The system SHALL return one normalized notification feed containing the authenticated user's supervisor messages, active-campaign call/form activity (including campaign capture-form submissions), attendance activity, and one daily performance summary for each application-timezone date in the bounded activity window. The current date SHALL remain live while prior dates SHALL be historical snapshots calculated from their own business-day range. Personal activity SHALL be matched to the authenticated user through an exact activity owner when available and otherwise through supported agent aliases, attendance SHALL be limited to that user's records, campaign activity SHALL be limited to the active accessible campaign, and the system SHALL NOT expose another user's private activity through item IDs or detail requests.
 
 #### Scenario: Mixed activity is available
 - **WHEN** the authenticated user has a supervisor message, personal form history, an attendance event, and a current-day performance summary
 - **THEN** the notification response contains all four categories in the normalized item contract
 - **AND** each item can be resolved only by that authenticated user in its authorized campaign scope
 
+#### Scenario: Daily performance has historical dates
+- **WHEN** the authenticated user requests the feed on a date with activity on multiple dates in the bounded window
+- **THEN** the response contains a stable performance item for the current date and each historical date in the window
+- **AND** opening a historical item calculates details for that item's date rather than silently returning the current day's metrics
+
+#### Scenario: Campaign form submissions are recorded
+- **WHEN** the authenticated user submits a standard campaign form or campaign capture form
+- **THEN** a user-scoped call/form notification is available without requiring a duplicate Laravel notification row
+- **AND** another user cannot resolve the item's detail or read key
+
 #### Scenario: Another user's source ID is requested
 - **WHEN** an authenticated user requests notification details for an attendance, history, or database-notification record owned by another user
 - **THEN** the system returns a non-disclosing not-found response
 
 ### Requirement: Mixed notification items are stable, deduplicated, and correctly ordered
-Every notification item SHALL have a stable source-qualified key and occurrence/update timestamp. The service SHALL deduplicate equal keys, order the live daily summary and activity deterministically newest-first, limit the visible response to 25 items, calculate unread count across the bounded 30-day notification window, and indicate when additional items exist.
+Every notification item SHALL have a stable source-qualified key and occurrence/update timestamp. The service SHALL deduplicate equal keys, order current live performance, historical performance, and activity deterministically newest-first, limit the visible response to 25 items, calculate unread count across the bounded 30-day notification window, and indicate when additional items exist.
 
 #### Scenario: A newer history item follows an older supervisor item
 - **WHEN** providers return an older supervisor message and a newer call/form item
-- **THEN** the newer call/form item appears first after the live daily summary
+- **THEN** the newer call/form item appears first after the current-date live performance item
 - **AND** provider concatenation order does not override chronological order
 
 #### Scenario: Realtime item is reconciled with REST
@@ -25,7 +35,7 @@ Every notification item SHALL have a stable source-qualified key and occurrence/
 - **THEN** the panel contains one copy with the server-authoritative data and read state
 
 ### Requirement: Derived notification read state is durable and item-specific
-The system SHALL persist per-user read state for call/form, attendance, and daily-performance items in durable database storage, SHALL use Laravel database notification read state for database notifications, and SHALL expose idempotent single-item and mark-all-read operations. Clearing application cache SHALL NOT make a read derived item unread again.
+The system SHALL persist per-user read state for call/form, attendance, and daily-performance items in durable database storage, SHALL use Laravel database notification read state for database notifications, and SHALL expose idempotent single-item and mark-all-read operations. Historical daily-performance items SHALL not inflate the unread badge merely because they are generated during a later request. Clearing application cache SHALL NOT make a read derived item unread again.
 
 #### Scenario: User opens one notification
 - **WHEN** the user activates an unread notification row
@@ -58,11 +68,11 @@ Notification previews and details SHALL resolve configured campaign names, form 
 Each notification row SHALL be a semantic button operable by pointer, touch, Enter, and Space. Activating it SHALL mark the item read and open a shared modal containing category-appropriate details, with a visible close control, Escape dismissal, visible focus styling, modal focus management, focus restoration to the originating row, and non-color text or semantics for unread/severity state.
 
 #### Scenario: Performance notification is activated
-- **WHEN** the user activates the current-day performance row
+- **WHEN** the user activates a current-day or historical performance row
 - **THEN** the modal shows campaign name, date and business range, personal sales, team totals, Top Agent, per-form totals, and leaderboard subject to amount visibility
 
 #### Scenario: Performance notification compares monthly totals
-- **WHEN** the user opens the current-day performance details
+- **WHEN** the user opens performance details for any available date
 - **THEN** the modal shows current-period and equivalent previous-month sales counts, the count change, and the comparison periods
 - **AND** it shows current-period and equivalent previous-month sales amounts and the amount change when dashboard amount visibility permits monetary totals
 - **AND** zero-baseline comparisons use a readable new-activity state instead of an infinite percentage
