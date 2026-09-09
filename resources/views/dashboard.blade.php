@@ -26,6 +26,18 @@
     $summaryAmountComparison = data_get($summary, 'comparison.amount', []);
     $summaryDaily = data_get($summary, 'daily', []);
     $summaryHasActivity = (bool) data_get($summary, 'has_activity', false);
+    $activityHasValues = static function (array $activity): bool {
+        foreach ((array) ($activity['values'] ?? []) as $value) {
+            if (is_numeric($value) && (float) $value > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+    $dailyActivityHasValues = $activityHasValues((array) ($dailyActivity ?? []));
+    $weeklyActivityHasValues = $activityHasValues((array) ($weeklyActivity ?? []));
+    $monthlyActivityHasValues = $activityHasValues((array) ($monthlyActivity ?? []));
     $summaryCurrencySymbol = (string) data_get($summary, 'currency.symbol', config('dashboard.currency_symbol', '₱'));
     $summaryModeLabel = data_get($summary, 'period.mode') === 'completed_month' ? 'Completed month' : 'Month to date';
     $summaryCurrentPeriodLabel = (string) data_get($summary, 'period.current.label', $monthTitle);
@@ -212,11 +224,11 @@
                         </div>
                     </details>
                 @else
-                    <div class="mt-4 rounded-lg border border-dashed border-[var(--color-border)] px-4 py-8 text-center" role="status">
-                        <x-icon name="chart-bar" class="mx-auto h-8 w-8 text-[var(--color-on-surface-dim)]" />
-                        <p class="mt-3 text-sm font-medium text-[var(--color-on-surface-muted)]">No activity found for the selected period.</p>
-                        <p class="mt-1 text-xs text-[var(--color-on-surface-dim)]">The chart will appear when qualifying sales activity is recorded.</p>
-                    </div>
+                    <x-empty-state
+                        icon="chart-bar"
+                        title="No activity in this period"
+                        description="The comparison chart will appear when qualifying sales activity is recorded for this campaign and period."
+                        class="mt-4" />
                 @endif
             </div>
         </section>
@@ -351,15 +363,36 @@
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-stagger">
         <div class="chart-container">
             <p class="chart-title">Activity — last 24 hours</p>
-            <div id="chart-daily-activity" class="w-full" style="min-height: 240px;"></div>
+            <div id="chart-daily-activity" class="w-full" aria-label="Daily activity chart">
+                <x-empty-state
+                    icon="chart-bar"
+                    :title="$dailyActivityHasValues ? 'Chart visualization unavailable' : 'No activity recorded yet'"
+                    :description="$dailyActivityHasValues ? 'Activity data exists, but the chart could not be rendered. Refresh or use the activity tables below.' : 'No submissions were recorded in the last 24 hours.'"
+                    :tone="$dailyActivityHasValues ? 'warning' : 'neutral'"
+                    class="dashboard-chart-placeholder" />
+            </div>
         </div>
         <div class="chart-container">
             <p class="chart-title">Weekly activity — this week</p>
-            <div id="chart-weekly-activity" class="w-full" style="min-height: 240px;"></div>
+            <div id="chart-weekly-activity" class="w-full" aria-label="Weekly activity chart">
+                <x-empty-state
+                    icon="chart-bar"
+                    :title="$weeklyActivityHasValues ? 'Chart visualization unavailable' : 'No activity recorded yet'"
+                    :description="$weeklyActivityHasValues ? 'Activity data exists, but the chart could not be rendered. Refresh or use the activity tables below.' : 'No submissions were recorded this week.'"
+                    :tone="$weeklyActivityHasValues ? 'warning' : 'neutral'"
+                    class="dashboard-chart-placeholder" />
+            </div>
         </div>
         <div class="chart-container">
             <p class="chart-title">Monthly activity — {{ $monthTitle }}</p>
-            <div id="chart-monthly-activity" class="w-full" style="min-height: 240px;"></div>
+            <div id="chart-monthly-activity" class="w-full" aria-label="Monthly activity chart">
+                <x-empty-state
+                    icon="chart-bar"
+                    :title="$monthlyActivityHasValues ? 'Chart visualization unavailable' : 'No activity recorded yet'"
+                    :description="$monthlyActivityHasValues ? 'Activity data exists, but the chart could not be rendered. Refresh or use the activity tables below.' : 'No submissions were recorded this month.'"
+                    :tone="$monthlyActivityHasValues ? 'warning' : 'neutral'"
+                    class="dashboard-chart-placeholder" />
+            </div>
         </div>
     </div>
     </section>
@@ -520,7 +553,7 @@
                                 </table>
                             </div>
                         @else
-                            <p class="table-empty py-10 text-center text-sm">No submissions for this period.</p>
+                            <p class="table-empty py-10 text-center text-sm">No submissions were recorded for this campaign and period.</p>
                         @endif
                     </div>
                 </section>
@@ -863,6 +896,9 @@
             return;
         }
         if (!Array.isArray(categories) || categories.length === 0) {
+            return;
+        }
+        if (!Array.isArray(values) || !values.some((value) => Number(value) > 0)) {
             return;
         }
 

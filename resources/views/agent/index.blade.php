@@ -133,11 +133,12 @@
         </div>
         @else
         <div class="md-card p-8 text-center">
-            <x-icon name="computer-desktop" class="w-12 h-12 mx-auto mb-3 text-[var(--color-on-surface-dim)] opacity-40" />
-            <p class="text-sm text-[var(--color-on-surface-muted)]">No agent screen fields configured.</p>
-            @can('Super Admin')
-            <a href="{{ route('admin.agent-screen.index') }}" class="link-primary text-xs mt-2 inline-block">Configure fields →</a>
-            @endcan
+            <x-empty-state
+                icon="computer-desktop"
+                title="Agent fields are not configured"
+                description="This campaign has no fields to capture on the Agent Screen yet."
+                :action-href="$user?->isSuperAdmin() ? route('admin.agent-screen.index') : null"
+                action-text="Configure agent fields" />
         </div>
         @endif
 
@@ -146,7 +147,11 @@
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)] mb-4">Recent Activity</h3>
             <div class="timeline" id="activity-timeline">
                 <template x-if="recentCalls.length === 0">
-                    <p class="text-sm text-[var(--color-on-surface-dim)]">No recent activity.</p>
+                    <x-empty-state
+                        icon="clock"
+                        title="No recent call activity"
+                        description="Completed calls will appear here after a disposition is saved."
+                        class="crm-empty-state--compact" />
                 </template>
                 <template x-for="entry in recentCalls" :key="entry.id">
                     <div class="timeline-item pb-3">
@@ -209,24 +214,117 @@
             </div>
         </div>
 
-        @if(($telephonyFeatures['ingroup_management'] ?? true) === true)
-            @include('agent.partials.ingroup-panel')
-        @endif
-        @if(($telephonyFeatures['transfer_controls'] ?? true) === true)
-            @include('agent.partials.transfer-panel')
-        @endif
-        @if(($telephonyFeatures['recording_controls'] ?? true) === true)
-            @include('agent.partials.recording-controls')
-        @endif
-        @if(($telephonyFeatures['dtmf_controls'] ?? true) === true)
-            @include('agent.partials.dtmf-keypad')
-        @endif
-        @if(($telephonyFeatures['callback_controls'] ?? true) === true)
-            @include('agent.partials.callback-form')
-        @endif
-        @if(($telephonyFeatures['lead_tools'] ?? true) === true)
-            @include('agent.partials.lead-search')
-        @endif
+        {{-- Advanced tools stay available without competing with the primary call state. --}}
+        <section id="agent-tool-panels" class="md-card md-card--static p-4 space-y-4" aria-labelledby="agent-tools-title">
+            <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <h3 id="agent-tools-title" class="text-sm font-semibold text-[var(--color-on-surface)]">Call tools</h3>
+                    <p class="text-xs text-[var(--color-on-surface-dim)] mt-1" x-text="activeTool ? toolDescription(activeTool) : 'Select a tool when you need it.'">Select a tool when you need it.</p>
+                </div>
+                <span class="status-chip status-chip-idle shrink-0" x-text="callStateLabel()">Ready</span>
+            </div>
+
+            <div class="agent-tool-tabs" role="tablist" aria-label="Advanced call tools">
+                @if(($telephonyFeatures['ingroup_management'] ?? true) === true)
+                    <button type="button" id="agent-tool-tab-ingroup" class="agent-tool-tab" role="tab"
+                            aria-controls="agent-tool-panel-ingroup"
+                            :aria-selected="activeTool === 'ingroup'"
+                            :class="{ 'is-active': activeTool === 'ingroup' }"
+                            @click="openTool('ingroup')">
+                        <x-icon name="users" class="w-4 h-4" />
+                        <span>Groups</span>
+                    </button>
+                @endif
+                @if(($telephonyFeatures['transfer_controls'] ?? true) === true)
+                    <button type="button" id="agent-tool-tab-transfer" class="agent-tool-tab" role="tab"
+                            aria-controls="agent-tool-panel-transfer"
+                            :aria-selected="activeTool === 'transfer'"
+                            :class="{ 'is-active': activeTool === 'transfer' }"
+                            @click="openTool('transfer')">
+                        <x-icon name="phone" class="w-4 h-4" />
+                        <span>Transfer</span>
+                    </button>
+                @endif
+                @if(($telephonyFeatures['recording_controls'] ?? true) === true)
+                    <button type="button" id="agent-tool-tab-recording" class="agent-tool-tab" role="tab"
+                            aria-controls="agent-tool-panel-recording"
+                            :aria-selected="activeTool === 'recording'"
+                            :class="{ 'is-active': activeTool === 'recording' }"
+                            @click="openTool('recording')">
+                        <x-icon name="microphone" class="w-4 h-4" />
+                        <span>Recording</span>
+                    </button>
+                @endif
+                @if(($telephonyFeatures['dtmf_controls'] ?? true) === true)
+                    <button type="button" id="agent-tool-tab-dtmf" class="agent-tool-tab" role="tab"
+                            aria-controls="agent-tool-panel-dtmf"
+                            :aria-selected="activeTool === 'dtmf'"
+                            :class="{ 'is-active': activeTool === 'dtmf' }"
+                            @click="openTool('dtmf')">
+                        <x-icon name="tag" class="w-4 h-4" />
+                        <span>DTMF</span>
+                    </button>
+                @endif
+                @if(($telephonyFeatures['callback_controls'] ?? true) === true)
+                    <button type="button" id="agent-tool-tab-callback" class="agent-tool-tab" role="tab"
+                            aria-controls="agent-tool-panel-callback"
+                            :aria-selected="activeTool === 'callback'"
+                            :class="{ 'is-active': activeTool === 'callback' }"
+                            @click="openTool('callback')">
+                        <x-icon name="clock" class="w-4 h-4" />
+                        <span>Callback</span>
+                    </button>
+                @endif
+                @if(($telephonyFeatures['lead_tools'] ?? true) === true)
+                    <button type="button" id="agent-tool-tab-lead" class="agent-tool-tab" role="tab"
+                            aria-controls="agent-tool-panel-lead"
+                            :aria-selected="activeTool === 'lead'"
+                            :class="{ 'is-active': activeTool === 'lead' }"
+                            @click="openTool('lead')">
+                        <x-icon name="magnifying-glass" class="w-4 h-4" />
+                        <span>Lead</span>
+                    </button>
+                @endif
+            </div>
+
+            <div x-show="!activeTool" x-cloak class="agent-tool-placeholder">
+                <x-empty-state
+                    icon="adjustments-horizontal"
+                    title="Choose a call tool"
+                    description="The primary dial and hangup controls stay above. Open a tab here only when you need an advanced operation." />
+            </div>
+
+            @if(($telephonyFeatures['ingroup_management'] ?? true) === true)
+                <div id="agent-tool-panel-ingroup" role="tabpanel" tabindex="0" aria-labelledby="agent-tool-tab-ingroup" x-show="activeTool === 'ingroup'" x-cloak>
+                    @include('agent.partials.ingroup-panel')
+                </div>
+            @endif
+            @if(($telephonyFeatures['transfer_controls'] ?? true) === true)
+                <div id="agent-tool-panel-transfer" role="tabpanel" tabindex="0" aria-labelledby="agent-tool-tab-transfer" x-show="activeTool === 'transfer'" x-cloak>
+                    @include('agent.partials.transfer-panel')
+                </div>
+            @endif
+            @if(($telephonyFeatures['recording_controls'] ?? true) === true)
+                <div id="agent-tool-panel-recording" role="tabpanel" tabindex="0" aria-labelledby="agent-tool-tab-recording" x-show="activeTool === 'recording'" x-cloak>
+                    @include('agent.partials.recording-controls')
+                </div>
+            @endif
+            @if(($telephonyFeatures['dtmf_controls'] ?? true) === true)
+                <div id="agent-tool-panel-dtmf" role="tabpanel" tabindex="0" aria-labelledby="agent-tool-tab-dtmf" x-show="activeTool === 'dtmf'" x-cloak>
+                    @include('agent.partials.dtmf-keypad')
+                </div>
+            @endif
+            @if(($telephonyFeatures['callback_controls'] ?? true) === true)
+                <div id="agent-tool-panel-callback" role="tabpanel" tabindex="0" aria-labelledby="agent-tool-tab-callback" x-show="activeTool === 'callback'" x-cloak>
+                    @include('agent.partials.callback-form')
+                </div>
+            @endif
+            @if(($telephonyFeatures['lead_tools'] ?? true) === true)
+                <div id="agent-tool-panel-lead" role="tabpanel" tabindex="0" aria-labelledby="agent-tool-tab-lead" x-show="activeTool === 'lead'" x-cloak>
+                    @include('agent.partials.lead-search')
+                </div>
+            @endif
+        </section>
 
     </div>
 </div>
@@ -253,6 +351,7 @@ window.agentScreen = function() {
         dialBlocked: false,
         predictiveMode: false,
         predictiveDelay: 3,
+        activeTool: null,
         _predictiveTimer: null,
         _leadHydrateTimer: null,
         _suppressLeadWatcher: false,
@@ -367,8 +466,11 @@ window.agentScreen = function() {
                 ['telephony-shortcut-dial', () => this.dial()],
                 ['telephony-shortcut-hangup', () => this.hangup()],
                 ['telephony-shortcut-transfer', () => {
-                    const panel = document.querySelector('[x-data=\"agentScreen()\"]');
-                    if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    if (!this.featureEnabled('transfer_controls')) return;
+                    this.openTool('transfer');
+                    requestAnimationFrame(() => {
+                        document.getElementById('agent-tool-panels')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    });
                 }],
                 ['telephony-shortcut-recording', () => {
                     if (!this.featureEnabled('recording_controls')) return;
@@ -711,6 +813,43 @@ window.agentScreen = function() {
 
         featureEnabled(key) {
             return !!this.features[key];
+        },
+
+        openTool(tool) {
+            const featureByTool = {
+                ingroup: 'ingroup_management',
+                transfer: 'transfer_controls',
+                recording: 'recording_controls',
+                dtmf: 'dtmf_controls',
+                callback: 'callback_controls',
+                lead: 'lead_tools',
+            };
+            const feature = featureByTool[tool];
+            if (!feature || !this.featureEnabled(feature)) {
+                return;
+            }
+            this.activeTool = tool;
+        },
+
+        toolDescription(tool) {
+            return {
+                ingroup: 'Update the active in-groups for this session.',
+                transfer: 'Transfer, conference, park, or retrieve the current call.',
+                recording: 'Start, stop, or check the current call recording.',
+                dtmf: 'Send keypad tones to the current call.',
+                callback: 'Schedule or manage a callback for this lead.',
+                lead: 'Search, load, or switch the current lead.',
+            }[tool] || 'Select a tool when you need it.';
+        },
+
+        callStateLabel() {
+            return {
+                idle: 'Ready',
+                dialing: 'Dialing',
+                ringing: 'Ringing',
+                connected: 'Connected',
+                wrapup: 'Wrap-up',
+            }[this.callState] || 'Call state';
         },
 
         async syncCallStatus() {

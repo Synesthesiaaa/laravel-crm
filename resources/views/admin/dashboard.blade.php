@@ -7,6 +7,17 @@
 @section('content')
 @php
     $agentScreenVisible = app(\App\Services\TelephonyFeatureService::class)->isEnabled('agent_screen_access');
+    $seriesHasValues = static function (array $series): bool {
+        foreach ((array) ($series['values'] ?? []) as $value) {
+            if (is_numeric($value) && (float) $value > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+    $activityTrendHasValues = $seriesHasValues((array) ($activityTrend ?? []));
+    $topAgentsHasValues = $seriesHasValues((array) ($topAgents ?? []));
 @endphp
 <div class="space-y-8">
 
@@ -400,17 +411,39 @@
     </div>
 
     {{-- Charts row --}}
-    @if(!empty($activityTrend['labels']))
+    @if($activityTrendHasValues || $topAgentsHasValues || !empty($activityTrend['labels']) || !empty($topAgents['labels']))
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div class="lg:col-span-2 chart-container">
             <p class="chart-title">Submission Activity — Last 30 days</p>
-            <div id="admin-chart-activity" style="min-height: 240px;"></div>
+            @if($activityTrendHasValues)
+                <div id="admin-chart-activity" aria-label="Submission activity chart"></div>
+            @else
+                <x-empty-state
+                    icon="chart-bar"
+                    title="No submission activity yet"
+                    description="This chart will appear when the selected campaign records submissions in the last 30 days."
+                    class="dashboard-chart-placeholder" />
+            @endif
         </div>
         <div class="chart-container">
             <p class="chart-title">Top Agents</p>
-            <div id="admin-chart-agents" style="min-height: 240px;"></div>
+            @if($topAgentsHasValues)
+                <div id="admin-chart-agents" aria-label="Top agents chart"></div>
+            @else
+                <x-empty-state
+                    icon="users"
+                    title="No agent activity yet"
+                    description="Agent rankings will appear when the selected campaign has qualifying submissions."
+                    class="dashboard-chart-placeholder" />
+            @endif
         </div>
     </div>
+    @else
+        <x-empty-state
+            icon="chart-bar"
+            title="No activity recorded yet"
+            description="Management charts and rankings will appear when the selected campaign records activity."
+            class="md-card" />
     @endif
 
     {{-- Admin navigation grid --}}
@@ -478,7 +511,7 @@
 @endsection
 
 @push('scripts')
-@if(!empty($activityTrend['labels']))
+@if($activityTrendHasValues || $topAgentsHasValues)
 <script>
 (async () => {
     const scope = window.crmSoftNav?.currentScope?.() || window.location.pathname;
@@ -524,8 +557,9 @@
         }
 
         const agentLabels = @json($topAgents['labels'] ?? []);
+        const agentValues = @json($topAgents['values'] ?? []);
         const agentsEl = document.getElementById('admin-chart-agents');
-        if (agentLabels.length && agentsEl) {
+        if (agentLabels.length && agentValues.some((value) => Number(value) > 0) && agentsEl) {
             const agents = new ApexCharts(agentsEl, {
                 series: [{ name: 'Submissions', data: @json($topAgents['values'] ?? []) }],
                 chart: { type: 'bar', height: 240, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },

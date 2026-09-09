@@ -89,7 +89,7 @@ class AgentScreenAccessConfigurationTest extends TestCase
             ->get(route('admin.dashboard'))
             ->assertOk()
             ->assertDontSee('href="'.route('admin.agent-screen.index').'"', false)
-            ->assertDontSee('Agent Screen Cfg', false);
+            ->assertDontSee('Agent Screen Configuration', false);
 
         $this->actingAs($this->superAdmin)
             ->withSession($this->campaignSession())
@@ -110,7 +110,7 @@ class AgentScreenAccessConfigurationTest extends TestCase
             ->get(route('admin.dashboard'))
             ->assertOk()
             ->assertSee('href="'.route('admin.agent-screen.index').'"', false)
-            ->assertSee('Agent Screen Cfg', false);
+            ->assertSee('Agent Screen Configuration', false);
 
         $this->actingAs($this->superAdmin)
             ->withSession($this->campaignSession())

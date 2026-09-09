@@ -101,7 +101,15 @@
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <div class="chart-container">
                 <p class="chart-title">Live call activity</p>
-                <div id="chart-live-activity" style="min-height: 260px;"></div>
+                <div id="chart-live-activity" aria-label="Live call activity chart">
+                    <div x-show="!liveHistory.length" x-cloak class="crm-empty-state report-empty-state" role="status" aria-live="polite">
+                        <span class="crm-empty-state-icon" aria-hidden="true"><x-icon name="signal" class="w-5 h-5" /></span>
+                        <div class="min-w-0">
+                            <p class="crm-empty-state-title">Waiting for a live snapshot</p>
+                            <p class="crm-empty-state-description">Live activity appears after the first polling response is received.</p>
+                        </div>
+                    </div>
+                </div>
                 <p class="text-xs text-[var(--color-on-surface-dim)] mt-2">The chart contains only snapshots received while this page is open.</p>
             </div>
             <div class="md-card p-4 space-y-3">
@@ -337,16 +345,24 @@
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <div class="chart-container">
                 <p class="chart-title">Hourly volume</p>
-                <div x-show="dashboard.status.hourlyLabels.length" id="chart-status-hourly" class="w-full" style="min-height: 280px;"></div>
-                <div x-show="!dashboard.status.hourlyLabels.length" class="table-empty py-10 text-center text-sm text-[var(--color-on-surface-dim)]">
-                    <span x-text="reportSectionMessage(dashboard.status.hourlyState, 'Hourly volume')">Hourly volume unavailable.</span>
+                <div x-show="dashboard.status.hourlyLabels.length" x-cloak id="chart-status-hourly" class="w-full" style="min-height: 280px;"></div>
+                <div x-show="!dashboard.status.hourlyLabels.length" x-cloak class="crm-empty-state report-empty-state" role="status" aria-live="polite">
+                    <span class="crm-empty-state-icon" aria-hidden="true"><x-icon name="chart-bar" class="w-5 h-5" /></span>
+                    <div class="min-w-0">
+                        <p class="crm-empty-state-title" x-text="reportSectionTitle(dashboard.status.hourlyState, 'Hourly volume')">Hourly volume unavailable</p>
+                        <p class="crm-empty-state-description" x-text="reportSectionDescription(dashboard.status.hourlyState, 'Hourly volume')">Hourly volume is unavailable for this scope.</p>
+                    </div>
                 </div>
             </div>
             <div class="chart-container">
                 <p class="chart-title">Status mix</p>
-                <div x-show="dashboard.status.statusLabels.length" id="chart-status-mix" class="w-full" style="min-height: 280px;"></div>
-                <div x-show="!dashboard.status.statusLabels.length" class="table-empty py-10 text-center text-sm text-[var(--color-on-surface-dim)]">
-                    <span x-text="reportSectionMessage(dashboard.status.statusState, 'Status breakdown')">Status breakdown unavailable.</span>
+                <div x-show="dashboard.status.statusLabels.length" x-cloak id="chart-status-mix" class="w-full" style="min-height: 280px;"></div>
+                <div x-show="!dashboard.status.statusLabels.length" x-cloak class="crm-empty-state report-empty-state" role="status" aria-live="polite">
+                    <span class="crm-empty-state-icon" aria-hidden="true"><x-icon name="chart-pie" class="w-5 h-5" /></span>
+                    <div class="min-w-0">
+                        <p class="crm-empty-state-title" x-text="reportSectionTitle(dashboard.status.statusState, 'Status breakdown')">Status breakdown unavailable</p>
+                        <p class="crm-empty-state-description" x-text="reportSectionDescription(dashboard.status.statusState, 'Status breakdown')">Status breakdown is unavailable for this scope.</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -483,9 +499,13 @@
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <div class="chart-container">
                 <p class="chart-title">Top dispositions by volume</p>
-                <div x-show="dashboard.dispo.labels.length" id="chart-dispo-breakdown" class="w-full" style="min-height: 280px;"></div>
-                <div x-show="!dashboard.dispo.labels.length" class="table-empty py-10 text-center text-sm text-[var(--color-on-surface-dim)]">
-                    <span x-text="reportSectionMessage(dashboard.dispo.state, 'Disposition data')">Disposition data unavailable.</span>
+                <div x-show="dashboard.dispo.labels.length" x-cloak id="chart-dispo-breakdown" class="w-full" style="min-height: 280px;"></div>
+                <div x-show="!dashboard.dispo.labels.length" x-cloak class="crm-empty-state report-empty-state" role="status" aria-live="polite">
+                    <span class="crm-empty-state-icon" aria-hidden="true"><x-icon name="tag" class="w-5 h-5" /></span>
+                    <div class="min-w-0">
+                        <p class="crm-empty-state-title" x-text="reportSectionTitle(dashboard.dispo.state, 'Disposition data')">Disposition data unavailable</p>
+                        <p class="crm-empty-state-description" x-text="reportSectionDescription(dashboard.dispo.state, 'Disposition data')">Disposition data is unavailable for this scope.</p>
+                    </div>
                 </div>
             </div>
             <div class="md-card p-4 space-y-3">
@@ -1521,6 +1541,7 @@ window.telephonyReports = function () {
                 return;
             }
 
+            chartElement.innerHTML = '';
             const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
             const textColor = isDark ? '#a1a1aa' : '#52525b';
             const gridColor = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
@@ -1658,6 +1679,34 @@ window.telephonyReports = function () {
             }
 
             return label + ' unavailable. Retry to request a fresh report.';
+        },
+
+        reportSectionTitle(state, label) {
+            if (state === 'loading') {
+                return 'Loading ' + label.toLowerCase();
+            }
+            if (state === 'empty' || state === 'confirmed_zero') {
+                return 'No ' + label.toLowerCase() + ' for this scope';
+            }
+            if (state === 'unsupported' || state === 'parse_failure') {
+                return label + ' unavailable';
+            }
+
+            return label + ' needs attention';
+        },
+
+        reportSectionDescription(state, label) {
+            if (state === 'loading') {
+                return 'The report is still being requested. This message will update when a response arrives.';
+            }
+            if (state === 'empty' || state === 'confirmed_zero') {
+                return 'No ' + label.toLowerCase() + ' was returned for the selected campaign and date range.';
+            }
+            if (state === 'unsupported' || state === 'parse_failure') {
+                return 'The VICIdial response did not include usable ' + label.toLowerCase() + '. Retry or check the report connection.';
+            }
+
+            return 'The report could not provide ' + label.toLowerCase() + '. Retry to request a fresh response.';
         },
 
         formatNumber(value) {

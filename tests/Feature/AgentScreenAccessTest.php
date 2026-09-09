@@ -77,10 +77,15 @@ class AgentScreenAccessTest extends TestCase
                 'url' => route('agent.index'),
             ]);
 
-        $this->actingAs($this->agent)
+        $response = $this->actingAs($this->agent)
             ->withSession($this->campaignSession())
             ->get(route('agent.index'))
             ->assertOk();
+
+        $response->assertSee('id="agent-tool-panels"', false);
+        $response->assertSee('role="tablist"', false);
+        $response->assertSee('id="agent-tool-tab-transfer"', false);
+        $response->assertSee('Choose a call tool', false);
     }
 
     private function enableAgentScreenAccess(): void

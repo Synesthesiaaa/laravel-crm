@@ -34,6 +34,8 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertSee('id="main-content"', false);
         $response->assertSee('tabindex="-1"', false);
         $response->assertSee('aria-controls="sidebar"', false);
+        $response->assertSee('sidebar-section-toggle', false);
+        $response->assertSee('aria-controls="sidebar-section-telephony"', false);
         $response->assertSee('window.crmGracefulLogout && window.crmGracefulLogout()', false);
         $response->assertSee('window.TelephonyMediaPath?.shouldUseSipMedia?.() === true', false);
         $response->assertSee('window.TelephonyMediaPath?.isDual?.() === true', false);
@@ -137,6 +139,9 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertSee('Call Volume Trend', false);
         $response->assertSee('Agent Performance', false);
         $response->assertSee('Disposition Pareto', false);
+        $response->assertSee('reportSectionTitle', false);
+        $response->assertSee('reportSectionDescription', false);
+        $response->assertSee('class="crm-empty-state report-empty-state"', false);
     }
 
     public function test_top_agent_stat_card_renders_sales_summary(): void
@@ -150,6 +155,22 @@ class ViewLifecycleRenderTest extends TestCase
         ])->render();
 
         $this->assertStringContainsString('2 sales · Total value: 125.50', $html);
+    }
+
+    public function test_empty_state_component_renders_a_contextual_status_message(): void
+    {
+        $html = view('components.empty-state', [
+            'icon' => 'chart-bar',
+            'title' => 'No activity recorded yet',
+            'description' => 'Charts will appear when qualifying activity is recorded.',
+            'tone' => 'info',
+        ])->render();
+
+        $this->assertStringContainsString('role="status"', $html);
+        $this->assertStringContainsString('aria-live="polite"', $html);
+        $this->assertStringContainsString('No activity recorded yet', $html);
+        $this->assertStringContainsString('Charts will appear when qualifying activity is recorded.', $html);
+        $this->assertStringContainsString('crm-empty-state--info', $html);
     }
 
     public function test_admin_dashboard_renders_soft_nav_chart_lifecycle_hooks(): void
