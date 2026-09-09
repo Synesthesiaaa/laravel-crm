@@ -8,13 +8,15 @@ const source = fs.readFileSync(new URL('../../resources/js/soft-navigate.js', im
 function setup() {
     const requests = [];
     const scrolls = [];
+    const injectedScripts = [];
     const modal = { open: null, hide() { this.open = null; } };
     const main = { innerHTML: 'initial', querySelectorAll: () => [], querySelector: () => null };
     const document = {
         readyState: 'loading', title: '',
-        body: { dataset: {}, scrollTop: 640 },
+        body: { dataset: {}, scrollTop: 640, appendChild: (element) => injectedScripts.push(element) },
         documentElement: { scrollTop: 640 },
         getElementById: (id) => id === 'main-layout' ? main : null,
+        createElement: () => ({ setAttribute() {} }),
         querySelector: () => null, querySelectorAll: () => [], addEventListener() {},
     };
     const window = {
@@ -40,8 +42,21 @@ function setup() {
     });
     vm.runInContext(source, context);
     const respond = (index, html) => requests[index].resolve({ ok: true, text: async () => html });
-    return { context, window, document, main, requests, scrolls, modal, respond };
+    return { context, window, document, main, requests, scrolls, modal, injectedScripts, respond };
 }
+
+test('soft navigation preserves module scripts when rehydrating page assets', () => {
+    const app = setup();
+    const script = { tagName: 'SCRIPT', type: 'module', src: '/build/assets/dashboard.js', async: false, nextElementSibling: null };
+    const marker = { nextElementSibling: script };
+    const fetchedDocument = { getElementById: (id) => id === 'soft-nav-scripts-marker' ? marker : null };
+
+    app.context.fetchedDocument = fetchedDocument;
+    vm.runInContext('executeScriptsAfterMarker(fetchedDocument)', app.context);
+
+    assert.equal(app.injectedScripts.length, 1);
+    assert.equal(app.injectedScripts[0].type, 'module');
+});
 
 test('background refresh preserves scroll and releases outgoing modal state', async () => {
     const app = setup();

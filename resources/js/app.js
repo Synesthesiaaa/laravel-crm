@@ -7,7 +7,6 @@ import './phone-widget';
 import './quick-form-widget';
 import './soft-navigate';
 import './form-visibility';
-import './agent-capture-webform';
 import './telephony-media-path';
 import './call-history';
 import TelephonyCore from './telephony-core';
@@ -94,26 +93,10 @@ window.crmCharts = {
     },
 };
 
-/** ApexCharts need a resize after layout is stable (full page load, sidebar transition, soft-nav). */
+/** Dashboard charts call this after their own lazy mount or a layout change. */
 window.resizeCrmDashboardCharts = function resizeCrmDashboardCharts() {
     window.crmCharts?.resizeGroup?.('dashboard');
 };
-
-function scheduleDashboardChartResize() {
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-        window.resizeCrmDashboardCharts();
-    }));
-}
-
-// Full page load (e.g. redirect after login): layout/fonts may settle after first chart render
-window.addEventListener('load', () => {
-    scheduleDashboardChartResize();
-});
-
-// After soft-nav layout settles
-window.addEventListener('soft-navigate', () => {
-    scheduleDashboardChartResize();
-});
 
 import Alpine from 'alpinejs';
 import focus from '@alpinejs/focus';

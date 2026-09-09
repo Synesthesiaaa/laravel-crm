@@ -68,6 +68,7 @@ Route::middleware('auth')->group(function () {
 
 Route::middleware(['auth', 'campaign'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('api/dashboard/activity', [DashboardController::class, 'activity'])->name('api.dashboard.activity')->middleware('throttle:api');
     Route::get('records', [RecordsController::class, 'index'])->name('records.index');
     Route::get('api/call-history', [CallHistoryController::class, 'index'])->name('api.call-history')->middleware('throttle:api');
     Route::post('api/call-history/refresh', [CallHistoryController::class, 'refresh'])->name('api.call-history.refresh')->middleware('throttle:api');

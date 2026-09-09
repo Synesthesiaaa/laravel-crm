@@ -34,6 +34,8 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertSee('id="main-content"', false);
         $response->assertSee('tabindex="-1"', false);
         $response->assertSee('aria-controls="sidebar"', false);
+        $response->assertSee('name="description"', false);
+        $response->assertSee('name="robots" content="noindex, nofollow, noarchive"', false);
         $response->assertSee('window.crmGracefulLogout && window.crmGracefulLogout()', false);
         $response->assertSee('window.TelephonyMediaPath?.shouldUseSipMedia?.() === true', false);
         $response->assertSee('window.TelephonyMediaPath?.isDual?.() === true', false);
@@ -75,13 +77,9 @@ class ViewLifecycleRenderTest extends TestCase
             ->get(route('dashboard'));
 
         $response->assertOk();
-        $response->assertSee('window.crmSoftNav?.register?.(scope', false);
-        $response->assertSee('window.crmSoftNav?.isRehydrating?.()', false);
-        $response->assertSee('window.crmSoftNav.refresh({ shouldDefer: shouldDeferRefresh })', false);
-        $response->assertSee('echo.subscribeDashboardChannel?.(campaignCode, scheduleRefresh)', false);
-        $response->assertSee('const fallbackIntervalMs = 30_000;', false);
-        $response->assertSee('window.crmCharts?.register?.(chartGroup, elId, chart);', false);
-        $response->assertSee('window.resizeCrmDashboardCharts?.()', false);
+        $response->assertSee('window.__crmDashboardConfig', false);
+        $response->assertSee('activityEndpoint', false);
+        $response->assertSee('data-activity-chart-loading', false);
         $response->assertSee('Total value:', false);
         $response->assertSee('Sales by form', false);
         $response->assertDontSee('x-on:mouseenter="openSalesModal()"', false);
@@ -90,6 +88,17 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertDontSee('Sales (24h)', false);
         $response->assertDontSee('Top agent (24h)', false);
         $response->assertDontSee('Calls (9h)', false);
+
+        $contents = file_get_contents(resource_path('js/dashboard.js'));
+
+        $this->assertIsString($contents);
+        $this->assertStringContainsString('window.crmDashboard = { init: initDashboard };', $contents);
+        $this->assertStringContainsString("window.addEventListener('soft-navigate'", $contents);
+        $this->assertStringContainsString('window.crmSoftNav?.register?.(scope', $contents);
+        $this->assertStringContainsString('window.crmSoftNav.refresh({ shouldDefer: shouldDeferRefresh })', $contents);
+        $this->assertStringContainsString('window.crmCharts?.register?.(CHART_GROUP', $contents);
+        $this->assertStringContainsString('window.resizeCrmDashboardCharts?.()', $contents);
+        $this->assertStringContainsString('state.config.activityEndpoint', $contents);
     }
 
     public function test_soft_navigation_script_handles_marked_get_forms(): void
@@ -105,6 +114,17 @@ class ViewLifecycleRenderTest extends TestCase
         $this->assertStringContainsString('campaignName', $contents);
         $this->assertStringContainsString("querySelector('#main-content')", $contents);
         $this->assertStringContainsString('preventScroll: true', $contents);
+    }
+
+    public function test_public_asset_rules_cache_hashed_build_files_and_enable_compression_when_available(): void
+    {
+        $contents = file_get_contents(public_path('.htaccess'));
+
+        $this->assertIsString($contents);
+        $this->assertStringContainsString('build/assets/', $contents);
+        $this->assertStringContainsString('max-age=31536000, immutable', $contents);
+        $this->assertStringContainsString('AddOutputFilterByType DEFLATE application/javascript', $contents);
+        $this->assertStringContainsString('AddOutputFilterByType DEFLATE text/css', $contents);
     }
 
     public function test_reports_preserve_last_good_data_when_a_refresh_is_unavailable(): void

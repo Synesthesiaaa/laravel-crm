@@ -6,6 +6,7 @@ use App\Services\CampaignService;
 use App\Services\DashboardLayoutService;
 use App\Services\DashboardSalesRangeService;
 use App\Services\DashboardStatsService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -35,9 +36,6 @@ class DashboardController extends Controller
             $campaign,
             now(config('app.timezone')),
         );
-        $dailyActivity = $this->dashboardStats->getLast24HourActivityTrend($campaign);
-        $weeklyActivity = $this->dashboardStats->getWeeklyActivityTrend($campaign);
-        $monthlyActivity = $this->dashboardStats->getMonthlyActivityTrend($campaign);
         $dashboardLayout = $this->dashboardLayoutService->getForCampaign($campaign);
 
         return view('dashboard', [
@@ -49,12 +47,23 @@ class DashboardController extends Controller
             'dashboardSummary' => $dashboardSummary,
             'dailyCampaignReport' => $dailyCampaignReport,
             'salesFilter' => $salesFilter,
-            'dailyActivity' => $dailyActivity,
-            'weeklyActivity' => $weeklyActivity,
-            'monthlyActivity' => $monthlyActivity,
             'agentLeaderboard' => $kpis['agent_leaderboard'] ?? [],
             'dashboardLayout' => $dashboardLayout,
             'salesMode' => data_get($dashboardLayout, 'sales.mode', 'legacy'),
+        ]);
+    }
+
+    public function activity(Request $request): JsonResponse
+    {
+        $campaign = (string) $request->session()->get('campaign', 'mbsales');
+
+        return response()->json([
+            'success' => true,
+            'activity' => [
+                'daily' => $this->dashboardStats->getLast24HourActivityTrend($campaign),
+                'weekly' => $this->dashboardStats->getWeeklyActivityTrend($campaign),
+                'monthly' => $this->dashboardStats->getMonthlyActivityTrend($campaign),
+            ],
         ]);
     }
 }

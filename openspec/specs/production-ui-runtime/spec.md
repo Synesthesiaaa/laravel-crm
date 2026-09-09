@@ -8,7 +8,7 @@ Keep the CRM's compiled frontend assets, Alpine bootstrap, and shared UI motion 
 
 ### Requirement: Production HTML resolves the current frontend build
 
-The application SHALL prevent successful HTML shell responses from being served from a stale browser or intermediary cache, while allowing hashed Vite build assets to use long-lived caching.
+The application SHALL prevent successful HTML shell responses from being served from a stale browser or intermediary cache, while allowing hashed Vite build assets to use long-lived caching. Route-specific Vite entries SHALL resolve from the same current manifest as the shared shell.
 
 #### Scenario: Authenticated page loads after a frontend deployment
 
@@ -18,7 +18,7 @@ The application SHALL prevent successful HTML shell responses from being served 
 #### Scenario: Versioned frontend assets are requested
 
 - **WHEN** the browser requests a hashed CSS or JavaScript file from the Vite build output
-- **THEN** the asset URL remains versioned by the Vite manifest and is eligible for the existing immutable static-asset cache policy
+- **THEN** the asset URL remains versioned by the Vite manifest, including route-specific dashboard or embedded-form entries, and is eligible for the existing immutable static-asset cache policy
 
 ### Requirement: Production does not accidentally use a development Vite server
 

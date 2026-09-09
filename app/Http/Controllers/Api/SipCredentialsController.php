@@ -17,14 +17,14 @@ class SipCredentialsController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'No SIP extension assigned to this account. Contact your administrator.',
-            ], 422);
+            ]);
         }
 
         if (empty($user->sip_password)) {
             return response()->json([
                 'success' => false,
                 'message' => 'SIP password not configured for this account. Contact your administrator.',
-            ], 422);
+            ]);
         }
 
         return response()->json([

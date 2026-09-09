@@ -31,7 +31,8 @@
     <div id="quick-form-widget-shell"
          class="widget-panel-upper-left absolute origin-bottom-right flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg"
          :class="isResizing ? 'transition-none' : 'transition-all duration-300 ease-out'"
-         :style="shellStyle">
+         :style="shellStyle"
+         style="width: 1px; height: 1px; max-width: 1px; max-height: 1px; overflow: hidden;">
         <div x-show="open"
              x-transition.opacity.duration.200ms
              class="flex items-center justify-between gap-2 bg-[var(--color-surface-elevated)] px-3 py-2 shrink-0">
