@@ -1,0 +1,327 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-10T06:58:26.1336097+08:00",
+  "title": "Design System: Laravel CRM",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Signal Magenta",
+        "canonical": "#e91e8c",
+        "tonalRamp": ["oklch(0.18 0.12 350)", "oklch(0.28 0.17 350)", "oklch(0.38 0.21 350)", "oklch(0.48 0.23 350)", "oklch(0.60 0.24 350)", "oklch(0.72 0.21 350)", "oklch(0.84 0.15 350)", "oklch(0.95 0.08 350)"]
+      },
+      "primary-hover": {
+        "role": "primary",
+        "displayName": "Signal Magenta Hover",
+        "canonical": "#f43f9e",
+        "tonalRamp": ["oklch(0.18 0.12 350)", "oklch(0.28 0.17 350)", "oklch(0.38 0.21 350)", "oklch(0.48 0.23 350)", "oklch(0.60 0.24 350)", "oklch(0.72 0.21 350)", "oklch(0.84 0.15 350)", "oklch(0.95 0.08 350)"]
+      },
+      "primary-muted": {
+        "role": "primary",
+        "displayName": "Signal Wash",
+        "canonical": "rgba(233, 30, 140, 0.15)",
+        "tonalRamp": ["oklch(0.18 0.12 350 / 0.15)", "oklch(0.28 0.17 350 / 0.15)", "oklch(0.38 0.21 350 / 0.15)", "oklch(0.48 0.23 350 / 0.15)", "oklch(0.60 0.24 350 / 0.15)", "oklch(0.72 0.21 350 / 0.15)", "oklch(0.84 0.15 350 / 0.15)", "oklch(0.95 0.08 350 / 0.15)"]
+      },
+      "primary-foreground": {
+        "role": "primary",
+        "displayName": "Signal Ink",
+        "canonical": "#ffffff",
+        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.25 0 0)", "oklch(0.35 0 0)", "oklch(0.45 0 0)", "oklch(0.58 0 0)", "oklch(0.70 0 0)", "oklch(0.83 0 0)", "oklch(0.95 0 0)"]
+      },
+      "success": {
+        "role": "status",
+        "displayName": "Connection Green",
+        "canonical": "#22c55e",
+        "tonalRamp": ["oklch(0.18 0.09 145)", "oklch(0.28 0.13 145)", "oklch(0.38 0.17 145)", "oklch(0.48 0.19 145)", "oklch(0.60 0.20 145)", "oklch(0.72 0.17 145)", "oklch(0.84 0.12 145)", "oklch(0.95 0.06 145)"]
+      },
+      "success-muted": {
+        "role": "status",
+        "displayName": "Connection Green Wash",
+        "canonical": "rgba(34, 197, 94, 0.15)",
+        "tonalRamp": ["oklch(0.18 0.09 145 / 0.15)", "oklch(0.28 0.13 145 / 0.15)", "oklch(0.38 0.17 145 / 0.15)", "oklch(0.48 0.19 145 / 0.15)", "oklch(0.60 0.20 145 / 0.15)", "oklch(0.72 0.17 145 / 0.15)", "oklch(0.84 0.12 145 / 0.15)", "oklch(0.95 0.06 145 / 0.15)"]
+      },
+      "success-fg": {
+        "role": "status",
+        "displayName": "Connection Green Ink",
+        "canonical": "#86efac",
+        "tonalRamp": ["oklch(0.18 0.09 145)", "oklch(0.28 0.13 145)", "oklch(0.38 0.17 145)", "oklch(0.48 0.19 145)", "oklch(0.60 0.20 145)", "oklch(0.72 0.17 145)", "oklch(0.84 0.12 145)", "oklch(0.95 0.06 145)"]
+      },
+      "warning": {
+        "role": "status",
+        "displayName": "Queue Amber",
+        "canonical": "#f59e0b",
+        "tonalRamp": ["oklch(0.18 0.08 85)", "oklch(0.28 0.12 85)", "oklch(0.38 0.16 85)", "oklch(0.48 0.18 85)", "oklch(0.60 0.18 85)", "oklch(0.72 0.16 85)", "oklch(0.84 0.11 85)", "oklch(0.95 0.05 85)"]
+      },
+      "warning-muted": {
+        "role": "status",
+        "displayName": "Queue Amber Wash",
+        "canonical": "rgba(245, 158, 11, 0.15)",
+        "tonalRamp": ["oklch(0.18 0.08 85 / 0.15)", "oklch(0.28 0.12 85 / 0.15)", "oklch(0.38 0.16 85 / 0.15)", "oklch(0.48 0.18 85 / 0.15)", "oklch(0.60 0.18 85 / 0.15)", "oklch(0.72 0.16 85 / 0.15)", "oklch(0.84 0.11 85 / 0.15)", "oklch(0.95 0.05 85 / 0.15)"]
+      },
+      "warning-fg": {
+        "role": "status",
+        "displayName": "Queue Amber Ink",
+        "canonical": "#fde68a",
+        "tonalRamp": ["oklch(0.18 0.08 85)", "oklch(0.28 0.12 85)", "oklch(0.38 0.16 85)", "oklch(0.48 0.18 85)", "oklch(0.60 0.18 85)", "oklch(0.72 0.16 85)", "oklch(0.84 0.11 85)", "oklch(0.95 0.05 85)"]
+      },
+      "danger": {
+        "role": "status",
+        "displayName": "Alert Red",
+        "canonical": "#ef4444",
+        "tonalRamp": ["oklch(0.18 0.10 28)", "oklch(0.28 0.15 28)", "oklch(0.38 0.19 28)", "oklch(0.48 0.22 28)", "oklch(0.60 0.22 28)", "oklch(0.72 0.19 28)", "oklch(0.84 0.14 28)", "oklch(0.95 0.07 28)"]
+      },
+      "danger-hover": {
+        "role": "status",
+        "displayName": "Alert Red Hover",
+        "canonical": "#f87171",
+        "tonalRamp": ["oklch(0.18 0.10 28)", "oklch(0.28 0.15 28)", "oklch(0.38 0.19 28)", "oklch(0.48 0.22 28)", "oklch(0.60 0.22 28)", "oklch(0.72 0.19 28)", "oklch(0.84 0.14 28)", "oklch(0.95 0.07 28)"]
+      },
+      "danger-muted": {
+        "role": "status",
+        "displayName": "Alert Red Wash",
+        "canonical": "rgba(239, 68, 68, 0.15)",
+        "tonalRamp": ["oklch(0.18 0.10 28 / 0.15)", "oklch(0.28 0.15 28 / 0.15)", "oklch(0.38 0.19 28 / 0.15)", "oklch(0.48 0.22 28 / 0.15)", "oklch(0.60 0.22 28 / 0.15)", "oklch(0.72 0.19 28 / 0.15)", "oklch(0.84 0.14 28 / 0.15)", "oklch(0.95 0.07 28 / 0.15)"]
+      },
+      "danger-fg": {
+        "role": "status",
+        "displayName": "Alert Red Ink",
+        "canonical": "#fca5a5",
+        "tonalRamp": ["oklch(0.18 0.10 28)", "oklch(0.28 0.15 28)", "oklch(0.38 0.19 28)", "oklch(0.48 0.22 28)", "oklch(0.60 0.22 28)", "oklch(0.72 0.19 28)", "oklch(0.84 0.14 28)", "oklch(0.95 0.07 28)"]
+      },
+      "info": {
+        "role": "status",
+        "displayName": "Information Blue",
+        "canonical": "#3b82f6",
+        "tonalRamp": ["oklch(0.18 0.10 260)", "oklch(0.28 0.15 260)", "oklch(0.38 0.19 260)", "oklch(0.48 0.20 260)", "oklch(0.60 0.20 260)", "oklch(0.72 0.17 260)", "oklch(0.84 0.12 260)", "oklch(0.95 0.06 260)"]
+      },
+      "info-muted": {
+        "role": "status",
+        "displayName": "Information Blue Wash",
+        "canonical": "rgba(59, 130, 246, 0.15)",
+        "tonalRamp": ["oklch(0.18 0.10 260 / 0.15)", "oklch(0.28 0.15 260 / 0.15)", "oklch(0.38 0.19 260 / 0.15)", "oklch(0.48 0.20 260 / 0.15)", "oklch(0.60 0.20 260 / 0.15)", "oklch(0.72 0.17 260 / 0.15)", "oklch(0.84 0.12 260 / 0.15)", "oklch(0.95 0.06 260 / 0.15)"]
+      },
+      "info-fg": {
+        "role": "status",
+        "displayName": "Information Blue Ink",
+        "canonical": "#93c5fd",
+        "tonalRamp": ["oklch(0.18 0.10 260)", "oklch(0.28 0.15 260)", "oklch(0.38 0.19 260)", "oklch(0.48 0.20 260)", "oklch(0.60 0.20 260)", "oklch(0.72 0.17 260)", "oklch(0.84 0.12 260)", "oklch(0.95 0.06 260)"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Carbon Base",
+        "canonical": "#0a0a0a",
+        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.25 0 0)", "oklch(0.35 0 0)", "oklch(0.45 0 0)", "oklch(0.58 0 0)", "oklch(0.70 0 0)", "oklch(0.83 0 0)", "oklch(0.95 0 0)"]
+      },
+      "surface-1": {
+        "role": "neutral",
+        "displayName": "Charcoal Layer One",
+        "canonical": "#111111",
+        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.25 0 0)", "oklch(0.35 0 0)", "oklch(0.45 0 0)", "oklch(0.58 0 0)", "oklch(0.70 0 0)", "oklch(0.83 0 0)", "oklch(0.95 0 0)"]
+      },
+      "surface-2": {
+        "role": "neutral",
+        "displayName": "Charcoal Layer Two",
+        "canonical": "#1a1a1a",
+        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.25 0 0)", "oklch(0.35 0 0)", "oklch(0.45 0 0)", "oklch(0.58 0 0)", "oklch(0.70 0 0)", "oklch(0.83 0 0)", "oklch(0.95 0 0)"]
+      },
+      "surface-3": {
+        "role": "neutral",
+        "displayName": "Charcoal Layer Three",
+        "canonical": "#242424",
+        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.25 0 0)", "oklch(0.35 0 0)", "oklch(0.45 0 0)", "oklch(0.58 0 0)", "oklch(0.70 0 0)", "oklch(0.83 0 0)", "oklch(0.95 0 0)"]
+      },
+      "surface-card": {
+        "role": "neutral",
+        "displayName": "Card Charcoal",
+        "canonical": "#141414",
+        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.25 0 0)", "oklch(0.35 0 0)", "oklch(0.45 0 0)", "oklch(0.58 0 0)", "oklch(0.70 0 0)", "oklch(0.83 0 0)", "oklch(0.95 0 0)"]
+      },
+      "surface-elevated": {
+        "role": "neutral",
+        "displayName": "Elevated Charcoal",
+        "canonical": "#1f1f1f",
+        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.25 0 0)", "oklch(0.35 0 0)", "oklch(0.45 0 0)", "oklch(0.58 0 0)", "oklch(0.70 0 0)", "oklch(0.83 0 0)", "oklch(0.95 0 0)"]
+      },
+      "on-surface": {
+        "role": "neutral",
+        "displayName": "Primary Ink",
+        "canonical": "#fafafa",
+        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.25 0 0)", "oklch(0.35 0 0)", "oklch(0.45 0 0)", "oklch(0.58 0 0)", "oklch(0.70 0 0)", "oklch(0.83 0 0)", "oklch(0.95 0 0)"]
+      },
+      "on-surface-muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "#a1a1aa",
+        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.25 0 0)", "oklch(0.35 0 0)", "oklch(0.45 0 0)", "oklch(0.58 0 0)", "oklch(0.70 0 0)", "oklch(0.83 0 0)", "oklch(0.95 0 0)"]
+      },
+      "on-surface-dim": {
+        "role": "neutral",
+        "displayName": "Dim Ink",
+        "canonical": "#71717a",
+        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.25 0 0)", "oklch(0.35 0 0)", "oklch(0.45 0 0)", "oklch(0.58 0 0)", "oklch(0.70 0 0)", "oklch(0.83 0 0)", "oklch(0.95 0 0)"]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "rgba(255,255,255,0.08)",
+        "tonalRamp": ["rgba(255,255,255,0.04)", "rgba(255,255,255,0.06)", "rgba(255,255,255,0.08)", "rgba(255,255,255,0.10)", "rgba(255,255,255,0.14)", "rgba(255,255,255,0.20)", "rgba(255,255,255,0.32)", "rgba(255,255,255,0.48)"]
+      },
+      "border-strong": {
+        "role": "neutral",
+        "displayName": "Strong Hairline",
+        "canonical": "rgba(255,255,255,0.14)",
+        "tonalRamp": ["rgba(255,255,255,0.06)", "rgba(255,255,255,0.08)", "rgba(255,255,255,0.12)", "rgba(255,255,255,0.16)", "rgba(255,255,255,0.22)", "rgba(255,255,255,0.30)", "rgba(255,255,255,0.40)", "rgba(255,255,255,0.55)"]
+      }
+    },
+    "typographyMeta": {
+      "display": {"displayName": "Display", "purpose": "KPI values and short, high-priority auth or workspace titles."},
+      "headline": {"displayName": "Headline", "purpose": "Page titles, welcome statements, and major section introductions."},
+      "title": {"displayName": "Title", "purpose": "Card headings, modal titles, and component-level headings."},
+      "body": {"displayName": "Body", "purpose": "Default page copy and explanatory operational text."},
+      "field": {"displayName": "Field", "purpose": "Entered values and select contents inside readable controls."},
+      "action": {"displayName": "Action", "purpose": "Buttons and explicit controls with clear verbs."},
+      "label": {"displayName": "Label", "purpose": "Uppercase tracked metadata, navigation groups, and table headers."},
+      "status": {"displayName": "Status", "purpose": "Compact state chips and live operational annotations."}
+    },
+    "shadows": [
+      {"name": "ambient-low", "value": "0 1px 3px rgba(0,0,0,.4)", "purpose": "Resting cards, charts, and table shells in the dark theme."},
+      {"name": "interactive-lift", "value": "0 4px 6px -1px rgba(0,0,0,.4), 0 2px 4px -2px rgba(0,0,0,.3)", "purpose": "Hovered cards, inline edit panels, and secondary floating layers."},
+      {"name": "overlay-lift", "value": "0 10px 15px -3px rgba(0,0,0,.4), 0 4px 6px -4px rgba(0,0,0,.3)", "purpose": "Dropdowns, notifications, modals, slide-overs, toasts, and expanded widgets."},
+      {"name": "signal-glow", "value": "0 0 20px rgba(233,30,140,.25)", "purpose": "Restrained hover feedback for primary actions and signal controls."}
+    ],
+    "motion": [
+      {"name": "motion-fast", "value": "150ms ease", "purpose": "Small hover, focus, and pressed-state transitions."},
+      {"name": "motion-standard", "value": "220ms ease", "purpose": "Standard control and panel state transitions."},
+      {"name": "content-reveal", "value": "350ms ease-out", "purpose": "Subtle page content entrance without delaying task access."},
+      {"name": "panel-transition", "value": "280ms cubic-bezier(.4,0,.2,1)", "purpose": "Sidebar width and shell movement across responsive states."},
+      {"name": "auth-sheet", "value": "950ms cubic-bezier(.22,1,.36,1)", "purpose": "One-time login sheet entrance; disabled under reduced motion."}
+    ],
+    "breakpoints": [
+      {"name": "sm", "value": "640px"},
+      {"name": "md", "value": "768px"},
+      {"name": "lg", "value": "1024px"},
+      {"name": "xl", "value": "1440px"},
+      {"name": "2xl", "value": "1536px"}
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The main save, submit, connect, or confirm action on a surface.",
+      "html": "<button class=\"ds-btn-primary\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m5 12 4 4L19 6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></svg><span>Save record</span></button>",
+      "css": ".ds-btn-primary { display:inline-flex; align-items:center; justify-content:center; gap:.5rem; min-height:2.75rem; padding:.5625rem 1.125rem; border:0; border-radius:8px; background:var(--color-primary); color:var(--color-primary-foreground); font:600 .875rem/1.5 \"DM Sans\",sans-serif; cursor:pointer; transition:background .2s,transform .15s,box-shadow .2s; } .ds-btn-primary svg { width:1rem; height:1rem; } .ds-btn-primary:hover { background:var(--color-primary-hover); box-shadow:var(--shadow-glow); } .ds-btn-primary:active { transform:scale(.98); } .ds-btn-primary:focus-visible { outline:2px solid var(--color-primary); outline-offset:3px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A solid-tonal alternative for adjacent, non-destructive actions.",
+      "html": "<button class=\"ds-btn-secondary\">Search records</button>",
+      "css": ".ds-btn-secondary { display:inline-flex; align-items:center; justify-content:center; min-height:2.75rem; padding:.5rem 1rem; border:1px solid var(--color-border-strong); border-radius:8px; background:var(--color-surface-2); color:var(--color-on-surface); font:500 .875rem/1.5 \"DM Sans\",sans-serif; cursor:pointer; transition:background .2s,border-color .2s; } .ds-btn-secondary:hover { background:var(--color-surface-3); border-color:var(--color-border-strong); } .ds-btn-secondary:focus-visible { outline:2px solid var(--color-primary); outline-offset:3px; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "A low-emphasis action for retry, dismiss, navigation, or secondary utility work.",
+      "html": "<button class=\"ds-btn-ghost\">Retry</button>",
+      "css": ".ds-btn-ghost { display:inline-flex; align-items:center; justify-content:center; min-height:2.75rem; padding:.5rem 1rem; border:1px solid var(--color-border); border-radius:8px; background:transparent; color:var(--color-on-surface-muted); font:500 .875rem/1.5 \"DM Sans\",sans-serif; cursor:pointer; transition:background .2s,color .2s,border-color .2s; } .ds-btn-ghost:hover { background:var(--color-surface-2); color:var(--color-on-surface); border-color:var(--color-border-strong); } .ds-btn-ghost:focus-visible { outline:2px solid var(--color-primary); outline-offset:3px; }"
+    },
+    {
+      "name": "Form Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "A readable labeled field with tonal fill, semantic focus, and error support.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Phone number</span><input class=\"ds-input\" type=\"text\" placeholder=\"+63 XXX XXX XXXX\"></label>",
+      "css": ".ds-field { display:flex; flex-direction:column; gap:.375rem; } .ds-field-label { color:var(--color-on-surface-muted); font:700 .75rem/1.2 \"DM Sans\",sans-serif; letter-spacing:.05em; text-transform:uppercase; } .ds-input { width:100%; min-height:2.75rem; padding:.5625rem .875rem; border:1px solid var(--color-border); border-radius:8px; background:var(--color-surface-2); color:var(--color-on-surface); font:400 .9375rem/1.5 \"DM Sans\",sans-serif; transition:border-color .2s,box-shadow .2s; } .ds-input::placeholder { color:var(--color-on-surface-dim); } .ds-input:focus { outline:0; border-color:var(--color-primary); box-shadow:0 0 0 3px var(--color-primary-muted); } .ds-input[aria-invalid=\"true\"] { border-color:var(--color-danger); box-shadow:0 0 0 3px var(--color-danger-muted); } .ds-input:focus-visible { outline:2px solid var(--color-primary); outline-offset:3px; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "A quiet grouping surface for dashboard metrics, forms, charts, activity, or tools.",
+      "html": "<article class=\"ds-card\"><p class=\"ds-card-label\">Activity</p><h3>Last 24 hours</h3><p class=\"ds-card-copy\">No activity recorded yet.</p></article>",
+      "css": ".ds-card { padding:1.25rem 1.5rem; border:1px solid var(--color-border); border-radius:12px; background:var(--color-surface-card); box-shadow:var(--shadow-1); color:var(--color-on-surface); } .ds-card-label { margin:0 0 .5rem; color:var(--color-on-surface-dim); font:700 .7rem/1.2 \"DM Sans\",sans-serif; letter-spacing:.08em; text-transform:uppercase; } .ds-card h3 { margin:0; font:600 1rem/1.5 \"DM Sans\",sans-serif; } .ds-card-copy { margin:.5rem 0 0; color:var(--color-on-surface-muted); font:400 .875rem/1.5 \"DM Sans\",sans-serif; } .ds-card:hover { border-color:var(--color-border-strong); box-shadow:var(--shadow-2); }"
+    },
+    {
+      "name": "Sidebar Navigation",
+      "kind": "nav",
+      "refersTo": "navigation",
+      "description": "The campaign-aware navigation rail with quiet rest states and a clear active route.",
+      "html": "<nav class=\"ds-sidebar\" aria-label=\"Primary\"><div class=\"ds-sidebar-brand\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 12h3l2-7 4 14 2-7h5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></svg><span>Laravel CRM</span></div><a class=\"ds-sidebar-item ds-is-active\" href=\"#\" aria-current=\"page\"><svg class=\"ds-sidebar-icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"></rect><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"></rect><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"></rect><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"></rect></svg><span>Dashboard</span></a><a class=\"ds-sidebar-item\" href=\"#\"><svg class=\"ds-sidebar-icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 19V5m0 14h16M8 16v-5m4 5V7m4 9v-8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"></path></svg><span>Agent Screen</span></a></nav>",
+      "css": ".ds-sidebar { width:280px; min-height:100%; padding:.5rem; border-right:1px solid var(--color-border); background:var(--color-surface-1); color:var(--color-on-surface-muted); font:400 .9375rem/1.5 \"DM Sans\",sans-serif; } .ds-sidebar-brand { display:flex; align-items:center; gap:.75rem; height:4rem; padding:0 1rem; border-bottom:1px solid var(--color-border); color:var(--color-on-surface); font-weight:700; text-transform:uppercase; letter-spacing:.08em; } .ds-sidebar-brand svg { width:1.25rem; height:1.25rem; color:var(--color-primary); flex:none; } .ds-sidebar-item { display:flex; align-items:center; gap:.75rem; min-height:2.75rem; margin-top:.25rem; padding:.5625rem .875rem; border-radius:10px; color:var(--color-on-surface-muted); text-decoration:none; font-weight:500; transition:background .2s,color .2s; } .ds-sidebar-item:hover { background:var(--color-surface-2); color:var(--color-on-surface); } .ds-sidebar-item.ds-is-active { background:var(--color-primary-muted); box-shadow:inset 3px 0 0 var(--color-primary); color:var(--color-primary); font-weight:600; } .ds-sidebar-item:focus-visible { outline:2px solid var(--color-primary); outline-offset:3px; } .ds-sidebar-icon { width:1.125rem; height:1.125rem; flex:none; color:currentColor; }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-primary",
+      "description": "A compact state annotation for connection, call, outcome, or attention state.",
+      "html": "<span class=\"ds-badge ds-badge-success\"><span class=\"ds-badge-dot\"></span>Connected</span>",
+      "css": ".ds-badge { display:inline-flex; align-items:center; gap:.25rem; padding:.1875rem .5rem; border-radius:9999px; font:600 .7rem/1.2 \"DM Sans\",sans-serif; letter-spacing:.03em; white-space:nowrap; } .ds-badge-dot { width:.375rem; height:.375rem; border-radius:50%; background:currentColor; } .ds-badge-success { background:var(--color-success-muted); color:var(--color-success-fg); } .ds-badge-warning { background:var(--color-warning-muted); color:var(--color-warning-fg); } .ds-badge-danger { background:var(--color-danger-muted); color:var(--color-danger-fg); } .ds-badge-info { background:var(--color-info-muted); color:var(--color-info-fg); } .ds-badge-primary { background:var(--color-primary-muted); color:var(--color-primary); }"
+    },
+    {
+      "name": "Notification Dropdown",
+      "kind": "custom",
+      "refersTo": "notification-dropdown",
+      "description": "An elevated, scan-first tray for unread, empty, loading, and retryable updates.",
+      "html": "<section class=\"ds-notifications\" aria-label=\"Notifications\"><header class=\"ds-notifications-header\"><strong>Notifications</strong><button class=\"ds-notifications-link\">Mark all read</button></header><button class=\"ds-notification ds-is-unread\"><span class=\"ds-notification-icon\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 8v4m0 4h.01M5.1 19h13.8c1.3 0 2.1-1.4 1.5-2.5L13.5 4.2c-.7-1.2-2.3-1.2-3 0L3.6 16.5C3 17.6 3.8 19 5.1 19Z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></svg></span><span><strong>Daily performance</strong><small>New activity is available</small></span></button></section>",
+      "css": ".ds-notifications { width:20rem; overflow:hidden; border:1px solid var(--color-border-strong); border-radius:12px; background:var(--color-surface-2); box-shadow:var(--shadow-3); color:var(--color-on-surface); font-family:\"DM Sans\",sans-serif; } .ds-notifications-header { display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:1rem; border-bottom:1px solid var(--color-border); font-size:.875rem; } .ds-notifications-link { min-height:2.75rem; padding:.25rem .5rem; border:0; background:transparent; color:var(--color-primary); font:600 .75rem/1.5 \"DM Sans\",sans-serif; cursor:pointer; } .ds-notification { display:flex; align-items:flex-start; gap:.75rem; width:100%; min-height:2.75rem; padding:.75rem 1rem; border:0; border-bottom:1px solid var(--color-border); background:transparent; color:inherit; text-align:left; cursor:pointer; } .ds-notification:hover,.ds-notification:focus-visible { background:var(--color-surface-3); } .ds-notification.ds-is-unread { background:var(--color-primary-muted); } .ds-notification-icon { display:inline-flex; align-items:center; justify-content:center; width:2rem; height:2rem; flex:none; border-radius:9999px; background:var(--color-info-muted); color:var(--color-info-fg); } .ds-notification-icon svg { width:1rem; height:1rem; } .ds-notification strong { display:block; font-size:.875rem; } .ds-notification small { display:block; margin-top:.125rem; color:var(--color-on-surface-muted); font-size:.75rem; } .ds-notification:focus-visible { outline:2px solid var(--color-primary); outline-offset:-2px; }"
+    },
+    {
+      "name": "Telephony Widget",
+      "kind": "custom",
+      "refersTo": "widget-launcher",
+      "description": "A persistent call-control launcher that expands into a bounded, resizable session panel.",
+      "html": "<div class=\"ds-phone-widget\"><button class=\"ds-widget-launcher\" aria-label=\"Phone / VICIdial session\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 5.18 2 2 0 0 1 4.11 3h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.63a2 2 0 0 1-.45 2.11L8 10.73a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.85.29 1.73.5 2.63.62A2 2 0 0 1 22 16.92z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></svg><span class=\"ds-widget-dot\"></span></button><section class=\"ds-phone-panel\"><header><strong>Phone</strong><span class=\"ds-badge ds-badge-success\">Online</span></header><p>VICIdial session ready.</p><button class=\"ds-btn-primary\">Open session</button></section></div>",
+      "css": ".ds-phone-widget { position:relative; display:inline-flex; flex-direction:column; align-items:flex-end; gap:.5rem; font-family:\"DM Sans\",sans-serif; } .ds-widget-launcher { position:relative; display:inline-flex; align-items:center; justify-content:center; width:3rem; height:3rem; border:2px solid color-mix(in srgb,var(--color-primary) 55%,var(--color-border-strong) 45%); border-radius:9999px; background:var(--color-surface-elevated); color:var(--color-on-surface); box-shadow:0 0 0 2px color-mix(in srgb,var(--color-surface) 70%,transparent),var(--shadow-2); cursor:pointer; } .ds-widget-launcher svg { width:1.5rem; height:1.5rem; } .ds-widget-launcher:hover { background:var(--color-surface-2); } .ds-widget-launcher:focus-visible { outline:2px solid var(--color-primary); outline-offset:3px; } .ds-widget-dot { position:absolute; top:-.125rem; right:-.125rem; width:.75rem; height:.75rem; border:2px solid var(--color-surface); border-radius:50%; background:var(--color-success); } .ds-phone-panel { width:20rem; padding:1rem; border:1px solid var(--color-border-strong); border-radius:14px; background:var(--color-surface-2); box-shadow:var(--shadow-3); color:var(--color-on-surface); } .ds-phone-panel header { display:flex; align-items:center; justify-content:space-between; gap:.5rem; padding-bottom:.75rem; border-bottom:1px solid var(--color-border); } .ds-phone-panel p { color:var(--color-on-surface-muted); font-size:.75rem; line-height:1.5; } .ds-phone-panel .ds-btn-primary { width:100%; }"
+    },
+    {
+      "name": "Login Glass Sheet",
+      "kind": "custom",
+      "refersTo": "auth-surface",
+      "description": "The expressive public-entry surface for credentials and campaign selection.",
+      "html": "<main class=\"ds-login-root\"><section class=\"ds-login-sheet\"><h1>Sign in</h1><p>Enter your credentials to continue</p><label class=\"ds-login-field\"><input type=\"text\" placeholder=\" \" aria-label=\"Username\"><span>Username</span></label><button class=\"ds-login-button\">Sign in</button></section></main>",
+      "css": ".ds-login-root { display:flex; align-items:center; justify-content:center; min-height:100%; padding:1.5rem; background:radial-gradient(circle at 12% 16%,color-mix(in srgb,var(--color-primary) 18%,transparent) 0%,transparent 42%),linear-gradient(160deg,var(--color-surface) 0%,var(--color-surface-1) 46%,var(--color-surface-2) 100%); font-family:\"DM Sans\",sans-serif; } .ds-login-sheet { width:100%; max-width:400px; padding:2.5rem; overflow:hidden; border:1px solid color-mix(in srgb,var(--color-border) 70%,rgba(255,255,255,.14) 30%); border-radius:26px; background:linear-gradient(165deg,color-mix(in srgb,var(--color-surface-card) 72%,transparent),color-mix(in srgb,var(--color-surface-card) 38%,transparent)); backdrop-filter:blur(42px) saturate(185%); box-shadow:0 0 0 1px color-mix(in srgb,#fff 9%,transparent),0 28px 56px -16px rgba(0,0,0,.45),0 12px 24px -12px rgba(0,0,0,.22),inset 0 1px 0 color-mix(in srgb,#fff 14%,transparent); color:var(--color-on-surface); } .ds-login-sheet h1 { margin:0 0 .25rem; font-size:1.75rem; line-height:1.5; } .ds-login-sheet p { margin:0 0 1.75rem; color:var(--color-on-surface-muted); font-size:.9375rem; } .ds-login-field { position:relative; display:block; margin-bottom:1.25rem; } .ds-login-field input { width:100%; padding:1.25rem 1rem .5rem; border:1px solid var(--color-border); border-radius:12px; background:color-mix(in srgb,var(--color-surface-2) 92%,transparent); color:var(--color-on-surface); font:400 .9375rem/1.5 \"DM Sans\",sans-serif; } .ds-login-field input:focus { outline:0; border-color:var(--color-primary); box-shadow:0 0 0 3px var(--color-primary-muted); } .ds-login-field span { position:absolute; left:1rem; top:50%; transform:translateY(-50%); color:var(--color-on-surface-muted); font-size:.875rem; pointer-events:none; transition:top .2s,transform .2s,font-size .2s; } .ds-login-field input:focus + span,.ds-login-field input:not(:placeholder-shown) + span { top:.5rem; transform:none; font-size:.6875rem; color:var(--color-on-surface-dim); } .ds-login-button { width:100%; min-height:2.75rem; padding:.875rem 1.25rem; border:0; border-radius:14px; background:linear-gradient(180deg,var(--color-primary-hover),var(--color-primary) 48%,color-mix(in srgb,var(--color-primary) 88%,#000 12%)); color:var(--color-primary-foreground); font:600 .9375rem/1.5 \"DM Sans\",sans-serif; cursor:pointer; box-shadow:0 10px 28px -6px color-mix(in srgb,var(--color-primary) 55%,transparent); } .ds-login-button:hover { transform:translateY(-2px); } .ds-login-button:focus-visible { outline:2px solid var(--color-primary); outline-offset:3px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Operational Signal Desk",
+    "overview": "Laravel CRM is an instrument panel for agents, Team Leaders, and administrators who need to see the next actionable state without leaving the call workflow. The visual system is dark-first and telephony-aware: a quiet charcoal surface stack gives the magenta brand signal and semantic status colors room to communicate clearly during long operational sessions.\n\nThe density is compact but not cramped. Fixed navigation, a sticky header, short labels, compact cards and tables, and persistent floating call/form controls keep the workspace scannable while preserving room for lead data and form completion. Surfaces are calm at rest and gain lift only when they become interactive or layered. The public login is intentionally more expressive, using a glass sheet as an entry moment without turning the operational workspace into a decorative canvas.",
+    "keyCharacteristics": [
+      "Dark-first, dual-theme operations shell.",
+      "Magenta as a scarce action, focus, and active-state signal.",
+      "Semantic status colors for connection, outcome, attention, and error.",
+      "Compact, data-rich surfaces designed for repeated scanning.",
+      "Telephony widgets that remain available without obscuring the primary work.",
+      "Visible focus, generous touch targets, contained overflow, and reduced-motion support."
+    ],
+    "rules": [
+      {"name": "The One Signal Rule", "body": "Use the primary accent to answer “what is active or actionable?” Keep it rare enough that a magenta edge, label, or control is immediately legible.", "section": "colors"},
+      {"name": "The Tonal Layer Rule", "body": "Prefer a change in surface tone before adding a border or shadow. Every layer should explain what is above or below it.", "section": "colors"},
+      {"name": "The Case Is a Signal Rule", "body": "Uppercase and letter spacing belong to labels, navigation groups, table headers, and status metadata; headings and body copy remain in sentence case.", "section": "typography"},
+      {"name": "The Layer-First Rule", "body": "Add tonal separation before adding shadow. Shadows should describe a surface crossing a boundary, not decorate every component.", "section": "elevation"}
+    ],
+    "dos": [
+      "Do use the frontmatter tokens and existing CSS custom properties as the source of truth.",
+      "Do keep magenta for action, selection, focus, active navigation, and meaningful emphasis.",
+      "Do pair semantic colors with text, icons, or structure so state is never color-only.",
+      "Do preserve the 44px interaction target and visible focus treatment on every interactive control.",
+      "Do keep telephony state, campaign scope, and the next call action visible in the working context.",
+      "Do contain table and notification overflow inside their own scroll regions.",
+      "Do honor the dark/light theme switch and prefers-reduced-motion: reduce behavior.",
+      "Do use lift and motion to clarify state changes, not to make static data feel busy."
+    ],
+    "donts": [
+      "Don't turn the operational shell into a glassmorphism or gradient-heavy composition; reserve that atmosphere for the login threshold and explicitly branded entry surfaces.",
+      "Don't add a second brand accent or use semantic colors as decoration.",
+      "Don't nest arbitrary rounded cards inside rounded cards without a real grouping need.",
+      "Don't make static cards translate on hover or hide important actions behind hover-only behavior.",
+      "Don't rely on color alone for call, connection, validation, or notification state.",
+      "Don't shrink labels, fields, or icon controls below the established touch and readability floor to fit a dense layout.",
+      "Don't allow a wide report, widget, or notification detail to create page-level horizontal overflow.",
+      "Don't add motion that continues, pulses, or shimmers when the user has requested reduced motion."
+    ]
+  }
+}
