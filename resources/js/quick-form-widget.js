@@ -27,8 +27,6 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         maxHeightPadding: 16,
     };
     let widgetCtx = null;
-    let formOptionsRequest = null;
-    let formSourceRequest = null;
     const persistence = createLayoutPersistence({
         widgetKey: 'quick_form',
         onHydrate: (layout) => widgetCtx?.applyLayout(layout),
@@ -127,9 +125,6 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
             this.splitScreen = next;
             this.open = next ? true : this.preSplitOpen;
             this.onWindowResize();
-            if (next) {
-                void this.ensureFormSource();
-            }
         },
 
         applyLayout(layout) {
@@ -265,32 +260,24 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         },
 
         async loadFormOptions() {
-            if (formOptionsRequest) {
-                return formOptionsRequest;
-            }
-
             this.formsLoading = true;
-            formOptionsRequest = window.axios.get('/api/forms/quick/bootstrap')
-                .then(({ data }) => {
-                    this.formOptions = normalizeQuickFormOptions(data?.forms);
 
-                    if (!this.currentCampaign && typeof data?.campaign === 'string') {
-                        this.currentCampaign = data.campaign;
-                    }
+            try {
+                const { data } = await window.axios.get('/api/forms/quick/bootstrap');
+                this.formOptions = normalizeQuickFormOptions(data?.forms);
 
-                    return data;
-                })
-                .catch(() => {
-                    this.formOptions = [];
+                if (!this.currentCampaign && typeof data?.campaign === 'string') {
+                    this.currentCampaign = data.campaign;
+                }
 
-                    return null;
-                })
-                .finally(() => {
-                    this.formsLoading = false;
-                    formOptionsRequest = null;
-                });
+                return data;
+            } catch (_) {
+                this.formOptions = [];
 
-            return formOptionsRequest;
+                return null;
+            } finally {
+                this.formsLoading = false;
+            }
         },
 
         syncFromUrl(rawUrl) {
@@ -361,7 +348,6 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
             this.open = !this.open;
             if (this.open) {
                 this.ensurePanelFitsViewport();
-                void this.ensureFormSource();
             }
             if (this.open && this.refreshOnOpen && this.currentFormType && this.currentCampaign) {
                 this.syncFrameSrc(this.currentFormType, this.currentCampaign, { force: true });
@@ -506,19 +492,6 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
             this.loading = false;
         },
 
-        async ensureFormSource() {
-            if (formSourceRequest) {
-                return formSourceRequest;
-            }
-
-            formSourceRequest = this.resolveDefaultSource()
-                .finally(() => {
-                    formSourceRequest = null;
-                });
-
-            return formSourceRequest;
-        },
-
         async init() {
             widgetCtx = this;
             window.addEventListener('crm-widget-workspace', this._onWorkspaceChange.bind(this));
@@ -533,8 +506,8 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
                     void this.loadFormOptions();
                 }
 
-                if (!switched && !this.frameSrc && (this.open || this.isSplitActive())) {
-                    void this.ensureFormSource();
+                if (!switched && !this.frameSrc) {
+                    void this.resolveDefaultSource();
                 }
             });
             document.addEventListener('click', (event) => {
@@ -546,9 +519,7 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
             this.onWindowResize();
             await persistence.load();
             this.syncFromUrl(window.location.href);
-            if (this.open || this.isSplitActive() || this.frameSrc) {
-                await this.ensureFormSource();
-            }
+            await this.resolveDefaultSource();
         },
     };
 };

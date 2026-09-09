@@ -55,16 +55,6 @@
         return ($amount > 0 ? '+' : ($amount < 0 ? '-' : '')).$formatSummaryAmount(abs((float) $amount), $compact);
     };
     $formatSignedCount = static fn (float|int $count): string => ($count > 0 ? '+' : ($count < 0 ? '-' : '')).number_format(abs((float) $count));
-    $dashboardConfig = [
-        'campaign' => $campaign ?? '',
-        'dashboardPath' => route('dashboard', [], false),
-        'activityEndpoint' => route('api.dashboard.activity', [], false),
-        'summaryDaily' => $summaryDaily,
-        'summaryCurrencySymbol' => $summaryCurrencySymbol,
-        'summaryCurrentLabel' => $summaryCurrentPeriodLabel,
-        'summaryPreviousLabel' => $summaryPreviousPeriodLabel,
-        'amountChartsEnabled' => $amountVisible('charts'),
-    ];
 @endphp
 <div class="space-y-8 flex flex-col">
 
@@ -361,21 +351,15 @@
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-stagger">
         <div class="chart-container">
             <p class="chart-title">Activity — last 24 hours</p>
-            <div id="chart-daily-activity" class="dashboard-activity-chart w-full" role="img" aria-label="Daily activity for the last 24 hours" aria-busy="true">
-                <div class="skeleton h-[240px] w-full" data-activity-chart-loading aria-hidden="true"></div>
-            </div>
+            <div id="chart-daily-activity" class="w-full" style="min-height: 240px;"></div>
         </div>
         <div class="chart-container">
             <p class="chart-title">Weekly activity — this week</p>
-            <div id="chart-weekly-activity" class="dashboard-activity-chart w-full" role="img" aria-label="Weekly activity for the current week" aria-busy="true">
-                <div class="skeleton h-[240px] w-full" data-activity-chart-loading aria-hidden="true"></div>
-            </div>
+            <div id="chart-weekly-activity" class="w-full" style="min-height: 240px;"></div>
         </div>
         <div class="chart-container">
             <p class="chart-title">Monthly activity — {{ $monthTitle }}</p>
-            <div id="chart-monthly-activity" class="dashboard-activity-chart w-full" role="img" aria-label="Monthly activity for the current month" aria-busy="true">
-                <div class="skeleton h-[240px] w-full" data-activity-chart-loading aria-hidden="true"></div>
-            </div>
+            <div id="chart-monthly-activity" class="w-full" style="min-height: 240px;"></div>
         </div>
     </div>
     </section>
@@ -602,8 +586,377 @@
 
 @push('scripts')
 <script>
-window.__crmDashboardConfig = @js($dashboardConfig);
-window.crmDashboard?.init(window.__crmDashboardConfig);
+(async () => {
+    const scope = window.crmSoftNav?.currentScope?.() || window.location.pathname;
+    const chartGroup = 'dashboard';
+    const campaignCode = @json($campaign ?? '');
+    const fallbackIntervalMs = 30_000;
+    let dashboardTeardown = null;
+    let fallbackTimer = null;
+    let refreshTimer = null;
+    let refreshInFlight = false;
+    let lastInteractionAt = 0;
+    let liveUpdatesStopped = false;
+    const markInteraction = () => { lastInteractionAt = Date.now(); };
+    let echo = null;
+    let echoReadyHandler = null;
+    let summaryChart = null;
+    let summaryChartConfig = null;
+    let summaryMode = 'volume';
+    const summaryDaily = @json($summaryDaily);
+    const summaryCurrencySymbol = @json($summaryCurrencySymbol);
+    const summaryCurrentLabel = @json($summaryCurrentPeriodLabel);
+    const summaryPreviousLabel = @json($summaryPreviousPeriodLabel);
+
+    function destroyCharts() {
+        window.crmCharts?.destroyGroup?.(chartGroup);
+        summaryChart = null;
+        summaryChartConfig = null;
+    }
+
+    function shouldDeferRefresh() {
+        return document.hidden
+            || Boolean(window.Alpine?.store('modal')?.open)
+            || Boolean(window.Alpine?.store('confirm')?.visible)
+            || Boolean(document.activeElement?.matches('input, select, textarea, [contenteditable="true"]'))
+            || Date.now() - lastInteractionAt < 1500;
+    }
+
+    function scheduleRefresh() {
+        window.clearTimeout(refreshTimer);
+        refreshTimer = window.setTimeout(() => {
+            if (liveUpdatesStopped || refreshInFlight || typeof window.crmSoftNav?.refresh !== 'function') {
+                return;
+            }
+
+            if (shouldDeferRefresh()) {
+                scheduleRefresh();
+                return;
+            }
+
+            refreshInFlight = true;
+            Promise.resolve(window.crmSoftNav.refresh({ shouldDefer: shouldDeferRefresh })).then((refreshed) => {
+                if (refreshed === false && !liveUpdatesStopped) scheduleRefresh();
+            }).catch(() => {
+                // The next fallback or campaign event retries a failed refresh.
+            }).finally(() => {
+                refreshInFlight = false;
+            });
+        }, 350);
+    }
+
+    function teardownLiveUpdates() {
+        liveUpdatesStopped = true;
+        document.removeEventListener('scroll', markInteraction, true);
+        document.removeEventListener('pointerdown', markInteraction, true);
+        document.removeEventListener('keydown', markInteraction, true);
+        window.clearTimeout(refreshTimer);
+        window.clearInterval(fallbackTimer);
+        refreshTimer = null;
+        fallbackTimer = null;
+        if (echoReadyHandler) {
+            window.removeEventListener('telephony-echo:ready', echoReadyHandler);
+            echoReadyHandler = null;
+        }
+        dashboardTeardown?.();
+        dashboardTeardown = null;
+    }
+
+    function startLiveUpdates() {
+        document.addEventListener('scroll', markInteraction, { capture: true, passive: true });
+        document.addEventListener('pointerdown', markInteraction, { capture: true, passive: true });
+        document.addEventListener('keydown', markInteraction, true);
+        const initializeEcho = () => {
+            echo = window.TelephonyEcho;
+            if (!echo?.isBroadcastEnabled?.()) {
+                return;
+            }
+
+            echo.initEcho?.();
+            dashboardTeardown = echo.subscribeDashboardChannel?.(campaignCode, scheduleRefresh) || null;
+        };
+
+        if (window.TelephonyEcho) {
+            initializeEcho();
+        } else {
+            echoReadyHandler = initializeEcho;
+            window.addEventListener('telephony-echo:ready', echoReadyHandler, { once: true });
+        }
+
+        fallbackTimer = window.setInterval(() => {
+            if (!(echo || window.TelephonyEcho)?.isEchoConnected?.()) {
+                scheduleRefresh();
+            }
+        }, fallbackIntervalMs);
+    }
+
+    function setSummaryChartStatus(message) {
+        const status = document.querySelector('[data-summary-chart-status]');
+        if (status) {
+            status.textContent = message;
+        }
+    }
+
+    function clearSummaryChartLoading() {
+        document.querySelector('[data-summary-chart-loading]')?.remove();
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;',
+        })[character]);
+    }
+
+    function formatSummaryValue(value, mode = summaryMode) {
+        const numericValue = Number(value) || 0;
+        if (mode === 'amount') {
+            return `${numericValue < 0 ? '-' : ''}${summaryCurrencySymbol}${Math.abs(numericValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
+
+        return Math.round(numericValue).toLocaleString();
+    }
+
+    function formatSummaryAxisValue(value, mode = summaryMode) {
+        const numericValue = Math.abs(Number(value) || 0);
+        if (mode !== 'amount' || numericValue < 1000) {
+            return formatSummaryValue(value, mode);
+        }
+
+        const units = [[1_000_000_000, 'B'], [1_000_000, 'M'], [1_000, 'K']];
+        const unit = units.find(([threshold]) => numericValue >= threshold);
+        const scaled = numericValue / unit[0];
+        return `${Number(value) < 0 ? '-' : ''}${summaryCurrencySymbol}${scaled.toFixed(1).replace(/\.0$/, '')}${unit[1]}`;
+    }
+
+    function formatSignedSummaryValue(value, mode = summaryMode) {
+        const numericValue = Number(value) || 0;
+        return `${numericValue > 0 ? '+' : numericValue < 0 ? '-' : ''}${formatSummaryValue(Math.abs(numericValue), mode)}`;
+    }
+
+    function summarySeries() {
+        const key = summaryMode === 'amount' ? 'amount' : 'count';
+
+        return [
+            { name: summaryCurrentLabel, data: summaryDaily.map((point) => point.current[key]) },
+            { name: summaryPreviousLabel, data: summaryDaily.map((point) => point.previous[key]) },
+        ];
+    }
+
+    function summaryTooltip({ dataPointIndex }) {
+        const point = summaryDaily[dataPointIndex];
+        if (!point) {
+            return '';
+        }
+
+        const key = summaryMode === 'amount' ? 'amount' : 'count';
+        const currentValue = Number(point.current[key]) || 0;
+        const hasPreviousEquivalent = point.previous_date !== null;
+        const previousValue = hasPreviousEquivalent ? Number(point.previous[key]) || 0 : null;
+        const difference = hasPreviousEquivalent ? currentValue - previousValue : null;
+        const comparison = !hasPreviousEquivalent
+            ? 'No equivalent date'
+            : previousValue === 0
+                ? (currentValue === 0 ? 'No change vs last month' : 'New activity vs last month')
+                : `${difference >= 0 ? '+' : ''}${((difference / previousValue) * 100).toFixed(2)}% vs last month`;
+        const currentDate = escapeHtml(point.current_date);
+        const previousDate = escapeHtml(point.previous_date || 'No equivalent date');
+        const currentLabel = escapeHtml(summaryCurrentLabel);
+        const previousLabel = escapeHtml(summaryPreviousLabel);
+        const previousDisplay = hasPreviousEquivalent ? formatSummaryValue(previousValue) : '—';
+        const differenceDisplay = hasPreviousEquivalent ? formatSignedSummaryValue(difference) : '—';
+
+        return `<div class="px-3 py-2 text-xs" style="background: var(--color-surface-card); color: var(--color-on-surface);">
+            <div class="font-semibold">Day ${escapeHtml(point.label)}</div>
+            <div class="mt-2 flex justify-between gap-6"><span>${currentLabel} <span class="text-[var(--color-on-surface-dim)]">(${currentDate})</span></span><strong>${formatSummaryValue(currentValue)}</strong></div>
+            <div class="flex justify-between gap-6"><span>${previousLabel} <span class="text-[var(--color-on-surface-dim)]">(${previousDate})</span></span><strong>${previousDisplay}</strong></div>
+            <div class="mt-2 border-t border-[var(--color-border)] pt-2"><span class="text-[var(--color-on-surface-dim)]">Difference</span> <strong>${differenceDisplay}</strong> <span class="text-[var(--color-on-surface-dim)]">${escapeHtml(comparison)}</span></div>
+        </div>`;
+    }
+
+    function summaryChartOptions(config) {
+        const amountMode = summaryMode === 'amount';
+        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+        return {
+            series: summarySeries(),
+            chart: {
+                type: 'line',
+                height: 300,
+                width: '100%',
+                toolbar: { show: false },
+                background: 'transparent',
+                fontFamily: 'DM Sans, ui-sans-serif',
+                animations: { enabled: !reduceMotion, easing: 'easeinout', speed: 400 },
+            },
+            colors: ['#e91e8c', config.isDark ? '#a1a1aa' : '#52525b'],
+            stroke: { curve: 'smooth', width: [3, 2], dashArray: [0, 6] },
+            markers: { size: 3, strokeWidth: 0, hover: { size: 5 } },
+            xaxis: {
+                categories: summaryDaily.map((point) => point.label),
+                labels: { style: { colors: config.textColor, fontSize: '11px' }, rotate: 0, hideOverlappingLabels: true },
+                axisBorder: { show: false },
+                axisTicks: { show: false },
+                title: { text: 'Day of month', style: { color: config.textColor, fontSize: '11px', fontWeight: 500 } },
+            },
+            yaxis: {
+                ...(amountMode ? {} : { min: 0 }),
+                labels: { style: { colors: config.textColor, fontSize: '11px' }, formatter: (value) => formatSummaryAxisValue(value) },
+                title: { text: amountMode ? `Amount (${summaryCurrencySymbol})` : 'Transactions', style: { color: config.textColor, fontSize: '11px', fontWeight: 500 } },
+            },
+            grid: { borderColor: config.gridColor, strokeDashArray: 3 },
+            tooltip: { theme: config.isDark ? 'dark' : 'light', shared: false, intersect: true, custom: summaryTooltip },
+            dataLabels: { enabled: false },
+            legend: { show: true, position: 'top', horizontalAlign: 'left', labels: { colors: config.textColor } },
+            theme: { mode: config.isDark ? 'dark' : 'light' },
+        };
+    }
+
+    async function mountDashboardSummaryChart(ApexCharts, config) {
+        const el = document.getElementById('chart-dashboard-summary');
+        if (!el || !document.getElementById('main-layout')?.contains(el)) {
+            return;
+        }
+        if (!Array.isArray(summaryDaily) || summaryDaily.length === 0) {
+            clearSummaryChartLoading();
+            el.setAttribute('aria-busy', 'false');
+            setSummaryChartStatus('No daily comparison data is available.');
+            return;
+        }
+
+        el.innerHTML = '';
+        summaryChartConfig = config;
+        summaryChart = new ApexCharts(el, summaryChartOptions(config));
+        window.crmCharts?.register?.(chartGroup, 'chart-dashboard-summary', summaryChart);
+
+        try {
+            await summaryChart.render();
+            el.setAttribute('aria-busy', 'false');
+            setSummaryChartStatus('Comparison chart ready.');
+        } catch (_) {
+            el.setAttribute('aria-busy', 'false');
+            setSummaryChartStatus('Chart visualization is unavailable. Use the daily summary data table below.');
+        }
+    }
+
+    window.setDashboardSummaryMode = (mode) => {
+        summaryMode = @json($amountVisible('charts')) && mode === 'amount' ? 'amount' : 'volume';
+        if (!summaryChart || !summaryChartConfig) {
+            return;
+        }
+
+        const options = summaryChartOptions(summaryChartConfig);
+        Promise.all([
+            summaryChart.updateSeries(options.series, true),
+            summaryChart.updateOptions({ yaxis: options.yaxis, tooltip: options.tooltip }, false, true),
+        ]).catch(() => {
+            setSummaryChartStatus('Chart visualization is unavailable. Use the daily summary data table below.');
+        });
+    };
+
+    async function mountAreaChart(ApexCharts, elId, categories, values, config) {
+        const el = document.getElementById(elId);
+        if (!el || !document.getElementById('main-layout')?.contains(el)) {
+            return;
+        }
+        if (!Array.isArray(categories) || categories.length === 0) {
+            return;
+        }
+
+        el.innerHTML = '';
+        const chart = new ApexCharts(el, {
+            series: [{ name: 'Submissions', data: values }],
+            chart: {
+                type: 'area',
+                height: 240,
+                width: '100%',
+                toolbar: { show: false },
+                background: 'transparent',
+                fontFamily: 'DM Sans, ui-sans-serif',
+                animations: { enabled: true, easing: 'easeinout', speed: 600 },
+            },
+            colors: ['#e91e8c'],
+            fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: .35, opacityTo: .03 } },
+            stroke: { curve: 'smooth', width: 2 },
+            xaxis: {
+                categories,
+                labels: { style: { colors: config.textColor, fontSize: '11px' }, rotate: -30 },
+                axisBorder: { show: false },
+                axisTicks: { show: false },
+            },
+            yaxis: { labels: { style: { colors: config.textColor, fontSize: '11px' } }, min: 0 },
+            grid: { borderColor: config.gridColor, strokeDashArray: 3 },
+            tooltip: { theme: config.isDark ? 'dark' : 'light' },
+            dataLabels: { enabled: false },
+            theme: { mode: config.isDark ? 'dark' : 'light' },
+        });
+
+        window.crmCharts?.register?.(chartGroup, elId, chart);
+        await chart.render();
+
+        try {
+            chart.resize();
+        } catch (_) {}
+    }
+
+    async function renderCharts() {
+        destroyCharts();
+
+        if (document.readyState === 'loading') {
+            await new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+        }
+
+        const ApexCharts = await window.ApexChartsLoader?.() ?? null;
+        if (!ApexCharts) {
+            clearSummaryChartLoading();
+            setSummaryChartStatus('Chart visualization is unavailable. Use the daily summary data table below.');
+            return;
+        }
+
+        const main = document.getElementById('main-layout');
+        if (!main || (!main.querySelector('#chart-monthly-activity') && !main.querySelector('#chart-dashboard-summary'))) {
+            return;
+        }
+
+        const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+        const config = {
+            isDark,
+            textColor: isDark ? '#a1a1aa' : '#52525b',
+            gridColor: isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)',
+        };
+
+        await Promise.all([
+            mountAreaChart(ApexCharts, 'chart-daily-activity', @json($dailyActivity['labels'] ?? []), @json($dailyActivity['values'] ?? []), config),
+            mountAreaChart(ApexCharts, 'chart-weekly-activity', @json($weeklyActivity['labels'] ?? []), @json($weeklyActivity['values'] ?? []), config),
+            mountAreaChart(ApexCharts, 'chart-monthly-activity', @json($monthlyActivity['labels'] ?? []), @json($monthlyActivity['values'] ?? []), config),
+            mountDashboardSummaryChart(ApexCharts, config),
+        ]);
+
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        window.resizeCrmDashboardCharts?.();
+        requestAnimationFrame(() => window.resizeCrmDashboardCharts?.());
+        setTimeout(() => window.resizeCrmDashboardCharts?.(), 120);
+        setTimeout(() => window.resizeCrmDashboardCharts?.(), 360);
+    }
+
+    window.crmSoftNav?.register?.(scope, {
+        beforeSwap: () => {
+            teardownLiveUpdates();
+            destroyCharts();
+        },
+        afterSwap: () => {
+            void renderCharts();
+        },
+    });
+
+    startLiveUpdates();
+
+    if (!window.crmSoftNav?.isRehydrating?.()) {
+        await renderCharts();
+    }
+})();
 </script>
-@vite('resources/js/dashboard.js')
 @endpush

@@ -11,7 +11,7 @@
       })();
     </script>
     <title>{{ $formName }} - {{ $campaignName }}</title>
-    @vite(['resources/css/app.css', 'resources/js/form-widget-entry.js'])
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-[var(--color-surface)]">
     <main class="p-4 lg:p-6">

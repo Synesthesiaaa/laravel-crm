@@ -164,9 +164,6 @@ function executeScriptsAfterMarker(doc) {
         if (el.tagName === 'SCRIPT') {
             const s = document.createElement('script');
             s.setAttribute('data-soft-nav-injected', '1');
-            if (el.type) {
-                s.type = el.type;
-            }
             if (el.src) {
                 s.src = el.src;
                 s.async = el.async;

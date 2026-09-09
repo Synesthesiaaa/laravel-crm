@@ -66,7 +66,9 @@
            'sidebar-mobile-open': $store.sidebar.mobileOpen,
        }"
        x-data
-       @keydown.escape="$store.sidebar.closeMobile()">
+       @keydown.escape="$store.sidebar.closeMobile()"
+       role="navigation"
+       aria-label="Main navigation">
 
     <div class="sidebar-header">
         <x-brand :branding="$branding" variant="sidebar" />

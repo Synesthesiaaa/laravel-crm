@@ -53,8 +53,7 @@
              'transition-none': isResizing || isSplitterResizing,
              'transition-all duration-300 ease-out': !isResizing && !isSplitterResizing,
          }"
-         :style="shellStyle"
-         style="width: 1px; height: 1px; max-width: 1px; max-height: 1px; overflow: hidden;">
+         :style="shellStyle">
 
         <div x-show="open"
              x-transition.opacity.duration.200ms

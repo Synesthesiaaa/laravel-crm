@@ -5,21 +5,6 @@ const DEFAULT_BOUNDS = {
     maxHeightPadding: 24,
 };
 
-let layoutsRequest = null;
-
-function sharedLayouts() {
-    if (!layoutsRequest) {
-        layoutsRequest = window.axios.get('/api/widgets/layouts')
-            .then(({ data }) => data?.layouts ?? {})
-            .catch((error) => {
-                layoutsRequest = null;
-                throw error;
-            });
-    }
-
-    return layoutsRequest;
-}
-
 /** Shared bottom-right FAB stack (click-to-call, softphone, quick-form anchor). */
 export const FAB_STACK = {
     baseBottomPx: 24,
@@ -83,8 +68,8 @@ export function createLayoutPersistence({
 
     const load = async () => {
         try {
-            const layouts = await sharedLayouts();
-            const layout = layouts?.[widgetKey];
+            const { data } = await window.axios.get('/api/widgets/layouts');
+            const layout = data?.layouts?.[widgetKey];
             if (layout && typeof layout === 'object') {
                 onHydrate(layout);
             }
