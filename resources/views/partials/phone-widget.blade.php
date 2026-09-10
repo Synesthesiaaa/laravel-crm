@@ -27,13 +27,15 @@
      @click.stop>
 
     <button type="button"
-            class="widget-launcher flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-elevated)] text-[var(--color-on-surface)] shadow-lg transition hover:bg-[var(--color-surface-2)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] relative"
+            class="widget-launcher flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-elevated)] text-[var(--color-on-surface)] transition hover:bg-[var(--color-surface-2)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] relative"
             @click="toggleOpen()"
             :aria-expanded="open"
+            :aria-label="open ? 'Minimize Phone widget' : 'Open Phone widget'"
             aria-controls="phone-widget-shell"
             title="Phone / VICIdial session">
         <x-icon name="phone" class="w-6 h-6" />
         <span class="absolute -top-0.5 -right-0.5 flex h-3 w-3 rounded-full border-2 border-[var(--color-surface)]"
+              aria-hidden="true"
               :class="{
                   'bg-emerald-500': vici.phase === 'ready' && $store.vicidial.loggedIn,
                   'bg-amber-400': ['requesting','iframe_loading','syncing'].includes(vici.phase),
@@ -47,20 +49,25 @@
     </button>
 
     <div id="phone-widget-shell"
-         class="phone-widget-shell relative flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg"
+         class="widget-shell phone-widget-shell relative flex flex-col overflow-hidden"
          :class="{
              'phone-widget-shell--open': open,
+             'widget-shell--open': open || isSplitActive(),
              'transition-none': isResizing || isSplitterResizing,
-             'transition-all duration-300 ease-out': !isResizing && !isSplitterResizing,
          }"
          :style="shellStyle">
 
         <div x-show="open"
              x-transition.opacity.duration.200ms
-             class="flex items-center justify-between gap-2 bg-[var(--color-surface-elevated)] px-3 py-2 shrink-0 border-b border-[var(--color-border)]">
-            <div class="flex items-center gap-2 min-w-0">
-                <span class="text-xs font-semibold text-[var(--color-on-surface)] truncate">Phone</span>
-                <span class="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0"
+             class="widget-shell-header">
+            <div class="widget-header-leading">
+                <div class="widget-header-title-group">
+                    <span class="widget-header-title">Phone</span>
+                    <span class="widget-header-context">
+                        Campaign: <strong x-text="vici.vici_campaign || '—'"></strong>
+                    </span>
+                </div>
+                <span class="text-xs font-semibold uppercase tracking-wide px-2 py-1 rounded-full shrink-0"
                       :class="{
                           'status-chip-ready':  vici.phase === 'ready',
                           'status-chip-warn':   ['requesting','iframe_loading','syncing'].includes(vici.phase),
@@ -78,16 +85,19 @@
                       }[vici.phase] || vici.phase">
                 </span>
             </div>
-            <div class="flex items-center gap-1 shrink-0">
+            <div class="widget-header-actions">
                 <button type="button"
-                        class="btn-ghost text-[10px] px-2 py-1"
+                        class="widget-header-button widget-header-action"
                         @click="toggleSplitScreen()"
+                        :aria-label="isSplitActive() ? 'Exit split view' : 'Open split view'"
                         :title="isSplitActive() ? 'Exit split view' : 'Open split view'">
-                    <span x-text="isSplitActive() ? 'Exit split' : 'Split view'"></span>
+                    <x-icon name="squares-plus" class="h-4 w-4" />
+                    <span class="widget-action-label" x-text="isSplitActive() ? 'Exit split' : 'Split view'"></span>
                 </button>
                 <button type="button"
-                        class="btn-ghost text-[10px] px-2 py-1"
+                        class="widget-header-button"
                         @click="closePanel()"
+                        aria-label="Minimize Phone widget"
                         title="Minimize (session keeps running)">
                     <x-icon name="chevron-down" class="w-4 h-4" />
                 </button>
@@ -98,58 +108,64 @@
         <div x-show="open"
              x-transition.opacity.duration.200ms
              id="phone-widget-panel"
-             class="flex flex-col shrink-0 overflow-hidden border-b border-[var(--color-border)] min-h-0"
+             class="widget-phone-controls"
              :style="controlsPanelStyle">
             <div class="overflow-y-auto flex-1 min-h-0 px-3 py-3 space-y-3 text-[var(--color-on-surface)]">
-                <p class="text-[11px] text-[var(--color-on-surface-dim)] leading-snug">
+                <p class="widget-help leading-snug">
                     Minimize to a corner chip — the dialer stays loaded for WebRTC.
                 </p>
 
                 @if(config('vicidial.session_iframe_agent_api_only') && (! config('vicidial.session_iframe_confirm_non_agent_live') || config('vicidial.session_iframe_skip_non_agent_live_check')))
-                    <p class="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 leading-snug">
+                    <p class="widget-notice widget-notice--warning">
+                        <x-icon name="exclamation-triangle" class="widget-notice-icon" />
                         @if(config('vicidial.session_iframe_skip_non_agent_live_check'))
-                            Non-Agent live check is skipped (<span class="font-mono text-[10px]">VICI_SESSION_SKIP_NON_AGENT_LIVE_CHECK</span>).
+                            Non-Agent live check is skipped (<span class="widget-code">VICI_SESSION_SKIP_NON_AGENT_LIVE_CHECK</span>).
                         @else
                             Iframe-only without Non-Agent confirmation — enable <span class="font-mono text-[10px]">VICI_SESSION_IFRAME_CONFIRM_NON_AGENT_LIVE</span> or turn off iframe-only mode.
                         @endif
                     </p>
                 @elseif(config('vicidial.session_iframe_agent_api_only'))
-                    <p class="text-[11px] text-[var(--color-on-surface-dim)] leading-snug">
+                    <p class="widget-help leading-snug">
                         Non-Agent verify: VD_login must match <span class="font-mono">vici_user</span>.
                     </p>
                 @endif
 
-                <div class="grid grid-cols-2 gap-2">
-                    <div class="form-field col-span-2">
+                <form class="space-y-3" @submit.prevent="viciLogin()">
+                    <div class="widget-phone-fields">
+                    <div class="widget-field-group-label">VICIdial access</div>
+                    <div class="form-field">
                         <label class="form-label">VD Login <span class="text-[var(--color-danger)]">*</span></label>
                         <input class="form-input" x-model="vici.vd_login" placeholder="VICIdial user login"
                                autocomplete="off" autocapitalize="none" spellcheck="false"
                                :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase)" />
                     </div>
-                    <div class="form-field col-span-2">
+                    <div class="form-field">
                         <label class="form-label">VD Pass</label>
                         <input type="password" class="form-input" x-model="vici.vd_pass" placeholder="VICIdial password"
                                autocomplete="new-password" autocapitalize="none" spellcheck="false"
                                data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
                                :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase)" />
                     </div>
-                    <div class="form-field col-span-2">
+                    <div class="widget-field-group-label">Phone connection</div>
+                    <div class="form-field">
                         <label class="form-label">Phone Login <span class="text-[var(--color-danger)]">*</span></label>
                         <input class="form-input" x-model="vici.phone_login" placeholder="Extension e.g. 6001"
                                autocomplete="off" autocapitalize="none" spellcheck="false"
                                :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase)" />
                     </div>
-                    <div class="form-field col-span-2">
+                    <div class="form-field">
                         <label class="form-label">Phone Pass</label>
                         <input type="password" class="form-input" x-model="vici.phone_pass" placeholder="SIP password"
                                autocomplete="new-password" autocapitalize="none" spellcheck="false"
                                data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
                                :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase)" />
                     </div>
-                </div>
+                    </div>
 
                 <div x-show="['requesting','iframe_loading','syncing'].includes(vici.phase)"
-                     class="flex items-center gap-1.5 text-[11px] text-amber-600">
+                     class="flex items-center gap-1.5 text-xs text-[var(--color-warning-fg)]"
+                     role="status"
+                     aria-live="polite">
                     <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
@@ -161,13 +177,17 @@
                     }[vici.phase] || ''"></span>
                 </div>
 
-                <div x-show="vici.phase === 'failed' || vici.phase === 'timeout'" class="text-[11px] text-red-600">
+                <div x-show="vici.phase === 'failed' || vici.phase === 'timeout'"
+                     class="widget-inline-error"
+                     role="alert"
+                     aria-live="assertive">
+                    <x-icon name="exclamation-triangle" />
                     Login did not complete. Check Phone Login and retry.
                 </div>
 
                 <div class="flex flex-wrap gap-2">
                     <template x-if="!$store.vicidial.loggedIn">
-                        <button class="btn-primary text-xs" @click="viciLogin()"
+                        <button type="submit" class="btn-primary text-xs"
                                 :disabled="['requesting','iframe_loading','syncing'].includes(vici.phase) || !vici.phone_login || !vici.vd_login">
                             <x-icon name="power" class="w-3.5 h-3.5" />
                             <span x-text="['requesting','iframe_loading','syncing'].includes(vici.phase) ? 'Connecting…' : 'Login'"></span>
@@ -187,12 +207,13 @@
 
                 <div x-show="$store.vicidial.loggedIn && (vici.phase === 'ready' || vici.phase === 'syncing' || vici.phase === 'iframe_loading')" class="space-y-1">
                     <button type="button"
-                            class="btn-ghost text-xs w-full flex items-center gap-1.5 justify-center border border-[var(--color-border)] rounded-lg py-1.5"
+                            class="btn-ghost text-xs w-full flex items-center gap-1.5 justify-center"
                             @click="viciPopout()">
                         <x-icon name="arrow-top-right-on-square" class="w-3.5 h-3.5" />
                         Open VICIdial in new window
                     </button>
                 </div>
+                </form>
             </div>
         </div>
 

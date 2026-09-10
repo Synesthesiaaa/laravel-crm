@@ -196,11 +196,9 @@
                                     <tr>
                                         <th>Day</th>
                                         <th class="text-right">Current volume</th>
-                                        @if($amountVisible('tables'))
-                                            <th class="text-right">Current amount</th>
-                                        @endif
                                         <th class="text-right">Previous volume</th>
                                         @if($amountVisible('tables'))
+                                            <th class="text-right">Current amount</th>
                                             <th class="text-right">Previous amount</th>
                                         @endif
                                     </tr>
@@ -210,16 +208,25 @@
                                         <tr>
                                             <td class="font-medium text-[var(--color-on-surface)]" title="{{ $summaryDay['current_date'] }}">{{ $summaryDay['label'] }}</td>
                                             <td class="text-right tabular-nums">{{ number_format($summaryDay['current']['count']) }}</td>
-                                            @if($amountVisible('tables'))
-                                                <td class="text-right tabular-nums">{{ $formatSummaryAmount($summaryDay['current']['amount']) }}</td>
-                                            @endif
                                             <td class="text-right tabular-nums" title="{{ $summaryDay['previous_date'] ?? 'No equivalent date' }}">{{ $summaryDay['previous']['count'] === null ? '—' : number_format($summaryDay['previous']['count']) }}</td>
                                             @if($amountVisible('tables'))
+                                                <td class="text-right tabular-nums">{{ $formatSummaryAmount($summaryDay['current']['amount']) }}</td>
                                                 <td class="text-right tabular-nums">{{ $summaryDay['previous']['amount'] === null ? '—' : $formatSummaryAmount($summaryDay['previous']['amount']) }}</td>
                                             @endif
                                         </tr>
                                     @endforeach
                                 </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <th scope="row" class="font-semibold text-[var(--color-on-surface)]">Total</th>
+                                        <td class="text-right font-semibold tabular-nums">{{ number_format($summaryCurrent['count'] ?? 0) }}</td>
+                                        <td class="text-right font-semibold tabular-nums">{{ number_format($summaryPrevious['count'] ?? 0) }}</td>
+                                        @if($amountVisible('tables'))
+                                            <td class="text-right font-semibold tabular-nums">{{ $formatSummaryAmount($summaryCurrent['amount'] ?? 0) }}</td>
+                                            <td class="text-right font-semibold tabular-nums">{{ $formatSummaryAmount($summaryPrevious['amount'] ?? 0) }}</td>
+                                        @endif
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
                     </details>

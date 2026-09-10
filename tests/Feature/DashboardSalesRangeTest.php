@@ -545,6 +545,28 @@ class DashboardSalesRangeTest extends TestCase
         $response->assertSee('+$20.00', false);
         $response->assertSee('25.00%', false);
         $response->assertSee('No change vs last month', false);
+
+        $content = $response->getContent();
+        $tableStart = strpos($content, '<caption class="sr-only">Daily current and previous period transaction and amount comparison</caption>');
+        $tableEnd = $tableStart === false ? false : strpos($content, '</table>', $tableStart);
+        $summaryTable = $tableStart === false || $tableEnd === false
+            ? ''
+            : substr($content, $tableStart, $tableEnd - $tableStart + strlen('</table>'));
+
+        $headerPositions = array_map(
+            static fn (string $header): int|false => strpos($summaryTable, $header),
+            ['Current volume', 'Previous volume', 'Current amount', 'Previous amount'],
+        );
+
+        $this->assertNotFalse($tableStart);
+        $this->assertNotFalse($tableEnd);
+        $this->assertLessThan($headerPositions[1], $headerPositions[0]);
+        $this->assertLessThan($headerPositions[2], $headerPositions[1]);
+        $this->assertLessThan($headerPositions[3], $headerPositions[2]);
+        $this->assertMatchesRegularExpression(
+            '/<tfoot>.*?<th[^>]*scope="row"[^>]*>Total<\/th>.*?<td[^>]*>1<\/td>.*?<td[^>]*>1<\/td>.*?<td[^>]*>\$100\.00<\/td>.*?<td[^>]*>\$80\.00<\/td>.*?<\/tfoot>/s',
+            $summaryTable,
+        );
     }
 
     public function test_dashboard_reverts_invalid_sales_filters_to_the_default_business_hours(): void

@@ -2,13 +2,23 @@ import {
     createLayoutPersistence,
     maxShellHeightForFabStack,
 } from './widgets/layout-manager';
-import { isSplitViewport, splitWorkspaceGeometry } from './widgets/workspace';
+import {
+    isSplitViewport,
+    SPLIT_VIEW_BREAKPOINT,
+    splitWorkspaceGeometry,
+} from './widgets/workspace';
 
 const HEADER_CHROME_HEIGHT = 40;
 const SPLITTER_HEIGHT = 8;
-const MIN_CONTROLS_HEIGHT = 140;
+const MIN_CONTROLS_HEIGHT = 180;
 const MIN_IFRAME_HEIGHT = 200;
 const CONTINUING_SESSION_STATUSES = ['login_pending', 'ready', 'paused', 'in_call'];
+
+function getViewportWidth() {
+    return typeof document !== 'undefined' && document.documentElement?.clientWidth
+        ? document.documentElement.clientWidth
+        : window.innerWidth;
+}
 
 function getResizeMultipliers(corner) {
     switch (corner) {
@@ -68,7 +78,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         isSplitterResizing: false,
         splitScreen: false,
         preSplitOpen: false,
-        viewportWidth: window.innerWidth,
+        viewportWidth: getViewportWidth(),
         viewportHeight: window.innerHeight,
         bounds,
         sessionControls: boot.sessionControls !== false,
@@ -99,7 +109,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
 
         minShellWidth() {
             const margin = Math.max(8, this.bounds.maxWidthPadding || 16);
-            const viewportWidth = Math.max(0, window.innerWidth - (margin * 2));
+            const viewportWidth = Math.max(0, getViewportWidth() - (margin * 2));
 
             return Math.min(this.bounds.minWidth, Math.max(260, viewportWidth));
         },
@@ -107,7 +117,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         maxControlsHeightForShell(shellHeight = this.height) {
             const available = shellHeight - this.chromeHeight() - MIN_IFRAME_HEIGHT;
 
-            return Math.max(80, available);
+            return Math.max(0, available);
         },
 
         clampControlsHeight(value, shellHeight = this.height) {
@@ -120,15 +130,16 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         clampShellDimensions(width, height) {
             const margin = Math.max(8, this.bounds.maxWidthPadding || 16);
             const minWidth = this.minShellWidth();
-            const maxWidth = Math.max(minWidth, window.innerWidth - (margin * 2));
+            const maxWidth = Math.max(minWidth, getViewportWidth() - (margin * 2));
             const maxHeight = Math.min(
-                Math.max(this.bounds.minHeight, window.innerHeight - (margin * 2)),
+                Math.max(260, window.innerHeight - (margin * 2)),
                 maxShellHeightForFabStack(this.bounds),
             );
+            const minHeight = Math.min(this.bounds.minHeight, maxHeight);
 
             return {
                 width: Math.min(Math.max(width, minWidth), maxWidth),
-                height: Math.min(Math.max(height, this.bounds.minHeight), maxHeight),
+                height: Math.min(Math.max(height, minHeight), maxHeight),
             };
         },
 
@@ -183,6 +194,10 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             return this.splitScreen && isSplitViewport(this.viewportWidth);
         },
 
+        isCompactViewport() {
+            return this.viewportWidth < SPLIT_VIEW_BREAKPOINT;
+        },
+
         toggleSplitScreen() {
             window.crmWidgetWorkspace?.toggle?.();
         },
@@ -195,8 +210,16 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             }
 
             this.splitScreen = next;
-            this.open = next ? true : this.preSplitOpen;
+            this.open = this.isSplitActive() ? true : this.preSplitOpen;
             this.onWindowResize();
+        },
+
+        _onWidgetPanelOpen(event) {
+            if (event.detail?.widget === 'softphone' || !this.open || !this.isCompactViewport()) {
+                return;
+            }
+
+            this.closePanel();
         },
 
         get controlsPanelStyle() {
@@ -249,6 +272,11 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         },
 
         toggleOpen() {
+            if (!this.open && this.isCompactViewport()) {
+                window.dispatchEvent(new CustomEvent('crm-widget-panel-open', {
+                    detail: { widget: 'softphone' },
+                }));
+            }
             this.open = !this.open;
             if (this.open) {
                 this.controlsHeight = this.clampControlsHeight(this.controlsHeight, this.height);
@@ -324,7 +352,7 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         },
 
         onWindowResize() {
-            this.viewportWidth = window.innerWidth;
+            this.viewportWidth = getViewportWidth();
             this.viewportHeight = window.innerHeight;
             const nextSize = this.clampShellDimensions(this.width, this.height);
             this.width = nextSize.width;
@@ -436,10 +464,11 @@ window.phoneWidget = function phoneWidget(boot = {}) {
             window.addEventListener('vicidial-ws-phase', this._onWsPhase.bind(this));
             window.addEventListener('telephony-shortcut-pause', this._pauseShortcut.bind(this));
             window.addEventListener('crm-widget-workspace', this._onWorkspaceChange.bind(this));
+            window.addEventListener('crm-widget-panel-open', this._onWidgetPanelOpen.bind(this));
             window.addEventListener('crm-campaign-changed', this.handleCrmCampaignChanged.bind(this));
             window.addEventListener('resize', this.onWindowResize.bind(this));
             this.splitScreen = window.crmWidgetWorkspace?.isSplitScreen?.() === true;
-            this.open = this.splitScreen ? true : this.open;
+            this.open = this.isSplitActive() ? true : this.open;
             this.onWindowResize();
             await persistence.load();
 

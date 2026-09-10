@@ -5,6 +5,12 @@ const DEFAULT_BOUNDS = {
     maxHeightPadding: 24,
 };
 
+function getViewportWidth() {
+    return typeof document !== 'undefined' && document.documentElement?.clientWidth
+        ? document.documentElement.clientWidth
+        : window.innerWidth;
+}
+
 /** Shared bottom-right FAB stack (click-to-call, softphone, quick-form anchor). */
 export const FAB_STACK = {
     baseBottomPx: 24,
@@ -15,11 +21,11 @@ export const FAB_STACK = {
 
 export function defaultQuickFormPosition(width) {
     const reservedBottom = FAB_STACK.baseBottomPx
-        + (2 * (FAB_STACK.sizePx + FAB_STACK.gapPx))
-        + 16;
+        + (3 * FAB_STACK.sizePx)
+        + (2 * FAB_STACK.gapPx);
 
     return {
-        x: Math.max(0, window.innerWidth - width - FAB_STACK.baseRightPx),
+        x: Math.max(0, getViewportWidth() - width - FAB_STACK.baseRightPx),
         y: Math.max(0, window.innerHeight - reservedBottom),
     };
 }
@@ -27,11 +33,12 @@ export function defaultQuickFormPosition(width) {
 /** Max shell height for softphone widget anchored above the FAB stack. */
 export function maxShellHeightForFabStack(bounds = DEFAULT_BOUNDS) {
     const reservedBottom = FAB_STACK.baseBottomPx
+        + FAB_STACK.sizePx
         + FAB_STACK.gapPx
         + FAB_STACK.sizePx
         + (bounds.maxHeightPadding || 16);
 
-    return Math.max(bounds.minHeight, window.innerHeight - reservedBottom);
+    return Math.max(260, window.innerHeight - reservedBottom);
 }
 
 function clamp(value, min, max) {
@@ -40,7 +47,7 @@ function clamp(value, min, max) {
 
 function getViewportMaxSize(bounds = DEFAULT_BOUNDS) {
     return {
-        maxWidth: Math.max(bounds.minWidth, window.innerWidth - (bounds.maxWidthPadding || 0)),
+        maxWidth: Math.max(bounds.minWidth, getViewportWidth() - (bounds.maxWidthPadding || 0)),
         maxHeight: Math.max(bounds.minHeight, window.innerHeight - (bounds.maxHeightPadding || 0)),
     };
 }
@@ -54,7 +61,7 @@ export function clampLayout(layout, bounds = DEFAULT_BOUNDS) {
         ...layout,
         width,
         height,
-        x: clamp(layout.x ?? 16, 0, Math.max(0, window.innerWidth - width)),
+        x: clamp(layout.x ?? 16, 0, Math.max(0, getViewportWidth() - width)),
         y: clamp(layout.y ?? 16, 0, Math.max(0, window.innerHeight - height)),
     };
 }

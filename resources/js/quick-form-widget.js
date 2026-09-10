@@ -6,10 +6,20 @@ import {
     hasQuickFormOption,
     normalizeQuickFormOptions,
 } from './widgets/quick-form-options.js';
-import { isSplitViewport, splitWorkspaceGeometry } from './widgets/workspace';
+import {
+    isSplitViewport,
+    SPLIT_VIEW_BREAKPOINT,
+    splitWorkspaceGeometry,
+} from './widgets/workspace';
 
 const FORM_ROUTE_PATTERN = /\/forms\/([^/?#]+)/i;
 const ICON_GAP_PX = 8;
+
+function getViewportWidth() {
+    return typeof document !== 'undefined' && document.documentElement?.clientWidth
+        ? document.documentElement.clientWidth
+        : window.innerWidth;
+}
 
 function clamp(value, min, max) {
     if (value < min) return min;
@@ -44,7 +54,7 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         isResizing: false,
         splitScreen: false,
         preSplitOpen: false,
-        viewportWidth: window.innerWidth,
+        viewportWidth: getViewportWidth(),
         viewportHeight: window.innerHeight,
         suppressToggleClick: false,
         bounds,
@@ -111,6 +121,10 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
             return this.splitScreen && isSplitViewport(this.viewportWidth);
         },
 
+        isCompactViewport() {
+            return this.viewportWidth < SPLIT_VIEW_BREAKPOINT;
+        },
+
         toggleSplitScreen() {
             window.crmWidgetWorkspace?.toggle?.();
         },
@@ -123,8 +137,16 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
             }
 
             this.splitScreen = next;
-            this.open = next ? true : this.preSplitOpen;
+            this.open = this.isSplitActive() ? true : this.preSplitOpen;
             this.onWindowResize();
+        },
+
+        _onWidgetPanelOpen(event) {
+            if (event.detail?.widget === 'quick_form' || !this.open || !this.isCompactViewport()) {
+                return;
+            }
+
+            this.closePanel();
         },
 
         applyLayout(layout) {
@@ -164,7 +186,7 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         minPanelWidth() {
             const margin = Math.max(8, this.bounds.maxWidthPadding || 16);
             const iconSize = 48;
-            const viewportWidth = Math.max(0, window.innerWidth - iconSize - ICON_GAP_PX - margin);
+            const viewportWidth = Math.max(0, getViewportWidth() - iconSize - ICON_GAP_PX - margin);
 
             return Math.min(this.bounds.minWidth, Math.max(220, viewportWidth));
         },
@@ -172,7 +194,7 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         ensurePanelFitsViewport() {
             const margin = Math.max(8, this.bounds.maxWidthPadding || 16);
             const iconSize = 48;
-            const maxAnchorX = Math.max(0, window.innerWidth - iconSize);
+            const maxAnchorX = Math.max(0, getViewportWidth() - iconSize);
             const requiredAnchorX = this.width + ICON_GAP_PX + margin;
 
             if (this.x - ICON_GAP_PX - this.width < margin) {
@@ -219,7 +241,7 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         clampAnchorPosition(x, y) {
             const iconSize = 48;
             return {
-                x: Math.min(Math.max(Number(x) || 0, 0), Math.max(0, window.innerWidth - iconSize)),
+                x: Math.min(Math.max(Number(x) || 0, 0), Math.max(0, getViewportWidth() - iconSize)),
                 y: Math.min(Math.max(Number(y) || 0, 0), Math.max(0, window.innerHeight - iconSize)),
             };
         },
@@ -257,6 +279,11 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
 
             this.open = true;
             this.syncFrameSrc(formType, this.currentCampaign, { force: true });
+        },
+
+        async retryLoad() {
+            this.error = null;
+            await this.resolveDefaultSource();
         },
 
         async loadFormOptions() {
@@ -345,6 +372,11 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
                 if (event?.preventDefault) event.preventDefault();
                 return;
             }
+            if (!this.open && this.isCompactViewport()) {
+                window.dispatchEvent(new CustomEvent('crm-widget-panel-open', {
+                    detail: { widget: 'quick_form' },
+                }));
+            }
             this.open = !this.open;
             if (this.open) {
                 this.ensurePanelFitsViewport();
@@ -387,7 +419,7 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
             const topLimit = Math.max(8, this.bounds.maxHeightPadding || 16);
 
             const anchorMinX = 0;
-            const anchorMaxX = Math.max(0, window.innerWidth - 48);
+            const anchorMaxX = Math.max(0, getViewportWidth() - 48);
             const anchorMinY = 0;
             const anchorMaxY = Math.max(0, window.innerHeight - 48);
             const rightMin = anchorMinX - ICON_GAP_PX;
@@ -448,7 +480,7 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         },
 
         onWindowResize() {
-            this.viewportWidth = window.innerWidth;
+            this.viewportWidth = getViewportWidth();
             this.viewportHeight = window.innerHeight;
             const anchor = this.clampAnchorPosition(this.x, this.y);
             this.x = anchor.x;
@@ -495,9 +527,10 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         async init() {
             widgetCtx = this;
             window.addEventListener('crm-widget-workspace', this._onWorkspaceChange.bind(this));
+            window.addEventListener('crm-widget-panel-open', this._onWidgetPanelOpen.bind(this));
             window.addEventListener('resize', this.onWindowResize.bind(this));
             this.splitScreen = window.crmWidgetWorkspace?.isSplitScreen?.() === true;
-            this.open = this.splitScreen ? true : this.open;
+            this.open = this.isSplitActive() ? true : this.open;
             window.addEventListener('soft-navigate', (event) => {
                 const previousCampaign = this.currentCampaign;
                 const switched = this.syncFromUrl(event?.detail?.url || window.location.href);
