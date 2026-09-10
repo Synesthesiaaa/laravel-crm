@@ -153,8 +153,16 @@ After build completes, node_modules can optionally be removed from the productio
 sudo chown -R crm:www-data /var/www/laravel-crm
 sudo find /var/www/laravel-crm -type f -exec chmod 644 {} \;
 sudo find /var/www/laravel-crm -type d -exec chmod 755 {} \;
-sudo chmod -R 775 /var/www/laravel-crm/storage
-sudo chmod -R 775 /var/www/laravel-crm/bootstrap/cache
+sudo find /var/www/laravel-crm/storage -type d -exec chmod 2775 {} \;
+sudo find /var/www/laravel-crm/storage -type f -exec chmod 0664 {} \;
+sudo find /var/www/laravel-crm/bootstrap/cache -type d -exec chmod 2775 {} \;
+sudo find /var/www/laravel-crm/bootstrap/cache -type f -exec chmod 0664 {} \;
+
+The `2` in directory mode `2775` is the setgid bit. It makes new files inherit
+the `www-data` group. Keep PHP-FPM, Horizon, the AMI listener, and the cron
+scheduler running as `crm` so all Laravel processes share the same application
+runtime account. The telephony daily channels also request file mode `0664`
+in `config/logging.php` so a newly rotated file remains group-writable.
 
 
 
@@ -331,6 +339,27 @@ Publish Horizon assets:
 sudo -u crm php artisan horizon:terminate
 
 Supervisor will restart Horizon automatically.
+
+If an existing host is already reporting a telephony log permission error,
+repair the current writable paths once after deployment:
+
+```bash
+cd /var/www/laravel-crm
+sudo chown -R crm:www-data storage/logs bootstrap/cache
+sudo find storage/logs bootstrap/cache -type d -exec chmod 2775 {} \;
+sudo find storage/logs bootstrap/cache -type f -exec chmod 0664 {} \;
+sudo -u crm php artisan optimize:clear
+sudo -u crm php artisan config:cache
+sudo systemctl restart php8.2-fpm
+sudo -u crm php artisan horizon:terminate
+sudo supervisorctl restart laravel-ami-listener
+sudo supervisorctl restart reverb
+sudo -u crm sh -c 'touch storage/logs/.write-test && rm storage/logs/.write-test'
+```
+
+Run the write test as the same account used by PHP-FPM and Supervisor. If a
+deployment intentionally uses another account, substitute that account in the
+ownership, Supervisor, PHP-FPM, cron, and validation commands consistently.
 
 
 7. Nginx Configuration
@@ -797,4 +826,3 @@ If using Redis persistence (AOF/RDB), back up /var/lib/redis/dump.rdb. Otherwise
 15. Add cron entry for scheduler
 16. Start services: nginx, php-fpm, redis, supervisor
 17. Log in as admin/admin@example.com, change password, assign Super Admin role
-
