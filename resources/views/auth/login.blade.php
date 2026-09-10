@@ -9,7 +9,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script>
-      (function() { var t = localStorage.getItem('theme') || 'dark'; document.documentElement.setAttribute('data-theme', t); })();
+      (function() {
+        var t = 'dark';
+        try { t = localStorage.getItem('theme') || 'dark'; } catch (e) {}
+        document.documentElement.setAttribute('data-theme', t);
+      })();
     </script>
     <title>Login | {{ $guestBrandName }}</title>
     <link rel="icon" href="{{ $guestFaviconUrl }}">
@@ -22,66 +26,73 @@
 <body>
     <div class="login-root">
         <button type="button" id="theme-toggle" class="theme-toggle login-theme-toggle" aria-label="Toggle light/dark mode" title="Toggle theme">
-            <svg class="theme-icon-dark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-            <svg class="theme-icon-light hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg class="theme-icon-dark" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <svg class="theme-icon-light hidden" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
         </button>
 
-        <div class="login-content">
-            <div class="login-glass-card">
-                <x-brand :branding="$branding" variant="login" />
-                <h1>Sign in</h1>
-                <p class="login-sub">Enter your credentials to continue</p>
+        <main class="login-content" aria-labelledby="login-title">
+            <div class="login-layout">
+                <aside class="login-context" aria-label="Company branding">
+                    <x-brand :branding="$branding" variant="login" class="login-context-brand" />
+                </aside>
 
-                @if (session('status'))
-                    <div class="login-alert login-alert--success" role="status">{{ session('status') }}</div>
-                @endif
-                @if ($errors->any())
-                    <div class="login-alert login-alert--error" role="alert">{{ $errors->first() }}</div>
-                @endif
-
-                <form method="POST" action="{{ route('login') }}">
-                    @csrf
-
-                    <div class="login-field login-field-float">
-                        <input id="username" type="text" name="username" value="{{ old('username') }}" required autofocus autocomplete="username" placeholder=" ">
-                        <span class="login-field-icon" aria-hidden="true">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                        </span>
-                        <label for="username">Username</label>
+                <section class="login-glass-card" aria-labelledby="login-title">
+                    <div class="login-form-heading">
+                        <h1 id="login-title">Sign in</h1>
+                        <p class="login-sub">Enter your credentials to continue</p>
                     </div>
 
-                    <div class="login-field login-field-float">
-                        <input id="password" type="password" name="password" required autocomplete="current-password" placeholder=" ">
-                        <span class="login-field-icon" aria-hidden="true">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                        </span>
-                        <label for="password">Password</label>
-                    </div>
-
-                    @if (!empty($campaigns))
-                    <div class="login-field login-field--select">
-                        <label class="login-select-label" for="campaign">Campaign</label>
-                        <div class="login-select-wrap">
-                            <span class="login-field-icon login-field-icon--select" aria-hidden="true">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
-                            </span>
-                            <select id="campaign" name="campaign" class="login-select">
-                                @foreach ($campaigns as $code => $config)
-                                    <option value="{{ $code }}" {{ old('campaign', array_key_first($campaigns)) === $code ? 'selected' : '' }}>
-                                        {{ $config['name'] ?? $code }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-                    </div>
+                    @if (session('status'))
+                        <div id="login-status" class="login-alert login-alert--success" role="status">{{ session('status') }}</div>
+                    @endif
+                    @if ($errors->any())
+                        <div id="login-error" class="login-alert login-alert--error" role="alert">{{ $errors->first() }}</div>
                     @endif
 
-                    <div class="login-field login-field--submit">
-                        <button type="submit" class="login-btn">Sign in</button>
-                    </div>
-                </form>
+                    <form method="POST" action="{{ route('login') }}">
+                        @csrf
+
+                        <div class="login-field login-field-float">
+                            <input id="username" type="text" name="username" value="{{ old('username') }}" required autofocus autocomplete="username" placeholder=" " @if ($errors->has('username')) aria-invalid="true" aria-describedby="login-error" @endif>
+                            <span class="login-field-icon" aria-hidden="true">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                            </span>
+                            <label for="username">Username</label>
+                        </div>
+
+                        <div class="login-field login-field-float">
+                            <input id="password" type="password" name="password" required autocomplete="current-password" placeholder=" " @if ($errors->has('password')) aria-invalid="true" aria-describedby="login-error" @endif>
+                            <span class="login-field-icon" aria-hidden="true">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                            </span>
+                            <label for="password">Password</label>
+                        </div>
+
+                        @if (!empty($campaigns))
+                        <div class="login-field login-field--select">
+                            <label class="login-select-label" for="campaign">Campaign</label>
+                            <div class="login-select-wrap">
+                                <span class="login-field-icon login-field-icon--select" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+                                </span>
+                                <select id="campaign" name="campaign" class="login-select" @if ($errors->has('campaign')) aria-invalid="true" aria-describedby="login-error" @endif>
+                                    @foreach ($campaigns as $code => $config)
+                                        <option value="{{ $code }}" {{ old('campaign', array_key_first($campaigns)) === $code ? 'selected' : '' }}>
+                                            {{ $config['name'] ?? $code }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+                        @endif
+
+                        <div class="login-field login-field--submit">
+                            <button type="submit" class="login-btn">Sign in</button>
+                        </div>
+                    </form>
+                </section>
             </div>
-        </div>
+        </main>
     </div>
     <script>
       (function() {

@@ -37,16 +37,9 @@
          }"
          :style="shellStyle">
         <div x-show="open"
-             x-transition.opacity.duration.200ms
+            x-transition.opacity.duration.200ms
              class="widget-shell-header">
             <div class="widget-header-leading">
-                <button type="button"
-                        class="widget-header-button widget-header-button--drag shrink-0"
-                        @pointerdown="onDragStart($event)"
-                        aria-label="Drag Quick Form widget"
-                        title="Drag widget">
-                    <x-icon name="bars-3" class="w-3.5 h-3.5" />
-                </button>
                 <div class="widget-header-title-group">
                     <span x-show="formOptions.length === 0"
                           class="widget-header-title">Quick Form</span>
@@ -58,13 +51,10 @@
                             :value="currentFormType || ''"
                             @change="selectForm($event.target.value)"
                             :disabled="formsLoading || formOptions.length === 0">
-                        <template x-for="option in formOptions" :key="option.type">
-                            <option :value="option.type" x-text="option.name"></option>
-                        </template>
-                    </select>
-                    <span class="widget-header-context">
-                        Campaign: <strong x-text="currentCampaign || '—'"></strong>
-                    </span>
+                            <template x-for="option in formOptions" :key="option.type">
+                                <option :value="option.type" x-text="option.name"></option>
+                            </template>
+                        </select>
                 </div>
             </div>
             <div class="widget-header-actions">
@@ -74,7 +64,7 @@
                         :aria-label="isSplitActive() ? 'Exit split view' : 'Open split view'"
                         :title="isSplitActive() ? 'Exit split view' : 'Open split view'">
                     <x-icon name="squares-plus" class="h-4 w-4" />
-                    <span class="widget-action-label" x-text="isSplitActive() ? 'Exit split' : 'Split view'"></span>
+                    <span class="widget-action-label sr-only" x-text="isSplitActive() ? 'Exit split' : 'Split view'"></span>
                 </button>
                 <button type="button"
                         class="widget-header-button"

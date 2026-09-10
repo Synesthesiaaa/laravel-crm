@@ -38,7 +38,6 @@
         <div class="widget-panel-header">
             <div>
                 <h4 class="text-sm font-semibold text-[var(--color-on-surface)]">Quick Dial</h4>
-                <p class="widget-panel-subtitle">Call a lead without leaving your current screen.</p>
             </div>
             <button type="button" @click="open = false" class="btn-icon widget-panel-close" aria-label="Close Quick Dial" title="Close Quick Dial">
                 <x-icon name="x-mark" class="w-3.5 h-3.5" />

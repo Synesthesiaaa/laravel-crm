@@ -43,7 +43,7 @@
                   'bg-[var(--color-on-surface-dim)]': vici.phase === 'idle' && !$store.vicidial.loggedIn,
               }"></span>
         <span x-show="$store.vicidial.queueCount > 0"
-              class="absolute -bottom-1 -left-1 min-w-[1.1rem] rounded-full bg-[var(--color-primary)] px-1 text-[10px] font-bold leading-tight text-white text-center"
+              class="absolute -bottom-1 -left-1 min-w-[1.1rem] rounded-full bg-[var(--color-primary)] px-1 text-xs font-bold leading-tight text-white text-center"
               x-text="$store.vicidial.queueCount > 99 ? '99+' : $store.vicidial.queueCount"
               style="display: none;"></span>
     </button>
@@ -63,9 +63,6 @@
             <div class="widget-header-leading">
                 <div class="widget-header-title-group">
                     <span class="widget-header-title">Phone</span>
-                    <span class="widget-header-context">
-                        Campaign: <strong x-text="vici.vici_campaign || '—'"></strong>
-                    </span>
                 </div>
                 <span class="text-xs font-semibold uppercase tracking-wide px-2 py-1 rounded-full shrink-0"
                       :class="{
@@ -92,7 +89,7 @@
                         :aria-label="isSplitActive() ? 'Exit split view' : 'Open split view'"
                         :title="isSplitActive() ? 'Exit split view' : 'Open split view'">
                     <x-icon name="squares-plus" class="h-4 w-4" />
-                    <span class="widget-action-label" x-text="isSplitActive() ? 'Exit split' : 'Split view'"></span>
+                    <span class="widget-action-label sr-only" x-text="isSplitActive() ? 'Exit split' : 'Split view'"></span>
                 </button>
                 <button type="button"
                         class="widget-header-button"
@@ -109,21 +106,24 @@
              x-transition.opacity.duration.200ms
              id="phone-widget-panel"
              class="widget-phone-controls"
-             :style="controlsPanelStyle">
+            :style="controlsPanelStyle">
             <div class="overflow-y-auto flex-1 min-h-0 px-3 py-3 space-y-3 text-[var(--color-on-surface)]">
-                <p class="widget-help leading-snug">
-                    Minimize to a corner chip — the dialer stays loaded for WebRTC.
-                </p>
-
                 @if(config('vicidial.session_iframe_agent_api_only') && (! config('vicidial.session_iframe_confirm_non_agent_live') || config('vicidial.session_iframe_skip_non_agent_live_check')))
-                    <p class="widget-notice widget-notice--warning">
-                        <x-icon name="exclamation-triangle" class="widget-notice-icon" />
+                    <details class="widget-notice widget-notice--warning">
+                        <summary class="widget-notice-summary">
+                            <x-icon name="exclamation-triangle" class="widget-notice-icon" />
+                            <span>Iframe-only verification is off</span>
+                        </summary>
                         @if(config('vicidial.session_iframe_skip_non_agent_live_check'))
-                            Non-Agent live check is skipped (<span class="widget-code">VICI_SESSION_SKIP_NON_AGENT_LIVE_CHECK</span>).
+                            <p class="widget-notice-detail">
+                                Non-Agent live check is skipped. <span class="widget-code">VICI_SESSION_SKIP_NON_AGENT_LIVE_CHECK</span> is enabled.
+                            </p>
                         @else
-                            Iframe-only without Non-Agent confirmation — enable <span class="font-mono text-[10px]">VICI_SESSION_IFRAME_CONFIRM_NON_AGENT_LIVE</span> or turn off iframe-only mode.
+                            <p class="widget-notice-detail">
+                                Enable <span class="widget-code">VICI_SESSION_IFRAME_CONFIRM_NON_AGENT_LIVE</span> or turn off iframe-only mode.
+                            </p>
                         @endif
-                    </p>
+                    </details>
                 @elseif(config('vicidial.session_iframe_agent_api_only'))
                     <p class="widget-help leading-snug">
                         Non-Agent verify: VD_login must match <span class="font-mono">vici_user</span>.
@@ -132,7 +132,6 @@
 
                 <form class="space-y-3" @submit.prevent="viciLogin()">
                     <div class="widget-phone-fields">
-                    <div class="widget-field-group-label">VICIdial access</div>
                     <div class="form-field">
                         <label class="form-label">VD Login <span class="text-[var(--color-danger)]">*</span></label>
                         <input class="form-input" x-model="vici.vd_login" placeholder="VICIdial user login"
@@ -146,7 +145,6 @@
                                data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
                                :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase)" />
                     </div>
-                    <div class="widget-field-group-label">Phone connection</div>
                     <div class="form-field">
                         <label class="form-label">Phone Login <span class="text-[var(--color-danger)]">*</span></label>
                         <input class="form-input" x-model="vici.phone_login" placeholder="Extension e.g. 6001"
