@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Models\VicidialAgentSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -18,18 +19,46 @@ class LoginTest extends TestCase
         $response->assertRedirect(route('login'));
     }
 
-    public function test_guest_login_page_renders_the_accessible_minimal_form_structure(): void
+    public function test_guest_login_page_renders_the_accessible_clarified_form_structure(): void
     {
+        Cache::put('campaigns_with_forms', [
+            'mbsales' => ['name' => 'MBSales'],
+            'pjli' => ['name' => 'PJLI'],
+        ], 300);
+
         $response = $this->get(route('login'));
 
         $response->assertOk()
             ->assertSee('<main class="login-content" aria-labelledby="login-title">', false)
-            ->assertSee('<section class="login-glass-card" aria-labelledby="login-title">', false)
+            ->assertSee('<div class="login-layout" data-login-layout>', false)
+            ->assertSee('data-login-context', false)
+            ->assertSee('<section class="login-glass-card" aria-labelledby="login-title" data-login-form>', false)
             ->assertSee('id="login-title"', false)
+            ->assertSee('Sign in to your CRM account', false)
+            ->assertSeeText('Use your CRM username and password.')
             ->assertSee('name="username"', false)
             ->assertSee('name="password"', false)
             ->assertSee('name="campaign"', false)
-            ->assertSee('id="theme-toggle"', false);
+            ->assertSee('Starting campaign', false)
+            ->assertSee('You will start in this campaign after signing in.', false)
+            ->assertDontSee('Choose a campaign', false)
+            ->assertDontSee('CAMPAIGN', false)
+            ->assertSee('aria-describedby="campaign-help"', false)
+            ->assertSee('data-login-campaign', false)
+            ->assertSee('id="password-toggle"', false)
+            ->assertSee('data-login-password-label', false)
+            ->assertSee('aria-label="Show password"', false)
+            ->assertSee('aria-pressed="false"', false)
+            ->assertSee('id="login-progress"', false)
+            ->assertSee('aria-busy="false"', false)
+            ->assertSee('data-login-submit', false)
+            ->assertSee('data-login-submit-label', false)
+            ->assertSee('id="login-help"', false)
+            ->assertSee('Contact your supervisor or help desk', false)
+            ->assertSee('aria-label="Switch to light mode"', false)
+            ->assertDontSee('Campaign operations, in one workspace.', false)
+            ->assertDontSee('Campaign-aware access', false)
+            ->assertDontSee('Sign in to your workspace', false);
     }
 
     public function test_login_page_marks_the_field_with_login_validation_feedback(): void
@@ -47,7 +76,45 @@ class LoginTest extends TestCase
             ->assertSee('id="login-error"', false)
             ->assertSee('id="username"', false)
             ->assertSee('aria-invalid="true"', false)
-            ->assertSee('aria-describedby="login-error"', false);
+            ->assertSee('aria-describedby="username-error"', false)
+            ->assertSee('id="username-error"', false)
+            ->assertSeeText("We couldn't sign you in with those details. Check your username and password, then try again.")
+            ->assertSee('Contact your supervisor or help desk', false);
+    }
+
+    public function test_single_campaign_is_rendered_as_read_only_context(): void
+    {
+        Cache::put('campaigns_with_forms', [
+            'solo' => [
+                'name' => 'Only Campaign',
+            ],
+        ], 300);
+
+        $response = $this->get(route('login'));
+
+        $response->assertOk()
+            ->assertSee('data-login-campaign-readonly', false)
+            ->assertSee('Starting campaign', false)
+            ->assertSee('Only Campaign', false)
+            ->assertSee('<input type="hidden" name="campaign" value="solo">', false)
+            ->assertDontSee('<select id="campaign"', false)
+            ->assertDontSee('Choose a campaign', false);
+
+        Cache::forget('campaigns_with_forms');
+    }
+
+    public function test_login_page_omits_campaign_control_when_no_campaigns_are_available(): void
+    {
+        Cache::put('campaigns_with_forms', [], 300);
+
+        $response = $this->get(route('login'));
+
+        $response->assertOk()
+            ->assertSee('data-login-submit', false)
+            ->assertDontSee('data-login-campaign', false)
+            ->assertDontSee('name="campaign"', false);
+
+        Cache::forget('campaigns_with_forms');
     }
 
     public function test_login_success_redirects_to_dashboard(): void
@@ -117,7 +184,9 @@ class LoginTest extends TestCase
             'username' => 'testagent',
             'password' => 'wrongpassword',
         ]);
-        $response->assertSessionHasErrors('username');
+        $response->assertSessionHasErrors([
+            'username' => "We couldn't sign you in with those details. Check your username and password, then try again.",
+        ]);
         $this->assertGuest();
     }
 

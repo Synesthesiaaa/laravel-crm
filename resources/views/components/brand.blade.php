@@ -10,7 +10,7 @@
     $logoAlt = data_get($branding, 'logo_alt', $brandName.' logo');
     $rootClasses = match ($variant) {
         'sidebar' => 'flex items-center gap-3 min-w-0',
-        'login' => 'flex flex-col items-center gap-3 text-center',
+        'login' => 'flex items-center gap-3 min-w-0',
         'preview' => 'flex items-center gap-3 min-w-0',
         default => 'flex items-center gap-3 min-w-0',
     };

@@ -1,29 +1,4 @@
-# Login Experience
-
-## Purpose
-
-Provide a minimal, palette-aligned, accessible guest login surface for the CRM's credential and campaign-aware entry flow.
-
-## Requirements
-
-### Requirement: Palette-aligned login composition
-
-The guest login page SHALL present a focused, brand-led authentication composition within the CRM's established visual system. It SHALL keep the configured brand lockup visible above a single dominant auth sheet, use the CRM's shared surface, text, border, elevation, and Signal Magenta tokens, and avoid redundant context content or unverified marketing claims.
-
-#### Scenario: Dark theme entry
-
-- **WHEN** a guest opens the login route with the dark theme active
-- **THEN** the page renders a calm charcoal single-column entry with the configured brand above the auth sheet, readable primary and muted text, and Signal Magenta reserved for the primary action, focus, and meaningful emphasis
-
-#### Scenario: Light theme entry
-
-- **WHEN** a guest switches the login page to the light theme
-- **THEN** the page rebinds its surfaces, borders, text, elevation, and atmosphere to the existing light-theme tokens without introducing a separate hard-coded palette
-
-#### Scenario: Configured brand remains visible
-
-- **WHEN** the login page receives a configured company name and logo or the safe fallback brand
-- **THEN** the compact brand lockup remains visible above the auth sheet, preserves its accessible alternative text, and long names wrap within the bounded column without creating horizontal overflow
+## MODIFIED Requirements
 
 ### Requirement: Login task hierarchy and form semantics
 
