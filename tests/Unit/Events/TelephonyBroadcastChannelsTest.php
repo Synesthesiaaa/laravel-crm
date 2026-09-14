@@ -20,6 +20,7 @@ class TelephonyBroadcastChannelsTest extends TestCase
 
         $this->assertContains('private-App.Models.User.42', $channels);
         $this->assertContains('private-agent.42', $channels);
+        $this->assertSame('deferred', $event->connection);
     }
 
     public function test_vicidial_agent_event_broadcasts_to_frontend_user_channel(): void
@@ -34,6 +35,7 @@ class TelephonyBroadcastChannelsTest extends TestCase
         $this->assertContains('private-App.Models.User.42', $channels);
         $this->assertContains('private-agent.42', $channels);
         $this->assertContains('private-telephony.supervisor', $channels);
+        $this->assertSame('deferred', $event->connection);
     }
 
     public function test_user_notifications_use_existing_frontend_private_channel(): void

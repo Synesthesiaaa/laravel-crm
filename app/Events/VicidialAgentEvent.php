@@ -4,18 +4,23 @@ namespace App\Events;
 
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldRescue;
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
 /**
  * Broadcast ViciDial agent-level events that don't map to CallStateChanged.
  * Examples: state_ready, state_paused, logged_in, 3way_start, park_started.
- * Uses ShouldBroadcastNow for sub-second delivery.
+ * Broadcast after the webhook response so realtime transport failures do not
+ * stall VICIdial state processing.
  */
-class VicidialAgentEvent implements ShouldBroadcastNow
+class VicidialAgentEvent implements ShouldBroadcast, ShouldDispatchAfterCommit, ShouldRescue
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
+
+    public string $connection = 'deferred';
 
     public function __construct(
         public readonly int $userId,

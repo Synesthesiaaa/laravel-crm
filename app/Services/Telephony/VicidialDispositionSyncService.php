@@ -3,6 +3,7 @@
 namespace App\Services\Telephony;
 
 use App\Models\CallSession;
+use App\Models\VicidialAgentSession;
 use App\Models\VicidialServer;
 use App\Repositories\VicidialServerRepository;
 use Illuminate\Support\Facades\Http;
@@ -25,10 +26,19 @@ class VicidialDispositionSyncService
      */
     public function syncDispositionToVicidial(CallSession $session): void
     {
-        if ($session->lead_id === null) {
-            return;
+        $viciCode = $this->mapLaravelToVicidial($session->disposition_code);
+
+        if ($session->lead_id !== null) {
+            $this->syncLeadStatus($session, $viciCode);
         }
 
+        if ($this->sendExternalStatus($session, $viciCode)) {
+            $this->restoreAgentAvailability($session);
+        }
+    }
+
+    private function syncLeadStatus(CallSession $session, string $viciCode): void
+    {
         $server = $this->serverRepository->getForCampaign($session->campaign_code);
         if (! $server) {
             $this->telephonyLogger->debug('VicidialDispositionSyncService', 'No server for campaign', [
@@ -38,7 +48,6 @@ class VicidialDispositionSyncService
             return;
         }
 
-        $viciCode = $this->mapLaravelToVicidial($session->disposition_code);
         $baseUrl = $this->getNonAgentApiUrl($server);
         if ($baseUrl === '') {
             return;
@@ -81,19 +90,16 @@ class VicidialDispositionSyncService
             ]);
         }
 
-        // Per ViciDial spec, external_status advances the agent session past
-        // the disposition screen. Without it ViciDial stays in DISPO state.
-        $this->sendExternalStatus($session, $viciCode);
     }
 
     /**
      * Call Agent API external_status so ViciDial moves the agent past disposition.
      */
-    protected function sendExternalStatus(CallSession $session, string $viciCode): void
+    protected function sendExternalStatus(CallSession $session, string $viciCode): bool
     {
         $user = $session->user;
         if (! $user) {
-            return;
+            return false;
         }
 
         try {
@@ -107,9 +113,57 @@ class VicidialDispositionSyncService
                     'status' => $viciCode,
                     'response' => $result['raw_response'],
                 ]);
+
+                return false;
             }
+
+            return true;
         } catch (\Throwable $e) {
             $this->telephonyLogger->warning('VicidialDispositionSyncService', 'external_status exception (non-blocking)', [
+                'session_id' => $session->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
+    private function restoreAgentAvailability(CallSession $session): void
+    {
+        $statusBeforeCall = strtolower((string) data_get($session->metadata, 'vicidial_session_status_before_call', ''));
+        if ($statusBeforeCall === 'paused') {
+            return;
+        }
+
+        $user = $session->user;
+        if (! $user) {
+            return;
+        }
+
+        try {
+            $result = $this->vicidialProxy->execute($user, $session->campaign_code, 'external_pause', [
+                'value' => 'RESUME',
+            ]);
+
+            if (! $result['success']) {
+                $this->telephonyLogger->warning('VicidialDispositionSyncService', 'Agent resume failed after disposition', [
+                    'session_id' => $session->id,
+                    'response' => $result['raw_response'],
+                ]);
+
+                return;
+            }
+
+            VicidialAgentSession::query()
+                ->where('user_id', $session->user_id)
+                ->where('campaign_code', $session->campaign_code)
+                ->update([
+                    'session_status' => 'ready',
+                    'pause_code' => null,
+                    'last_synced_at' => now(),
+                ]);
+        } catch (\Throwable $e) {
+            $this->telephonyLogger->warning('VicidialDispositionSyncService', 'Agent resume exception after disposition', [
                 'session_id' => $session->id,
                 'error' => $e->getMessage(),
             ]);

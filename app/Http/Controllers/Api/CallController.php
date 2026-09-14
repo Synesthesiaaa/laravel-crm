@@ -45,20 +45,13 @@ class CallController extends Controller
             return response()->json($payload, 422);
         }
 
-        $hydrated = $this->leadHydrationService->hydrate(
-            $request->user(),
-            $campaign,
-            isset($validated['lead_id']) ? (int) $validated['lead_id'] : null,
-            (string) $phoneNumber,
-        );
-
         return response()->json([
             'success' => true,
             'session_id' => $result->data['session_id'],
-            'lead_id' => $hydrated['lead_id'],
-            'phone_number' => $hydrated['phone_number'] ?? $phoneNumber,
-            'client_name' => $hydrated['client_name'],
-            'lead_data' => $hydrated['capture_data'],
+            'lead_id' => isset($validated['lead_id']) ? (int) $validated['lead_id'] : null,
+            'phone_number' => $phoneNumber,
+            'client_name' => null,
+            'lead_data' => [],
         ]);
     }
 

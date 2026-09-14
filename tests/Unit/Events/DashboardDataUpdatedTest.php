@@ -4,16 +4,23 @@ namespace Tests\Unit\Events;
 
 use App\Events\DashboardDataUpdated;
 use Illuminate\Broadcasting\PrivateChannel;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldRescue;
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Tests\TestCase;
 
 class DashboardDataUpdatedTest extends TestCase
 {
-    public function test_event_broadcasts_a_minimal_campaign_scoped_payload_immediately(): void
+    public function test_event_defers_a_minimal_campaign_scoped_payload_until_after_the_response(): void
     {
         $event = new DashboardDataUpdated('mbsales', 'ezycash', 42, 'submitted');
 
-        $this->assertInstanceOf(ShouldBroadcastNow::class, $event);
+        $this->assertInstanceOf(ShouldBroadcast::class, $event);
+        $this->assertNotInstanceOf(ShouldBroadcastNow::class, $event);
+        $this->assertInstanceOf(ShouldRescue::class, $event);
+        $this->assertInstanceOf(ShouldDispatchAfterCommit::class, $event);
+        $this->assertSame('deferred', $event->connection);
         $this->assertSame('dashboard.data.updated', $event->broadcastAs());
         $this->assertEquals([
             'campaign' => 'mbsales',

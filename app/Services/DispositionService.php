@@ -3,13 +3,13 @@
 namespace App\Services;
 
 use App\Events\DispositionSaved;
+use App\Jobs\SyncVicidialDispositionJob;
 use App\Models\CallSession;
 use App\Models\CampaignDispositionRecord;
 use App\Models\DispositionCode;
 use App\Repositories\DispositionRepository;
 use App\Services\Telephony\CallStateService;
 use App\Services\Telephony\TelephonyLogger;
-use App\Services\Telephony\VicidialDispositionSyncService;
 use App\Support\OperationResult;
 use Illuminate\Support\Facades\DB;
 
@@ -17,7 +17,6 @@ class DispositionService
 {
     public function __construct(
         protected DispositionRepository $dispositionRepository,
-        protected VicidialDispositionSyncService $vicidialSync,
         protected CallStateService $callStateService,
         protected TelephonyLogger $telephonyLogger,
     ) {}
@@ -89,7 +88,7 @@ class DispositionService
         }
 
         try {
-            DB::transaction(function () use (
+            $syncSessionId = DB::transaction(function () use (
                 $campaignCode,
                 $agent,
                 $dispositionCode,
@@ -102,6 +101,8 @@ class DispositionService
                 $leadDataJson,
                 $persistRecord
             ) {
+                $syncSessionId = null;
+
                 if ($persistRecord) {
                     CampaignDispositionRecord::create([
                         'call_session_id' => $callSessionId,
@@ -128,14 +129,20 @@ class DispositionService
                             'disposition_at' => now(),
                             'call_duration_seconds' => $callDurationSeconds ?? $session->call_duration_seconds,
                         ]);
-                        $this->vicidialSync->syncDispositionToVicidial($session->fresh());
+                        $syncSessionId = (int) $session->id;
                     }
                 }
 
                 if ($persistRecord) {
                     event(new DispositionSaved($campaignCode, $agent, $dispositionCode, $leadId));
                 }
+
+                return $syncSessionId;
             });
+
+            if ($syncSessionId !== null) {
+                SyncVicidialDispositionJob::dispatch($syncSessionId);
+            }
 
             return OperationResult::success();
         } catch (\Throwable $e) {

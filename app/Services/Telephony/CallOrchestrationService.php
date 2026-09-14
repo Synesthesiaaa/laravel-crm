@@ -56,12 +56,12 @@ class CallOrchestrationService
 
         $skipAgentSessionCheck = app()->runningInConsole() && ! app()->runningUnitTests();
 
-        if (! $skipAgentSessionCheck && config('vicidial.require_vicidial_agent_session_before_dial', true)) {
-            $agentSession = VicidialAgentSession::query()
-                ->where('user_id', $user->id)
-                ->where('campaign_code', $campaign)
-                ->first();
+        $agentSession = VicidialAgentSession::query()
+            ->where('user_id', $user->id)
+            ->where('campaign_code', $campaign)
+            ->first();
 
+        if (! $skipAgentSessionCheck && config('vicidial.require_vicidial_agent_session_before_dial', true)) {
             if (! $agentSession
                 || ! in_array($agentSession->session_status, VicidialSessionService::USABLE_STATUSES, true)) {
                 return OperationResult::failure(
@@ -73,7 +73,7 @@ class CallOrchestrationService
 
         // Create session first so we have a session_id for the timeout job
         try {
-            $session = DB::transaction(function () use ($user, $campaign, $phoneNumber, $leadId) {
+            $session = DB::transaction(function () use ($user, $campaign, $phoneNumber, $leadId, $agentSession) {
                 return CallSession::create([
                     'user_id' => $user->id,
                     'campaign_code' => $campaign,
@@ -81,6 +81,9 @@ class CallOrchestrationService
                     'phone_number' => $phoneNumber,
                     'status' => CallSession::STATUS_DIALING,
                     'dialed_at' => now(),
+                    'metadata' => [
+                        'vicidial_session_status_before_call' => $agentSession?->session_status,
+                    ],
                 ]);
             });
         } catch (\Throwable $e) {
@@ -126,13 +129,11 @@ class CallOrchestrationService
             );
         }
 
-        // Transition to ringing and schedule no-answer timeout
+        // Transition the local state first. A queue outage must not turn a dial
+        // already accepted by VICIdial into a false "call setup failed" result.
         try {
             DB::transaction(function () use ($session) {
                 $this->callStateService->transition($session, CallSession::STATUS_RINGING);
-                CallNoAnswerTimeoutJob::dispatch($session->id)->delay(
-                    now()->addSeconds(config('webrtc.no_answer_timeout', 45)),
-                );
             });
         } catch (\Throwable $e) {
             $this->telephonyLogger->error('CallOrchestrationService', 'Failed to transition to ringing', [
@@ -147,6 +148,19 @@ class CallOrchestrationService
                 'Call setup failed. Please try again.',
                 CallErrors::toJson(CallErrors::NETWORK_FAILURE),
             );
+        }
+
+        try {
+            CallNoAnswerTimeoutJob::dispatch($session->id)->delay(
+                now()->addSeconds(config('webrtc.no_answer_timeout', 45)),
+            );
+        } catch (\Throwable $e) {
+            // getActiveSession() has the same no-answer stale cleanup, so the
+            // queue job is an optimization rather than a correctness boundary.
+            $this->telephonyLogger->warning('CallOrchestrationService', 'No-answer timeout job could not be queued', [
+                'session_id' => $session->id,
+                'error' => $e->getMessage(),
+            ]);
         }
 
         return OperationResult::success(['session_id' => $session->id]);

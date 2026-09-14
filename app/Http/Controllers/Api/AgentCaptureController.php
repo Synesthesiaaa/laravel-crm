@@ -3,10 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SyncVicidialLeadFieldsJob;
 use App\Models\AgentCaptureRecord;
 use App\Models\AgentScreenField;
-use App\Services\Telephony\LeadService;
-use App\Services\Telephony\TelephonyLogger;
 use App\Support\PercentageValue;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,11 +15,6 @@ use Illuminate\Validation\ValidationException;
 
 class AgentCaptureController extends Controller
 {
-    public function __construct(
-        protected LeadService $leadService,
-        protected TelephonyLogger $telephonyLogger,
-    ) {}
-
     public function store(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -66,7 +60,7 @@ class AgentCaptureController extends Controller
             'capture_data' => $captureData,
         ]);
 
-        $this->syncPostFieldsToVicidial($request, $fields, $captureData, (string) $campaign);
+        $this->deferPostFieldsToVicidial($request, $fields, $captureData, (string) $campaign);
 
         return response()->json([
             'success' => true,
@@ -108,7 +102,7 @@ class AgentCaptureController extends Controller
     /**
      * Push mapped capture fields back to Vicidial for directions post/both.
      */
-    private function syncPostFieldsToVicidial(Request $request, Collection $fields, array $captureData, string $campaign): void
+    private function deferPostFieldsToVicidial(Request $request, Collection $fields, array $captureData, string $campaign): void
     {
         $leadId = trim((string) $request->input('lead_id', ''));
         if ($leadId === '') {
@@ -142,23 +136,7 @@ class AgentCaptureController extends Controller
             return;
         }
 
-        try {
-            $result = $this->leadService->updateFields($request->user(), $campaign, $updateFields);
-            if (! $result->success) {
-                $this->telephonyLogger->warning('AgentCaptureController', 'Vicidial update_fields push failed', [
-                    'campaign' => $campaign,
-                    'lead_id' => $leadId,
-                    'message' => $result->message,
-                    'mapped_fields' => array_keys($updateFields),
-                ]);
-            }
-        } catch (\Throwable $e) {
-            $this->telephonyLogger->warning('AgentCaptureController', 'Vicidial update_fields push threw exception', [
-                'campaign' => $campaign,
-                'lead_id' => $leadId,
-                'error' => $e->getMessage(),
-            ]);
-        }
+        SyncVicidialLeadFieldsJob::dispatch((int) $request->user()->id, $campaign, $updateFields);
     }
 
     private function normalizeCaptureValue(mixed $value, string $fieldType): string

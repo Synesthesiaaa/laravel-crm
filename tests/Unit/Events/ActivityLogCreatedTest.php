@@ -3,6 +3,7 @@
 namespace Tests\Unit\Events;
 
 use App\Events\ActivityLogCreated;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Contracts\Broadcasting\ShouldRescue;
 use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
@@ -14,9 +15,11 @@ class ActivityLogCreatedTest extends TestCase
     {
         $event = new ActivityLogCreated(42, ['id' => 42, 'action' => 'updated']);
 
-        $this->assertInstanceOf(ShouldBroadcastNow::class, $event);
+        $this->assertInstanceOf(ShouldBroadcast::class, $event);
+        $this->assertNotInstanceOf(ShouldBroadcastNow::class, $event);
         $this->assertInstanceOf(ShouldRescue::class, $event);
         $this->assertInstanceOf(ShouldDispatchAfterCommit::class, $event);
+        $this->assertSame('deferred', $event->connection);
         $this->assertSame('private-activity-log', $event->broadcastOn()[0]->name);
         $this->assertSame('activity.log.created', $event->broadcastAs());
         $this->assertSame(['entry' => ['id' => 42, 'action' => 'updated']], $event->broadcastWith());

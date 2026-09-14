@@ -4,7 +4,10 @@ namespace Tests\Unit\Events;
 
 use App\Events\DashboardLayoutUpdated;
 use Illuminate\Broadcasting\PrivateChannel;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldRescue;
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Tests\TestCase;
 
 class DashboardLayoutUpdatedTest extends TestCase
@@ -13,7 +16,11 @@ class DashboardLayoutUpdatedTest extends TestCase
     {
         $event = new DashboardLayoutUpdated('mbsales');
 
-        $this->assertInstanceOf(ShouldBroadcastNow::class, $event);
+        $this->assertInstanceOf(ShouldBroadcast::class, $event);
+        $this->assertNotInstanceOf(ShouldBroadcastNow::class, $event);
+        $this->assertInstanceOf(ShouldRescue::class, $event);
+        $this->assertInstanceOf(ShouldDispatchAfterCommit::class, $event);
+        $this->assertSame('deferred', $event->connection);
         $this->assertSame('dashboard.layout.updated', $event->broadcastAs());
         $this->assertSame([
             'campaign' => 'mbsales',

@@ -42,7 +42,7 @@ document.addEventListener('alpine:init', () => {
                 }));
                 window.Alpine?.store('toast')?.success?.('Status started.');
                 await this.refresh();
-                window.location.reload();
+                await window.crmSoftNav?.refresh?.();
             } catch (e) {
                 const msg =
                     e.response?.data?.message ||
@@ -62,7 +62,7 @@ document.addEventListener('alpine:init', () => {
                 }));
                 window.Alpine?.store('toast')?.success?.('Status ended.');
                 await this.refresh();
-                window.location.reload();
+                await window.crmSoftNav?.refresh?.();
             } catch (e) {
                 const msg =
                     e.response?.data?.message ||

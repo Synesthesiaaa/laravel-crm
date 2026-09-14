@@ -2,9 +2,13 @@
 
 namespace Tests\Unit\Services;
 
+use App\Jobs\SyncVicidialDispositionJob;
+use App\Models\CallSession;
 use App\Models\DispositionCode;
+use App\Models\User;
 use App\Services\DispositionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class DispositionServiceTest extends TestCase
@@ -16,10 +20,8 @@ class DispositionServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // Resolve via the container so all dependencies (DispositionRepository,
-        // VicidialDispositionSyncService, CallStateService, TelephonyLogger)
-        // are wired per the service's real constructor. Hard-coding a subset
-        // here is what caused the ArgumentCountError in the previous version.
+        // Resolve through the container so repository, call-state, and logging
+        // dependencies use the same wiring as the application.
         $this->service = $this->app->make(DispositionService::class);
     }
 
@@ -49,5 +51,39 @@ class DispositionServiceTest extends TestCase
         $codes = $this->service->getCodesForCampaign('test');
         $this->assertCount(1, $codes);
         $this->assertEquals('SALE', $codes[0]['code']);
+    }
+
+    public function test_save_disposition_defers_vicidial_sync_until_after_the_request(): void
+    {
+        Queue::fake();
+
+        $user = User::factory()->create(['username' => 'agent1']);
+        $session = CallSession::factory()->completed()->for($user)->create([
+            'campaign_code' => 'mbsales',
+            'lead_id' => 123,
+        ]);
+        DispositionCode::create([
+            'campaign_code' => 'mbsales',
+            'code' => 'SALE',
+            'label' => 'Sale',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
+        $service = $this->app->make(DispositionService::class);
+
+        $result = $service->saveDisposition(
+            'mbsales',
+            'agent1',
+            'SALE',
+            'Sale',
+            $user->id,
+            $session->id,
+            123,
+            '15551234567',
+        );
+
+        $this->assertTrue($result->success);
+        Queue::assertPushed(SyncVicidialDispositionJob::class, fn (SyncVicidialDispositionJob $job): bool => $job->callSessionId === $session->id);
     }
 }

@@ -4,17 +4,22 @@ namespace App\Events;
 
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldRescue;
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
 /**
  * Fires when an inbound or dialer call is answered and lead data should
- * be "popped" on the agent screen. ShouldBroadcastNow for zero-delay delivery.
+ * be "popped" on the agent screen. Delivery is deferred until after the
+ * webhook response so realtime transport failures cannot block call processing.
  */
-class InboundCallReceived implements ShouldBroadcastNow
+class InboundCallReceived implements ShouldBroadcast, ShouldDispatchAfterCommit, ShouldRescue
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
+
+    public string $connection = 'deferred';
 
     public function __construct(
         public readonly int $userId,
