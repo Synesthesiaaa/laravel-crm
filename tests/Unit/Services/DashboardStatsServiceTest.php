@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Services;
 
+use App\Events\DashboardDataUpdated;
 use App\Models\CampaignDispositionRecord;
 use App\Models\Form;
 use App\Models\FormField;
@@ -12,6 +13,7 @@ use Database\Seeders\CampaignSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -333,11 +335,277 @@ class DashboardStatsServiceTest extends TestCase
             'updated_at' => Carbon::parse('2026-05-06 16:00:00'),
         ]));
 
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
         $trend = app(DashboardStatsService::class)->getLast24HourActivityTrend('mbsales');
 
         $this->assertCount(24, $trend['labels']);
         $this->assertCount(24, $trend['values']);
         $this->assertSame(2, array_sum($trend['values']));
+        $this->assertTrue(collect(DB::getQueryLog())->contains(
+            fn (array $query): bool => str_contains(strtolower($query['query']), 'ezycash')
+                && str_contains(strtolower($query['query']), 'group by'),
+        ));
+    }
+
+    public function test_last_24_hour_activity_preserves_application_timezone_hour_buckets(): void
+    {
+        $originalTimezone = config('app.timezone');
+        config(['app.timezone' => 'Asia/Manila']);
+        Carbon::setTestNow(Carbon::parse('2026-05-07 23:30:00', 'UTC'));
+        Cache::flush();
+        $this->seed(CampaignSeeder::class);
+
+        $base = [
+            'cardholder_name' => 'Test',
+            'mpi_credit_card_no' => '0000',
+            'bank' => 'Test',
+            'account_type' => 'Savings',
+            'account_number' => '1',
+            'surname' => 'User',
+            'first_name' => 'Test',
+            'ezycash_amount' => 100.00,
+            'term' => '12',
+            'rate' => 1.5,
+            'agent' => 'AgentX',
+            'date' => '2026-05-07',
+            'request_id' => 'req_24h_tz_'.uniqid(),
+            'created_at' => '2026-05-07 14:15:00',
+            'updated_at' => '2026-05-07 14:15:00',
+        ];
+        DB::table('ezycash')->insert($base);
+
+        try {
+            $trend = app(DashboardStatsService::class)->getLast24HourActivityTrend('mbsales');
+        } finally {
+            config(['app.timezone' => $originalTimezone]);
+        }
+
+        $localHourIndex = array_search('May 7 22:00', $trend['labels'], true);
+        $rawHourIndex = array_search('May 7 14:00', $trend['labels'], true);
+
+        $this->assertNotFalse($localHourIndex);
+        $this->assertNotFalse($rawHourIndex);
+        $this->assertSame(1, $trend['values'][$localHourIndex]);
+        $this->assertSame(0, $trend['values'][$rawHourIndex]);
+    }
+
+    public function test_sales_kpis_are_cached_until_campaign_stats_are_invalidated(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        Cache::flush();
+        $this->seed(CampaignSeeder::class);
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount',
+            'field_label' => 'EzyCash Amount',
+            'field_type' => 'number',
+            'is_required' => false,
+            'is_sale_amount' => true,
+            'field_order' => 1,
+        ]);
+        $from = Carbon::parse('2026-05-15 06:00:00');
+        $until = Carbon::parse('2026-05-15 18:00:00');
+        $service = app(DashboardStatsService::class);
+
+        $this->insertEzycashSaleRow('2026-05-15', 'Alice', 100.00, 10.00, '2026-05-15 10:00:00', 101);
+        $first = $service->getSalesKpisForCampaign('mbsales', $from, $until);
+
+        $this->insertEzycashSaleRow('2026-05-15', 'Bob', 50.00, 10.00, '2026-05-15 11:00:00', 102);
+        $cached = $service->getSalesKpisForCampaign('mbsales', $from, $until);
+
+        $this->assertSame(1, $first['sales']);
+        $this->assertSame($first, $cached);
+
+        $service->invalidate('mbsales');
+        $fresh = $service->getSalesKpisForCampaign('mbsales', $from, $until);
+
+        $this->assertSame(2, $fresh['sales']);
+        $this->assertSame(150.0, $fresh['sales_amount']);
+    }
+
+    public function test_legacy_sales_cache_fingerprint_changes_when_marked_sale_fields_change(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        Cache::flush();
+        $this->seed(CampaignSeeder::class);
+        $field = FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount',
+            'field_label' => 'EzyCash Amount',
+            'field_type' => 'number',
+            'is_required' => false,
+            'is_sale_amount' => true,
+            'field_order' => 1,
+        ]);
+        $from = Carbon::parse('2026-05-15 06:00:00');
+        $until = Carbon::parse('2026-05-15 18:00:00');
+        $asOf = Carbon::parse('2026-05-15 12:00:00');
+        $this->insertEzycashSaleRow('2026-05-15', 'Alice', 100.00, 10.00, '2026-05-15 10:00:00', 112);
+
+        $firstService = app(DashboardStatsService::class);
+        $this->assertSame(1, $firstService->getSalesKpisForCampaign('mbsales', $from, $until)['sales']);
+        $this->assertSame(1, $firstService->getDashboardSummaryForCampaign('mbsales', $asOf)['summary']['current']['count']);
+
+        $field->forceFill(['is_sale_amount' => false])->saveQuietly();
+        $freshService = app(DashboardStatsService::class);
+
+        $this->assertSame(0, $freshService->getSalesKpisForCampaign('mbsales', $from, $until)['sales']);
+        $this->assertSame(0, $freshService->getDashboardSummaryForCampaign('mbsales', $asOf)['summary']['current']['count']);
+    }
+
+    public function test_dashboard_range_index_migration_uses_portable_schema_index_introspection(): void
+    {
+        $source = file_get_contents(database_path('migrations/2026_09_15_081500_add_dashboard_range_indexes_to_form_tables.php'));
+
+        $this->assertIsString($source);
+        $this->assertStringContainsString('Schema::getIndexes(', $source);
+        $this->assertStringNotContainsString('SHOW INDEX', $source);
+        $this->assertStringNotContainsString('PRAGMA index_list', $source);
+    }
+
+    public function test_dashboard_data_updated_event_invalidates_campaign_sales_cache(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        Cache::flush();
+        Queue::fake();
+        $this->seed(CampaignSeeder::class);
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount',
+            'field_label' => 'EzyCash Amount',
+            'field_type' => 'number',
+            'is_required' => false,
+            'is_sale_amount' => true,
+            'field_order' => 1,
+        ]);
+        $from = Carbon::parse('2026-05-15 06:00:00');
+        $until = Carbon::parse('2026-05-15 18:00:00');
+        $service = app(DashboardStatsService::class);
+
+        $this->insertEzycashSaleRow('2026-05-15', 'Alice', 100.00, 10.00, '2026-05-15 10:00:00', 110);
+        $this->assertSame(1, $service->getSalesKpisForCampaign('mbsales', $from, $until)['sales']);
+
+        $this->insertEzycashSaleRow('2026-05-15', 'Bob', 50.00, 10.00, '2026-05-15 11:00:00', 111);
+        event(new DashboardDataUpdated('mbsales', 'ezycash', 111, 'submitted'));
+
+        $fresh = $service->getSalesKpisForCampaign('mbsales', $from, $until);
+        $this->assertSame(2, $fresh['sales']);
+        $this->assertSame(150.0, $fresh['sales_amount']);
+    }
+
+    public function test_dashboard_summary_is_cached_until_campaign_stats_are_invalidated(): void
+    {
+        Carbon::setTestNow('2026-05-07 12:00:00');
+        Cache::flush();
+        $this->seed(CampaignSeeder::class);
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount',
+            'field_label' => 'EzyCash Amount',
+            'field_type' => 'number',
+            'is_required' => false,
+            'is_sale_amount' => true,
+            'field_order' => 1,
+        ]);
+        $service = app(DashboardStatsService::class);
+
+        $this->insertEzycashSaleRow('2026-05-07', 'Alice', 100.00, 10.00, '2026-05-07 10:00:00', 103);
+        $first = $service->getDashboardSummaryForCampaign('mbsales');
+
+        $this->insertEzycashSaleRow('2026-05-07', 'Bob', 50.00, 10.00, '2026-05-07 11:00:00', 104);
+        $cached = $service->getDashboardSummaryForCampaign('mbsales');
+
+        $this->assertSame(['count' => 1, 'amount' => 100.0], $first['summary']['current']);
+        $this->assertSame($first, $cached);
+
+        $service->invalidate('mbsales');
+        $fresh = $service->getDashboardSummaryForCampaign('mbsales');
+
+        $this->assertSame(['count' => 2, 'amount' => 150.0], $fresh['summary']['current']);
+    }
+
+    public function test_live_dashboard_summary_reuses_cache_within_the_same_ttl_bucket(): void
+    {
+        config(['dashboard.summary_cache_seconds' => 60]);
+        Carbon::setTestNow('2026-05-07 12:00:01');
+        Cache::flush();
+        $this->seed(CampaignSeeder::class);
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount',
+            'field_label' => 'EzyCash Amount',
+            'field_type' => 'number',
+            'is_required' => false,
+            'is_sale_amount' => true,
+            'field_order' => 1,
+        ]);
+        $service = app(DashboardStatsService::class);
+
+        $this->insertEzycashSaleRow('2026-05-07', 'Alice', 100.00, 10.00, '2026-05-07 11:00:00', 108);
+        $first = $service->getDashboardSummaryForCampaign('mbsales');
+
+        Carbon::setTestNow('2026-05-07 12:00:20');
+        $this->insertEzycashSaleRow('2026-05-07', 'Bob', 50.00, 10.00, '2026-05-07 11:30:00', 109);
+        $cached = $service->getDashboardSummaryForCampaign('mbsales');
+
+        $this->assertSame(['count' => 1, 'amount' => 100.0], $first['summary']['current']);
+        $this->assertSame($first, $cached);
+    }
+
+    public function test_legacy_daily_campaign_report_aggregates_rows_in_sql(): void
+    {
+        Carbon::setTestNow('2026-05-07 12:00:00');
+        Cache::flush();
+        $this->seed(CampaignSeeder::class);
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount',
+            'field_label' => 'EzyCash Amount',
+            'field_type' => 'number',
+            'is_required' => false,
+            'is_sale_amount' => true,
+            'field_order' => 1,
+        ]);
+        $this->insertEzycashSaleRow('2026-05-01', 'Alice', 100.00, 10.00, '2026-05-01 10:00:00', 105);
+        $this->insertEzycashSaleRow('2026-05-07', 'Alice', 25.00, 10.00, '2026-05-07 10:00:00', 106);
+        $this->insertEzycashSaleRow('2026-05-07', 'Bob', 50.00, 10.00, '2026-05-07 11:00:00', 107);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $report = app(DashboardStatsService::class)->getDailyCampaignReport(
+            'mbsales',
+            Carbon::parse('2026-05-07 12:00:00'),
+        );
+        $daily = collect($report['daily'])->keyBy('agent');
+        $monthToDate = collect($report['month_to_date'])->keyBy('agent');
+
+        $this->assertSame(1, $daily['Alice']['counts']['ezycash']);
+        $this->assertSame(25.0, $daily['Alice']['amounts']['ezycash']);
+        $this->assertSame(2, $monthToDate['Alice']['counts']['ezycash']);
+        $this->assertSame(125.0, $monthToDate['Alice']['amounts']['ezycash']);
+        $this->assertSame(1, $daily['Bob']['counts']['ezycash']);
+        $this->assertTrue(collect(DB::getQueryLog())->contains(
+            fn (array $query): bool => str_contains(strtolower($query['query']), 'ezycash')
+                && str_contains(strtolower($query['query']), 'group by'),
+        ));
+    }
+
+    public function test_core_form_tables_have_dashboard_range_indexes(): void
+    {
+        $indexes = collect(Schema::getIndexes('ezycash'));
+        $indexedColumns = $indexes->pluck('columns')->all();
+
+        $this->assertContains(['created_at'], $indexedColumns);
+        $this->assertContains(['date', 'agent'], $indexedColumns);
     }
 
     public function test_get_weekly_activity_trend_shows_current_week_daily(): void

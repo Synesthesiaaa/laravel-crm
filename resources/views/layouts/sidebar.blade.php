@@ -79,9 +79,9 @@
            'sidebar-mobile-open': $store.sidebar.mobileOpen,
        }"
        x-data
+       x-init="$watch('$store.sidebar.collapsed', value => window.syncSidebarCollapsedState(value))"
        @keydown.escape="$store.sidebar.closeMobile()"
-       role="navigation"
-       aria-label="Main navigation">
+       >
 
     <div class="sidebar-header">
         <x-brand :branding="$branding" variant="sidebar" />

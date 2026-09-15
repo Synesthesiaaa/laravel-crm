@@ -26,7 +26,7 @@
             <div>
                 <h2 class="text-xl font-bold text-[var(--color-on-surface)]">Admin Control Center</h2>
                 <p class="text-[var(--color-on-surface-muted)] text-sm mt-1">
-                    Campaign: <span class="font-semibold text-[var(--color-primary)]">{{ $campaignName }}</span>
+                    Campaign: <span class="font-semibold text-[var(--color-action)]">{{ $campaignName }}</span>
                 </p>
             </div>
             <div class="flex gap-2">
@@ -249,7 +249,7 @@
                             <label class="cursor-pointer rounded-md px-3 py-1.5 text-xs transition" :class="salesMode === 'legacy' ? 'bg-[var(--color-surface)] text-[var(--color-on-surface)] shadow-sm' : 'text-[var(--color-on-surface-dim)]'">
                                 <input type="radio" name="sales_mode" value="legacy" x-model="salesMode" class="sr-only"> Legacy
                             </label>
-                            <label class="cursor-pointer rounded-md px-3 py-1.5 text-xs transition" :class="salesMode === 'custom' ? 'bg-[var(--color-primary-muted)] text-[var(--color-primary)] shadow-sm' : 'text-[var(--color-on-surface-dim)]'">
+                            <label class="cursor-pointer rounded-md px-3 py-1.5 text-xs transition" :class="salesMode === 'custom' ? 'bg-[var(--color-primary-muted)] text-[var(--color-action)] shadow-sm' : 'text-[var(--color-on-surface-dim)]'">
                                 <input type="radio" name="sales_mode" value="custom" x-model="salesMode" class="sr-only"> Custom rules
                             </label>
                         </div>
@@ -317,15 +317,15 @@
                                     </div>
 
                                     <div x-show="ruleUsesForm(rule)" x-cloak class="rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-primary-muted)] p-3 text-xs text-[var(--color-on-surface-muted)]">
-                                        <p class="font-semibold text-[var(--color-primary)]">Form submission trigger</p>
+                                        <p class="font-semibold text-[var(--color-action)]">Form submission trigger</p>
                                         <p class="mt-1">Every submission of this form counts as one sale. The amount field is optional and only contributes to the sales amount total.</p>
-                                        <button type="button" class="mt-2 text-[11px] text-[var(--color-primary)] hover:underline" x-show="tagFields(rule.form_code).length > 0" @click="rule.trigger = 'tag'; changeRuleTrigger(rule)">Use a Yes/No tag condition instead</button>
+                                        <button type="button" class="mt-2 text-[11px] text-[var(--color-action)] hover:underline" x-show="tagFields(rule.form_code).length > 0" @click="rule.trigger = 'tag'; changeRuleTrigger(rule)">Use a Yes/No tag condition instead</button>
                                     </div>
 
                                     <div x-show="ruleUsesMarkedAmount(rule)" x-cloak class="rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-primary-muted)] p-3 text-xs text-[var(--color-on-surface-muted)]">
-                                        <p class="font-semibold text-[var(--color-primary)]">Marked sale-amount trigger</p>
+                                        <p class="font-semibold text-[var(--color-action)]">Marked sale-amount trigger</p>
                                         <p class="mt-1">A submission qualifies when this marked numeric field contains a value. The submission is counted once and the field value is added to the sales amount.</p>
-                                        <button type="button" class="mt-2 text-[11px] text-[var(--color-primary)] hover:underline" x-show="tagFields(rule.form_code).length > 0" @click="switchToTagRule(rule)">Use a text/select tag condition instead</button>
+                                        <button type="button" class="mt-2 text-[11px] text-[var(--color-action)] hover:underline" x-show="tagFields(rule.form_code).length > 0" @click="switchToTagRule(rule)">Use a text/select tag condition instead</button>
                                     </div>
 
                                     <div x-show="ruleUsesTag(rule)" x-cloak class="space-y-3">
@@ -346,7 +346,7 @@
                                                 <div class="space-y-2">
                                                     <div class="flex items-center justify-between gap-2">
                                                         <label class="form-label mb-0">Accepted values</label>
-                                                        <button type="button" class="text-[11px] text-[var(--color-primary)] hover:underline" @click="addAcceptedValue(condition)">Add value</button>
+                                                        <button type="button" class="text-[11px] text-[var(--color-action)] hover:underline" @click="addAcceptedValue(condition)">Add value</button>
                                                     </div>
                                                     <template x-for="(value, valueIndex) in condition.accepted_values" :key="valueIndex">
                                                         <div class="flex items-center gap-2">
@@ -541,7 +541,7 @@
         if (activityEl) {
             const activity = new ApexCharts(activityEl, {
                 series: [{ name: 'Submissions', data: @json($activityTrend['values'] ?? []) }],
-                chart: { type: 'area', height: 240, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
+                chart: { type: 'area', height: 240, toolbar: { show: false }, background: 'transparent', fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
                 colors: ['#e91e8c'],
                 fill: { type: 'gradient', gradient: { opacityFrom: .35, opacityTo: .03 } },
                 stroke: { curve: 'smooth', width: 2 },
@@ -562,7 +562,7 @@
         if (agentLabels.length && agentValues.some((value) => Number(value) > 0) && agentsEl) {
             const agents = new ApexCharts(agentsEl, {
                 series: [{ name: 'Submissions', data: @json($topAgents['values'] ?? []) }],
-                chart: { type: 'bar', height: 240, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
+                chart: { type: 'bar', height: 240, toolbar: { show: false }, background: 'transparent', fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
                 colors: ['#e91e8c'],
                 plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '55%' } },
                 xaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, axisBorder: { show: false } },

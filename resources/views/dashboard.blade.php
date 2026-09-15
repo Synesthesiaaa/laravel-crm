@@ -38,6 +38,9 @@
     $dailyActivityHasValues = $activityHasValues((array) ($dailyActivity ?? []));
     $weeklyActivityHasValues = $activityHasValues((array) ($weeklyActivity ?? []));
     $monthlyActivityHasValues = $activityHasValues((array) ($monthlyActivity ?? []));
+    $dashboardHasRenderableChartData = ($sectionVisible('activity') && (
+        $dailyActivityHasValues || $weeklyActivityHasValues || $monthlyActivityHasValues
+    )) || ($sectionVisible('kpis') && $summaryHasActivity);
     $summaryCurrencySymbol = (string) data_get($summary, 'currency.symbol', config('dashboard.currency_symbol', '₱'));
     $summaryModeLabel = data_get($summary, 'period.mode') === 'completed_month' ? 'Completed month' : 'Month to date';
     $summaryCurrentPeriodLabel = (string) data_get($summary, 'period.current.label', $monthTitle);
@@ -79,7 +82,7 @@
                 <h2 class="text-xl font-bold text-[var(--color-on-surface)]">Welcome to {{ data_get($branding, 'name', 'CRM') }}</h2>
                 <p class="text-sm text-[var(--color-on-surface-muted)] mt-1">Hello, {{ $user->full_name ?? $user->username }}</p>
                 <p class="text-[var(--color-on-surface-muted)] text-sm mt-1">
-                    Campaign: <span class="font-semibold text-[var(--color-primary)]">{{ $campaignName }}</span>
+                    Campaign: <span class="font-semibold text-[var(--color-action)]">{{ $campaignName }}</span>
                 </p>
             </div>
             <x-badge type="active">Online</x-badge>
@@ -174,8 +177,8 @@
                     </div>
                     @if($summaryHasActivity && $amountVisible('charts'))
                         <div x-data="{ mode: 'volume' }" x-init="$watch('mode', value => window.setDashboardSummaryMode?.(value))" class="inline-flex rounded-lg border border-[var(--color-border)] p-1" role="group" aria-label="Chart measure">
-                            <button type="button" class="min-h-11 rounded-md px-3 text-xs font-semibold transition-colors" :class="mode === 'volume' ? 'bg-[var(--color-primary-muted)] text-[var(--color-primary)]' : 'text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'" :aria-pressed="mode === 'volume'" x-on:click="mode = 'volume'">Volume</button>
-                            <button type="button" class="min-h-11 rounded-md px-3 text-xs font-semibold transition-colors" :class="mode === 'amount' ? 'bg-[var(--color-primary-muted)] text-[var(--color-primary)]' : 'text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'" :aria-pressed="mode === 'amount'" x-on:click="mode = 'amount'">Amount</button>
+                            <button type="button" class="min-h-11 rounded-md px-3 text-xs font-semibold transition-colors" :class="mode === 'volume' ? 'bg-[var(--color-primary-muted)] text-[var(--color-action)]' : 'text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'" :aria-pressed="mode === 'volume'" x-on:click="mode = 'volume'">Volume</button>
+                            <button type="button" class="min-h-11 rounded-md px-3 text-xs font-semibold transition-colors" :class="mode === 'amount' ? 'bg-[var(--color-primary-muted)] text-[var(--color-action)]' : 'text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'" :aria-pressed="mode === 'amount'" x-on:click="mode = 'amount'">Amount</button>
                         </div>
                     @endif
                 </div>
@@ -829,7 +832,7 @@
                 width: '100%',
                 toolbar: { show: false },
                 background: 'transparent',
-                fontFamily: 'DM Sans, ui-sans-serif',
+                fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
                 animations: { enabled: !reduceMotion, easing: 'easeinout', speed: 400 },
             },
             colors: ['#e91e8c', config.isDark ? '#a1a1aa' : '#52525b'],
@@ -918,7 +921,7 @@
                 width: '100%',
                 toolbar: { show: false },
                 background: 'transparent',
-                fontFamily: 'DM Sans, ui-sans-serif',
+                fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
                 animations: { enabled: true, easing: 'easeinout', speed: 600 },
             },
             colors: ['#e91e8c'],
@@ -939,10 +942,6 @@
 
         window.crmCharts?.register?.(chartGroup, elId, chart);
         await chart.render();
-
-        try {
-            chart.resize();
-        } catch (_) {}
     }
 
     async function renderCharts() {
@@ -950,6 +949,11 @@
 
         if (document.readyState === 'loading') {
             await new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+        }
+
+        const hasRenderableChartData = @json($dashboardHasRenderableChartData);
+        if (!hasRenderableChartData) {
+            return;
         }
 
         const ApexCharts = await window.ApexChartsLoader?.() ?? null;
@@ -980,9 +984,6 @@
 
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         window.resizeCrmDashboardCharts?.();
-        requestAnimationFrame(() => window.resizeCrmDashboardCharts?.());
-        setTimeout(() => window.resizeCrmDashboardCharts?.(), 120);
-        setTimeout(() => window.resizeCrmDashboardCharts?.(), 360);
     }
 
     window.crmSoftNav?.register?.(scope, {

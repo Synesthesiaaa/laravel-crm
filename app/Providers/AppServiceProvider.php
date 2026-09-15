@@ -18,6 +18,8 @@ use App\Policies\UserPolicy;
 use App\Policies\VicidialServerPolicy;
 use App\Services\BrandingService;
 use App\Services\CampaignService;
+use App\Services\DashboardLayoutService;
+use App\Services\DashboardSalesRuleService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
@@ -32,6 +34,8 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->ensureTempDirectoryForPhp();
         $this->registerRepositoryBindings();
+        $this->app->scoped(DashboardLayoutService::class);
+        $this->app->scoped(DashboardSalesRuleService::class);
     }
 
     public function boot(): void

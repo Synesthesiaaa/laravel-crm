@@ -145,6 +145,22 @@ class AgentScreenAccessTest extends TestCase
         $this->assertBoundLabelForControl($html, 'Customer Name', 'name="customer_name"');
     }
 
+    public function test_agent_screen_releases_wrapup_on_vicidial_disposition_event(): void
+    {
+        $this->enableAgentScreenAccess();
+
+        $html = $this->actingAs($this->agent)
+            ->withSession($this->campaignSession())
+            ->get(route('agent.index'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertMatchesRegularExpression(
+            "/p\.event === 'dispo_set'.*?shouldReleaseWrapupForVicidialDisposition.*?this\.resetAfterDisposition\(\)/s",
+            $html,
+        );
+    }
+
     private function enableAgentScreenAccess(): void
     {
         SystemSetting::query()->create([

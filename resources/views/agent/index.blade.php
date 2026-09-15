@@ -595,7 +595,16 @@ window.agentScreen = function() {
                     window.TelephonyCore.destroy().catch(() => {});
                 }
             } else if (p.event === 'dispo_set') {
-                // ViciDial confirmed disposition — no action needed if CRM already saved
+                const shouldReleaseWrapup = window.AgentVicidialEvents?.shouldReleaseWrapupForVicidialDisposition?.(p, {
+                    leadId: this.leadId,
+                    callState: this.callState,
+                    hasDispositionPending: this.hasDispositionPending,
+                    dialBlocked: this.dialBlocked,
+                });
+
+                if (shouldReleaseWrapup) {
+                    this.resetAfterDisposition();
+                }
             }
             store.lastSyncAt = p.timestamp || new Date().toISOString();
         },

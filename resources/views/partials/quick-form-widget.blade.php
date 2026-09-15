@@ -95,7 +95,7 @@
                 </div>
             </template>
             <iframe x-show="!loading && !error"
-                    :src="frameSrc || 'about:blank'"
+                    :src="(open || isSplitActive()) && frameSrc ? frameSrc : 'about:blank'"
                     class="block h-full min-h-0 w-full border-0 bg-transparent"
                     title="Quick campaign form"></iframe>
         </div>

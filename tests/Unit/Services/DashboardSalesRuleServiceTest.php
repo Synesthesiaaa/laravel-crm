@@ -6,6 +6,7 @@ use App\Models\FormField;
 use App\Services\DashboardSalesRuleService;
 use Database\Seeders\CampaignSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class DashboardSalesRuleServiceTest extends TestCase
@@ -63,6 +64,43 @@ class DashboardSalesRuleServiceTest extends TestCase
                 'accepted_values' => ['yes', 'approved'],
             ]],
         ], $resolved['forms'][0]);
+    }
+
+    public function test_resolve_for_campaign_memoizes_identical_rule_configuration_within_the_service_instance(): void
+    {
+        $this->seed(CampaignSeeder::class);
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount',
+            'field_label' => 'EzyCash Amount',
+            'field_type' => 'number',
+            'is_required' => false,
+            'field_order' => 1,
+        ]);
+        $config = [
+            'mode' => 'custom',
+            'forms' => [[
+                'form_code' => 'ezycash',
+                'amount_field' => 'ezycash_amount',
+                'trigger' => 'form',
+                'conditions' => [],
+            ]],
+        ];
+
+        $service = app(DashboardSalesRuleService::class);
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $first = $service->resolveForCampaign('mbsales', $config);
+        $second = $service->resolveForCampaign('mbsales', $config);
+
+        $fieldSelects = collect(DB::getQueryLog())
+            ->filter(fn (array $query): bool => str_contains(strtolower($query['query']), 'form_fields'))
+            ->filter(fn (array $query): bool => str_starts_with(ltrim(strtolower($query['query'])), 'select'));
+
+        $this->assertSame($first, $second);
+        $this->assertCount(1, $fieldSelects);
     }
 
     public function test_custom_mode_returns_warnings_for_stale_references_without_falling_back(): void

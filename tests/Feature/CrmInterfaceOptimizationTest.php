@@ -135,6 +135,87 @@ final class CrmInterfaceOptimizationTest extends TestCase
         $this->assertMatchesRegularExpression('/\.data-master-desktop-table \.table-scroll-wrap\s*\{[^}]*overflow-x:\s*auto;/s', $css);
     }
 
+    public function test_sidebar_uses_one_labelled_navigation_landmark(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_AGENT]);
+
+        $response = $this->actingAs($user)
+            ->withSession($this->campaignSession())
+            ->get(route('dashboard'));
+
+        $response->assertOk();
+        $html = $response->getContent();
+
+        $this->assertIsString($html);
+        $this->assertMatchesRegularExpression('/<aside\b[^>]*id="sidebar"[^>]*>/s', $html);
+        preg_match('/<aside\b[^>]*id="sidebar"[^>]*>/s', $html, $asideMatch);
+        preg_match('/<nav\b[^>]*class="sidebar-nav"[^>]*>/s', $html, $navMatch);
+
+        $this->assertNotEmpty($asideMatch);
+        $this->assertNotEmpty($navMatch);
+        $this->assertStringNotContainsString('role="navigation"', $asideMatch[0]);
+        $this->assertStringNotContainsString('aria-label=', $asideMatch[0]);
+        $this->assertStringContainsString('aria-label="Primary destinations"', $navMatch[0]);
+    }
+
+    public function test_dark_theme_text_and_action_tokens_meet_wcag_aa(): void
+    {
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertIsString($css);
+        $tokens = $this->cssHexTokens($css, [
+            'color-primary',
+            'color-primary-foreground',
+            'color-action',
+            'color-on-surface',
+            'color-on-surface-muted',
+            'color-on-surface-dim',
+            'color-surface-3',
+        ]);
+
+        $this->assertSame('#e91e8c', strtolower($tokens['color-primary']));
+        foreach (['color-on-surface', 'color-on-surface-muted', 'color-on-surface-dim', 'color-action'] as $foregroundToken) {
+            $this->assertGreaterThanOrEqual(
+                4.5,
+                $this->contrastRatio($tokens[$foregroundToken], $tokens['color-surface-3']),
+                $foregroundToken.' should meet WCAG AA against the lightest dark surface.',
+            );
+        }
+        $this->assertGreaterThanOrEqual(
+            4.5,
+            $this->contrastRatio($tokens['color-primary-foreground'], $tokens['color-primary']),
+            'Primary action text should meet WCAG AA on the brand background.',
+        );
+        $this->assertMatchesRegularExpression('/\.sidebar-item\.active\s*\{[^}]*color:\s*var\(--color-action\);/s', $css);
+        $this->assertMatchesRegularExpression('/\.link-primary\s*\{[^}]*color:\s*var\(--color-action\);/s', $css);
+    }
+
+    public function test_interactive_magenta_foregrounds_use_accessible_action_token(): void
+    {
+        $css = file_get_contents(resource_path('css/app.css'));
+        $callHistory = file_get_contents(resource_path('views/records/partials/call-history-panel.blade.php'));
+        $supervisor = file_get_contents(resource_path('views/admin/supervisor.blade.php'));
+        $recordsList = file_get_contents(resource_path('views/admin/records_list.blade.php'));
+        $dashboard = file_get_contents(resource_path('views/dashboard.blade.php'));
+        $adminDashboard = file_get_contents(resource_path('views/admin/dashboard.blade.php'));
+        $clickToCall = file_get_contents(resource_path('views/components/click-to-call.blade.php'));
+
+        foreach ([$css, $callHistory, $supervisor, $recordsList, $dashboard, $adminDashboard, $clickToCall] as $source) {
+            $this->assertIsString($source);
+        }
+
+        $this->assertMatchesRegularExpression('/\.agent-tool-tab\.is-active\s*\{[^}]*color:\s*var\(--color-action\);/s', $css);
+        $this->assertMatchesRegularExpression('/\.link-primary:hover\s*\{[^}]*color:\s*var\(--color-action\);/s', $css);
+        $this->assertStringContainsString('hover:text-[var(--color-action)]', $callHistory);
+        $this->assertMatchesRegularExpression('/<summary[^>]*text-\[var\(--color-action\)\]/s', $callHistory);
+        $this->assertGreaterThanOrEqual(4, substr_count($supervisor, 'text-[var(--color-action)]'));
+        $this->assertGreaterThanOrEqual(2, substr_count($recordsList, 'text-[var(--color-action)]'));
+        $this->assertStringContainsString("bg-[var(--color-primary-muted)] text-[var(--color-action)]", $dashboard);
+        $this->assertStringContainsString("bg-[var(--color-primary-muted)] text-[var(--color-action)]", $adminDashboard);
+        $this->assertStringContainsString('bg-[var(--color-primary)] text-[var(--color-primary-foreground)]', $clickToCall);
+        $this->assertStringNotContainsString('bg-[var(--color-primary)] text-white', $clickToCall);
+    }
+
     /**
      * @return array{campaign: string, campaign_name: string}
      */
@@ -144,5 +225,50 @@ final class CrmInterfaceOptimizationTest extends TestCase
             'campaign' => 'mbsales',
             'campaign_name' => 'MB Sales',
         ];
+    }
+
+    /**
+     * @param  list<string>  $names
+     * @return array<string, string>
+     */
+    private function cssHexTokens(string $css, array $names): array
+    {
+        $tokens = [];
+
+        foreach ($names as $name) {
+            preg_match('/--'.preg_quote($name, '/').'\s*:\s*(#[0-9a-fA-F]{6})\s*;/', $css, $match);
+            $this->assertNotEmpty($match, 'Missing CSS token --'.$name.'.');
+            $tokens[$name] = $match[1];
+        }
+
+        return $tokens;
+    }
+
+    private function contrastRatio(string $foreground, string $background): float
+    {
+        $foregroundLuminance = $this->relativeLuminance($foreground);
+        $backgroundLuminance = $this->relativeLuminance($background);
+        $lighter = max($foregroundLuminance, $backgroundLuminance);
+        $darker = min($foregroundLuminance, $backgroundLuminance);
+
+        return ($lighter + 0.05) / ($darker + 0.05);
+    }
+
+    private function relativeLuminance(string $hex): float
+    {
+        $channels = [
+            hexdec(substr($hex, 1, 2)) / 255,
+            hexdec(substr($hex, 3, 2)) / 255,
+            hexdec(substr($hex, 5, 2)) / 255,
+        ];
+
+        [$red, $green, $blue] = array_map(
+            static fn (float $channel): float => $channel <= 0.04045
+                ? $channel / 12.92
+                : (($channel + 0.055) / 1.055) ** 2.4,
+            $channels,
+        );
+
+        return (0.2126 * $red) + (0.7152 * $green) + (0.0722 * $blue);
     }
 }

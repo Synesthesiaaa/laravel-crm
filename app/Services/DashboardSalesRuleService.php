@@ -25,6 +25,9 @@ class DashboardSalesRuleService
     /** @var list<string> */
     private const TAG_FIELD_TYPES = ['text', 'select'];
 
+    /** @var array<string, array{mode: string, forms: list<array<string, mixed>>, warnings: list<string>}> */
+    private array $resolvedRules = [];
+
     public function __construct(
         protected CampaignRepository $campaignRepository,
     ) {}
@@ -37,12 +40,17 @@ class DashboardSalesRuleService
      */
     public function resolveForCampaign(string $campaignCode, ?array $salesConfig): array
     {
+        $memoKey = $campaignCode.':'.sha1(serialize($salesConfig));
+        if (array_key_exists($memoKey, $this->resolvedRules)) {
+            return $this->resolvedRules[$memoKey];
+        }
+
         $mode = ($salesConfig['mode'] ?? null) === self::MODE_CUSTOM
             ? self::MODE_CUSTOM
             : self::MODE_LEGACY;
 
         if ($mode === self::MODE_LEGACY) {
-            return [
+            return $this->resolvedRules[$memoKey] = [
                 'mode' => self::MODE_LEGACY,
                 'forms' => [],
                 'warnings' => [],
@@ -145,7 +153,7 @@ class DashboardSalesRuleService
             ];
         }
 
-        return [
+        return $this->resolvedRules[$memoKey] = [
             'mode' => self::MODE_CUSTOM,
             'forms' => $forms,
             'warnings' => array_values(array_unique($warnings)),

@@ -1,5 +1,4 @@
 import './bootstrap';
-import './echo';
 import './components';
 import './vicidial-session';
 import './widgets/workspace';
@@ -7,10 +6,15 @@ import './phone-widget';
 import './quick-form-widget';
 import './soft-navigate';
 import './form-visibility';
-import './agent-capture-webform';
 import './telephony-media-path';
 import './call-history';
 import TelephonyCore from './telephony-core';
+import { shouldReleaseWrapupForVicidialDisposition } from './agent-vicidial-events';
+
+window.AgentVicidialEvents = {
+    ...(window.AgentVicidialEvents || {}),
+    shouldReleaseWrapupForVicidialDisposition,
+};
 
 function reportClientWarning(error, context) {
     if (window.axios?.isCancel?.(error) || error?.__crmPollBackoff) {

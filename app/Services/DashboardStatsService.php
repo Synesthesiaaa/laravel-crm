@@ -13,6 +13,12 @@ use Illuminate\Support\Facades\Schema;
 
 class DashboardStatsService
 {
+    /** @var array<string, array{sales_config: ?array, rules: array<string, mixed>, fingerprint: string}> */
+    private array $salesContexts = [];
+
+    /** @var array<string, array{configured: bool, fields: array<string, list<string>>, forms: array<string, array{form_code: string, form_name: string}>}> */
+    private array $markedSaleFields = [];
+
     public function __construct(
         protected CampaignRepository $campaignRepository,
         protected DashboardLayoutService $dashboardLayoutService,
@@ -47,20 +53,23 @@ class DashboardStatsService
                 $labels[] = $h->format('M j H:00');
             }
 
+            $minuteExpression = $this->dashboardMinuteBucketExpression();
             foreach ($tables as $t) {
-                DB::table($t)
+                $rows = DB::table($t)
                     ->where('created_at', '>=', $since)
-                    ->select('created_at')
-                    ->orderBy('id')
-                    ->chunk(1000, function ($rows) use (&$bucketCounts) {
-                        foreach ($rows as $row) {
-                            $h = Carbon::parse($row->created_at)->timezone(config('app.timezone'))->startOfHour();
-                            $key = $h->format('Y-m-d H');
-                            if (array_key_exists($key, $bucketCounts)) {
-                                $bucketCounts[$key]++;
-                            }
-                        }
-                    });
+                    ->selectRaw("{$minuteExpression} as minute_key, COUNT(*) as total")
+                    ->groupByRaw($minuteExpression)
+                    ->get();
+
+                foreach ($rows as $row) {
+                    $key = Carbon::parse((string) $row->minute_key)
+                        ->timezone((string) config('app.timezone'))
+                        ->startOfHour()
+                        ->format('Y-m-d H');
+                    if (array_key_exists($key, $bucketCounts)) {
+                        $bucketCounts[$key] += (int) $row->total;
+                    }
+                }
             }
 
             $values = [];
@@ -148,6 +157,7 @@ class DashboardStatsService
         ?Carbon $asOf = null,
         ?bool $completedMonth = null,
     ): array {
+        $isLiveSnapshot = $asOf === null;
         $asOf ??= now(config('app.timezone'));
         $completedMonth ??= $asOf->copy()
             ->setTimezone(config('app.timezone'))
@@ -155,81 +165,93 @@ class DashboardStatsService
         $periods = $completedMonth
             ? $this->dashboardPeriodService->completedMonth($asOf)
             : $this->dashboardPeriodService->monthToDate($asOf);
-        $salesConfig = $this->dashboardLayoutService->getForCampaign($campaignCode)['sales'] ?? null;
-        $resolvedSalesRules = $this->dashboardSalesRuleService->resolveForCampaign($campaignCode, $salesConfig);
+        $salesContext = $this->resolveSalesContext($campaignCode);
+        $resolvedSalesRules = $salesContext['rules'];
+        $ttl = max(5, (int) config('dashboard.summary_cache_seconds', 60));
+        $liveBucket = $isLiveSnapshot ? intdiv($asOf->getTimestamp(), $ttl) : null;
+        $cacheKey = $this->dashboardSummaryCacheKey(
+            $campaignCode,
+            $periods,
+            $salesContext['fingerprint'],
+            $liveBucket,
+            $ttl,
+        );
 
-        $amountDefinition = $resolvedSalesRules['mode'] === DashboardSalesRuleService::MODE_CUSTOM
-            ? 'Amount uses the configured custom sales rule amount field for qualifying records.'
-            : 'Amount is the sum of numeric form fields marked as sale amounts for qualifying records.';
+        return Cache::remember($cacheKey, $ttl, function () use ($campaignCode, $periods, $resolvedSalesRules): array {
 
-        $aggregate = ['totals' => [
-            'current' => ['count' => 0, 'amount' => 0.0],
-            'previous' => ['count' => 0, 'amount' => 0.0],
-        ], 'daily' => $this->emptyDashboardSummaryDaily($periods)];
+            $amountDefinition = $resolvedSalesRules['mode'] === DashboardSalesRuleService::MODE_CUSTOM
+                ? 'Amount uses the configured custom sales rule amount field for qualifying records.'
+                : 'Amount is the sum of numeric form fields marked as sale amounts for qualifying records.';
 
-        if ($resolvedSalesRules['mode'] === DashboardSalesRuleService::MODE_CUSTOM) {
-            $sources = $this->dashboardSummaryCustomSources($resolvedSalesRules['forms']);
-            $aggregate = $this->aggregateDashboardSummary(
-                $periods,
-                $sources,
-                function (object $row, array $source): ?float {
-                    $rule = $source['rule'];
-                    if (! $this->matchesCustomConditions(
-                        $row,
-                        $rule['conditions'],
-                        $rule['amount_field'],
-                        $rule['trigger'],
-                    )) {
-                        return null;
-                    }
+            $aggregate = ['totals' => [
+                'current' => ['count' => 0, 'amount' => 0.0],
+                'previous' => ['count' => 0, 'amount' => 0.0],
+            ], 'daily' => $this->emptyDashboardSummaryDaily($periods)];
 
-                    return $this->customSaleAmount($row, $rule['amount_field']);
-                },
-            );
-        } else {
-            $markedSaleFields = $this->resolveMarkedSaleFields($campaignCode);
-            $sources = $this->dashboardSummaryLegacySources($markedSaleFields['fields']);
-            if ($sources !== []) {
+            if ($resolvedSalesRules['mode'] === DashboardSalesRuleService::MODE_CUSTOM) {
+                $sources = $this->dashboardSummaryCustomSources($resolvedSalesRules['forms']);
                 $aggregate = $this->aggregateDashboardSummary(
                     $periods,
                     $sources,
-                    fn (object $row, array $source): ?float => $this->sumMarkedSaleValues($row, $source['fields']),
+                    function (object $row, array $source): ?float {
+                        $rule = $source['rule'];
+                        if (! $this->matchesCustomConditions(
+                            $row,
+                            $rule['conditions'],
+                            $rule['amount_field'],
+                            $rule['trigger'],
+                        )) {
+                            return null;
+                        }
+
+                        return $this->customSaleAmount($row, $rule['amount_field']);
+                    },
                 );
+            } else {
+                $markedSaleFields = $this->resolveMarkedSaleFields($campaignCode);
+                $sources = $this->dashboardSummaryLegacySources($markedSaleFields['fields']);
+                if ($sources !== []) {
+                    $aggregate = $this->aggregateDashboardSummary(
+                        $periods,
+                        $sources,
+                        fn (object $row, array $source): ?float => $this->sumMarkedSaleValues($row, $source['fields']),
+                    );
+                }
             }
-        }
 
-        $current = $aggregate['totals']['current'];
-        $previous = $aggregate['totals']['previous'];
-        $currentCount = (int) $current['count'];
-        $previousCount = (int) $previous['count'];
-        $currentAmount = round((float) $current['amount'], 2);
-        $previousAmount = round((float) $previous['amount'], 2);
+            $current = $aggregate['totals']['current'];
+            $previous = $aggregate['totals']['previous'];
+            $currentCount = (int) $current['count'];
+            $previousCount = (int) $previous['count'];
+            $currentAmount = round((float) $current['amount'], 2);
+            $previousAmount = round((float) $previous['amount'], 2);
 
-        return [
-            'available' => true,
-            'has_activity' => $currentCount > 0 || $previousCount > 0,
-            'amount_definition' => $amountDefinition,
-            'currency' => [
-                'code' => (string) config('dashboard.currency_code', 'PHP'),
-                'symbol' => (string) config('dashboard.currency_symbol', '₱'),
-            ],
-            'period' => $this->serializeDashboardPeriods($periods),
-            'summary' => [
-                'current' => [
-                    'count' => $currentCount,
-                    'amount' => $currentAmount,
+            return [
+                'available' => true,
+                'has_activity' => $currentCount > 0 || $previousCount > 0,
+                'amount_definition' => $amountDefinition,
+                'currency' => [
+                    'code' => (string) config('dashboard.currency_code', 'PHP'),
+                    'symbol' => (string) config('dashboard.currency_symbol', '₱'),
                 ],
-                'previous' => [
-                    'count' => $previousCount,
-                    'amount' => $previousAmount,
+                'period' => $this->serializeDashboardPeriods($periods),
+                'summary' => [
+                    'current' => [
+                        'count' => $currentCount,
+                        'amount' => $currentAmount,
+                    ],
+                    'previous' => [
+                        'count' => $previousCount,
+                        'amount' => $previousAmount,
+                    ],
                 ],
-            ],
-            'comparison' => [
-                'count' => $this->dashboardPeriodService->compare($currentCount, $previousCount),
-                'amount' => $this->dashboardPeriodService->compare($currentAmount, $previousAmount),
-            ],
-            'daily' => $aggregate['daily'],
-        ];
+                'comparison' => [
+                    'count' => $this->dashboardPeriodService->compare($currentCount, $previousCount),
+                    'amount' => $this->dashboardPeriodService->compare($currentAmount, $previousAmount),
+                ],
+                'daily' => $aggregate['daily'],
+            ];
+        });
     }
 
     /**
@@ -504,44 +526,49 @@ class DashboardStatsService
             return $empty;
         }
 
-        $salesConfig = $this->dashboardLayoutService->getForCampaign($campaignCode)['sales'] ?? null;
-        $resolvedSalesRules = $this->dashboardSalesRuleService->resolveForCampaign($campaignCode, $salesConfig);
+        $salesContext = $this->resolveSalesContext($campaignCode);
+        $resolvedSalesRules = $salesContext['rules'];
+        $cacheKey = $this->salesKpiCacheKey($campaignCode, $from, $until, $salesContext['fingerprint']);
+        $ttl = max(5, (int) config('dashboard.sales_kpi_cache_seconds', 60));
 
-        if ($resolvedSalesRules['mode'] === DashboardSalesRuleService::MODE_CUSTOM) {
-            $fieldDrivenSales = $this->getCustomSalesByAgentInRange(
-                $resolvedSalesRules['forms'],
-                $from,
-                $until,
-            );
-        } else {
-            $markedSaleFields = $this->resolveMarkedSaleFields($campaignCode);
-            if (! $markedSaleFields['configured']) {
-                return $empty;
+        return Cache::remember($cacheKey, $ttl, function () use ($campaignCode, $from, $until, $resolvedSalesRules, $empty): array {
+
+            if ($resolvedSalesRules['mode'] === DashboardSalesRuleService::MODE_CUSTOM) {
+                $fieldDrivenSales = $this->getCustomSalesByAgentInRange(
+                    $resolvedSalesRules['forms'],
+                    $from,
+                    $until,
+                );
+            } else {
+                $markedSaleFields = $this->resolveMarkedSaleFields($campaignCode);
+                if (! $markedSaleFields['configured']) {
+                    return $empty;
+                }
+
+                $fieldDrivenSales = $this->getFieldDrivenSalesByAgentInRange(
+                    $markedSaleFields['fields'],
+                    $markedSaleFields['forms'],
+                    $from,
+                    $until,
+                );
             }
 
-            $fieldDrivenSales = $this->getFieldDrivenSalesByAgentInRange(
-                $markedSaleFields['fields'],
-                $markedSaleFields['forms'],
-                $from,
-                $until,
+            $agentLeaderboard = $this->buildSalesLeaderboard(
+                $fieldDrivenSales['counts'],
+                $fieldDrivenSales['amounts'],
             );
-        }
+            $topAgent = $agentLeaderboard[0]['agent'] ?? null;
 
-        $agentLeaderboard = $this->buildSalesLeaderboard(
-            $fieldDrivenSales['counts'],
-            $fieldDrivenSales['amounts'],
-        );
-        $topAgent = $agentLeaderboard[0]['agent'] ?? null;
-
-        return [
-            'sales' => $fieldDrivenSales['count'],
-            'sales_amount' => round($fieldDrivenSales['amount'], 2),
-            'top_agent' => $topAgent,
-            'top_agent_sales' => $topAgent === null ? 0 : $fieldDrivenSales['counts'][$topAgent],
-            'top_agent_sales_amount' => $topAgent === null ? 0.0 : round($fieldDrivenSales['amounts'][$topAgent], 2),
-            'sales_by_form' => $fieldDrivenSales['sales_by_form'],
-            'agent_leaderboard' => $agentLeaderboard,
-        ];
+            return [
+                'sales' => $fieldDrivenSales['count'],
+                'sales_amount' => round($fieldDrivenSales['amount'], 2),
+                'top_agent' => $topAgent,
+                'top_agent_sales' => $topAgent === null ? 0 : $fieldDrivenSales['counts'][$topAgent],
+                'top_agent_sales_amount' => $topAgent === null ? 0.0 : round($fieldDrivenSales['amounts'][$topAgent], 2),
+                'sales_by_form' => $fieldDrivenSales['sales_by_form'],
+                'agent_leaderboard' => $agentLeaderboard,
+            ];
+        });
     }
 
     /**
@@ -561,8 +588,7 @@ class DashboardStatsService
         $cacheKey = 'daily_campaign_report_'.$campaignCode.'_'.$date;
 
         return Cache::remember($cacheKey, 60, function () use ($campaignCode, $businessDate, $date): array {
-            $salesConfig = $this->dashboardLayoutService->getForCampaign($campaignCode)['sales'] ?? null;
-            $resolvedSalesRules = $this->dashboardSalesRuleService->resolveForCampaign($campaignCode, $salesConfig);
+            $resolvedSalesRules = $this->resolveSalesContext($campaignCode)['rules'];
             if ($resolvedSalesRules['mode'] === DashboardSalesRuleService::MODE_CUSTOM) {
                 return $this->buildCustomDailyCampaignReport($resolvedSalesRules['forms'], $businessDate, $date);
             }
@@ -598,40 +624,43 @@ class DashboardStatsService
                     continue;
                 }
 
-                $select = array_merge(['id', 'date', 'agent'], $form['amount_fields']);
-                DB::table($form['table'])
+                $grammar = DB::connection()->getQueryGrammar();
+                $dateColumn = $grammar->wrap('date');
+                $agentColumn = $grammar->wrap('agent');
+                $amountExpression = $this->dashboardAmountExpression($form['amount_fields']);
+                $rows = DB::table($form['table'])
                     ->whereBetween('date', [$monthStart, $date])
-                    ->select(array_values(array_unique($select)))
-                    ->orderBy('id')
-                    ->chunk(1000, function ($rows) use (
-                        &$dailyRows,
-                        &$monthToDateRows,
-                        &$dailyTotals,
-                        &$monthToDateTotals,
-                        $form,
+                    ->whereNotNull('agent')
+                    ->whereRaw("TRIM({$agentColumn}) <> ''")
+                    ->selectRaw("TRIM({$agentColumn}) as agent")
+                    ->selectRaw('COUNT(*) as month_count')
+                    ->selectRaw("SUM(CASE WHEN {$dateColumn} = ? THEN 1 ELSE 0 END) as daily_count", [$date])
+                    ->selectRaw("SUM({$amountExpression}) as month_amount")
+                    ->selectRaw("SUM(CASE WHEN {$dateColumn} = ? THEN {$amountExpression} ELSE 0 END) as daily_amount", [$date])
+                    ->groupByRaw("TRIM({$agentColumn})")
+                    ->get();
+
+                foreach ($rows as $row) {
+                    $agent = (string) $row->agent;
+                    $this->mergeCampaignReportAggregate(
+                        $monthToDateRows,
+                        $monthToDateTotals,
                         $formColumns,
-                        $date,
-                    ): void {
-                        foreach ($rows as $row) {
-                            $isDaily = (string) $row->date === $date;
-                            $this->addCampaignReportEntry(
-                                $monthToDateRows,
-                                $monthToDateTotals,
-                                $form,
-                                $formColumns,
-                                $row,
-                            );
-                            if ($isDaily) {
-                                $this->addCampaignReportEntry(
-                                    $dailyRows,
-                                    $dailyTotals,
-                                    $form,
-                                    $formColumns,
-                                    $row,
-                                );
-                            }
-                        }
-                    });
+                        (string) $form['code'],
+                        $agent,
+                        (int) $row->month_count,
+                        (float) $row->month_amount,
+                    );
+                    $this->mergeCampaignReportAggregate(
+                        $dailyRows,
+                        $dailyTotals,
+                        $formColumns,
+                        (string) $form['code'],
+                        $agent,
+                        (int) $row->daily_count,
+                        (float) $row->daily_amount,
+                    );
+                }
             }
 
             return [
@@ -779,6 +808,9 @@ class DashboardStatsService
 
     public function invalidate(string $campaignCode, int $days = 14): void
     {
+        $this->bumpDashboardCacheGeneration($campaignCode);
+        unset($this->salesContexts[$campaignCode], $this->markedSaleFields[$campaignCode]);
+
         Cache::forget("activity_trend_{$campaignCode}_{$days}");
         Cache::forget("top_agents_{$campaignCode}_10");
 
@@ -798,6 +830,177 @@ class DashboardStatsService
         Cache::forget('agent_leaderboard_'.$campaignCode.'_'.now()->format('Y-m').'_'.$limit);
 
         Cache::forget('daily_campaign_report_'.$campaignCode.'_'.now()->toDateString());
+    }
+
+    /**
+     * Resolve the sales configuration once for this service instance so a dashboard
+     * request does not repeatedly query layout and field metadata.
+     *
+     * @return array{sales_config: ?array, rules: array<string, mixed>, fingerprint: string}
+     */
+    private function resolveSalesContext(string $campaignCode): array
+    {
+        if (array_key_exists($campaignCode, $this->salesContexts)) {
+            return $this->salesContexts[$campaignCode];
+        }
+
+        $salesConfig = $this->dashboardLayoutService->getForCampaign($campaignCode)['sales'] ?? null;
+        $rules = $this->dashboardSalesRuleService->resolveForCampaign($campaignCode, $salesConfig);
+        $legacyMarkedSaleConfig = $rules['mode'] === DashboardSalesRuleService::MODE_LEGACY
+            ? $this->normalizedMarkedSaleConfig($this->resolveMarkedSaleFields($campaignCode))
+            : null;
+
+        return $this->salesContexts[$campaignCode] = [
+            'sales_config' => $salesConfig,
+            'rules' => $rules,
+            'fingerprint' => hash('sha256', serialize([$salesConfig, $rules, $legacyMarkedSaleConfig])),
+        ];
+    }
+
+    private function salesKpiCacheKey(
+        string $campaignCode,
+        Carbon $from,
+        Carbon $until,
+        string $salesFingerprint,
+    ): string {
+        $signature = hash('sha256', implode('|', [
+            $from->format('Y-m-d\TH:i:s.uP'),
+            $until->format('Y-m-d\TH:i:s.uP'),
+            $salesFingerprint,
+        ]));
+
+        return 'dashboard_sales_kpis_'.$campaignCode.'_'.$this->dashboardCacheGeneration($campaignCode).'_'.$signature;
+    }
+
+    /** @param array<string, mixed> $periods */
+    private function dashboardSummaryCacheKey(
+        string $campaignCode,
+        array $periods,
+        string $salesFingerprint,
+        ?int $liveBucket,
+        int $ttl,
+    ): string {
+        $parts = [
+            (string) $periods['mode'],
+            $periods['current']['start']->format('Y-m-d\TH:i:s.uP'),
+            $periods['previous']['start']->format('Y-m-d\TH:i:s.uP'),
+            $salesFingerprint,
+            (string) config('dashboard.currency_code', 'PHP'),
+            (string) config('dashboard.currency_symbol', '₱'),
+        ];
+
+        if ($liveBucket !== null) {
+            $parts[] = 'live';
+            $parts[] = (string) $ttl;
+            $parts[] = (string) $liveBucket;
+        } else {
+            $parts[] = $periods['current']['end']->format('Y-m-d\TH:i:s.uP');
+            $parts[] = $periods['previous']['end']->format('Y-m-d\TH:i:s.uP');
+        }
+
+        $signature = hash('sha256', implode('|', $parts));
+
+        return 'dashboard_summary_'.$campaignCode.'_'.$this->dashboardCacheGeneration($campaignCode).'_'.$signature;
+    }
+
+    private function dashboardCacheGeneration(string $campaignCode): int
+    {
+        return (int) Cache::get('dashboard_stats_generation_'.$campaignCode, 0);
+    }
+
+    private function bumpDashboardCacheGeneration(string $campaignCode): void
+    {
+        $cacheKey = 'dashboard_stats_generation_'.$campaignCode;
+        Cache::forever($cacheKey, $this->dashboardCacheGeneration($campaignCode) + 1);
+    }
+
+    private function dashboardMinuteBucketExpression(): string
+    {
+        $connection = DB::connection();
+        $createdAt = $connection->getQueryGrammar()->wrap('created_at');
+
+        return match ($connection->getDriverName()) {
+            'sqlite' => "strftime('%Y-%m-%d %H:%M', {$createdAt})",
+            'pgsql' => "to_char({$createdAt}, 'YYYY-MM-DD HH24:MI')",
+            'sqlsrv' => "FORMAT({$createdAt}, 'yyyy-MM-dd HH:mm')",
+            default => "DATE_FORMAT({$createdAt}, '%Y-%m-%d %H:%i')",
+        };
+    }
+
+    /**
+     * @param  array{configured: bool, fields: array<string, list<string>>, forms: array<string, array{form_code: string, form_name: string}>}  $markedSaleConfig
+     * @return array{configured: bool, fields: array<string, list<string>>, forms: array<string, array{form_code: string, form_name: string}>}
+     */
+    private function normalizedMarkedSaleConfig(array $markedSaleConfig): array
+    {
+        $fields = $markedSaleConfig['fields'];
+        ksort($fields);
+        foreach ($fields as &$fieldNames) {
+            sort($fieldNames, SORT_STRING);
+        }
+        unset($fieldNames);
+
+        $forms = $markedSaleConfig['forms'];
+        ksort($forms);
+        foreach ($forms as &$form) {
+            ksort($form);
+        }
+        unset($form);
+
+        return [
+            'configured' => $markedSaleConfig['configured'],
+            'fields' => $fields,
+            'forms' => $forms,
+        ];
+    }
+
+    /** @param list<string> $fieldNames */
+    private function dashboardAmountExpression(array $fieldNames): string
+    {
+        if ($fieldNames === []) {
+            return '0';
+        }
+
+        $grammar = DB::connection()->getQueryGrammar();
+
+        return implode(' + ', array_map(
+            static fn (string $fieldName): string => 'COALESCE('.$grammar->wrap($fieldName).', 0)',
+            $fieldNames,
+        ));
+    }
+
+    /**
+     * @param  array<string, array{agent: string, counts: array<string, int>, amounts: array<string, float>, total_count: int, total_amount: float}>  $rows
+     * @param  array{counts: array<string, int>, amounts: array<string, float>, total_count: int, total_amount: float}  $totals
+     * @param  list<array{code: string, name: string}>  $formColumns
+     */
+    private function mergeCampaignReportAggregate(
+        array &$rows,
+        array &$totals,
+        array $formColumns,
+        string $formCode,
+        string $agent,
+        int $count,
+        float $amount,
+    ): void {
+        if ($count <= 0) {
+            return;
+        }
+
+        if (! isset($rows[$agent])) {
+            $reportRow = $this->emptyCampaignReportRow($formColumns);
+            $reportRow['agent'] = $agent;
+            $rows[$agent] = $reportRow;
+        }
+
+        $rows[$agent]['counts'][$formCode] += $count;
+        $rows[$agent]['amounts'][$formCode] += $amount;
+        $rows[$agent]['total_count'] += $count;
+        $rows[$agent]['total_amount'] += $amount;
+        $totals['counts'][$formCode] += $count;
+        $totals['amounts'][$formCode] += $amount;
+        $totals['total_count'] += $count;
+        $totals['total_amount'] += $amount;
     }
 
     /**
@@ -871,28 +1074,6 @@ class DashboardStatsService
             'agent' => '',
             ...$totals,
         ];
-    }
-
-    /**
-     * @param  array<string, array{agent: string, counts: array<string, int>, amounts: array<string, float>, total_count: int, total_amount: float}>  $rows
-     * @param  array{counts: array<string, int>, amounts: array<string, float>, total_count: int, total_amount: float}  $totals
-     * @param  array{code: string, name: string, table: string, amount_fields: list<string>}  $form
-     * @param  list<array{code: string, name: string}>  $formColumns
-     */
-    private function addCampaignReportEntry(
-        array &$rows,
-        array &$totals,
-        array $form,
-        array $formColumns,
-        object $row,
-    ): void {
-        $agent = trim((string) ($row->agent ?? ''));
-        if ($agent === '') {
-            return;
-        }
-
-        $amount = $this->sumMarkedSaleValues($row, $form['amount_fields']) ?? 0.0;
-        $this->recordCampaignReportEntry($rows, $totals, $formColumns, (string) $form['code'], $agent, $amount);
     }
 
     /**
@@ -1009,6 +1190,10 @@ class DashboardStatsService
      */
     private function resolveMarkedSaleFields(string $campaignCode): array
     {
+        if (array_key_exists($campaignCode, $this->markedSaleFields)) {
+            return $this->markedSaleFields[$campaignCode];
+        }
+
         $campaigns = $this->campaignRepository->getCampaignsWithForms();
         $forms = $campaigns[$campaignCode]['forms'] ?? [];
         $markedFields = FormField::query()
@@ -1048,7 +1233,7 @@ class DashboardStatsService
             $fieldsByTable[$tableName] = array_values(array_unique($fieldNames));
         }
 
-        return [
+        return $this->markedSaleFields[$campaignCode] = [
             'configured' => $fieldsByTable !== [],
             'fields' => $fieldsByTable,
             'forms' => $formsByTable,

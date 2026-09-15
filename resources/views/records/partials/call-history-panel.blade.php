@@ -142,7 +142,7 @@
                     <tr>
                         <template x-for="column in columns" :key="column.key">
                             <th scope="col" class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)] whitespace-nowrap">
-                                <button type="button" class="hover:text-[var(--color-primary)]" x-show="column.sortable" @click="setSort(column.key)" x-text="column.label"></button>
+                                <button type="button" class="hover:text-[var(--color-action)]" x-show="column.sortable" @click="setSort(column.key)" x-text="column.label"></button>
                                 <span x-show="!column.sortable" x-text="column.label"></span>
                             </th>
                         </template>
@@ -163,7 +163,7 @@
                             <td class="px-4 py-3 font-mono text-sm" x-text="row.vicidial_campaign || '—'"></td>
                             <td class="px-4 py-3">
                                 <details class="text-sm">
-                                    <summary class="cursor-pointer text-[var(--color-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">View</summary>
+                                    <summary class="cursor-pointer text-[var(--color-action)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">View</summary>
                                     <dl class="mt-2 min-w-48 space-y-1 text-xs text-[var(--color-on-surface-dim)]">
                                         <div class="flex justify-between gap-3"><dt>Direction</dt><dd x-text="row.call_direction"></dd></div>
                                         <div class="flex justify-between gap-3"><dt>Lead ID</dt><dd x-text="row.lead_id || '—'"></dd></div>

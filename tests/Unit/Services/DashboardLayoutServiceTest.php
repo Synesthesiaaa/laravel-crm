@@ -2,8 +2,11 @@
 
 namespace Tests\Unit\Services;
 
+use App\Models\DashboardLayout;
 use App\Services\DashboardLayoutService;
+use App\Services\DashboardSalesRuleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class DashboardLayoutServiceTest extends TestCase
@@ -24,6 +27,18 @@ class DashboardLayoutServiceTest extends TestCase
             'quick_links',
         ], array_keys($layout['sections']));
         $this->assertTrue($layout['sections']['welcome']['visible']);
+    }
+
+    public function test_dashboard_layout_and_sales_rule_services_are_scoped_in_the_container(): void
+    {
+        $this->assertSame(
+            app(DashboardLayoutService::class),
+            app(DashboardLayoutService::class),
+        );
+        $this->assertSame(
+            app(DashboardSalesRuleService::class),
+            app(DashboardSalesRuleService::class),
+        );
     }
 
     public function test_save_normalizes_order_visibility_and_unknown_sections(): void
@@ -52,6 +67,32 @@ class DashboardLayoutServiceTest extends TestCase
         $this->assertTrue($service->getForCampaign('mbsales')['sections']['forms']['visible']);
         $this->assertTrue($service->getForCampaign('other')['sections']['welcome']['visible']);
         $this->assertDatabaseMissing('dashboard_layouts', ['campaign_code' => 'other']);
+    }
+
+    public function test_get_for_campaign_memoizes_the_campaign_lookup_within_the_service_instance(): void
+    {
+        DashboardLayout::query()->create([
+            'campaign_code' => 'mbsales',
+            'layout' => [
+                'sections' => [
+                    'forms' => ['visible' => true, 'order' => 0],
+                ],
+            ],
+        ]);
+
+        $service = app(DashboardLayoutService::class);
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $first = $service->getForCampaign('mbsales');
+        $second = $service->getForCampaign('mbsales');
+
+        $layoutSelects = collect(DB::getQueryLog())
+            ->filter(fn (array $query): bool => str_contains(strtolower($query['query']), 'dashboard_layouts'))
+            ->filter(fn (array $query): bool => str_starts_with(ltrim(strtolower($query['query'])), 'select'));
+
+        $this->assertSame($first, $second);
+        $this->assertCount(1, $layoutSelects);
     }
 
     public function test_save_persists_custom_sales_rules_with_campaign_layout(): void

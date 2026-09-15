@@ -43,7 +43,7 @@
                   'bg-[var(--color-on-surface-dim)]': vici.phase === 'idle' && !$store.vicidial.loggedIn,
               }"></span>
         <span x-show="$store.vicidial.queueCount > 0"
-              class="absolute -bottom-1 -left-1 min-w-[1.1rem] rounded-full bg-[var(--color-primary)] px-1 text-xs font-bold leading-tight text-white text-center"
+              class="absolute -bottom-1 -left-1 min-w-[1.1rem] rounded-full bg-[var(--color-primary)] px-1 text-xs font-bold leading-tight text-[var(--color-primary-foreground)] text-center"
               x-text="$store.vicidial.queueCount > 99 ? '99+' : $store.vicidial.queueCount"
               style="display: none;"></span>
     </button>
@@ -133,27 +133,27 @@
                 <form class="space-y-3" @submit.prevent="viciLogin()">
                     <div class="widget-phone-fields">
                     <div class="form-field">
-                        <label class="form-label">VD Login <span class="text-[var(--color-danger)]">*</span></label>
-                        <input class="form-input" x-model="vici.vd_login" placeholder="VICIdial user login"
+                        <label class="form-label" for="vici-vd-login">VD Login <span class="text-[var(--color-danger)]">*</span></label>
+                        <input id="vici-vd-login" class="form-input" x-model="vici.vd_login" placeholder="VICIdial user login"
                                autocomplete="off" autocapitalize="none" spellcheck="false"
                                :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase)" />
                     </div>
                     <div class="form-field">
-                        <label class="form-label">VD Pass</label>
-                        <input type="password" class="form-input" x-model="vici.vd_pass" placeholder="VICIdial password"
+                        <label class="form-label" for="vici-vd-pass">VD Pass</label>
+                        <input id="vici-vd-pass" type="password" class="form-input" x-model="vici.vd_pass" placeholder="VICIdial password"
                                autocomplete="new-password" autocapitalize="none" spellcheck="false"
                                data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
                                :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase)" />
                     </div>
                     <div class="form-field">
-                        <label class="form-label">Phone Login <span class="text-[var(--color-danger)]">*</span></label>
-                        <input class="form-input" x-model="vici.phone_login" placeholder="Extension e.g. 6001"
+                        <label class="form-label" for="vici-phone-login">Phone Login <span class="text-[var(--color-danger)]">*</span></label>
+                        <input id="vici-phone-login" class="form-input" x-model="vici.phone_login" placeholder="Extension e.g. 6001"
                                autocomplete="off" autocapitalize="none" spellcheck="false"
                                :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase)" />
                     </div>
                     <div class="form-field">
-                        <label class="form-label">Phone Pass</label>
-                        <input type="password" class="form-input" x-model="vici.phone_pass" placeholder="SIP password"
+                        <label class="form-label" for="vici-phone-pass">Phone Pass</label>
+                        <input id="vici-phone-pass" type="password" class="form-input" x-model="vici.phone_pass" placeholder="SIP password"
                                autocomplete="new-password" autocapitalize="none" spellcheck="false"
                                data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
                                :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase)" />

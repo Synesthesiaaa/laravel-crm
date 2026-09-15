@@ -15,7 +15,7 @@
     <section class="md-card p-4 activity-log-filter-card" aria-labelledby="activity-filter-heading">
         <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div>
-                <p class="text-xs font-semibold tracking-[0.18em] text-[var(--color-primary)]">LIVE ACTIVITY STREAM</p>
+                <p class="text-xs font-semibold tracking-[0.18em] text-[var(--color-action)]">LIVE ACTIVITY STREAM</p>
                 <h2 id="activity-filter-heading" class="mt-1 text-base font-semibold text-[var(--color-on-surface)]">Filter activity</h2>
                 <p id="activity-filter-help" class="mt-1 text-sm text-[var(--color-on-surface-muted)]">Search the audit stream by actor, action, description, or date.</p>
             </div>
@@ -177,7 +177,7 @@
     .activity-terminal-toolbar, .activity-terminal-footer { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .8rem 1rem; font: 600 .72rem/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     .activity-terminal-toolbar { border-bottom: 1px solid var(--color-border); background: var(--color-surface-2); }
     .activity-terminal-footer { border-top: 1px solid var(--color-border); color: var(--color-on-surface-muted); }
-    .activity-terminal-prompt { color: var(--color-primary); }
+    .activity-terminal-prompt { color: var(--color-action); }
     .activity-terminal-button { min-height: 2.75rem; border: 1px solid var(--color-border-strong); border-radius: var(--radius-control); padding: .35rem .65rem; color: var(--color-on-surface-muted); background: var(--color-surface-3); transition: background var(--motion-fast) ease, color var(--motion-fast) ease; }
     .activity-terminal-button:hover { color: var(--color-on-surface); background: var(--color-primary-muted); }
     .activity-terminal-output { max-width: 100%; max-height: min(65vh, 42rem); overflow: auto; padding: .8rem 0; font: 500 .78rem/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; scrollbar-color: var(--color-border-strong) var(--color-surface-1); }
@@ -197,7 +197,7 @@
     .activity-terminal-description { overflow: hidden; color: var(--color-on-surface); overflow-wrap: anywhere; text-overflow: ellipsis; white-space: nowrap; }
     .activity-terminal-details { margin: .15rem 1rem .65rem 18.2rem; min-width: 0; overflow-wrap: anywhere; border-left: 1px solid var(--color-border-strong); padding: .45rem .75rem; color: var(--color-on-surface-muted); }
     .activity-terminal-detail-section { margin-top: .85rem; }
-    .activity-terminal-section-title { margin-bottom: .4rem; color: var(--color-primary); font-size: .68rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    .activity-terminal-section-title { margin-bottom: .4rem; color: var(--color-action); font-size: .68rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
     .activity-terminal-key { display: inline-block; width: 5.5rem; color: var(--color-on-surface-dim); }
     .activity-terminal-diff { display: grid; gap: .35rem; }
     .activity-terminal-diff-row { display: grid; grid-template-columns: minmax(7rem, .7fr) minmax(0, 1fr) minmax(0, 1fr); gap: .65rem; border-top: 1px solid var(--color-border); padding-top: .35rem; }

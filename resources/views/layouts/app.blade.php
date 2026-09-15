@@ -9,19 +9,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="crm-base-url" content="{{ rtrim(request()->getBaseUrl(), '/') }}">
+    <meta name="robots" content="noindex,nofollow,noarchive">
+    <meta name="description" content="Private CRM workspace for authenticated campaign and customer operations.">
     <script>
       (function() {
-        var t = localStorage.getItem('theme') || 'dark';
-        document.documentElement.setAttribute('data-theme', t);
+        var html = document.documentElement;
+        var t = 'dark';
+        var sidebarCollapsed = false;
+        try {
+          t = localStorage.getItem('theme') || 'dark';
+          sidebarCollapsed = localStorage.getItem('sidebar_collapsed') === 'true';
+        } catch (e) {}
+        html.setAttribute('data-theme', t);
+        window.syncSidebarCollapsedState = function(collapsed) {
+          if (collapsed) html.setAttribute('data-sidebar-collapsed', 'true');
+          else html.removeAttribute('data-sidebar-collapsed');
+        };
+        window.syncSidebarCollapsedState(sidebarCollapsed);
       })();
     </script>
     <title>@hasSection('title')@yield('title') | @endif{{ $layoutBrandName }}</title>
     <link rel="icon" href="{{ $layoutFaviconUrl }}">
     <link rel="shortcut icon" href="{{ $layoutFaviconUrl }}">
-    {{-- Self-hosted DM Sans font (fallback to system) --}}
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @stack('styles')
 </head>
@@ -175,7 +184,7 @@
                                         <div class="flex-1 min-w-0">
                                             <div class="flex items-center justify-between gap-2">
                                                 <p class="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]" x-text="n.source || 'Notification'"></p>
-                                                <span class="text-[10px] font-semibold uppercase tracking-wide" :class="n.read ? 'text-[var(--color-on-surface-dim)]' : 'text-[var(--color-primary)]'" x-text="n.read ? 'Read' : 'Unread'"></span>
+                                                <span class="text-[10px] font-semibold uppercase tracking-wide" :class="n.read ? 'text-[var(--color-on-surface-dim)]' : 'text-[var(--color-action)]'" x-text="n.read ? 'Read' : 'Unread'"></span>
                                             </div>
                                             <p class="text-sm font-medium text-[var(--color-on-surface)] leading-snug mt-0.5" x-text="n.title || 'Update'"></p>
                                             <p class="text-xs text-[var(--color-on-surface-muted)] leading-snug mt-0.5" x-text="n.message"></p>
@@ -281,7 +290,7 @@
                             aria-haspopup="true"
                             :aria-expanded="open"
                             aria-controls="user-menu">
-                        <div class="w-7 h-7 rounded-full bg-[var(--color-primary-muted)] border border-[var(--color-primary)] flex items-center justify-center text-[var(--color-primary)] font-bold text-xs uppercase">
+                        <div class="w-7 h-7 rounded-full bg-[var(--color-primary-muted)] border border-[var(--color-primary)] flex items-center justify-center text-[var(--color-action)] font-bold text-xs uppercase">
                             {{ substr($user->full_name ?? $user->username ?? 'U', 0, 1) }}
                         </div>
                         <span class="hidden sm:block text-[var(--color-on-surface-muted)] max-w-[120px] truncate">

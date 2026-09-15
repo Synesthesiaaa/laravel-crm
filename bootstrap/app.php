@@ -50,6 +50,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'api/webhooks/vicidial-events',
         ]);
         $middleware->web(append: [
+            \App\Http\Middleware\SecurityHeaders::class,
             \App\Http\Middleware\PreventHtmlResponseCaching::class,
             \App\Http\Middleware\AuditUserActivity::class,
         ]);

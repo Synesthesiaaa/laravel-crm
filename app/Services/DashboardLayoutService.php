@@ -6,6 +6,12 @@ use App\Models\DashboardLayout;
 
 class DashboardLayoutService
 {
+    /** @var array<string, int> */
+    private static array $campaignRevisions = [];
+
+    /** @var array<string, array{revision: int, layout: array<string, mixed>}> */
+    private array $campaignLayouts = [];
+
     /** @return array<string, string> */
     public static function amountDefinitions(): array
     {
@@ -56,17 +62,22 @@ class DashboardLayoutService
     /** @return array{sections: array<string, array{visible: bool, order: int}>, amounts: array<string, bool>, sales?: array<string, mixed>} */
     public function getForCampaign(string $campaignCode): array
     {
+        $revision = self::$campaignRevisions[$campaignCode] ?? 0;
+        if (($this->campaignLayouts[$campaignCode]['revision'] ?? null) === $revision) {
+            return $this->campaignLayouts[$campaignCode]['layout'];
+        }
+
         $record = DashboardLayout::query()
             ->where('campaign_code', $campaignCode)
             ->first();
 
         if (! $record || ! is_array($record->layout)) {
-            return $this->defaultLayout();
+            return $this->rememberCampaignLayout($campaignCode, $this->defaultLayout(), $revision);
         }
 
         $savedSections = $record->layout['sections'] ?? [];
         if (! is_array($savedSections)) {
-            return $this->defaultLayout();
+            return $this->rememberCampaignLayout($campaignCode, $this->defaultLayout(), $revision);
         }
 
         uasort($savedSections, static function (mixed $left, mixed $right): int {
@@ -88,7 +99,7 @@ class DashboardLayoutService
             $layout['sales'] = $record->layout['sales'];
         }
 
-        return $layout;
+        return $this->rememberCampaignLayout($campaignCode, $layout, $revision);
     }
 
     /**
@@ -128,6 +139,20 @@ class DashboardLayoutService
             ['campaign_code' => $campaignCode],
             ['layout' => $layout],
         );
+
+        $revision = (self::$campaignRevisions[$campaignCode] ?? 0) + 1;
+        self::$campaignRevisions[$campaignCode] = $revision;
+
+        return $this->rememberCampaignLayout($campaignCode, $layout, $revision);
+    }
+
+    /** @param array<string, mixed> $layout */
+    private function rememberCampaignLayout(string $campaignCode, array $layout, int $revision): array
+    {
+        $this->campaignLayouts[$campaignCode] = [
+            'revision' => $revision,
+            'layout' => $layout,
+        ];
 
         return $layout;
     }

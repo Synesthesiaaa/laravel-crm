@@ -38,7 +38,7 @@
             <div class="space-y-1">
                 <h2 class="text-xl font-bold text-[var(--color-on-surface)]" x-text="mode === 'historical' ? 'Historical Performance' : (mode === 'today' ? 'Today at a glance' : 'Live reporting')"></h2>
                 <p class="text-[var(--color-on-surface-muted)] text-sm">
-                    Campaign: <span class="font-semibold text-[var(--color-primary)]" x-text="dashboard.overview.campaign"></span>
+                    Campaign: <span class="font-semibold text-[var(--color-action)]" x-text="dashboard.overview.campaign"></span>
                 </p>
                 <p class="text-xs text-[var(--color-on-surface-dim)]">
                     <span x-show="mode === 'historical'">Selected period:
@@ -1459,7 +1459,7 @@ window.telephonyReports = function () {
             if (statusHourlyEl && this.dashboard.status.hourlyLabels.length) {
                 const chart = new ApexCharts(statusHourlyEl, {
                     series: [{ name: 'Calls', data: this.dashboard.status.hourlyValues }],
-                    chart: { type: 'area', height: 280, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
+                    chart: { type: 'area', height: 280, toolbar: { show: false }, background: 'transparent', fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
                     colors: ['#e91e8c'],
                     fill: { type: 'gradient', gradient: { opacityFrom: 0.32, opacityTo: 0.05 } },
                     stroke: { curve: 'smooth', width: 2 },
@@ -1477,7 +1477,7 @@ window.telephonyReports = function () {
             if (statusMixEl && this.dashboard.status.statusLabels.length) {
                 const chart = new ApexCharts(statusMixEl, {
                     series: this.dashboard.status.statusValues,
-                    chart: { type: 'donut', height: 280, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
+                    chart: { type: 'donut', height: 280, toolbar: { show: false }, background: 'transparent', fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
                     labels: this.dashboard.status.statusLabels,
                     colors: ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#14b8a6'],
                     dataLabels: { enabled: false },
@@ -1499,7 +1499,7 @@ window.telephonyReports = function () {
             if (agentCallsEl && this.dashboard.agents.callsLabels.length) {
                 const chart = new ApexCharts(agentCallsEl, {
                     series: [{ name: 'Calls', data: this.dashboard.agents.callsValues }],
-                    chart: { type: 'bar', height: 280, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
+                    chart: { type: 'bar', height: 280, toolbar: { show: false }, background: 'transparent', fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
                     colors: ['#3b82f6'],
                     plotOptions: { bar: { horizontal: true, borderRadius: 5, barHeight: '55%' } },
                     xaxis: { categories: this.dashboard.agents.callsLabels, labels: { style: { colors: textColor, fontSize: '11px' } } },
@@ -1516,7 +1516,7 @@ window.telephonyReports = function () {
             if (dispoEl && this.dashboard.dispo.labels.length) {
                 const chart = new ApexCharts(dispoEl, {
                     series: [{ name: 'Calls', data: this.dashboard.dispo.values }],
-                    chart: { type: 'bar', height: 280, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif' },
+                    chart: { type: 'bar', height: 280, toolbar: { show: false }, background: 'transparent', fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
                     labels: this.dashboard.dispo.labels,
                     colors: ['#3b82f6'],
                     plotOptions: { bar: { horizontal: true, borderRadius: 5, barHeight: '60%' } },
@@ -1559,7 +1559,7 @@ window.telephonyReports = function () {
             const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
             this.liveChart = new ApexCharts(chartElement, {
                 series,
-                chart: { type: 'line', height: 260, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif', animations: { enabled: !reduceMotion, dynamicAnimation: { speed: 350 } } },
+                chart: { type: 'line', height: 260, toolbar: { show: false }, background: 'transparent', fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', animations: { enabled: !reduceMotion, dynamicAnimation: { speed: 350 } } },
                 colors: ['#22c55e', '#f59e0b'],
                 stroke: { curve: 'smooth', width: 2 },
                 xaxis: { categories: labels, labels: { style: { colors: textColor, fontSize: '11px' } }, axisBorder: { show: false } },

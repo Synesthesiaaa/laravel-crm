@@ -63,6 +63,13 @@ return [
     'last_24h_activity_cache_seconds' => 120,
 
     /*
+    | Short-lived caches for the heavier sales scans used by the main dashboard.
+    | Cache generations are bumped by DashboardStatsService::invalidate().
+    */
+    'sales_kpi_cache_seconds' => 60,
+    'summary_cache_seconds' => 60,
+
+    /*
     | Currency used by the executive dashboard summary. Override both values
     | when a deployment reports monetary values in another currency.
     */

@@ -8,7 +8,7 @@
     <button type="button"
             @click="open = !open"
             x-show="$store.call.state === 'idle'"
-            class="widget-launcher w-12 h-12 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center transition-all hover:bg-[var(--color-primary-hover)] hover:scale-105 active:scale-95"
+            class="widget-launcher w-12 h-12 rounded-full bg-[var(--color-primary)] text-[var(--color-primary-foreground)] flex items-center justify-center transition-all hover:bg-[var(--color-primary-hover)] hover:scale-105 active:scale-95"
             :aria-label="open ? 'Close Quick Dial' : 'Open Quick Dial'"
             title="Quick Dial">
         <x-icon name="phone" class="w-5 h-5" />

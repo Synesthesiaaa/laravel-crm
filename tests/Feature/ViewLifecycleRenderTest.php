@@ -98,6 +98,65 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertDontSee('Calls (9h)', false);
     }
 
+    public function test_quick_form_iframe_stays_blank_until_the_widget_is_open_or_split(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertDontSee(':src="frameSrc || \'about:blank\'"', false);
+        $response->assertSee(
+            ':src="(open || isSplitActive()) && frameSrc ? frameSrc : \'about:blank\'"',
+            false,
+        );
+    }
+
+    public function test_dashboard_skips_apexcharts_loader_when_no_chart_can_render(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('dashboard'));
+
+        $response->assertOk();
+        $html = $response->getContent();
+
+        $this->assertStringContainsString('const hasRenderableChartData = false;', $html);
+
+        $guard = strpos($html, 'if (!hasRenderableChartData)');
+        $loader = strpos($html, 'const ApexCharts = await window.ApexChartsLoader?.() ?? null;');
+
+        $this->assertNotFalse($guard);
+        $this->assertNotFalse($loader);
+        $this->assertLessThan($loader, $guard);
+        $this->assertStringContainsString('return;', substr($html, $guard, $loader - $guard));
+    }
+
+    public function test_dashboard_chart_resize_work_is_coalesced(): void
+    {
+        $source = file_get_contents(resource_path('views/dashboard.blade.php'));
+
+        $this->assertIsString($source);
+        $this->assertSame(1, substr_count($source, 'window.resizeCrmDashboardCharts?.()'));
+        $this->assertStringNotContainsString('chart.resize();', $source);
+        $this->assertStringNotContainsString(
+            'setTimeout(() => window.resizeCrmDashboardCharts?.()',
+            $source,
+        );
+        $this->assertStringNotContainsString("fontFamily: 'DM Sans, ui-sans-serif'", $source);
+        $this->assertSame(
+            2,
+            substr_count(
+                $source,
+                'fontFamily: \'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif\'',
+            ),
+        );
+    }
+
     public function test_soft_navigation_script_handles_marked_get_forms(): void
     {
         $contents = file_get_contents(resource_path('js/soft-navigate.js'));

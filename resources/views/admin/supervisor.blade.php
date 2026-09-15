@@ -191,17 +191,17 @@
     {{-- Tabs --}}
     <div class="crm-tab-strip responsive-tab-strip border-b border-[var(--color-border)]" role="tablist" aria-label="Supervisor views">
         <button id="supervisor-tab-agents" class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
-                :class="tab === 'agents' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'"
+                :class="tab === 'agents' ? 'border-[var(--color-primary)] text-[var(--color-action)]' : 'border-transparent text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'"
                 @click="tab = 'agents'" role="tab" :aria-selected="tab === 'agents'" aria-controls="supervisor-panel-agents">
             Agent Status
         </button>
         <button id="supervisor-tab-queue" class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
-                :class="tab === 'queue' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'"
+                :class="tab === 'queue' ? 'border-[var(--color-primary)] text-[var(--color-action)]' : 'border-transparent text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'"
                 @click="tab = 'queue'" role="tab" :aria-selected="tab === 'queue'" aria-controls="supervisor-panel-queue">
             Queue Monitor
         </button>
         <button id="supervisor-tab-wallboard" class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
-                :class="tab === 'wallboard' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'"
+                :class="tab === 'wallboard' ? 'border-[var(--color-primary)] text-[var(--color-action)]' : 'border-transparent text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'"
                 @click="tab = 'wallboard'" role="tab" :aria-selected="tab === 'wallboard'" aria-controls="supervisor-panel-wallboard">
             Live Wallboard
         </button>
@@ -211,7 +211,7 @@
     <div id="supervisor-panel-agents" x-show="tab === 'agents'" role="tabpanel" aria-labelledby="supervisor-tab-agents">
         <div class="flex items-center justify-between mb-4">
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">
-                Agent Status — <span x-text="agents.length + ' agents'" class="text-[var(--color-primary)]"></span>
+                Agent Status — <span x-text="agents.length + ' agents'" class="text-[var(--color-action)]"></span>
             </h3>
             <div class="flex items-center gap-3">
                 <span class="text-xs text-[var(--color-on-surface-dim)]" x-show="lastRefreshAt" x-text="'Updated ' + lastRefreshAt"></span>
@@ -608,7 +608,7 @@ window.supervisorDashboard = function(initialCampaign = '') {
                 document.getElementById('chart-queue-pressure').innerHTML = '';
                 const queueChart = new ApexCharts(document.getElementById('chart-queue-pressure'), {
                     series: [{ name: 'Calls waiting', data: queueData }],
-                    chart: { type: 'area', height: 260, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif', animations: { enabled: !reduceMotion } },
+                    chart: { type: 'area', height: 260, toolbar: { show: false }, background: 'transparent', fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', animations: { enabled: !reduceMotion } },
                     colors: ['#f59e0b'],
                     fill: { type: 'gradient', gradient: { opacityFrom: .3, opacityTo: .03 } },
                     stroke: { curve: 'smooth', width: 2 },
@@ -631,7 +631,7 @@ window.supervisorDashboard = function(initialCampaign = '') {
                 ];
                 const realtimeChart = new ApexCharts(document.getElementById('chart-realtime'), {
                     series: [{ name: 'Calls waiting', data: sparkData }],
-                    chart: { type: 'line', height: 200, toolbar: { show: false }, background: 'transparent', fontFamily: 'DM Sans, ui-sans-serif', animations: { enabled: !reduceMotion, dynamicAnimation: { speed: 350 } } },
+                    chart: { type: 'line', height: 200, toolbar: { show: false }, background: 'transparent', fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', animations: { enabled: !reduceMotion, dynamicAnimation: { speed: 350 } } },
                     colors: ['#22c55e'],
                     stroke: { curve: 'smooth', width: 3 },
                     xaxis: { labels: { show: false }, axisBorder: { show: false }, axisTicks: { show: false } },
