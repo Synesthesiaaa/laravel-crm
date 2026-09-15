@@ -161,20 +161,20 @@
     <div class="md-card p-4">
         <div class="grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
             <div class="form-field">
-                <label class="form-label">Recipient Type</label>
-                <select class="form-select" x-model="notification.recipient_type">
+                <label for="supervisor-notification-recipient-type" class="form-label">Recipient Type</label>
+                <select id="supervisor-notification-recipient-type" class="form-select" x-model="notification.recipient_type">
                     <option value="USER">USER</option>
                     <option value="USER_GROUP">USER_GROUP</option>
                     <option value="CAMPAIGN">CAMPAIGN</option>
                 </select>
             </div>
             <div class="form-field">
-                <label class="form-label">Recipient</label>
-                <input class="form-input" x-model="notification.recipient" placeholder="e.g. AGENTS or TESTCAMP or 6666" />
+                <label for="supervisor-notification-recipient" class="form-label">Recipient</label>
+                <input id="supervisor-notification-recipient" class="form-input" x-model="notification.recipient" placeholder="e.g. AGENTS or TESTCAMP or 6666" />
             </div>
             <div class="form-field md:col-span-2">
-                <label class="form-label">Message</label>
-                <input class="form-input" x-model="notification.text" placeholder="Notification text" />
+                <label for="supervisor-notification-message" class="form-label">Message</label>
+                <input id="supervisor-notification-message" class="form-input" x-model="notification.text" placeholder="Notification text" />
             </div>
             <div class="form-field">
                 <label class="inline-flex items-center gap-2 text-xs text-[var(--color-on-surface-muted)] mb-1">
@@ -189,7 +189,7 @@
     </div>
 
     {{-- Tabs --}}
-    <div class="flex gap-2 border-b border-[var(--color-border)]" role="tablist">
+    <div class="crm-tab-strip responsive-tab-strip border-b border-[var(--color-border)]" role="tablist" aria-label="Supervisor views">
         <button id="supervisor-tab-agents" class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
                 :class="tab === 'agents' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-on-surface-muted)] hover:text-[var(--color-on-surface)]'"
                 @click="tab = 'agents'" role="tab" :aria-selected="tab === 'agents'" aria-controls="supervisor-panel-agents">
@@ -331,7 +331,7 @@
     </div>
 
     {{-- Live Wallboard --}}
-    <div x-show="tab === 'wallboard'" role="tabpanel">
+    <div id="supervisor-panel-wallboard" x-show="tab === 'wallboard'" role="tabpanel" aria-labelledby="supervisor-tab-wallboard">
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-6 animate-stagger">
             <div class="wallboard-metric">
                 <div class="wallboard-value text-4xl" x-text="stats.agentsOnline">0</div>

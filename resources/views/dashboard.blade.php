@@ -601,7 +601,7 @@
     @if($sectionVisible('quick_links'))
     <section data-dashboard-section="quick_links" style="order: {{ $sectionOrder('quick_links') }}">
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <a href="{{ route('records.index') }}" class="md-card p-4 flex items-center gap-3 no-underline group">
+        <a href="{{ route('records.index') }}" class="md-card md-card--interactive p-4 flex items-center gap-3 no-underline group">
             <x-icon name="clipboard-document-list" class="w-5 h-5 text-[var(--color-primary)]" />
             <div class="flex-1">
                 <h4 class="font-semibold text-[var(--color-on-surface)] text-sm">Call History</h4>
@@ -609,7 +609,7 @@
             </div>
             <x-icon name="chevron-right" class="w-4 h-4 text-[var(--color-on-surface-dim)] group-hover:text-[var(--color-primary)]" />
         </a>
-        <a href="{{ route('attendance.index') }}" class="md-card p-4 flex items-center gap-3 no-underline group">
+        <a href="{{ route('attendance.index') }}" class="md-card md-card--interactive p-4 flex items-center gap-3 no-underline group">
             <x-icon name="clock" class="w-5 h-5 text-[var(--color-primary)]" />
             <div class="flex-1">
                 <h4 class="font-semibold text-[var(--color-on-surface)] text-sm">My Attendance</h4>

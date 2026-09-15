@@ -462,7 +462,7 @@
         @endphp
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 animate-stagger">
             @foreach($adminLinks as $link)
-                <a href="{{ route($link['route']) }}" class="md-card p-4 flex items-center gap-3 no-underline group">
+                <a href="{{ route($link['route']) }}" class="md-card md-card--interactive p-4 flex items-center gap-3 no-underline group">
                     <div class="w-10 h-10 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border)] flex items-center justify-center shrink-0 group-hover:border-[var(--color-primary)] group-hover:bg-[var(--color-primary-muted)] transition-colors">
                         <x-icon :name="$link['icon']" class="w-5 h-5 text-[var(--color-on-surface-muted)] group-hover:text-[var(--color-primary)]" />
                     </div>
@@ -492,7 +492,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 animate-stagger">
             @foreach($superLinks as $link)
                 @if($link['route'] !== 'admin.agent-screen.index' || $agentScreenVisible)
-                <a href="{{ route($link['route']) }}" class="md-card p-4 flex items-center gap-3 no-underline group">
+                <a href="{{ route($link['route']) }}" class="md-card md-card--interactive p-4 flex items-center gap-3 no-underline group">
                     <div class="w-10 h-10 rounded-lg bg-[var(--color-danger-muted)] border border-[var(--color-border)] flex items-center justify-center shrink-0 group-hover:border-[var(--color-danger)] transition-colors">
                         <x-icon :name="$link['icon']" class="w-5 h-5 text-[var(--color-danger-fg)]" />
                     </div>

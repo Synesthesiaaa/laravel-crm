@@ -42,22 +42,22 @@
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div class="form-field">
-                    <label class="form-label">Phone Number</label>
+                    <label for="agent-phone-number" class="form-label">Phone Number</label>
                     <div class="flex gap-2">
-                        <input type="text" x-model="phoneNumber" class="form-input flex-1" placeholder="+63 XXX XXX XXXX" />
-                        <button type="button" class="phone-dial-btn" @click="dial()" title="Call"
+                        <input id="agent-phone-number" type="text" x-model="phoneNumber" class="form-input flex-1" placeholder="+63 XXX XXX XXXX" />
+                        <button type="button" class="phone-dial-btn" @click="dial()" title="Call" aria-label="Dial phone number"
                                 :disabled="callState !== 'idle' || dialBlocked || !phoneNumber">
                             <x-icon name="phone" class="w-5 h-5" />
                         </button>
                     </div>
                 </div>
                 <div class="form-field">
-                    <label class="form-label">Lead ID</label>
-                    <input type="text" x-model="leadId" class="form-input" placeholder="ViciDial Lead ID" />
+                    <label for="agent-lead-id" class="form-label">Lead ID</label>
+                    <input id="agent-lead-id" type="text" x-model="leadId" class="form-input" placeholder="ViciDial Lead ID" />
                 </div>
                 <div class="form-field">
-                    <label class="form-label">Campaign</label>
-                    <input type="text" value="{{ session('campaign_name') }}" class="form-input" readonly />
+                    <label for="agent-campaign" class="form-label">Campaign</label>
+                    <input id="agent-campaign" type="text" value="{{ session('campaign_name') }}" class="form-input" readonly />
                 </div>
             </div>
         </div>
@@ -72,21 +72,24 @@
                   @submit.prevent="saveForm()"
                   class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 @foreach($fields as $field)
+                @php
+                    $captureFieldId = 'agent-capture-'.str_replace(['.', '[', ']', '_'], ['-', '-', '', '-'], $field->field_name);
+                @endphp
                 <div class="@if(($field->field_width ?? '') === 'full') sm:col-span-2 @endif"
                      data-capture-field
                      x-show="shouldShow('{{ $field->field_name }}', @js($field->visibility ?? null))">
                     @if($field->field_type === 'textarea')
                         <div class="form-field">
-                            <label class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
-                            <textarea class="form-textarea" name="{{ $field->field_name }}" rows="3"
+                            <label for="{{ $captureFieldId }}" class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
+                            <textarea id="{{ $captureFieldId }}" class="form-textarea" name="{{ $field->field_name }}" rows="3"
                                       x-model="values['{{ $field->field_name }}']"
                                       @if(!empty($field->placeholder)) placeholder="{{ $field->placeholder }}" @endif
                                       @if($field->required) required @endif></textarea>
                         </div>
                     @elseif($field->field_type === 'select')
                         <div class="form-field">
-                            <label class="form-label">{{ $field->label }}</label>
-                            <select class="form-select" name="{{ $field->field_name }}" x-model="values['{{ $field->field_name }}']" @if($field->required) required @endif>
+                            <label for="{{ $captureFieldId }}" class="form-label">{{ $field->label }}</label>
+                            <select id="{{ $captureFieldId }}" class="form-select" name="{{ $field->field_name }}" x-model="values['{{ $field->field_name }}']" @if($field->required) required @endif>
                                 <option value="">-- Select --</option>
                                 @foreach($field->options_array ?? [] as $opt)
                                     <option value="{{ $opt }}">{{ $opt }}</option>
@@ -95,9 +98,10 @@
                         </div>
                     @elseif($field->field_type === 'percentage')
                         <div class="form-field">
-                            <label class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
+                            <label for="{{ $captureFieldId }}" class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
                             <div class="relative">
                                 <input type="number"
+                                       id="{{ $captureFieldId }}"
                                        min="0"
                                        max="100"
                                        step="0.01"
@@ -112,8 +116,8 @@
                         </div>
                     @else
                         <div class="form-field">
-                            <label class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
-                            <input type="{{ ($field->field_type ?? 'text') === 'number' ? 'text' : ($field->field_type ?? 'text') }}" class="form-input"
+                            <label for="{{ $captureFieldId }}" class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
+                            <input id="{{ $captureFieldId }}" type="{{ ($field->field_type ?? 'text') === 'number' ? 'text' : ($field->field_type ?? 'text') }}" class="form-input"
                                    name="{{ $field->field_name }}"
                                    x-model="values['{{ $field->field_name }}']"
                                    @if(!empty($field->placeholder)) placeholder="{{ $field->placeholder }}" @endif
@@ -198,15 +202,17 @@
 
                 {{-- Dial / Hangup buttons --}}
                 <div class="flex items-center justify-center gap-4">
-                    <button class="phone-dial-btn"
+                    <button type="button" class="phone-dial-btn"
                             @click="dial()"
+                            aria-label="Dial phone number"
                             x-show="callState === 'idle'"
                             :disabled="!phoneNumber || dialBlocked"
                             :title="!phoneNumber ? 'Enter a phone number first' : dialBlocked ? 'Complete disposition before dialing' : 'Click to dial'">
                         <x-icon name="phone" class="w-6 h-6" />
                     </button>
-                    <button class="phone-hangup-btn"
+                    <button type="button" class="phone-hangup-btn"
                             @click="hangup()"
+                            aria-label="Hang up call"
                             x-show="callState !== 'idle' && callState !== 'wrapup'">
                         <x-icon name="phone-x-mark" class="w-6 h-6" />
                     </button>

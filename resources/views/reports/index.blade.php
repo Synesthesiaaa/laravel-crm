@@ -150,8 +150,8 @@
     </section>
 
     <div x-show="mode === 'historical'" x-cloak>
-    <div class="md-card p-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3">
+    <div class="md-card p-4 md-card--static" x-data="{ advancedFiltersOpen: false }">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
             <div class="form-field">
                 <label class="form-label" for="reports-crm-campaign">CRM Campaign</label>
                 <select id="reports-crm-campaign" class="form-select" x-model="filters.crm_campaign" @change="filters.campaigns = '---ALL---'; refreshAll()">
@@ -161,6 +161,35 @@
                 </select>
             </div>
             <div class="form-field">
+                <label class="form-label" for="reports-date-start">Date Start</label>
+                <input id="reports-date-start" class="form-input" type="date" x-model="filters.query_date" />
+            </div>
+            <div class="form-field">
+                <label class="form-label" for="reports-date-end">Date End</label>
+                <input id="reports-date-end" class="form-input" type="date" x-model="filters.end_date" />
+            </div>
+            <div class="form-actions-bottom">
+                <button type="button"
+                        class="btn-secondary"
+                        @click="advancedFiltersOpen = !advancedFiltersOpen"
+                        :aria-expanded="advancedFiltersOpen"
+                        aria-controls="reports-advanced-filters">
+                    <x-icon name="adjustments-horizontal" class="w-4 h-4" />
+                    <span x-text="advancedFiltersOpen ? 'Fewer filters' : 'More filters'">More filters</span>
+                </button>
+                <button type="button" class="btn-primary" @click="refreshAll()" x-bind:disabled="loading">
+                    <span class="inline-flex" x-bind:class="loading ? 'animate-spin' : ''">
+                        <x-icon name="arrow-path" class="w-4 h-4" />
+                    </span>
+                    <span x-text="loading ? 'Loading...' : 'Refresh Reports'">Refresh Reports</span>
+                </button>
+            </div>
+        </div>
+        <div id="reports-advanced-filters"
+             class="filter-disclosure grid-cols-1 md:grid-cols-3"
+             x-show="advancedFiltersOpen"
+             x-cloak>
+            <div class="form-field">
                 <label class="form-label" for="reports-vici-campaign">VICIdial Campaigns</label>
                 <select id="reports-vici-campaign" class="form-select" x-model="filters.campaigns">
                     <option value="---ALL---">All mapped campaigns</option>
@@ -168,26 +197,16 @@
                         <option :value="code" x-text="code"></option>
                     </template>
                 </select>
-                <p class="mt-1 text-[11px] text-[var(--color-on-surface-dim)]">
-                    Only campaigns mapped to the selected CRM campaign are available.
-                </p>
-            </div>
-            <div class="form-field">
-                <label class="form-label" for="reports-date-start">Date Start</label>
-                <input class="form-input" type="date" x-model="filters.query_date" />
-            </div>
-            <div class="form-field">
-                <label class="form-label" for="reports-date-end">Date End</label>
-                <input class="form-input" type="date" x-model="filters.end_date" />
+                <p class="form-help">Only campaigns mapped to the selected CRM campaign are available.</p>
             </div>
             <div class="form-field">
                 <label class="form-label" for="reports-disposition-scope">Disposition Scope</label>
-                <select id="reports-disposition-scope" class="form-input" x-model="filters.disposition_scope" @change="refreshAll()">
+                <select id="reports-disposition-scope" class="form-select" x-model="filters.disposition_scope" @change="refreshAll()">
                     <template x-for="option in dispositionScopeOptions" :key="option.value">
                         <option :value="option.value" x-text="option.label"></option>
                     </template>
                 </select>
-                <p class="mt-1 text-[11px] text-[var(--color-on-surface-dim)]">
+                <p class="form-help">
                     System codes:
                     <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="systemDispositionCodes.length ? systemDispositionCodes.join(', ') : 'None configured'"></span>
                 </p>
@@ -201,14 +220,6 @@
                     <option value="previous_week">Previous week</option>
                     <option value="previous_month">Previous month</option>
                 </select>
-            </div>
-            <div class="form-field flex items-end">
-                <button class="btn-primary w-full" @click="refreshAll()" x-bind:disabled="loading">
-                    <span class="inline-flex" x-bind:class="loading ? 'animate-spin' : ''">
-                        <x-icon name="arrow-path" class="w-4 h-4" />
-                    </span>
-                    <span x-text="loading ? 'Loading...' : 'Refresh Reports'">Refresh Reports</span>
-                </button>
             </div>
         </div>
     </div>

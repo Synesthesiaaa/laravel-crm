@@ -56,6 +56,41 @@ final class RecordsTest extends TestCase
             ->assertSee('Locally synchronized');
     }
 
+    public function test_call_history_exposes_primary_filters_and_more_filters_disclosure(): void
+    {
+        $agent = User::factory()->create(['role' => User::ROLE_AGENT, 'vici_user' => 'agent_filters']);
+
+        $this->actingAs($agent)
+            ->withSession(['campaign' => 'mbsales'])
+            ->get(route('records.index'))
+            ->assertOk()
+            ->assertSee('Start Date')
+            ->assertSee('End Date')
+            ->assertSee('Phone')
+            ->assertSee('More filters')
+            ->assertSee('aria-controls="call-history-advanced-filters"', false)
+            ->assertSee('id="call-history-advanced-filters"', false);
+    }
+
+    public function test_call_history_select_controls_use_form_select_styling(): void
+    {
+        $agent = User::factory()->create(['role' => User::ROLE_AGENT, 'vici_user' => 'agent_selects']);
+
+        $html = $this->actingAs($agent)
+            ->withSession(['campaign' => 'mbsales'])
+            ->get(route('records.index'))
+            ->assertOk()
+            ->getContent();
+
+        foreach (['filters.agent', 'filters.status', 'filters.disposition', 'filters.vicidial_campaign', 'filters.direction'] as $model) {
+            $this->assertMatchesRegularExpression(
+                '/<select(?=[^>]*class="[^"]*form-select[^"]*")(?=[^>]*x-model="'.preg_quote($model, '/').'")[^>]*>/i',
+                $html,
+                "Expected {$model} to use form-select styling.",
+            );
+        }
+    }
+
     public function test_crm_submission_history_is_not_rendered_as_telephony_history(): void
     {
         $agent = User::factory()->create(['role' => User::ROLE_AGENT, 'vici_user' => 'agent_submission']);

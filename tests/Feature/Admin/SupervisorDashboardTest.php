@@ -69,4 +69,31 @@ class SupervisorDashboardTest extends TestCase
             ->assertSee('id="supervisor-campaign"', false)
             ->assertSee('This CRM campaign selects the VICIdial server.', false);
     }
+
+    public function test_supervisor_tabs_use_shared_responsive_tab_strip(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+
+        $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('admin.supervisor'))
+            ->assertOk()
+            ->assertSee('responsive-tab-strip', false);
+    }
+
+    public function test_supervisor_tabpanels_are_bound_to_their_tabs(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+
+        $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('admin.supervisor'))
+            ->assertOk()
+            ->assertSee('id="supervisor-panel-agents"', false)
+            ->assertSee('aria-labelledby="supervisor-tab-agents"', false)
+            ->assertSee('id="supervisor-panel-queue"', false)
+            ->assertSee('aria-labelledby="supervisor-tab-queue"', false)
+            ->assertSee('id="supervisor-panel-wallboard"', false)
+            ->assertSee('aria-labelledby="supervisor-tab-wallboard"', false);
+    }
 }

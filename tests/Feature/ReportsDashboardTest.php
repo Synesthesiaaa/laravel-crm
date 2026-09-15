@@ -53,13 +53,40 @@ class ReportsDashboardTest extends TestCase
         $response->assertSee('Call Volume Trend');
         $response->assertSee('Agent Performance');
         $response->assertSee('Disposition Pareto');
-        $response->assertSee('Campaign Comparison');
+        $response->assertDontSee('Campaign Comparison');
         $response->assertSee('Call Funnel');
         $response->assertSee('Agent Time Distribution');
         $response->assertSee('Debug / Raw VICIdial Output');
         $response->assertSee('<details', false);
         $response->assertDontSee('role="tablist"', false);
         $response->assertDontSee('Recording Browser');
+    }
+
+    public function test_reports_date_range_labels_are_bound_to_their_controls(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('reports.index'))
+            ->assertOk()
+            ->assertSee('for="reports-date-start"', false)
+            ->assertSee('id="reports-date-start"', false)
+            ->assertSee('for="reports-date-end"', false)
+            ->assertSee('id="reports-date-end"', false);
+    }
+
+    public function test_reports_advanced_filters_are_behind_more_filters_disclosure(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('reports.index'))
+            ->assertOk()
+            ->assertSee('More filters')
+            ->assertSee('aria-controls="reports-advanced-filters"', false)
+            ->assertSee('id="reports-advanced-filters"', false);
     }
 
     public function test_reports_page_requires_higher_role_access(): void

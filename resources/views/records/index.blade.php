@@ -5,9 +5,7 @@
 @section('header-title', 'Call History')
 
 @section('content')
-<nav class="mb-4 text-sm text-[var(--color-on-surface-dim)]" aria-label="Breadcrumb">
-    <span class="text-[var(--color-on-surface-muted)]">Call History</span>
-</nav>
+<x-page-header title="Call History" :breadcrumbs="['Call History' => null]" />
 
 @include('records.partials.call-history-panel', ['campaign' => $campaign, 'personal' => true])
 @endsection

@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Campaign;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\ViewErrorBag;
 use Tests\TestCase;
 
 class ViewLifecycleRenderTest extends TestCase
@@ -19,6 +21,8 @@ class ViewLifecycleRenderTest extends TestCase
             'code' => 'mbsales',
             'name' => 'MB Sales',
         ]);
+
+        view()->share('errors', new ViewErrorBag);
     }
 
     public function test_authenticated_layout_wires_shared_logout_cleanup_and_media_path_gate(): void
@@ -171,6 +175,49 @@ class ViewLifecycleRenderTest extends TestCase
         $this->assertStringContainsString('No activity recorded yet', $html);
         $this->assertStringContainsString('Charts will appear when qualifying activity is recorded.', $html);
         $this->assertStringContainsString('crm-empty-state--info', $html);
+    }
+
+    public function test_form_input_associates_help_text_with_the_control(): void
+    {
+        $html = Blade::render(
+            '<x-form.input name="customer_name" label="Customer name" help="Use the customer\'s full name." />',
+            ['errors' => new ViewErrorBag],
+        );
+
+        $this->assertStringContainsString('aria-describedby="field-customer_name-help"', $html);
+        $this->assertStringContainsString('id="field-customer_name-help"', $html);
+    }
+
+    public function test_form_select_associates_help_text_with_the_control(): void
+    {
+        $html = Blade::render(
+            '<x-form.select name="status" label="Status" help="Choose the current status." :options="[\'open\' => \'Open\']" />',
+            ['errors' => new ViewErrorBag],
+        );
+
+        $this->assertStringContainsString('aria-describedby="field-status-help"', $html);
+        $this->assertStringContainsString('id="field-status-help"', $html);
+    }
+
+    public function test_form_textarea_associates_help_text_with_the_control(): void
+    {
+        $html = Blade::render(
+            '<x-form.textarea name="notes" label="Notes" help="Add context for the next user." />',
+            ['errors' => new ViewErrorBag],
+        );
+
+        $this->assertStringContainsString('aria-describedby="field-notes-help"', $html);
+        $this->assertStringContainsString('id="field-notes-help"', $html);
+    }
+
+    public function test_table_component_keeps_native_table_semantics_by_default(): void
+    {
+        $html = Blade::render(
+            '<x-table.index caption="Example"><tbody><tr><td>Value</td></tr></tbody></x-table.index>',
+            ['errors' => new ViewErrorBag],
+        );
+
+        $this->assertStringNotContainsString('role="grid"', $html);
     }
 
     public function test_admin_dashboard_renders_soft_nav_chart_lifecycle_hooks(): void

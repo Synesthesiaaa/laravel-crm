@@ -9,15 +9,11 @@
 @endphp
 
 @section('content')
-<nav class="mb-4 text-sm text-[var(--color-on-surface-dim)]" aria-label="Breadcrumb">
-    <a href="{{ route('admin.dashboard') }}" class="link-primary">Admin</a>
-    <span class="mx-1.5">/</span>
-    <span class="text-[var(--color-on-surface-muted)]">Records List</span>
-</nav>
+<x-page-header title="Records List" :breadcrumbs="['Admin' => route('admin.dashboard'), 'Records List' => null]" />
 
 <div class="md-card mb-4 md-card--static">
     <div class="px-4 pt-4 border-b border-[var(--color-border)]">
-        <div class="flex flex-wrap gap-2 overflow-x-auto" role="tablist" aria-label="Records list sections">
+        <div class="crm-tab-strip" role="tablist" aria-label="Records list sections">
             <a href="{{ route('admin.records.index', array_merge($tabParams, ['tab' => 'submissions'])) }}" role="tab" aria-selected="{{ $activeTab === 'submissions' ? 'true' : 'false' }}" id="records-tab-submissions" class="px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap {{ $activeTab === 'submissions' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-on-surface-dim)] hover:text-[var(--color-on-surface)]' }}">
                 Submitted Records
             </a>

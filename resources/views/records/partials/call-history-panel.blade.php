@@ -36,7 +36,8 @@
                 </div>
             </div>
 
-            <form class="filter-row" @submit.prevent="applyFilters()">
+            <form @submit.prevent="applyFilters()" x-data="{ advancedFiltersOpen: false }">
+                <div class="filter-row">
                 <label class="form-field">
                     <span class="form-label">Start Date</span>
                     <input class="form-input" type="date" x-model="filters.start_date">
@@ -46,56 +47,71 @@
                     <input class="form-input" type="date" x-model="filters.end_date">
                 </label>
                 <label class="form-field">
-                    <span class="form-label">Agent</span>
-                    <select class="form-input" x-model="filters.agent" @change="applyFilters()">
-                        <option value="">All agents</option>
-                        <template x-for="agent in filterOptions.agents || []" :key="agent.value">
-                            <option :value="agent.value" x-text="agent.label"></option>
-                        </template>
-                    </select>
-                </label>
-                <label class="form-field">
                     <span class="form-label">Phone</span>
                     <input class="form-input" type="tel" placeholder="Phone number" x-model.debounce.450ms="filters.phone" @input="queueTextFilter()">
                 </label>
-                <label class="form-field">
-                    <span class="form-label">Status</span>
-                    <select class="form-input" x-model="filters.status" @change="applyFilters()">
-                        <option value="">All statuses</option>
-                        <template x-for="status in filterOptions.statuses || []" :key="status">
-                            <option :value="status" x-text="status"></option>
-                        </template>
-                    </select>
-                </label>
-                <label class="form-field">
-                    <span class="form-label">Disposition</span>
-                    <select class="form-input" x-model="filters.disposition" @change="applyFilters()">
-                        <option value="">All dispositions</option>
-                        <template x-for="(label, code) in filterOptions.dispositions || {}" :key="code">
-                            <option :value="code" x-text="label"></option>
-                        </template>
-                    </select>
-                </label>
-                <label class="form-field">
-                    <span class="form-label">VICIdial Campaign</span>
-                    <select class="form-input" x-model="filters.vicidial_campaign" @change="applyFilters()">
-                        <option value="">All mapped campaigns</option>
-                        <template x-for="campaignCode in filterOptions.campaigns || []" :key="campaignCode">
-                            <option :value="campaignCode" x-text="campaignCode"></option>
-                        </template>
-                    </select>
-                </label>
-                <label class="form-field">
-                    <span class="form-label">Direction</span>
-                    <select class="form-input" x-model="filters.direction" @change="applyFilters()">
-                        <option value="">All directions</option>
-                        <option value="OUTBOUND">Outbound</option>
-                        <option value="INBOUND">Inbound</option>
-                    </select>
-                </label>
                 <div class="form-actions-bottom">
                     <button type="submit" class="btn-primary">Filter</button>
+                    <button type="button"
+                            class="btn-secondary"
+                            @click="advancedFiltersOpen = !advancedFiltersOpen"
+                            :aria-expanded="advancedFiltersOpen"
+                            aria-controls="call-history-advanced-filters">
+                        <x-icon name="adjustments-horizontal" class="w-4 h-4" />
+                        <span x-text="advancedFiltersOpen ? 'Fewer filters' : 'More filters'">More filters</span>
+                    </button>
                     <button type="button" class="btn-ghost" @click="clearFilters()">Clear</button>
+                </div>
+                </div>
+
+                <div id="call-history-advanced-filters"
+                     class="filter-disclosure grid-cols-1 sm:grid-cols-2 xl:grid-cols-5"
+                     x-show="advancedFiltersOpen"
+                     x-cloak>
+                    <label class="form-field">
+                        <span class="form-label">Agent</span>
+                        <select class="form-select" x-model="filters.agent" @change="applyFilters()">
+                            <option value="">All agents</option>
+                            <template x-for="agent in filterOptions.agents || []" :key="agent.value">
+                                <option :value="agent.value" x-text="agent.label"></option>
+                            </template>
+                        </select>
+                    </label>
+                    <label class="form-field">
+                        <span class="form-label">Status</span>
+                        <select class="form-select" x-model="filters.status" @change="applyFilters()">
+                            <option value="">All statuses</option>
+                            <template x-for="status in filterOptions.statuses || []" :key="status">
+                                <option :value="status" x-text="status"></option>
+                            </template>
+                        </select>
+                    </label>
+                    <label class="form-field">
+                        <span class="form-label">Disposition</span>
+                        <select class="form-select" x-model="filters.disposition" @change="applyFilters()">
+                            <option value="">All dispositions</option>
+                            <template x-for="(label, code) in filterOptions.dispositions || {}" :key="code">
+                                <option :value="code" x-text="label"></option>
+                            </template>
+                        </select>
+                    </label>
+                    <label class="form-field">
+                        <span class="form-label">VICIdial Campaign</span>
+                        <select class="form-select" x-model="filters.vicidial_campaign" @change="applyFilters()">
+                            <option value="">All mapped campaigns</option>
+                            <template x-for="campaignCode in filterOptions.campaigns || []" :key="campaignCode">
+                                <option :value="campaignCode" x-text="campaignCode"></option>
+                            </template>
+                        </select>
+                    </label>
+                    <label class="form-field">
+                        <span class="form-label">Direction</span>
+                        <select class="form-select" x-model="filters.direction" @change="applyFilters()">
+                            <option value="">All directions</option>
+                            <option value="OUTBOUND">Outbound</option>
+                            <option value="INBOUND">Inbound</option>
+                        </select>
+                    </label>
                 </div>
             </form>
         </div>

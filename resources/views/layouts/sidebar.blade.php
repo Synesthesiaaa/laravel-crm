@@ -123,7 +123,7 @@
         {{-- Telephony section --}}
         <button type="button"
                 class="sidebar-section-toggle"
-                @click="toggleSection('telephony')"
+                @click="$store.sidebar.collapsed ? ($store.sidebar.toggle(), expandedSections.telephony = true) : toggleSection('telephony')"
                 :aria-expanded="expandedSections.telephony"
                 aria-controls="sidebar-section-telephony"
                 title="Toggle Telephony navigation">
@@ -150,7 +150,7 @@
         @if(!empty($forms))
         <button type="button"
                 class="sidebar-section-toggle"
-                @click="toggleSection('forms')"
+                @click="$store.sidebar.collapsed ? ($store.sidebar.toggle(), expandedSections.forms = true) : toggleSection('forms')"
                 :aria-expanded="expandedSections.forms"
                 aria-controls="sidebar-section-forms"
                 title="Toggle Campaign Forms navigation">
@@ -176,7 +176,7 @@
         @if($user && $user->isTeamLeader())
         <button type="button"
                 class="sidebar-section-toggle"
-                @click="toggleSection('admin')"
+                @click="$store.sidebar.collapsed ? ($store.sidebar.toggle(), expandedSections.admin = true) : toggleSection('admin')"
                 :aria-expanded="expandedSections.admin"
                 aria-controls="sidebar-section-admin"
                 title="Toggle Administration navigation">
@@ -201,7 +201,7 @@
             @if($user->isSuperAdmin())
             <button type="button"
                     class="sidebar-section-toggle"
-                    @click="toggleSection('super-admin')"
+                    @click="$store.sidebar.collapsed ? ($store.sidebar.toggle(), expandedSections['super-admin'] = true) : toggleSection('super-admin')"
                     :aria-expanded="expandedSections['super-admin']"
                     aria-controls="sidebar-section-super-admin"
                     title="Toggle Super Admin navigation">
