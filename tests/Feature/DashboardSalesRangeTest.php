@@ -267,6 +267,12 @@ class DashboardSalesRangeTest extends TestCase
         $response->assertSee('Daily agent leaderboard', false);
         $response->assertSee('Agent leaderboard', false);
         $response->assertSee('class="stat-card h-full"', false);
+        $response->assertSee('class="dashboard-masthead"', false);
+        $response->assertSee('class="dashboard-signal-grid animate-stagger"', false);
+        $response->assertSee('class="stat-card stat-card--lead h-full"', false);
+        $response->assertSee('Sales in selected window', false);
+        $response->assertSee('class="dashboard-analysis-band mt-8"', false);
+        $response->assertSee('focus:ring-offset-[var(--color-surface)]', false);
     }
 
     public function test_dashboard_renders_selected_range_agent_leaderboard_amounts(): void

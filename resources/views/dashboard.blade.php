@@ -71,21 +71,24 @@
     };
     $formatSignedCount = static fn (float|int $count): string => ($count > 0 ? '+' : ($count < 0 ? '-' : '')).number_format(abs((float) $count));
 @endphp
-<div class="space-y-8 flex flex-col">
+<div class="flex flex-col gap-8">
 
     {{-- Welcome hero --}}
     @if($sectionVisible('welcome'))
     <section data-dashboard-section="welcome" style="order: {{ $sectionOrder('welcome') }}">
-    <div class="md-hero">
-        <div class="flex items-start justify-between flex-wrap gap-4">
-            <div>
-                <h2 class="text-xl font-bold text-[var(--color-on-surface)]">Welcome to {{ data_get($branding, 'name', 'CRM') }}</h2>
-                <p class="text-sm text-[var(--color-on-surface-muted)] mt-1">Hello, {{ $user->full_name ?? $user->username }}</p>
-                <p class="text-[var(--color-on-surface-muted)] text-sm mt-1">
-                    Campaign: <span class="font-semibold text-[var(--color-action)]">{{ $campaignName }}</span>
+    <div class="dashboard-masthead">
+        <div class="dashboard-masthead__content">
+            <div class="min-w-0">
+                <h2 class="dashboard-masthead__title">{{ $campaignName }}</h2>
+                <p class="dashboard-masthead__context">
+                    {{ data_get($branding, 'name', 'CRM') }} <span aria-hidden="true">/</span>
+                    <span>Hello, {{ $user->full_name ?? $user->username }}</span>
                 </p>
             </div>
-            <x-badge type="active">Online</x-badge>
+            <div class="dashboard-masthead__status">
+                <span class="text-xs text-[var(--color-on-surface-dim)]">Campaign workspace</span>
+                <x-badge type="active">Online</x-badge>
+            </div>
         </div>
     </div>
     </section>
@@ -94,24 +97,26 @@
     @if($sectionVisible('kpis'))
     <section data-dashboard-section="kpis" style="order: {{ $sectionOrder('kpis') }}">
     <div x-data="{}">
-        {{-- KPI + context stat cards --}}
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 animate-stagger">
-            <button type="button" class="text-left cursor-pointer rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" aria-haspopup="dialog" x-on:click="$store.modal.show('sales-summary')">
-                <x-stat-card label="Sales" :value="number_format($kpis['sales'] ?? 0)" :secondary="$salesRangeLabel.($amountsEnabled ? ' · Total value: '.number_format($kpis['sales_amount'] ?? 0, 2) : '')" icon="check-circle" color="success" />
+        {{-- Primary signal + supporting context --}}
+        <div class="dashboard-signal-grid animate-stagger">
+            <button type="button" class="dashboard-lead-stat text-left cursor-pointer rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-2 focus:ring-offset-[var(--color-surface)]" aria-haspopup="dialog" x-on:click="$store.modal.show('sales-summary')">
+                <x-stat-card class="stat-card--lead h-full" label="Sales in selected window" :value="number_format($kpis['sales'] ?? 0)" :secondary="$salesRangeLabel.($amountsEnabled ? ' · Total value: '.number_format($kpis['sales_amount'] ?? 0, 2) : '')" icon="check-circle" color="primary" />
             </button>
-            <button type="button" class="text-left cursor-pointer rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" aria-haspopup="dialog" x-on:click="$store.modal.show('agent-leaderboard')">
-                <x-stat-card class="h-full" label="Top agent" :value="$kpis['top_agent'] ?? '—'" :secondary="($kpis['top_agent_sales'] ?? 0) > 0 ? number_format($kpis['top_agent_sales']).' sales'.($amountsEnabled ? ' · Total value: '.number_format($kpis['top_agent_sales_amount'] ?? 0, 2) : '') : null" icon="user" color="warning" />
-            </button>
-            <x-stat-card label="Active Forms" :value="count($forms ?? [])" icon="document-text" color="info" />
-            <x-stat-card label="Campaign" :value="strtoupper($campaign ?? '—')" icon="building-office" color="info" />
+            <div class="dashboard-supporting-stats">
+                <button type="button" class="text-left cursor-pointer rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-2 focus:ring-offset-[var(--color-surface)]" aria-haspopup="dialog" x-on:click="$store.modal.show('agent-leaderboard')">
+                    <x-stat-card class="h-full" label="Top agent" :value="$kpis['top_agent'] ?? '—'" :secondary="($kpis['top_agent_sales'] ?? 0) > 0 ? number_format($kpis['top_agent_sales']).' sales'.($amountsEnabled ? ' · Total value: '.number_format($kpis['top_agent_sales_amount'] ?? 0, 2) : '') : null" icon="user" color="warning" />
+                </button>
+                <x-stat-card class="h-full" label="Active forms" :value="count($forms ?? [])" icon="document-text" color="info" />
+                <x-stat-card class="h-full" label="Campaign code" :value="strtoupper($campaign ?? '—')" icon="building-office" color="info" />
+            </div>
         </div>
 
         {{-- Month comparison summary --}}
-        <section class="mt-6 space-y-4" data-dashboard-summary aria-labelledby="dashboard-summary-title">
-            <div class="flex items-start justify-between gap-4 flex-wrap">
+        <section class="dashboard-analysis-band mt-8" data-dashboard-summary aria-labelledby="dashboard-summary-title">
+            <div class="dashboard-analysis-band__header">
                 <div>
-                    <h3 id="dashboard-summary-title" class="text-sm font-semibold text-[var(--color-on-surface)]">Monthly performance</h3>
-                    <p class="text-xs text-[var(--color-on-surface-muted)] mt-1">
+                    <h3 id="dashboard-summary-title" class="dashboard-section-title">Monthly performance</h3>
+                    <p class="text-sm text-[var(--color-on-surface-muted)] mt-1">
                         {{ $summaryModeLabel }}: {{ $summaryCurrentPeriodLabel }}
                     </p>
                     <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">
@@ -121,7 +126,7 @@
                 <span class="badge badge-info">{{ $summaryModeLabel }}</span>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 {{ $amountVisible('total') && $amountVisible('change') ? 'xl:grid-cols-4' : ($amountVisible('total') || $amountVisible('change') ? 'xl:grid-cols-3' : '') }} gap-4 animate-stagger">
+            <div class="dashboard-analysis-stats grid grid-cols-1 sm:grid-cols-2 {{ $amountVisible('total') && $amountVisible('change') ? 'xl:grid-cols-4' : ($amountVisible('total') || $amountVisible('change') ? 'xl:grid-cols-3' : '') }} gap-4 animate-stagger">
                 <x-stat-card
                     label="Transactions"
                     :value="number_format($summaryCurrent['count'])"
@@ -166,7 +171,7 @@
                 @endif
             </div>
 
-            <div class="chart-container" data-dashboard-summary-chart>
+            <div class="chart-container dashboard-analysis-chart" data-dashboard-summary-chart>
                 <div class="flex items-start justify-between gap-4 flex-wrap">
                     <div>
                         <h4 class="chart-title mb-1">Daily comparison</h4>
