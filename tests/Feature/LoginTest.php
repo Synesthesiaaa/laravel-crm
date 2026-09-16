@@ -129,6 +129,44 @@ class LoginTest extends TestCase
         $this->assertAuthenticatedAs($user);
     }
 
+    public function test_login_and_logout_can_use_csrf_tokens_across_session_regeneration(): void
+    {
+        $user = User::factory()->create(['username' => 'csrf-agent']);
+
+        $loginPage = $this->get(route('login'));
+        preg_match(
+            '/<input type="hidden" name="_token" value="([^"]+)"/',
+            $loginPage->getContent(),
+            $loginToken,
+        );
+        $this->assertArrayHasKey(1, $loginToken);
+
+        $loginResponse = $this->post(route('login'), [
+            '_token' => $loginToken[1],
+            'username' => 'csrf-agent',
+            'password' => 'password',
+            'campaign' => 'mbsales',
+        ]);
+
+        $loginResponse->assertRedirect(route('dashboard'));
+        $this->assertAuthenticatedAs($user);
+
+        $dashboardPage = $this->get(route('dashboard'));
+        preg_match(
+            '/<input type="hidden" name="_token" value="([^"]+)"/',
+            $dashboardPage->getContent(),
+            $logoutToken,
+        );
+        $this->assertArrayHasKey(1, $logoutToken);
+
+        $logoutResponse = $this->post(route('logout'), [
+            '_token' => $logoutToken[1],
+        ]);
+
+        $logoutResponse->assertRedirect(route('login'));
+        $this->assertGuest();
+    }
+
     public function test_login_succeeds_when_the_activity_broadcaster_is_unavailable(): void
     {
         config(['broadcasting.default' => 'unavailable-broadcast-connection']);

@@ -6,6 +6,8 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /*
  * Use app storage for PHP temp directory so tempnam() does not trigger
@@ -65,7 +67,34 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (HttpException $exception, Request $request): ?Response {
+            $authRouteUri = $request->route()?->uri();
+
+            if ($exception->getStatusCode() !== 419
+                || $request->expectsJson()
+                || ! in_array($authRouteUri, ['login', 'login/pending', 'logout'], true)) {
+                return null;
+            }
+
+            if ($authRouteUri === 'logout') {
+                if ($request->user() !== null) {
+                    return redirect()
+                        ->route('dashboard')
+                        ->with('error', 'Your sign-out session expired. Please try again.');
+                }
+
+                return redirect()
+                    ->route('login')
+                    ->with('status', 'Your session expired. Please sign in again.');
+            }
+
+            return redirect()
+                ->route('login')
+                ->withInput($request->except(['_token', 'password', 'password_confirmation']))
+                ->withErrors([
+                    'username' => 'Your sign-in session expired. Please try again.',
+                ]);
+        });
     })
     ->booted(function (): void {
         RateLimiter::for('login', function (Request $request) {
