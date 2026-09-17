@@ -72,9 +72,9 @@ class DashboardDisplayControlsTest extends TestCase
             ->withSession(['campaign' => 'mbsales'])
             ->get(route('dashboard'))->assertOk()
             ->assertSee('Transactions')
-            ->assertDontSee('Total amount')
-            ->assertDontSee('Amount change')
-            ->assertDontSee('Total value:')
+            ->assertDontSee('Total Amount')
+            ->assertDontSee('Amount Change')
+            ->assertDontSee('Total Value:')
             ->assertDontSee('data-report-table="daily-amounts"', false)
             ->assertDontSee('x-on:mouseenter=', false)
             ->assertDontSee('x-on:focusin=', false);
@@ -87,6 +87,6 @@ class DashboardDisplayControlsTest extends TestCase
         $service->saveForCampaign('mbsales', $sections, $sections, amountConfig: ['change' => false]);
         $this->actingAs(User::factory()->create(['role' => User::ROLE_AGENT]))
             ->withSession(['campaign' => 'mbsales'])
-            ->get(route('dashboard'))->assertOk()->assertSee('Total amount')->assertDontSee('Amount change');
+            ->get(route('dashboard'))->assertOk()->assertSee('Total Amount')->assertDontSee('Amount Change');
     }
 }

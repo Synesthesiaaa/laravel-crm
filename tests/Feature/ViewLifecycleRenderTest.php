@@ -88,8 +88,8 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertSee('const fallbackIntervalMs = 30_000;', false);
         $response->assertSee('window.crmCharts?.register?.(chartGroup, elId, chart);', false);
         $response->assertSee('window.resizeCrmDashboardCharts?.()', false);
-        $response->assertSee('Total value:', false);
-        $response->assertSee('Sales by form', false);
+        $response->assertSee('Total Value:', false);
+        $response->assertSee('Sales by Form', false);
         $response->assertDontSee('x-on:mouseenter="openSalesModal()"', false);
         $response->assertDontSee('x-on:mouseleave="scheduleSalesModalClose()"', false);
         $response->assertSee('x-transition:leave="transition ease-in duration-150"', false);

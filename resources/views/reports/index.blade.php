@@ -5,14 +5,14 @@
 @section('header-title', 'Telephony Reports')
 
 @section('content')
-<div x-data="telephonyReports()" x-init="init()" class="space-y-6">
+<div x-data="telephonyReports()" x-init="init()" class="reports-page space-y-6">
     <x-page-header
         title="Telephony Reports"
         description="Historical performance, trends, and management reporting."
         :breadcrumbs="['Dashboard' => route('dashboard'), 'Reports' => null]" />
 
     <template x-if="errorMessage">
-        <div class="rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/5 px-4 py-3" role="alert" aria-live="assertive">
+        <div class="report-notice report-notice--danger" role="alert" aria-live="assertive">
             <div class="flex items-start justify-between gap-3">
                 <div>
                     <p class="text-sm font-semibold text-[var(--color-danger)]" x-text="mode === 'historical' ? 'Historical report data could not be loaded' : 'Live report data could not be loaded'"></p>
@@ -24,7 +24,7 @@
     </template>
 
     <div x-show="dashboard.availability.status && dashboard.availability.status !== 'live'"
-         class="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/5 px-4 py-3"
+         class="report-notice report-notice--warning"
          role="status"
          aria-live="polite">
         <p class="text-sm font-semibold text-[var(--color-warning)]"
@@ -33,27 +33,43 @@
            x-text="dashboard.availability.message || 'Some report sections could not be loaded.'"></p>
     </div>
 
-    <div class="md-hero">
-        <div class="flex items-start justify-between flex-wrap gap-4">
-            <div class="space-y-1">
-                <h2 class="text-xl font-bold text-[var(--color-on-surface)]" x-text="mode === 'historical' ? 'Historical Performance' : (mode === 'today' ? 'Today at a glance' : 'Live reporting')"></h2>
-                <p class="text-[var(--color-on-surface-muted)] text-sm">
-                    Campaign: <span class="font-semibold text-[var(--color-action)]" x-text="dashboard.overview.campaign"></span>
-                </p>
-                <p class="text-xs text-[var(--color-on-surface-dim)]">
-                    <span x-show="mode === 'historical'">Selected period:
-                        <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="filters.query_date"></span>
-                        to
-                        <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="filters.end_date"></span>
+    <section class="reports-command-center" x-data="{ advancedFiltersOpen: false }" aria-label="Report controls and scope">
+        <div class="reports-command-center__main">
+            <div class="min-w-0">
+                <p class="report-eyebrow">Reporting Workspace</p>
+                <h2 class="reports-command-center__title" x-text="mode === 'historical' ? 'Historical Performance' : (mode === 'today' ? 'Today at a Glance' : 'Live Reporting')"></h2>
+                <div class="reports-context-strip">
+                    <span class="reports-context-item">
+                        <x-icon name="building-office" class="h-4 w-4" />
+                        <span class="reports-context-label">Campaign</span>
+                        <span x-text="dashboard.overview.campaign"></span>
                     </span>
-                    <span x-show="mode !== 'historical'" x-text="mode === 'today' ? 'Historical totals: midnight → now · live state is separate' : (realtime.timeScope || 'Rolling operational window')"></span>
-                </p>
+                    <span class="reports-context-item" x-show="mode === 'historical'">
+                        <x-icon name="clock" class="h-4 w-4" />
+                        <span class="reports-context-label">Period</span>
+                        <span x-text="filters.query_date + ' to ' + filters.end_date"></span>
+                    </span>
+                    <span class="reports-context-item" x-show="mode !== 'historical'">
+                        <x-icon name="clock" class="h-4 w-4" />
+                        <span class="reports-context-label">Window</span>
+                        <span x-text="mode === 'today' ? 'Midnight to now' : cleanReportText(realtime.scopeLabel || 'Rolling Operational Window')"></span>
+                    </span>
+                    <span class="badge"
+                          :class="mode === 'historical' ? 'badge-pending' : (realtime.status === 'live' ? 'badge-active' : 'badge-warning')"
+                          x-text="mode === 'historical' ? 'Historical' : humanizeLabel(realtime.status || 'Unavailable')"></span>
+                </div>
             </div>
-            <div class="flex items-center gap-2">
-                <span class="badge"
-                      :class="mode === 'historical' ? 'badge-pending' : (realtime.status === 'live' ? 'badge-active' : 'badge-warning')"
-                      x-text="mode === 'historical' ? 'Historical' : (realtime.status || 'Unavailable')"></span>
-                <button class="btn-secondary text-xs" @click="refreshAll()" x-bind:disabled="loading">
+
+            <div class="reports-command-center__actions">
+                <div class="reports-mode-switcher">
+                    <label for="reports-mode">Report Mode</label>
+                    <select id="reports-mode" class="form-select" x-model="mode" @change="changeMode()">
+                        <option value="live">Live: Rolling Window</option>
+                        <option value="today">Today: Midnight to Now</option>
+                        <option value="historical">Historical: Custom Range</option>
+                    </select>
+                </div>
+                <button class="btn-primary reports-refresh-button" @click="refreshAll()" x-bind:disabled="loading">
                     <span class="inline-flex" x-bind:class="loading ? 'animate-spin' : ''">
                         <x-icon name="arrow-path" class="w-4 h-4" />
                     </span>
@@ -61,26 +77,81 @@
                 </button>
             </div>
         </div>
-    </div>
 
-    <div class="md-card p-4" aria-label="Report mode controls">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <div>
-                <label class="form-label mb-1" for="reports-mode">Report mode</label>
-                <p class="text-xs text-[var(--color-on-surface-dim)]">Choose operational telemetry or date-scoped analysis.</p>
+        <div x-show="mode === 'historical'" x-cloak class="reports-filter-bar">
+            <div class="reports-filter-grid">
+                <div class="form-field">
+                    <label class="form-label" for="reports-crm-campaign">CRM Campaign</label>
+                    <select id="reports-crm-campaign" class="form-select" x-model="filters.crm_campaign" @change="filters.campaigns = '---ALL---'; refreshAll()">
+                        @foreach($reportCampaigns ?? [] as $code => $config)
+                            <option value="{{ $code }}">{{ $config['name'] ?? $code }} ({{ $code }})</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label" for="reports-date-start">Start Date</label>
+                    <input id="reports-date-start" class="form-input" type="date" x-model="filters.query_date" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label" for="reports-date-end">End Date</label>
+                    <input id="reports-date-end" class="form-input" type="date" x-model="filters.end_date" />
+                </div>
+                <div class="reports-filter-actions">
+                    <button type="button"
+                            class="btn-secondary"
+                            @click="advancedFiltersOpen = !advancedFiltersOpen"
+                            :aria-expanded="advancedFiltersOpen"
+                            aria-controls="reports-advanced-filters">
+                        <x-icon name="adjustments-horizontal" class="w-4 h-4" />
+                        <span x-text="advancedFiltersOpen ? 'Fewer Filters' : 'More Filters'">More Filters</span>
+                    </button>
+                </div>
             </div>
-            <select id="reports-mode" class="form-select max-w-xs" x-model="mode" @change="changeMode()">
-                <option value="live">Live — rolling window</option>
-                <option value="today">Today — midnight to now</option>
-                <option value="historical">Historical — custom range</option>
-            </select>
-        </div>
-    </div>
 
-    <section x-show="mode !== 'historical'" x-cloak class="space-y-4" aria-labelledby="live-report-title">
-        <div class="flex flex-wrap items-end justify-between gap-3">
+            <div id="reports-advanced-filters"
+                 class="reports-advanced-filters"
+                 x-show="advancedFiltersOpen"
+                 x-cloak>
+                <div class="form-field">
+                    <label class="form-label" for="reports-vici-campaign">VICIdial Campaigns</label>
+                    <select id="reports-vici-campaign" class="form-select" x-model="filters.campaigns">
+                        <option value="---ALL---">All Mapped Campaigns</option>
+                        <template x-for="code in mappedCampaigns" :key="code">
+                            <option :value="code" x-text="code"></option>
+                        </template>
+                    </select>
+                    <p class="form-help">Only campaigns mapped to the selected CRM campaign are available.</p>
+                </div>
+                <div class="form-field">
+                    <label class="form-label" for="reports-disposition-scope">Disposition Scope</label>
+                    <select id="reports-disposition-scope" class="form-select" x-model="filters.disposition_scope" @change="refreshAll()">
+                        <template x-for="option in dispositionScopeOptions" :key="option.value">
+                            <option :value="option.value" x-text="option.label"></option>
+                        </template>
+                    </select>
+                    <p class="form-help">
+                        System codes:
+                        <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="systemDispositionCodes.length ? systemDispositionCodes.join(', ') : 'None configured'"></span>
+                    </p>
+                </div>
+                <div class="form-field">
+                    <label class="form-label" for="reports-comparison">Comparison</label>
+                    <select id="reports-comparison" class="form-select" x-model="filters.comparison">
+                        <option value="none">No Comparison</option>
+                        <option value="previous_period">Previous Period</option>
+                        <option value="previous_day">Previous Day</option>
+                        <option value="previous_week">Previous Week</option>
+                        <option value="previous_month">Previous Month</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section x-show="mode !== 'historical'" x-cloak class="report-section-shell" aria-labelledby="live-report-title">
+        <div class="report-section-header">
             <div>
-                <h3 id="live-report-title" class="text-sm font-semibold text-[var(--color-on-surface)]" x-text="mode === 'today' ? 'Today and live operations' : 'Live operational metrics'"></h3>
+                <h3 id="live-report-title" class="report-section-title" x-text="mode === 'today' ? 'Today and Live Operations' : 'Live Operational Metrics'"></h3>
                 <p class="text-xs text-[var(--color-on-surface-dim)]" x-text="realtime.scopeLabel"></p>
             </div>
             <p class="text-xs text-[var(--color-on-surface-dim)]" role="status" aria-live="polite">
@@ -88,19 +159,19 @@
             </p>
         </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div class="reports-live-kpis">
             <template x-for="card in realtime.cards" :key="card.key">
-                <div class="md-card p-4 min-w-0">
-                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]" x-text="card.label"></p>
-                    <p class="mt-2 text-2xl font-bold tabular-nums text-[var(--color-on-surface)]" x-text="card.value"></p>
+                <div class="reports-live-kpi">
+                    <p class="report-metric-label" x-text="card.label"></p>
+                    <p class="reports-live-kpi__value" x-text="card.value"></p>
                     <p class="mt-1 text-[11px] text-[var(--color-on-surface-dim)]" x-text="card.scope"></p>
                 </div>
             </template>
         </div>
 
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <div class="chart-container">
-                <p class="chart-title">Live call activity</p>
+            <div class="chart-container report-panel report-chart-panel">
+                <p class="chart-title">Live Call Activity</p>
                 <div id="chart-live-activity" aria-label="Live call activity chart">
                     <div x-show="!liveHistory.length" x-cloak class="crm-empty-state report-empty-state" role="status" aria-live="polite">
                         <span class="crm-empty-state-icon" aria-hidden="true"><x-icon name="signal" class="w-5 h-5" /></span>
@@ -112,19 +183,19 @@
                 </div>
                 <p class="text-xs text-[var(--color-on-surface-dim)] mt-2">The chart contains only snapshots received while this page is open.</p>
             </div>
-            <div class="md-card p-4 space-y-3">
+            <div class="report-panel report-source-health">
                 <div class="flex items-center justify-between gap-3">
                     <div>
-                        <h4 class="text-sm font-semibold text-[var(--color-on-surface)]">Source health</h4>
+                        <h4 class="report-section-title">Source Health</h4>
                         <p class="text-xs text-[var(--color-on-surface-dim)]">Color is supplementary; the status text is authoritative.</p>
                     </div>
-                    <span class="badge" :class="realtime.status === 'live' ? 'badge-active' : (realtime.status === 'degraded' ? 'badge-warning' : 'badge-error')" x-text="realtime.status"></span>
+                    <span class="badge" :class="realtime.status === 'live' ? 'badge-active' : (realtime.status === 'degraded' ? 'badge-warning' : 'badge-error')" x-text="humanizeLabel(realtime.status)"></span>
                 </div>
                 <ul class="space-y-2 text-sm">
                     <template x-for="source in realtime.sources" :key="source.key">
                         <li class="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] px-3 py-2">
-                            <span class="text-[var(--color-on-surface)]" x-text="source.label"></span>
-                            <span class="text-xs font-medium" :class="source.status === 'healthy' ? 'text-[var(--color-success)]' : 'text-[var(--color-warning)]'" x-text="source.status"></span>
+                            <span class="text-[var(--color-on-surface)]" x-text="humanizeLabel(source.label)"></span>
+                            <span class="text-xs font-medium" :class="source.status === 'healthy' ? 'text-[var(--color-success)]' : 'text-[var(--color-warning)]'" x-text="humanizeLabel(source.status)"></span>
                         </li>
                     </template>
                 </ul>
@@ -132,10 +203,10 @@
             </div>
         </div>
 
-        <div class="md-card p-4">
+        <div class="report-panel report-outcomes-panel">
             <div class="flex items-center justify-between gap-3 mb-3">
                 <div>
-                    <h4 class="text-sm font-semibold text-[var(--color-on-surface)]">Recent completed outcomes</h4>
+                    <h4 class="report-section-title">Recent Completed Outcomes</h4>
                     <p class="text-xs text-[var(--color-on-surface-dim)]" x-text="realtime.rollingScope"></p>
                 </div>
                 <span class="text-xs text-[var(--color-on-surface-dim)]" x-text="realtime.dispositions.length + ' dispositions'"></span>
@@ -149,180 +220,78 @@
         </div>
     </section>
 
-    <div x-show="mode === 'historical'" x-cloak>
-    <div class="md-card p-4 md-card--static" x-data="{ advancedFiltersOpen: false }">
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-            <div class="form-field">
-                <label class="form-label" for="reports-crm-campaign">CRM Campaign</label>
-                <select id="reports-crm-campaign" class="form-select" x-model="filters.crm_campaign" @change="filters.campaigns = '---ALL---'; refreshAll()">
-                    @foreach($reportCampaigns ?? [] as $code => $config)
-                        <option value="{{ $code }}">{{ $config['name'] ?? $code }} ({{ $code }})</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="form-field">
-                <label class="form-label" for="reports-date-start">Date Start</label>
-                <input id="reports-date-start" class="form-input" type="date" x-model="filters.query_date" />
-            </div>
-            <div class="form-field">
-                <label class="form-label" for="reports-date-end">Date End</label>
-                <input id="reports-date-end" class="form-input" type="date" x-model="filters.end_date" />
-            </div>
-            <div class="form-actions-bottom">
-                <button type="button"
-                        class="btn-secondary"
-                        @click="advancedFiltersOpen = !advancedFiltersOpen"
-                        :aria-expanded="advancedFiltersOpen"
-                        aria-controls="reports-advanced-filters">
-                    <x-icon name="adjustments-horizontal" class="w-4 h-4" />
-                    <span x-text="advancedFiltersOpen ? 'Fewer filters' : 'More filters'">More filters</span>
-                </button>
-                <button type="button" class="btn-primary" @click="refreshAll()" x-bind:disabled="loading">
-                    <span class="inline-flex" x-bind:class="loading ? 'animate-spin' : ''">
-                        <x-icon name="arrow-path" class="w-4 h-4" />
+    <div x-show="mode === 'historical'" x-cloak class="reports-historical-stack">
+
+    <section class="md-card overflow-hidden animate-stagger" aria-labelledby="report-performance-title">
+        <div class="h-1 bg-[var(--color-primary)]" aria-hidden="true"></div>
+
+        <div class="px-5 py-5 sm:px-6 sm:py-6">
+            <div class="flex flex-col gap-4 border-b border-[var(--color-border)] pb-5 lg:flex-row lg:items-end lg:justify-between">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2 text-[var(--color-primary)]">
+                        <x-icon name="chart-bar" class="h-4 w-4 shrink-0" />
+                        <p class="report-eyebrow">Performance Snapshot</p>
+                    </div>
+                    <h3 id="report-performance-title" class="mt-2 truncate text-xl font-bold text-[var(--color-on-surface)]" x-text="dashboard.overview.campaign"></h3>
+                    <p class="mt-1 text-sm text-[var(--color-on-surface-muted)]">Core call performance for the selected report scope.</p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-[var(--color-on-surface-dim)]">
+                    <span class="inline-flex items-center gap-1.5">
+                        <x-icon name="clock" class="h-4 w-4 text-[var(--color-on-surface-muted)]" />
+                        <span x-text="filters.query_date + ' to ' + filters.end_date"></span>
                     </span>
-                    <span x-text="loading ? 'Loading...' : 'Refresh Reports'">Refresh Reports</span>
-                </button>
+                    <span class="inline-flex items-center gap-1.5">
+                        <x-icon name="tag" class="h-4 w-4 text-[var(--color-on-surface-muted)]" />
+                        <span x-text="humanizeLabel(dashboard.scopeLabel)"></span>
+                    </span>
+                </div>
             </div>
-        </div>
-        <div id="reports-advanced-filters"
-             class="filter-disclosure grid-cols-1 md:grid-cols-3"
-             x-show="advancedFiltersOpen"
-             x-cloak>
-            <div class="form-field">
-                <label class="form-label" for="reports-vici-campaign">VICIdial Campaigns</label>
-                <select id="reports-vici-campaign" class="form-select" x-model="filters.campaigns">
-                    <option value="---ALL---">All mapped campaigns</option>
-                    <template x-for="code in mappedCampaigns" :key="code">
-                        <option :value="code" x-text="code"></option>
-                    </template>
-                </select>
-                <p class="form-help">Only campaigns mapped to the selected CRM campaign are available.</p>
-            </div>
-            <div class="form-field">
-                <label class="form-label" for="reports-disposition-scope">Disposition Scope</label>
-                <select id="reports-disposition-scope" class="form-select" x-model="filters.disposition_scope" @change="refreshAll()">
-                    <template x-for="option in dispositionScopeOptions" :key="option.value">
-                        <option :value="option.value" x-text="option.label"></option>
-                    </template>
-                </select>
-                <p class="form-help">
-                    System codes:
-                    <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="systemDispositionCodes.length ? systemDispositionCodes.join(', ') : 'None configured'"></span>
-                </p>
-            </div>
-            <div class="form-field">
-                <label class="form-label" for="reports-comparison">Comparison</label>
-                <select id="reports-comparison" class="form-select" x-model="filters.comparison">
-                    <option value="none">No comparison</option>
-                    <option value="previous_period">Previous period</option>
-                    <option value="previous_day">Previous day</option>
-                    <option value="previous_week">Previous week</option>
-                    <option value="previous_month">Previous month</option>
-                </select>
-            </div>
-        </div>
-    </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8 gap-4 animate-stagger">
-        <div class="md-card p-4 min-w-0">
-            <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Campaign</p>
-                    <p class="mt-2 text-lg font-semibold text-[var(--color-on-surface)] truncate" x-text="dashboard.overview.campaign"></p>
+            <div class="grid grid-cols-1 gap-5 pt-5 xl:grid-cols-[minmax(16rem,0.9fr)_minmax(0,2.1fr)] xl:gap-6">
+                <div class="relative overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--color-primary)_35%,var(--color-border))] bg-[var(--color-primary-muted)] p-5 sm:p-6">
+                    <div class="absolute inset-y-0 left-0 w-1 bg-[var(--color-primary)]" aria-hidden="true"></div>
+                    <p class="report-eyebrow">Answer Rate</p>
+                    <p class="mt-3 text-4xl font-extrabold leading-none tracking-tight text-[var(--color-on-surface)] tabular-nums sm:text-5xl" x-text="formatPercent(dashboard.overview.answerRate)"></p>
+                    <p class="mt-3 text-sm leading-6 text-[var(--color-on-surface-muted)]">
+                        <span class="font-semibold text-[var(--color-on-surface)] tabular-nums" x-text="formatNumber(dashboard.overview.answeredCalls)"></span>
+                        answered from
+                        <span class="font-semibold text-[var(--color-on-surface)] tabular-nums" x-text="formatNumber(dashboard.overview.totalCalls)"></span>
+                        total calls.
+                    </p>
                 </div>
-                <div class="w-10 h-10 rounded-lg bg-[var(--color-primary-muted)] flex items-center justify-center shrink-0">
-                    <x-icon name="building-office" class="w-5 h-5 text-[var(--color-primary)]" />
-                </div>
+
+                <dl class="grid grid-cols-2 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] sm:grid-cols-3">
+                    <div class="min-w-0 border-b border-r border-[var(--color-border)] p-4 sm:p-5">
+                        <dt class="report-metric-label">Total Calls</dt>
+                        <dd class="mt-2 text-2xl font-bold text-[var(--color-on-surface)] tabular-nums" x-text="formatNumber(dashboard.overview.totalCalls)"></dd>
+                    </div>
+                    <div class="min-w-0 border-b border-[var(--color-border)] p-4 sm:border-r sm:p-5">
+                        <dt class="report-metric-label">Answered</dt>
+                        <dd class="mt-2 text-2xl font-bold text-[var(--color-success)] tabular-nums" x-text="formatNumber(dashboard.overview.answeredCalls)"></dd>
+                    </div>
+                    <div class="min-w-0 border-b border-r border-[var(--color-border)] p-4 sm:border-r-0 sm:p-5">
+                        <dt class="report-metric-label">Contact Rate</dt>
+                        <dd class="mt-2 text-2xl font-bold text-[var(--color-on-surface)] tabular-nums" x-text="formatPercent(dashboard.overview.contactRate)"></dd>
+                    </div>
+                    <div class="min-w-0 border-b border-[var(--color-border)] p-4 sm:border-b-0 sm:border-r sm:p-5">
+                        <dt class="report-metric-label">Calls per Agent</dt>
+                        <dd class="mt-2 text-2xl font-bold text-[var(--color-on-surface)] tabular-nums" x-text="formatNumber(dashboard.overview.callsPerAgent)"></dd>
+                    </div>
+                    <div class="min-w-0 border-r border-[var(--color-border)] p-4 sm:p-5">
+                        <dt class="report-metric-label">Average Talk Time</dt>
+                        <dd class="mt-2 truncate text-xl font-bold text-[var(--color-on-surface)] tabular-nums" x-text="formatDuration(dashboard.overview.averageTalkTimeSeconds)"></dd>
+                    </div>
+                    <div class="min-w-0 p-4 sm:p-5">
+                        <dt class="report-metric-label">Agents With Activity</dt>
+                        <dd class="mt-2 text-2xl font-bold text-[var(--color-on-surface)] tabular-nums" x-text="formatNumber(dashboard.overview.agentsWithActivity)"></dd>
+                    </div>
+                </dl>
             </div>
         </div>
+    </section>
 
-        <div class="md-card p-4 min-w-0">
-            <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Total Calls</p>
-                    <p class="mt-2 text-2xl font-bold text-[var(--color-on-surface)]" x-text="formatNumber(dashboard.overview.totalCalls)"></p>
-                </div>
-                <div class="w-10 h-10 rounded-lg bg-[var(--color-surface-2)] flex items-center justify-center shrink-0">
-                    <x-icon name="phone" class="w-5 h-5 text-[var(--color-primary)]" />
-                </div>
-            </div>
-        </div>
-
-        <div class="md-card p-4 min-w-0">
-            <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Answered</p>
-                    <p class="mt-2 text-2xl font-bold text-[var(--color-on-surface)]" x-text="formatNumber(dashboard.overview.answeredCalls)"></p>
-                </div>
-                <div class="w-10 h-10 rounded-lg bg-[var(--color-success)]/10 flex items-center justify-center shrink-0">
-                    <x-icon name="check-circle" class="w-5 h-5 text-[var(--color-success)]" />
-                </div>
-            </div>
-        </div>
-
-        <div class="md-card p-4 min-w-0">
-            <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Answer Rate</p>
-                    <p class="mt-2 text-2xl font-bold text-[var(--color-on-surface)]" x-text="formatPercent(dashboard.overview.answerRate)"></p>
-                </div>
-                <div class="w-10 h-10 rounded-lg bg-[var(--color-info)]/10 flex items-center justify-center shrink-0">
-                    <x-icon name="chart-bar" class="w-5 h-5 text-[var(--color-info)]" />
-                </div>
-            </div>
-        </div>
-
-        <div class="md-card p-4 min-w-0">
-            <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Contact Rate</p>
-                    <p class="mt-2 text-2xl font-bold text-[var(--color-on-surface)]" x-text="formatPercent(dashboard.overview.contactRate)"></p>
-                </div>
-                <div class="w-10 h-10 rounded-lg bg-[var(--color-warning)]/10 flex items-center justify-center shrink-0">
-                    <x-icon name="user-group" class="w-5 h-5 text-[var(--color-warning)]" />
-                </div>
-            </div>
-        </div>
-
-        <div class="md-card p-4 min-w-0">
-            <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Average Talk Time</p>
-                    <p class="mt-2 text-lg font-semibold text-[var(--color-on-surface)] truncate" x-text="formatDuration(dashboard.overview.averageTalkTimeSeconds)"></p>
-                </div>
-                <div class="w-10 h-10 rounded-lg bg-[var(--color-danger)]/10 flex items-center justify-center shrink-0">
-                    <x-icon name="clock" class="w-5 h-5 text-[var(--color-danger)]" />
-                </div>
-            </div>
-        </div>
-
-        <div class="md-card p-4 min-w-0">
-            <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Agents With Activity</p>
-                    <p class="mt-2 text-2xl font-bold text-[var(--color-on-surface)]" x-text="formatNumber(dashboard.overview.agentsWithActivity)"></p>
-                </div>
-                <div class="w-10 h-10 rounded-lg bg-[var(--color-surface-2)] flex items-center justify-center shrink-0">
-                    <x-icon name="users" class="w-5 h-5 text-[var(--color-primary)]" />
-                </div>
-            </div>
-        </div>
-
-        <div class="md-card p-4 min-w-0">
-            <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Calls / Agent</p>
-                    <p class="mt-2 text-2xl font-bold text-[var(--color-on-surface)]" x-text="formatNumber(dashboard.overview.callsPerAgent)"></p>
-                </div>
-                <div class="w-10 h-10 rounded-lg bg-[var(--color-surface-2)] flex items-center justify-center shrink-0">
-                    <x-icon name="calculator" class="w-5 h-5 text-[var(--color-primary)]" />
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <section x-show="dashboard.comparison.enabled" class="md-card p-4 space-y-3" aria-labelledby="comparison-title">
+    <section x-show="dashboard.comparison.enabled" class="report-panel report-comparison-panel" aria-labelledby="comparison-title">
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
                 <h3 id="comparison-title" class="text-sm font-semibold text-[var(--color-on-surface)]">Period Comparison</h3>
@@ -333,10 +302,10 @@
             </div>
             <span class="text-xs text-[var(--color-on-surface-dim)]" x-text="dashboard.comparison.availabilityLabel"></span>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div class="report-comparison-grid">
             <template x-for="item in dashboard.comparison.cards" :key="item.key">
-                <div class="rounded-lg border border-[var(--color-border)] p-3">
-                    <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]" x-text="item.label"></p>
+                <div class="report-comparison-metric">
+                    <p class="report-metric-label" x-text="item.label"></p>
                     <p class="mt-1 text-lg font-semibold text-[var(--color-on-surface)]" x-text="item.value"></p>
                     <p class="mt-1 text-xs" :class="item.tone" x-text="item.changeLabel"></p>
                 </div>
@@ -344,52 +313,52 @@
         </div>
     </section>
 
-    <section class="space-y-4">
-        <div class="flex flex-wrap items-end justify-between gap-3">
+    <section class="report-section-shell">
+        <div class="report-section-header">
             <div>
-                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Call Volume Trend</h3>
-                <p class="text-xs text-[var(--color-on-surface-dim)]">Historical activity for the selected campaign/date range.</p>
+                <h3 class="report-section-title">Call Volume Trend</h3>
+                <p class="text-xs text-[var(--color-on-surface-dim)]">Historical activity for the selected campaign and date range.</p>
             </div>
             <p class="text-xs text-[var(--color-on-surface-dim)]" x-text="'Rows loaded: ' + dashboard.status.rows.length"></p>
         </div>
 
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <div class="chart-container">
-                <p class="chart-title">Hourly volume</p>
+            <div class="chart-container report-panel report-chart-panel">
+                <p class="chart-title">Hourly Volume</p>
                 <div x-show="dashboard.status.hourlyLabels.length" x-cloak id="chart-status-hourly" class="w-full" style="min-height: 280px;"></div>
                 <div x-show="!dashboard.status.hourlyLabels.length" x-cloak class="crm-empty-state report-empty-state" role="status" aria-live="polite">
                     <span class="crm-empty-state-icon" aria-hidden="true"><x-icon name="chart-bar" class="w-5 h-5" /></span>
                     <div class="min-w-0">
-                        <p class="crm-empty-state-title" x-text="reportSectionTitle(dashboard.status.hourlyState, 'Hourly volume')">Hourly volume unavailable</p>
-                        <p class="crm-empty-state-description" x-text="reportSectionDescription(dashboard.status.hourlyState, 'Hourly volume')">Hourly volume is unavailable for this scope.</p>
+                        <p class="crm-empty-state-title" x-text="reportSectionTitle(dashboard.status.hourlyState, 'Hourly Volume')">Hourly Volume Unavailable</p>
+                        <p class="crm-empty-state-description" x-text="reportSectionDescription(dashboard.status.hourlyState, 'Hourly Volume')">Hourly volume is unavailable for this scope.</p>
                     </div>
                 </div>
             </div>
-            <div class="chart-container">
-                <p class="chart-title">Status mix</p>
+            <div class="chart-container report-panel report-chart-panel">
+                <p class="chart-title">Status Mix</p>
                 <div x-show="dashboard.status.statusLabels.length" x-cloak id="chart-status-mix" class="w-full" style="min-height: 280px;"></div>
                 <div x-show="!dashboard.status.statusLabels.length" x-cloak class="crm-empty-state report-empty-state" role="status" aria-live="polite">
                     <span class="crm-empty-state-icon" aria-hidden="true"><x-icon name="chart-pie" class="w-5 h-5" /></span>
                     <div class="min-w-0">
-                        <p class="crm-empty-state-title" x-text="reportSectionTitle(dashboard.status.statusState, 'Status breakdown')">Status breakdown unavailable</p>
-                        <p class="crm-empty-state-description" x-text="reportSectionDescription(dashboard.status.statusState, 'Status breakdown')">Status breakdown is unavailable for this scope.</p>
+                        <p class="crm-empty-state-title" x-text="reportSectionTitle(dashboard.status.statusState, 'Status Breakdown')">Status Breakdown Unavailable</p>
+                        <p class="crm-empty-state-description" x-text="reportSectionDescription(dashboard.status.statusState, 'Status Breakdown')">Status breakdown is unavailable for this scope.</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="md-card overflow-hidden">
+        <div class="report-table-panel">
             <div class="px-5 py-4 border-b border-[var(--color-border)] flex items-center justify-between gap-3">
                 <div>
-                    <h4 class="text-sm font-semibold text-[var(--color-on-surface)]">Call status breakdown</h4>
+                    <h4 class="report-section-title">Call Status Breakdown</h4>
                     <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">Each row is grouped by campaign or ingroup.</p>
                 </div>
-                <span class="text-xs text-[var(--color-on-surface-dim)]" x-text="dashboard.status.rows.length + ' rows'"></span>
+                <span class="text-xs text-[var(--color-on-surface-dim)]" x-text="dashboard.status.rows.length + (dashboard.status.rows.length === 1 ? ' row' : ' rows')"></span>
             </div>
             <div class="md-table-wrap">
-                <x-table.index caption="Call status breakdown table">
+                <x-table.index caption="Call Status Breakdown Table">
                     <x-table.head :columns="[
-                        ['label' => 'Campaign / In-Group'],
+                        ['label' => 'Campaign and In-Group'],
                         ['label' => 'Total'],
                         ['label' => 'Answered'],
                         ['label' => 'Answer Rate', 'align' => 'right'],
@@ -416,58 +385,58 @@
         </div>
     </section>
 
-    <section class="space-y-4">
-        <div class="flex flex-wrap items-end justify-between gap-3">
+    <section class="report-section-shell">
+        <div class="report-section-header">
             <div>
-                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Agent Performance</h3>
+                <h3 class="report-section-title">Agent Performance</h3>
                 <p class="text-xs text-[var(--color-on-surface-dim)]">Readable agent activity summaries built from VICIdial export rows.</p>
             </div>
             <p class="text-xs text-[var(--color-on-surface-dim)]" x-text="'Agents loaded: ' + dashboard.agents.rows.length"></p>
         </div>
 
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <div class="chart-container">
-                <p class="chart-title">Calls by agent</p>
+            <div class="chart-container report-panel report-chart-panel">
+                <p class="chart-title">Calls by Agent</p>
                 <div x-show="dashboard.agents.callsLabels.length" id="chart-agent-calls" class="w-full" style="min-height: 280px;"></div>
                 <div x-show="!dashboard.agents.callsLabels.length" class="table-empty py-10 text-center text-sm text-[var(--color-on-surface-dim)]">
                     No agent rows yet.
                 </div>
             </div>
-            <div class="chart-container">
-                <p class="chart-title">Talk time balance</p>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div class="md-card p-4">
-                        <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Total talk</p>
+            <div class="chart-container report-panel report-chart-panel">
+                <p class="chart-title">Talk Time Balance</p>
+                <div class="report-inline-metrics">
+                    <div class="report-inline-metric">
+                        <p class="report-metric-label">Total Talk</p>
                         <p class="mt-2 text-lg font-semibold text-[var(--color-on-surface)]" x-text="dashboard.agents.summary.totalTalkTime"></p>
                     </div>
-                    <div class="md-card p-4">
-                        <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Avg talk / call</p>
+                    <div class="report-inline-metric">
+                        <p class="report-metric-label">Average Talk Time per Call</p>
                         <p class="mt-2 text-lg font-semibold text-[var(--color-on-surface)]" x-text="dashboard.agents.summary.avgTalkTime"></p>
                     </div>
-                    <div class="md-card p-4">
-                        <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Total pause</p>
+                    <div class="report-inline-metric">
+                        <p class="report-metric-label">Total Pause</p>
                         <p class="mt-2 text-lg font-semibold text-[var(--color-on-surface)]" x-text="dashboard.agents.summary.totalPauseTime"></p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="md-card overflow-hidden">
+        <div class="report-table-panel">
             <div class="px-5 py-4 border-b border-[var(--color-border)] flex items-center justify-between gap-3">
                 <div>
-                    <h4 class="text-sm font-semibold text-[var(--color-on-surface)]">Agent performance table</h4>
+                    <h4 class="report-section-title">Agent Performance Table</h4>
                     <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">Sorted by calls in the selected range.</p>
                 </div>
-                <span class="text-xs text-[var(--color-on-surface-dim)]" x-text="dashboard.agents.summary.agentCount + ' agents'"></span>
+                <span class="text-xs text-[var(--color-on-surface-dim)]" x-text="dashboard.agents.rows.length + (dashboard.agents.rows.length === 1 ? ' agent' : ' agents')"></span>
             </div>
             <div class="md-table-wrap">
-                <x-table.index caption="Agent performance table">
+                <x-table.index caption="Agent Performance Table">
                     <x-table.head :columns="[
                         ['label' => 'Agent'],
                         ['label' => 'Group'],
                         ['label' => 'Calls', 'align' => 'right'],
                         ['label' => 'Talk Time', 'align' => 'right'],
-                        ['label' => 'Avg Talk', 'align' => 'right'],
+                        ['label' => 'Average Talk Time', 'align' => 'right'],
                         ['label' => 'Wait Time', 'align' => 'right'],
                         ['label' => 'Pause %', 'align' => 'right'],
                     ]" />
@@ -495,57 +464,57 @@
         </div>
     </section>
 
-    <section class="space-y-4">
-        <div class="flex flex-wrap items-end justify-between gap-3">
+    <section class="report-section-shell">
+        <div class="report-section-header">
                 <div>
-                    <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Disposition Pareto</h3>
+                    <h3 class="report-section-title">Disposition Pareto</h3>
                     <p class="text-xs text-[var(--color-on-surface-dim)]">
                         Disposition totals and percentages for the selected report window.
-                        <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="'Scope: ' + dashboard.scopeLabel"></span>
+                        <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="'Scope: ' + humanizeLabel(dashboard.scopeLabel)"></span>
                     </p>
                 </div>
             <p class="text-xs text-[var(--color-on-surface-dim)]" x-text="'Disposition rows: ' + dashboard.dispo.rows.length"></p>
         </div>
 
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <div class="chart-container">
-                <p class="chart-title">Top dispositions by volume</p>
+            <div class="chart-container report-panel report-chart-panel">
+                <p class="chart-title">Top Dispositions by Volume</p>
                 <div x-show="dashboard.dispo.labels.length" x-cloak id="chart-dispo-breakdown" class="w-full" style="min-height: 280px;"></div>
                 <div x-show="!dashboard.dispo.labels.length" x-cloak class="crm-empty-state report-empty-state" role="status" aria-live="polite">
                     <span class="crm-empty-state-icon" aria-hidden="true"><x-icon name="tag" class="w-5 h-5" /></span>
                     <div class="min-w-0">
-                        <p class="crm-empty-state-title" x-text="reportSectionTitle(dashboard.dispo.state, 'Disposition data')">Disposition data unavailable</p>
-                        <p class="crm-empty-state-description" x-text="reportSectionDescription(dashboard.dispo.state, 'Disposition data')">Disposition data is unavailable for this scope.</p>
+                        <p class="crm-empty-state-title" x-text="reportSectionTitle(dashboard.dispo.state, 'Disposition Data')">Disposition Data Unavailable</p>
+                        <p class="crm-empty-state-description" x-text="reportSectionDescription(dashboard.dispo.state, 'Disposition Data')">Disposition data is unavailable for this scope.</p>
                     </div>
                 </div>
             </div>
-            <div class="md-card p-4 space-y-3">
-                <p class="chart-title mb-0">Report totals</p>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div class="md-card p-4">
-                        <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Total Calls</p>
+            <div class="report-panel report-totals-panel">
+                <p class="chart-title mb-0">Report Totals</p>
+                <div class="report-inline-metrics report-inline-metrics--two">
+                    <div class="report-inline-metric">
+                        <p class="report-metric-label">Total Calls</p>
                         <p class="mt-2 text-2xl font-bold text-[var(--color-on-surface)]" x-text="formatNumber(dashboard.dispo.summary.totalCalls)"></p>
                     </div>
-                    <div class="md-card p-4">
-                        <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]">Contact Rate</p>
+                    <div class="report-inline-metric">
+                        <p class="report-metric-label">Contact Rate</p>
                         <p class="mt-2 text-lg font-semibold text-[var(--color-on-surface)] truncate" x-text="formatPercent(dashboard.overview.contactRate)"></p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="md-card overflow-hidden">
+        <div class="report-table-panel">
             <div class="px-5 py-4 border-b border-[var(--color-border)] flex items-center justify-between gap-3">
                 <div>
-                    <h4 class="text-sm font-semibold text-[var(--color-on-surface)]">Disposition table</h4>
+                    <h4 class="report-section-title">Disposition Table</h4>
                     <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">Each row mirrors the VICIdial export but with the total row kept in the debug area.</p>
                 </div>
-                <span class="text-xs text-[var(--color-on-surface-dim)]" x-text="dashboard.dispo.rows.length + ' campaigns'"></span>
+                <span class="text-xs text-[var(--color-on-surface-dim)]" x-text="dashboard.dispo.rows.length + (dashboard.dispo.rows.length === 1 ? ' campaign' : ' campaigns')"></span>
             </div>
             <div class="md-table-wrap">
-                <x-table.index caption="Disposition table">
+                <x-table.index caption="Disposition Table">
                     <x-table.head :columns="[
-                        ['label' => 'Campaign / In-Group'],
+                        ['label' => 'Campaign and In-Group'],
                         ['label' => 'Total Calls', 'align' => 'right'],
                         ['label' => 'Top Disposition'],
                         ['label' => 'Breakdown'],
@@ -568,10 +537,10 @@
         </div>
     </section>
 
-    <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div class="md-card p-4 space-y-3" x-show="dashboard.funnel.length >= 2">
+    <section class="report-section-shell grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div class="report-panel" x-show="dashboard.funnel.length >= 2">
             <div>
-                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Call Funnel</h3>
+                <h3 class="report-section-title">Call Funnel</h3>
                 <p class="text-xs text-[var(--color-on-surface-dim)]">Only configured disposition stages are shown.</p>
             </div>
             <ol class="space-y-2">
@@ -583,15 +552,15 @@
                 </template>
             </ol>
         </div>
-        <div class="md-card p-4 space-y-3">
+        <div class="report-panel">
             <div>
-                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Agent Time Distribution</h3>
+                <h3 class="report-section-title">Agent Time Distribution</h3>
                 <p class="text-xs text-[var(--color-on-surface-dim)]">Only durations supplied by VICIdial are shown.</p>
             </div>
-            <div class="grid grid-cols-2 gap-3">
+            <div class="report-inline-metrics report-inline-metrics--two">
                 <template x-for="item in dashboard.timeDistribution" :key="item.key">
-                    <div class="rounded-lg border border-[var(--color-border)] p-3">
-                        <p class="text-xs uppercase tracking-widest text-[var(--color-on-surface-dim)]" x-text="item.label"></p>
+                    <div class="report-inline-metric">
+                        <p class="report-metric-label" x-text="item.label"></p>
                         <p class="mt-1 text-lg font-semibold text-[var(--color-on-surface)]" x-text="formatDuration(item.seconds)"></p>
                     </div>
                 </template>
@@ -602,16 +571,16 @@
     </div>
 
     @if(auth()->user()?->isAdmin())
-    <details class="md-card p-4">
+    <details class="report-debug-panel">
         <summary class="cursor-pointer list-none flex items-center justify-between gap-3">
             <div>
-                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Debug / Raw VICIdial Output</h3>
+                <h3 class="report-section-title">Debug and Raw VICIdial Output</h3>
                 <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">Collapsed by default. Open this only when the dashboard needs diagnosis.</p>
             </div>
             <span class="text-xs text-[var(--color-on-surface-dim)]">
-                <span x-text="dashboard.status.rows.length"></span> status rows |
-                <span x-text="dashboard.agents.rows.length"></span> agent rows |
-                <span x-text="dashboard.dispo.rows.length"></span> disposition rows
+                <span x-text="dashboard.status.rows.length"></span> <span x-text="dashboard.status.rows.length === 1 ? 'status row' : 'status rows'"></span>,
+                <span x-text="dashboard.agents.rows.length"></span> <span x-text="dashboard.agents.rows.length === 1 ? 'agent row' : 'agent rows'"></span>,
+                <span x-text="dashboard.dispo.rows.length"></span> <span x-text="dashboard.dispo.rows.length === 1 ? 'disposition row' : 'disposition rows'"></span>
             </span>
         </summary>
         <div class="mt-4 space-y-4">
@@ -683,9 +652,9 @@ window.telephonyReports = function () {
         },
         mappedCampaigns: @json($vicidialCampaignCodes ?? []),
         dispositionScopeOptions: [
-            { value: 'all', label: 'All dispositions' },
-            { value: 'exclude_system', label: 'Hide system dispositions' },
-            { value: 'system_only', label: 'System dispositions only' },
+            { value: 'all', label: 'All Dispositions' },
+            { value: 'exclude_system', label: 'Hide System Dispositions' },
+            { value: 'system_only', label: 'System Dispositions Only' },
         ],
         systemDispositionCodes: @json(config('vicidial.report_system_disposition_codes', [])),
         recordingFilters: {
@@ -700,7 +669,7 @@ window.telephonyReports = function () {
             recording: null,
         },
         dashboard: {
-            scopeLabel: 'All dispositions',
+            scopeLabel: 'All Dispositions',
             overview: {
                 campaign: @json($campaignName),
                 totalCalls: null,
@@ -710,9 +679,9 @@ window.telephonyReports = function () {
                 averageTalkTimeSeconds: null,
                 agentsWithActivity: null,
                 callsPerAgent: null,
-                topAgent: '—',
-                topStatus: '—',
-                topDisposition: '—',
+                topAgent: 'N/A',
+                topStatus: 'N/A',
+                topDisposition: 'N/A',
                 activeAgents: 0,
             },
             availability: {
@@ -741,9 +710,9 @@ window.telephonyReports = function () {
                 summary: {
                     agentCount: 0,
                     totalCalls: null,
-                    totalTalkTime: '—',
-                    totalPauseTime: '—',
-                    avgTalkTime: '—',
+                    totalTalkTime: 'N/A',
+                    totalPauseTime: 'N/A',
+                    avgTalkTime: 'N/A',
                 },
             },
             dispo: {
@@ -753,7 +722,7 @@ window.telephonyReports = function () {
                 state: 'loading',
                 summary: {
                     totalCalls: null,
-                    topDisposition: '—',
+                    topDisposition: 'N/A',
                     topDispositionCount: null,
                 },
             },
@@ -928,7 +897,7 @@ window.telephonyReports = function () {
                     staleMessage: data.availability?.message || 'The last live snapshot could not be refreshed. Retry to request a fresh snapshot.',
                     sources: Object.entries(data.sources || {}).map(([key, source]) => ({
                         key,
-                        label: key.replaceAll('_', ' '),
+                        label: this.humanizeLabel(key),
                         status: source.status || 'unavailable',
                     })),
                 };
@@ -941,11 +910,11 @@ window.telephonyReports = function () {
 
                 return;
             }
-            const numberOrDash = (value) => value === null || value === undefined ? '—' : this.formatNumber(value);
+            const numberOrDash = (value) => value === null || value === undefined ? 'N/A' : this.formatNumber(value);
             const cards = isToday ? [
-                { key: 'today-total', label: "Today's Calls", value: numberOrDash(today.total_calls), scope: today.label || 'Midnight → now' },
-                { key: 'today-answered', label: 'Answered', value: numberOrDash(today.answered), scope: today.label || 'Midnight → now' },
-                { key: 'today-rate', label: 'Answer Rate', value: this.formatPercent(today.answer_rate), scope: today.label || 'Midnight → now' },
+                { key: 'today-total', label: "Today's Calls", value: numberOrDash(today.total_calls), scope: this.cleanReportText(today.label || 'Midnight to Now') },
+                { key: 'today-answered', label: 'Answered', value: numberOrDash(today.answered), scope: this.cleanReportText(today.label || 'Midnight to Now') },
+                { key: 'today-rate', label: 'Answer Rate', value: this.formatPercent(today.answer_rate), scope: this.cleanReportText(today.label || 'Midnight to Now') },
                 { key: 'live-calls', label: 'Live Calls', value: numberOrDash(metrics.live_calls), scope: 'Current snapshot' },
                 { key: 'waiting', label: 'Waiting Calls', value: numberOrDash(metrics.calls_waiting), scope: 'Current snapshot' },
                 { key: 'available', label: 'Available Agents', value: numberOrDash(metrics.available_agents), scope: 'Current snapshot' },
@@ -954,19 +923,19 @@ window.telephonyReports = function () {
                 { key: 'active-agents', label: 'Active Agents', value: numberOrDash(metrics.active_agents), scope: 'Current snapshot' },
                 { key: 'available', label: 'Available Agents', value: numberOrDash(metrics.available_agents), scope: 'Current snapshot' },
                 { key: 'waiting', label: 'Waiting Calls', value: numberOrDash(metrics.calls_waiting), scope: 'Current snapshot' },
-                { key: 'rolling-answered', label: 'Answered', value: numberOrDash(rolling.answered), scope: rolling.label || 'Rolling window' },
-                { key: 'rolling-rate', label: 'Answer Rate', value: this.formatPercent(rolling.answer_rate), scope: rolling.label || 'Rolling window' },
+                { key: 'rolling-answered', label: 'Answered', value: numberOrDash(rolling.answered), scope: this.cleanReportText(rolling.label || 'Rolling Window') },
+                { key: 'rolling-rate', label: 'Answer Rate', value: this.formatPercent(rolling.answer_rate), scope: this.cleanReportText(rolling.label || 'Rolling Window') },
             ];
             this.realtime = {
                 mode: this.mode,
                 snapshotKey: realtimeSnapshotKey,
                 status: normalizedStatus,
-                scopeLabel: data.time_scope?.label || rolling.label || 'Rolling operational window',
-                rollingScope: rolling.label || 'Rolling metrics unavailable',
+                scopeLabel: this.cleanReportText(data.time_scope?.label || rolling.label || 'Rolling Operational Window'),
+                rollingScope: this.cleanReportText(rolling.label || 'Rolling Metrics Unavailable'),
                 lastUpdated: data.freshness?.last_success_at ? new Date(data.freshness.last_success_at).toLocaleTimeString() : new Date().toLocaleTimeString(),
                 staleMessage: data.freshness?.status === 'stale' ? 'Live data is stale. Retry to request a fresh snapshot.' : (data.availability?.message || ''),
                 cards,
-                sources: Object.entries(data.sources || {}).map(([key, source]) => ({ key, label: key.replaceAll('_', ' '), status: source.status || 'unavailable' })),
+                sources: Object.entries(data.sources || {}).map(([key, source]) => ({ key, label: this.humanizeLabel(key), status: source.status || 'unavailable' })),
                 dispositions: Object.entries((isToday ? today.dispositions : rolling.dispositions) || {}).map(([code, count]) => ({ code, count: this.formatNumber(count) })),
             };
             this.hasRealtimeSnapshot = true;
@@ -1041,8 +1010,8 @@ window.telephonyReports = function () {
                     total: row.total_calls ?? null,
                     answered: row.answered_calls ?? null,
                     answerRate: row.answer_rate ?? null,
-                    topStatus: '—',
-                    peakHourLabel: '—',
+                    topStatus: 'N/A',
+                    peakHourLabel: 'N/A',
                 })),
                 hourlyLabels: callVolume.labels || [],
                 hourlyValues: callVolume.values || [],
@@ -1054,8 +1023,8 @@ window.telephonyReports = function () {
                     totalCalls: summary.total_calls,
                     answeredCalls: summary.answered_calls,
                     answerRate: summary.answer_rate,
-                    topStatus: '—',
-                    topHour: '—',
+                    topStatus: 'N/A',
+                    topHour: 'N/A',
                 },
             };
             this.dashboard.status.rows.forEach((statusRow, index) => {
@@ -1070,7 +1039,7 @@ window.telephonyReports = function () {
                     total_talk_time: this.formatDuration(row.total_talk_time_seconds),
                     avg_talk_time: this.formatDuration(row.avg_talk_time_seconds),
                     total_wait_time: this.formatDuration(row.total_wait_time_seconds),
-                    pause_pct: row.pause_pct === null ? '—' : String(row.pause_pct) + '%',
+                    pause_pct: row.pause_pct === null ? 'N/A' : String(row.pause_pct) + '%',
                 })),
                 callsLabels: agents.slice(0, 10).map((row) => row.full_name || row.user),
                 callsValues: agents.slice(0, 10).map((row) => row.calls ?? null),
@@ -1080,7 +1049,7 @@ window.telephonyReports = function () {
                     totalTalkTime: this.formatDuration(data.agent_summary?.total_talk_time_seconds),
                     totalPauseTime: this.formatDuration(data.agent_summary?.total_pause_time_seconds),
                     avgTalkTime: this.formatDuration(summary.average_talk_time_seconds),
-                    topAgent: agents[0]?.full_name || agents[0]?.user || '—',
+                    topAgent: agents[0]?.full_name || agents[0]?.user || 'N/A',
                 },
             };
             this.dashboard.dispo = {
@@ -1088,10 +1057,10 @@ window.telephonyReports = function () {
                     key: (row.campaign || 'campaign') + '-' + index,
                     label: row.campaign || 'Unknown',
                     totalCalls: row.total_calls ?? null,
-                    topDisposition: row.top_disposition || '—',
+                    topDisposition: row.top_disposition || 'N/A',
                     breakdownSummary: (row.metrics || []).slice(0, 3)
                         .map((metric) => metric.label + ': ' + this.formatNumber(metric.value))
-                        .join(' | ') || 'No breakdown data',
+                        .join(', ') || 'No breakdown data',
                 })),
                 labels: dispositions.labels || [],
                 values: dispositions.values || [],
@@ -1099,7 +1068,7 @@ window.telephonyReports = function () {
                 state: dispositions.state || data.disposition_summary?.state || 'unavailable',
                 summary: {
                     totalCalls: data.disposition_summary?.total_calls ?? null,
-                    topDisposition: dispositions.labels?.[0] || '—',
+                    topDisposition: dispositions.labels?.[0] || 'N/A',
                     topDispositionCount: dispositions.values?.[0] ?? null,
                     scopeLabel: this.dispositionScopeLabel(this.filters.disposition_scope),
                 },
@@ -1136,20 +1105,20 @@ window.telephonyReports = function () {
                 contact_rate: 'Contact Rate',
                 average_talk_time_seconds: 'Average Talk',
                 agents_with_activity: 'Agents With Activity',
-                calls_per_agent: 'Calls / Agent',
+                calls_per_agent: 'Calls per Agent',
             };
             const cards = Object.entries(comparison.metrics || {}).slice(0, 4).map(([key, metric]) => {
                 const change = metric.change;
                 const isRate = metric.unit === 'rate';
                 const changeLabel = change === null
                     ? 'No comparable baseline'
-                    : (change >= 0 ? '↑ ' : '↓ ') + Math.abs(change).toFixed(1)
-                        + (isRate ? ' percentage points' : '%') + ' vs previous';
+                    : (change >= 0 ? 'Increase of ' : 'Decrease of ') + Math.abs(change).toFixed(1)
+                        + (isRate ? ' percentage points' : '%') + ' versus previous';
 
                 return {
                     key,
                     label: labels[key] || key,
-                    value: metric.current === null ? '—' : (isRate ? this.formatPercent(metric.current) : this.formatNumber(metric.current)),
+                    value: metric.current === null ? 'N/A' : (isRate ? this.formatPercent(metric.current) : this.formatNumber(metric.current)),
                     changeLabel,
                     tone: change === null ? 'text-[var(--color-on-surface-dim)]' : (change >= 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'),
                 };
@@ -1158,7 +1127,7 @@ window.telephonyReports = function () {
             return {
                 enabled: true,
                 periodLabel: comparison.period ? comparison.period.start + ' to ' + comparison.period.end : 'previous period',
-                availabilityLabel: comparison.availability?.status || 'unknown',
+                availabilityLabel: this.humanizeLabel(comparison.availability?.status || 'unknown'),
                 cards,
             };
         },
@@ -1428,7 +1397,7 @@ window.telephonyReports = function () {
 
         dispositionScopeLabel(scope) {
             const option = this.dispositionScopeOptions.find((entry) => entry.value === scope);
-            return option?.label || 'All dispositions';
+            return option?.label || 'All Dispositions';
         },
 
         async renderCharts() {
@@ -1666,13 +1635,49 @@ window.telephonyReports = function () {
             return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
         },
 
+        humanizeLabel(value) {
+            const acronyms = {
+                api: 'API',
+                crm: 'CRM',
+                id: 'ID',
+                ivr: 'IVR',
+                sip: 'SIP',
+                vicidial: 'VICIdial',
+            };
+            const words = String(value ?? '')
+                .trim()
+                .replace(/[_-]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .split(' ')
+                .filter(Boolean);
+
+            if (!words.length) {
+                return 'Unknown';
+            }
+
+            return words.map((word) => {
+                const normalized = word.toLowerCase();
+
+                return acronyms[normalized] || normalized.charAt(0).toUpperCase() + normalized.slice(1);
+            }).join(' ');
+        },
+
+        cleanReportText(value) {
+            return String(value ?? '')
+                .replace(/\s*→\s*/g, ' to ')
+                .replace(/\s*·\s*/g, '; ')
+                .replace(/\s+\|\s+/g, ', ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        },
+
         formatDuration(seconds) {
             if (seconds !== null && seconds !== undefined && seconds !== '' && !Number.isFinite(Number(seconds))) {
                 return 'Unavailable';
             }
 
             if (seconds === null || seconds === undefined || seconds === '') {
-                return '—';
+                return 'N/A';
             }
 
             return this.secondsToDuration(seconds);
@@ -1694,16 +1699,16 @@ window.telephonyReports = function () {
 
         reportSectionTitle(state, label) {
             if (state === 'loading') {
-                return 'Loading ' + label.toLowerCase();
+                return 'Loading ' + label;
             }
             if (state === 'empty' || state === 'confirmed_zero') {
-                return 'No ' + label.toLowerCase() + ' for this scope';
+                return 'No ' + label + ' for This Scope';
             }
             if (state === 'unsupported' || state === 'parse_failure') {
-                return label + ' unavailable';
+                return label + ' Unavailable';
             }
 
-            return label + ' needs attention';
+            return label + ' Needs Attention';
         },
 
         reportSectionDescription(state, label) {
@@ -1722,12 +1727,12 @@ window.telephonyReports = function () {
 
         formatNumber(value) {
             if (value === null || value === undefined || value === '') {
-                return '—';
+                return 'N/A';
             }
 
             const number = Number(value);
             if (!Number.isFinite(number)) {
-                return '—';
+                return 'N/A';
             }
 
             return new Intl.NumberFormat().format(number);
@@ -1735,12 +1740,12 @@ window.telephonyReports = function () {
 
         formatPercent(value) {
             if (value === null || value === undefined || value === '') {
-                return '—';
+                return 'N/A';
             }
 
             const number = Number(value);
             if (!Number.isFinite(number)) {
-                return '—';
+                return 'N/A';
             }
 
             return `${number.toFixed(1)}%`;

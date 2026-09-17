@@ -42,12 +42,12 @@ class ReportsDashboardTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Historical Performance');
-        $response->assertSee('Live — rolling window');
-        $response->assertSee('Today — midnight to now');
+        $response->assertSee('Live: Rolling Window');
+        $response->assertSee('Today: Midnight to Now');
         $response->assertSee('chart-live-activity');
         $response->assertSee('refreshInFlight');
         $response->assertSee('Disposition Scope');
-        $response->assertSee('Hide system dispositions');
+        $response->assertSee('Hide System Dispositions');
         $response->assertSee('id="reports-disposition-scope"', false);
         $response->assertSee('@change="refreshAll()"', false);
         $response->assertSee('Call Volume Trend');
@@ -56,10 +56,49 @@ class ReportsDashboardTest extends TestCase
         $response->assertDontSee('Campaign Comparison');
         $response->assertSee('Call Funnel');
         $response->assertSee('Agent Time Distribution');
-        $response->assertSee('Debug / Raw VICIdial Output');
+        $response->assertSee('Debug and Raw VICIdial Output');
         $response->assertSee('<details', false);
         $response->assertDontSee('role="tablist"', false);
         $response->assertDontSee('Recording Browser');
+    }
+
+    public function test_reports_page_uses_polished_title_case_labels_and_readable_separators(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $response = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('reports.index'));
+
+        $response->assertOk();
+        $response->assertSee('Performance Snapshot');
+        $response->assertSee('Answer Rate');
+        $response->assertSee('Total Calls');
+        $response->assertSee('Contact Rate');
+        $response->assertSee('Calls per Agent');
+        $response->assertSee('Average Talk Time');
+        $response->assertSee('Agents With Activity');
+        $response->assertSee("filters.query_date + ' to ' + filters.end_date", false);
+        $response->assertSee("dashboard.agents.rows.length === 1 ? ' agent' : ' agents'", false);
+        $response->assertSee("dashboard.status.rows.length === 1 ? ' row' : ' rows'", false);
+    }
+
+    public function test_reports_page_uses_one_cohesive_visual_system_for_controls_metrics_and_sections(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $response = $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('reports.index'));
+
+        $response->assertOk();
+        $response->assertSee('reports-command-center', false);
+        $response->assertSee('reports-mode-switcher', false);
+        $response->assertSee('reports-live-kpis', false);
+        $response->assertSee('report-section-shell', false);
+        $response->assertSee('report-panel', false);
+        $response->assertSee('report-table-panel', false);
+        $response->assertSee('report-inline-metrics', false);
     }
 
     public function test_reports_date_range_labels_are_bound_to_their_controls(): void
@@ -84,7 +123,7 @@ class ReportsDashboardTest extends TestCase
             ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
             ->get(route('reports.index'))
             ->assertOk()
-            ->assertSee('More filters')
+            ->assertSee('More Filters')
             ->assertSee('aria-controls="reports-advanced-filters"', false)
             ->assertSee('id="reports-advanced-filters"', false);
     }

@@ -239,7 +239,7 @@ class DashboardSalesRangeTest extends TestCase
         $response->assertSee('value="06:00"', false);
         $response->assertSee('name="sales_end"', false);
         $response->assertSee('value="18:00"', false);
-        $response->assertSee('No activity found for the selected period.', false);
+        $response->assertSee('No Activity in This Period', false);
     }
 
     public function test_dashboard_uses_requested_sales_filter_values_and_renders_the_sales_modal_trigger(): void
@@ -258,19 +258,19 @@ class DashboardSalesRangeTest extends TestCase
         $response->assertSee('value="2026-05-12"', false);
         $response->assertSee('value="07:30"', false);
         $response->assertSee('value="16:45"', false);
-        $response->assertSee('Sales by form', false);
+        $response->assertSee('Sales by Form', false);
         $response->assertDontSee('x-on:mouseenter=', false);
         $response->assertDontSee('x-on:focusin=', false);
         $response->assertSee('x-on:click="$store.modal.show(\'sales-summary\')"', false);
         $response->assertSee('x-on:click="$store.modal.show(\'agent-leaderboard\')"', false);
         $response->assertSee('aria-haspopup="dialog"', false);
-        $response->assertSee('Daily agent leaderboard', false);
-        $response->assertSee('Agent leaderboard', false);
+        $response->assertSee('Daily Agent Leaderboard', false);
+        $response->assertSee('Agent Leaderboard', false);
         $response->assertSee('class="stat-card h-full"', false);
         $response->assertSee('class="dashboard-masthead"', false);
         $response->assertSee('class="dashboard-signal-grid animate-stagger"', false);
         $response->assertSee('class="stat-card stat-card--lead h-full"', false);
-        $response->assertSee('Sales in selected window', false);
+        $response->assertSee('Sales in Selected Window', false);
         $response->assertSee('class="dashboard-analysis-band mt-8"', false);
         $response->assertSee('focus:ring-offset-[var(--color-surface)]', false);
     }
@@ -292,7 +292,7 @@ class DashboardSalesRangeTest extends TestCase
             ]));
 
         $response->assertOk();
-        $response->assertSee('Daily agent leaderboard', false);
+        $response->assertSee('Daily Agent Leaderboard', false);
         $response->assertSee('Alice', false);
         $response->assertSee('Bob', false);
         $response->assertSee('100.00', false);
@@ -319,12 +319,12 @@ class DashboardSalesRangeTest extends TestCase
             ->withSession(['campaign' => 'mbsales'])
             ->get(route('dashboard'))->assertOk()
             ->assertSee('Alice')
-            ->assertSee('Total amount')
-            ->assertSee('Current volume')
-            ->assertDontSee('Current amount')
-            ->assertDontSee('Previous amount')
-            ->assertDontSee('>Sale amount</th>', false)
-            ->assertDontSee('>Total amount</th>', false)
+            ->assertSee('Total Amount')
+            ->assertSee('Current Volume')
+            ->assertDontSee('Current Amount')
+            ->assertDontSee('Previous Amount')
+            ->assertDontSee('>Sale Amount</th>', false)
+            ->assertDontSee('>Total Amount</th>', false)
             ->assertDontSee('>1,234.56</td>', false)
             ->assertDontSee('aria-label="Chart measure"', false)
             ->assertDontSee('data-report-table="daily-amounts"', false)
@@ -484,10 +484,10 @@ class DashboardSalesRangeTest extends TestCase
             ->get(route('dashboard'));
 
         $response->assertOk();
-        $response->assertSee('Daily amounts', false);
-        $response->assertSee('Daily counts', false);
-        $response->assertSee('Month to date accounts', false);
-        $response->assertSee('Month to date submitted amounts', false);
+        $response->assertSee('Daily Amounts', false);
+        $response->assertSee('Daily Counts', false);
+        $response->assertSee('Month to Date Accounts', false);
+        $response->assertSee('Month to Date Submitted Amounts', false);
         $response->assertSee('Cash Sale', false);
         $response->assertDontSee('MPI Cards', false);
 
@@ -499,7 +499,7 @@ class DashboardSalesRangeTest extends TestCase
             : substr($content, $sectionStart, $sectionEnd - $sectionStart);
 
         $this->assertStringContainsString('Cash Sale', $monthToDateAccounts);
-        $this->assertStringContainsString('Total accounts', $monthToDateAccounts);
+        $this->assertStringContainsString('Total Accounts', $monthToDateAccounts);
         $this->assertStringNotContainsString('Submitted amount', $monthToDateAccounts);
         $this->assertLessThan(
             strpos($content, 'data-report-table="month-to-date-accounts"'),
@@ -535,16 +535,16 @@ class DashboardSalesRangeTest extends TestCase
             ->get(route('dashboard'));
 
         $response->assertOk();
-        $response->assertSee('Monthly performance', false);
-        $response->assertSee('Month to date: May 1, 2026 - May 15, 2026', false);
+        $response->assertSee('Monthly Performance', false);
+        $response->assertSee('Month to Date: May 1, 2026 - May 15, 2026', false);
         $response->assertSee('Compared with Apr 1, 2026 - Apr 15, 2026', false);
         $response->assertSee('Transactions', false);
-        $response->assertSee('Total amount', false);
-        $response->assertSee('Transaction change', false);
-        $response->assertSee('Amount change', false);
+        $response->assertSee('Total Amount', false);
+        $response->assertSee('Transaction Change', false);
+        $response->assertSee('Amount Change', false);
         $response->assertSee('id="chart-dashboard-summary"', false);
         $response->assertSee('Chart measure', false);
-        $response->assertSee('View daily summary data', false);
+        $response->assertSee('View Daily Summary Data', false);
         $response->assertSee('Daily current and previous period transaction and amount comparison', false);
         $response->assertSee('Amount is the sum of numeric form fields marked as sale amounts for qualifying records.', false);
         $response->assertSee('$100.00', false);
@@ -561,7 +561,7 @@ class DashboardSalesRangeTest extends TestCase
 
         $headerPositions = array_map(
             static fn (string $header): int|false => strpos($summaryTable, $header),
-            ['Current volume', 'Previous volume', 'Current amount', 'Previous amount'],
+            ['Current Volume', 'Previous Volume', 'Current Amount', 'Previous Amount'],
         );
 
         $this->assertNotFalse($tableStart);

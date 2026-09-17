@@ -42,9 +42,9 @@
         $dailyActivityHasValues || $weeklyActivityHasValues || $monthlyActivityHasValues
     )) || ($sectionVisible('kpis') && $summaryHasActivity);
     $summaryCurrencySymbol = (string) data_get($summary, 'currency.symbol', config('dashboard.currency_symbol', '₱'));
-    $summaryModeLabel = data_get($summary, 'period.mode') === 'completed_month' ? 'Completed month' : 'Month to date';
+    $summaryModeLabel = data_get($summary, 'period.mode') === 'completed_month' ? 'Completed Month' : 'Month to Date';
     $summaryCurrentPeriodLabel = (string) data_get($summary, 'period.current.label', $monthTitle);
-    $summaryPreviousPeriodLabel = (string) data_get($summary, 'period.previous.label', 'Previous month');
+    $summaryPreviousPeriodLabel = (string) data_get($summary, 'period.previous.label', 'Previous Month');
     $formatSummaryNumber = static function (float|int $amount, bool $compact = false): string {
         $amount = abs((float) $amount);
         if (! $compact || $amount < 1000) {
@@ -71,7 +71,7 @@
     };
     $formatSignedCount = static fn (float|int $count): string => ($count > 0 ? '+' : ($count < 0 ? '-' : '')).number_format(abs((float) $count));
 @endphp
-<div class="flex flex-col gap-8">
+<div class="dashboard-page flex flex-col gap-8">
 
     {{-- Welcome hero --}}
     @if($sectionVisible('welcome'))
@@ -79,6 +79,7 @@
     <div class="dashboard-masthead">
         <div class="dashboard-masthead__content">
             <div class="min-w-0">
+                <p class="dashboard-eyebrow" style="text-transform: none">Campaign Workspace</p>
                 <h2 class="dashboard-masthead__title">{{ $campaignName }}</h2>
                 <p class="dashboard-masthead__context">
                     {{ data_get($branding, 'name', 'CRM') }} <span aria-hidden="true">/</span>
@@ -86,7 +87,7 @@
                 </p>
             </div>
             <div class="dashboard-masthead__status">
-                <span class="text-xs text-[var(--color-on-surface-dim)]">Campaign workspace</span>
+                <span class="text-xs font-medium text-[var(--color-on-surface-dim)]">Live Operations</span>
                 <x-badge type="active">Online</x-badge>
             </div>
         </div>
@@ -99,15 +100,15 @@
     <div x-data="{}">
         {{-- Primary signal + supporting context --}}
         <div class="dashboard-signal-grid animate-stagger">
-            <button type="button" class="dashboard-lead-stat text-left cursor-pointer rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-2 focus:ring-offset-[var(--color-surface)]" aria-haspopup="dialog" x-on:click="$store.modal.show('sales-summary')">
-                <x-stat-card class="stat-card--lead h-full" label="Sales in selected window" :value="number_format($kpis['sales'] ?? 0)" :secondary="$salesRangeLabel.($amountsEnabled ? ' · Total value: '.number_format($kpis['sales_amount'] ?? 0, 2) : '')" icon="check-circle" color="primary" />
+            <button type="button" class="dashboard-lead-stat dashboard-detail-trigger text-left cursor-pointer rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-2 focus:ring-offset-[var(--color-surface)]" aria-haspopup="dialog" x-on:click="$store.modal.show('sales-summary')">
+                <x-stat-card class="stat-card--lead h-full" label="Sales in Selected Window" :value="number_format($kpis['sales'] ?? 0)" :secondary="$salesRangeLabel.($amountsEnabled ? ' · Total Value: '.number_format($kpis['sales_amount'] ?? 0, 2) : '')" icon="check-circle" color="primary" />
             </button>
             <div class="dashboard-supporting-stats">
-                <button type="button" class="text-left cursor-pointer rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-2 focus:ring-offset-[var(--color-surface)]" aria-haspopup="dialog" x-on:click="$store.modal.show('agent-leaderboard')">
-                    <x-stat-card class="h-full" label="Top agent" :value="$kpis['top_agent'] ?? '—'" :secondary="($kpis['top_agent_sales'] ?? 0) > 0 ? number_format($kpis['top_agent_sales']).' sales'.($amountsEnabled ? ' · Total value: '.number_format($kpis['top_agent_sales_amount'] ?? 0, 2) : '') : null" icon="user" color="warning" />
+                <button type="button" class="dashboard-detail-trigger text-left cursor-pointer rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-2 focus:ring-offset-[var(--color-surface)]" aria-haspopup="dialog" x-on:click="$store.modal.show('agent-leaderboard')">
+                    <x-stat-card class="h-full" label="Top Agent" :value="$kpis['top_agent'] ?? '—'" :secondary="($kpis['top_agent_sales'] ?? 0) > 0 ? number_format($kpis['top_agent_sales']).' sales'.($amountsEnabled ? ' · Total Value: '.number_format($kpis['top_agent_sales_amount'] ?? 0, 2) : '') : null" icon="user" color="warning" />
                 </button>
-                <x-stat-card class="h-full" label="Active forms" :value="count($forms ?? [])" icon="document-text" color="info" />
-                <x-stat-card class="h-full" label="Campaign code" :value="strtoupper($campaign ?? '—')" icon="building-office" color="info" />
+                <x-stat-card class="h-full" label="Active Forms" :value="count($forms ?? [])" icon="document-text" color="info" />
+                <x-stat-card class="h-full" label="Campaign Code" :value="strtoupper($campaign ?? '—')" icon="building-office" color="info" />
             </div>
         </div>
 
@@ -115,7 +116,7 @@
         <section class="dashboard-analysis-band mt-8" data-dashboard-summary aria-labelledby="dashboard-summary-title">
             <div class="dashboard-analysis-band__header">
                 <div>
-                    <h3 id="dashboard-summary-title" class="dashboard-section-title">Monthly performance</h3>
+                    <h3 id="dashboard-summary-title" class="dashboard-section-title">Monthly Performance</h3>
                     <p class="text-sm text-[var(--color-on-surface-muted)] mt-1">
                         {{ $summaryModeLabel }}: {{ $summaryCurrentPeriodLabel }}
                     </p>
@@ -139,7 +140,7 @@
                     :trend-status="$summaryCountComparison['status'] ?? 'unchanged'" />
                 @if($amountVisible('total'))
                 <x-stat-card
-                    label="Total amount"
+                    label="Total Amount"
                     :value="$formatSummaryAmount($summaryCurrent['amount'] ?? 0, true)"
                     :secondary="'Current period: '.$summaryCurrentPeriodLabel"
                     icon="tag"
@@ -150,7 +151,7 @@
                     :trend-status="$summaryAmountComparison['status'] ?? 'unchanged'" />
                 @endif
                 <x-stat-card
-                    label="Transaction change"
+                    label="Transaction Change"
                     :value="$formatSignedCount($summaryCountComparison['difference'] ?? 0)"
                     :secondary="number_format($summaryCurrent['count']).' current vs '.number_format($summaryPrevious['count']).' previous'"
                     icon="chart-bar"
@@ -160,7 +161,7 @@
                     :trend-status="$summaryCountComparison['status'] ?? 'unchanged'" />
                 @if($amountVisible('change'))
                 <x-stat-card
-                    label="Amount change"
+                    label="Amount Change"
                     :value="$formatSignedAmount($summaryAmountComparison['difference'] ?? 0, true)"
                     :secondary="$formatSummaryAmount($summaryCurrent['amount'] ?? 0, true).' current vs '.$formatSummaryAmount($summaryPrevious['amount'] ?? 0, true).' previous'"
                     icon="arrow-trending-up"
@@ -174,7 +175,7 @@
             <div class="chart-container dashboard-analysis-chart" data-dashboard-summary-chart>
                 <div class="flex items-start justify-between gap-4 flex-wrap">
                     <div>
-                        <h4 class="chart-title mb-1">Daily comparison</h4>
+                        <h4 class="chart-title mb-1">Daily Comparison</h4>
                         <p class="text-xs text-[var(--color-on-surface-muted)]">Current period versus the equivalent previous-month days.</p>
                         @if($amountsEnabled)
                         <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">{{ data_get($summary, 'amount_definition', 'Amount attribution follows the campaign configuration.') }}</p>
@@ -196,18 +197,18 @@
                     <p data-summary-chart-status class="mt-2 text-xs text-[var(--color-on-surface-dim)]" role="status" aria-live="polite">Loading comparison chart...</p>
 
                     <details class="mt-4 border-t border-[var(--color-border)] pt-3">
-                        <summary class="cursor-pointer text-xs font-semibold text-[var(--color-on-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">View daily summary data</summary>
+                        <summary class="cursor-pointer text-xs font-semibold text-[var(--color-on-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">View Daily Summary Data</summary>
                         <div class="md-table-wrap mt-3">
                             <table>
                                 <caption class="sr-only">Daily current and previous period {{ $amountVisible('tables') ? 'transaction and amount' : 'transaction' }} comparison</caption>
                                 <thead>
                                     <tr>
                                         <th>Day</th>
-                                        <th class="text-right">Current volume</th>
-                                        <th class="text-right">Previous volume</th>
+                                        <th class="text-right">Current Volume</th>
+                                        <th class="text-right">Previous Volume</th>
                                         @if($amountVisible('tables'))
-                                            <th class="text-right">Current amount</th>
-                                            <th class="text-right">Previous amount</th>
+                                            <th class="text-right">Current Amount</th>
+                                            <th class="text-right">Previous Amount</th>
                                         @endif
                                     </tr>
                                 </thead>
@@ -241,7 +242,7 @@
                 @else
                     <x-empty-state
                         icon="chart-bar"
-                        title="No activity in this period"
+                        title="No Activity in This Period"
                         description="The comparison chart will appear when qualifying sales activity is recorded for this campaign and period."
                         class="mt-4" />
                 @endif
@@ -249,7 +250,7 @@
         </section>
 
         <x-modal name="sales-summary"
-                 title="Sales by form"
+                 title="Sales by Form"
                  :close-on-backdrop="true"
                  maxWidth="lg"
                  x-on:keydown.escape.window="if ($store.modal.is('sales-summary') || $store.modal.is('agent-leaderboard')) $store.modal.hide()">
@@ -259,15 +260,15 @@
                     <input type="date" name="sales_date" value="{{ $salesFilter['date'] }}" class="form-input mt-1 w-full">
                 </label>
                 <label class="text-sm font-medium text-[var(--color-on-surface)]">
-                    Start time
+                    Start Time
                     <input type="time" name="sales_start" value="{{ $salesFilter['start'] }}" class="form-input mt-1 w-full">
                 </label>
                 <label class="text-sm font-medium text-[var(--color-on-surface)]">
-                    End time
+                    End Time
                     <input type="time" name="sales_end" value="{{ $salesFilter['end'] }}" class="form-input mt-1 w-full">
                 </label>
                 <div class="sm:col-span-3 flex justify-end">
-                    <button type="submit" class="btn-primary">Apply range</button>
+                    <button type="submit" class="btn-primary">Apply Range</button>
                 </div>
             </form>
 
@@ -281,7 +282,7 @@
                                 <th>Form</th>
                                 <th class="text-right">Sales</th>
                                 @if($amountVisible('tables'))
-                                    <th class="text-right">Total amount</th>
+                                    <th class="text-right">Total Amount</th>
                                 @endif
                             </tr>
                         </thead>
@@ -304,7 +305,7 @@
         </x-modal>
 
         <x-modal name="agent-leaderboard"
-                 title="Daily agent leaderboard"
+                 title="Daily Agent Leaderboard"
                  :close-on-backdrop="true"
                  maxWidth="lg"
                  x-on:keydown.escape.window="if ($store.modal.is('sales-summary') || $store.modal.is('agent-leaderboard')) $store.modal.hide()">
@@ -314,15 +315,15 @@
                     <input type="date" name="sales_date" value="{{ $salesFilter['date'] }}" class="form-input mt-1 w-full">
                 </label>
                 <label class="text-sm font-medium text-[var(--color-on-surface)]">
-                    Start time
+                    Start Time
                     <input type="time" name="sales_start" value="{{ $salesFilter['start'] }}" class="form-input mt-1 w-full">
                 </label>
                 <label class="text-sm font-medium text-[var(--color-on-surface)]">
-                    End time
+                    End Time
                     <input type="time" name="sales_end" value="{{ $salesFilter['end'] }}" class="form-input mt-1 w-full">
                 </label>
                 <div class="sm:col-span-3 flex justify-end">
-                    <button type="submit" class="btn-primary">Apply range</button>
+                    <button type="submit" class="btn-primary">Apply Range</button>
                 </div>
             </form>
 
@@ -337,7 +338,7 @@
                                 <th>Agent</th>
                                 <th class="text-right">Sales</th>
                                 @if($amountVisible('tables'))
-                                    <th class="text-right">Sale amount</th>
+                                    <th class="text-right">Sale Amount</th>
                                 @endif
                             </tr>
                         </thead>
@@ -375,40 +376,49 @@
     {{-- Activity charts: daily / weekly / monthly --}}
     @if($sectionVisible('activity'))
     <section data-dashboard-section="activity" style="order: {{ $sectionOrder('activity') }}">
+    <div class="dashboard-section-block">
+        <div class="dashboard-section-heading">
+            <div>
+                <p class="dashboard-eyebrow" style="text-transform: none">Activity</p>
+                <h3 class="dashboard-section-heading__title">Submission Trends</h3>
+                <p class="dashboard-section-heading__description">Compare recent activity across the last 24 hours, the current week, and {{ $monthTitle }}.</p>
+            </div>
+        </div>
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-stagger">
         <div class="chart-container">
-            <p class="chart-title">Activity — last 24 hours</p>
+            <h4 class="chart-title">Activity — Last 24 Hours</h4>
             <div id="chart-daily-activity" class="w-full" aria-label="Daily activity chart">
                 <x-empty-state
                     icon="chart-bar"
-                    :title="$dailyActivityHasValues ? 'Chart visualization unavailable' : 'No activity recorded yet'"
+                    :title="$dailyActivityHasValues ? 'Chart Visualization Unavailable' : 'No Activity Recorded Yet'"
                     :description="$dailyActivityHasValues ? 'Activity data exists, but the chart could not be rendered. Refresh or use the activity tables below.' : 'No submissions were recorded in the last 24 hours.'"
                     :tone="$dailyActivityHasValues ? 'warning' : 'neutral'"
                     class="dashboard-chart-placeholder" />
             </div>
         </div>
         <div class="chart-container">
-            <p class="chart-title">Weekly activity — this week</p>
+            <h4 class="chart-title">Weekly Activity — This Week</h4>
             <div id="chart-weekly-activity" class="w-full" aria-label="Weekly activity chart">
                 <x-empty-state
                     icon="chart-bar"
-                    :title="$weeklyActivityHasValues ? 'Chart visualization unavailable' : 'No activity recorded yet'"
+                    :title="$weeklyActivityHasValues ? 'Chart Visualization Unavailable' : 'No Activity Recorded Yet'"
                     :description="$weeklyActivityHasValues ? 'Activity data exists, but the chart could not be rendered. Refresh or use the activity tables below.' : 'No submissions were recorded this week.'"
                     :tone="$weeklyActivityHasValues ? 'warning' : 'neutral'"
                     class="dashboard-chart-placeholder" />
             </div>
         </div>
         <div class="chart-container">
-            <p class="chart-title">Monthly activity — {{ $monthTitle }}</p>
+            <h4 class="chart-title">Monthly Activity — {{ $monthTitle }}</h4>
             <div id="chart-monthly-activity" class="w-full" aria-label="Monthly activity chart">
                 <x-empty-state
                     icon="chart-bar"
-                    :title="$monthlyActivityHasValues ? 'Chart visualization unavailable' : 'No activity recorded yet'"
+                    :title="$monthlyActivityHasValues ? 'Chart Visualization Unavailable' : 'No Activity Recorded Yet'"
                     :description="$monthlyActivityHasValues ? 'Activity data exists, but the chart could not be rendered. Refresh or use the activity tables below.' : 'No submissions were recorded this month.'"
                     :tone="$monthlyActivityHasValues ? 'warning' : 'neutral'"
                     class="dashboard-chart-placeholder" />
             </div>
         </div>
+    </div>
     </div>
     </section>
     @endif
@@ -416,9 +426,20 @@
     {{-- Daily campaign leaderboard --}}
     @if($sectionVisible('leaderboard'))
     <section data-dashboard-section="leaderboard" style="order: {{ $sectionOrder('leaderboard') }}">
-    <div class="md-card overflow-hidden">
-        <div class="px-5 py-4 border-b border-[var(--color-border)]">
-            <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Agent leaderboard — {{ $salesRangeLabel }}</h3>
+    <div class="dashboard-section-block">
+        <div class="dashboard-section-heading">
+            <div>
+                <p class="dashboard-eyebrow" style="text-transform: none">Team Performance</p>
+                <h3 class="dashboard-section-heading__title">Agent Leaderboard</h3>
+                <p class="dashboard-section-heading__description">Qualifying sales for {{ $salesRangeLabel }}.</p>
+            </div>
+            @if($sectionVisible('kpis'))
+                <button type="button" class="btn-secondary" aria-haspopup="dialog" x-on:click="$store.modal.show('agent-leaderboard')">Adjust Range</button>
+            @endif
+        </div>
+    <div class="md-card dashboard-table-card overflow-hidden">
+        <div class="dashboard-card-header px-5 py-4 border-b border-[var(--color-border)]">
+            <h4 class="text-sm font-semibold text-[var(--color-on-surface)]">Current Ranking</h4>
             <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">{{ $amountsEnabled ? 'Ranked by total sale amount, then qualifying sales count and agent name.' : 'Ranked using campaign sales rules.' }}</p>
         </div>
         <div class="md-table-wrap">
@@ -430,7 +451,7 @@
                             <th>Agent</th>
                             <th class="text-right">Sales</th>
                             @if($amountVisible('tables'))
-                                <th class="text-right">Sale amount</th>
+                                <th class="text-right">Sale Amount</th>
                             @endif
                         </tr>
                     </thead>
@@ -461,6 +482,7 @@
             @endif
         </div>
     </div>
+    </div>
     </section>
     @endif
 
@@ -472,28 +494,28 @@
         $reportForms = $report['forms'] ?? [];
         $reportTables = [
             [
-                'title' => $salesMode === 'custom' ? 'Daily attributed amounts' : 'Daily amounts',
+                'title' => $salesMode === 'custom' ? 'Daily Attributed Amounts' : 'Daily Amounts',
                 'subtitle' => ($salesMode === 'custom' ? 'Attributed amounts by form for ' : 'Submitted amounts by form for ').($report['date'] ?? now()->toDateString()),
                 'rows' => $report['daily'] ?? [],
                 'totals' => $report['totals']['daily'] ?? ['counts' => [], 'amounts' => [], 'total_count' => 0, 'total_amount' => 0],
                 'mode' => 'amounts',
             ],
             [
-                'title' => $salesMode === 'custom' ? 'Month to date attributed amounts' : 'Month to date submitted amounts',
+                'title' => $salesMode === 'custom' ? 'Month to Date Attributed Amounts' : 'Month to Date Submitted Amounts',
                 'subtitle' => ($salesMode === 'custom' ? 'Attributed amounts by form since ' : 'Submitted amounts by form since ').now()->startOfMonth()->format('M j, Y'),
                 'rows' => $report['month_to_date'] ?? [],
                 'totals' => $report['totals']['month_to_date'] ?? ['counts' => [], 'amounts' => [], 'total_count' => 0, 'total_amount' => 0],
                 'mode' => 'amounts',
             ],
             [
-                'title' => 'Daily counts',
+                'title' => 'Daily Counts',
                 'subtitle' => 'Accounts submitted by form for '.($report['date'] ?? now()->toDateString()),
                 'rows' => $report['daily'] ?? [],
                 'totals' => $report['totals']['daily'] ?? ['counts' => [], 'amounts' => [], 'total_count' => 0, 'total_amount' => 0],
                 'mode' => 'counts',
             ],
             [
-                'title' => 'Month to date accounts',
+                'title' => 'Month to Date Accounts',
                 'subtitle' => 'Accounts submitted since '.now()->startOfMonth()->format('M j, Y'),
                 'rows' => $report['month_to_date'] ?? [],
                 'totals' => $report['totals']['month_to_date'] ?? ['counts' => [], 'amounts' => [], 'total_count' => 0, 'total_amount' => 0],
@@ -501,14 +523,15 @@
             ],
         ];
     @endphp
-    <div class="space-y-4" aria-label="Campaign daily and month-to-date report">
-        <div class="flex items-end justify-between gap-3 flex-wrap">
+    <div class="dashboard-section-block" aria-label="Campaign daily and month-to-date report">
+        <div class="dashboard-section-heading">
             <div>
-                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Campaign report</h3>
-                <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">{{ $campaignName }} · live totals for the selected campaign</p>
+                <p class="dashboard-eyebrow" style="text-transform: none">Campaign Performance</p>
+                <h3 class="dashboard-section-heading__title">Campaign Report</h3>
+                <p class="dashboard-section-heading__description">{{ $campaignName }} · daily and month-to-date totals for the active campaign.</p>
             </div>
             @if($reportForms !== [])
-                <span class="text-xs text-[var(--color-on-surface-dim)]">{{ count($reportForms) }} form{{ count($reportForms) === 1 ? '' : 's' }}</span>
+                <span class="dashboard-section-heading__meta">{{ count($reportForms) }} form{{ count($reportForms) === 1 ? '' : 's' }}</span>
             @endif
         </div>
 
@@ -516,7 +539,7 @@
             @foreach($reportTables as $reportTable)
                 @continue($reportTable['mode'] === 'amounts' && ! $amountVisible('tables'))
                 <section class="md-card md-card--static overflow-hidden" data-report-table="{{ Illuminate\Support\Str::slug($reportTable['title']) }}">
-                    <div class="px-5 py-4 border-b border-[var(--color-border)]">
+                    <div class="dashboard-card-header px-5 py-4 border-b border-[var(--color-border)]">
                         <h4 class="text-sm font-semibold text-[var(--color-on-surface)]">{{ $reportTable['title'] }}</h4>
                         <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">{{ $reportTable['subtitle'] }}</p>
                     </div>
@@ -526,11 +549,11 @@
                                 <table class="report-table--wide">
                                     <thead>
                                         <tr>
-                                            <th>Agent name</th>
+                                            <th>Agent Name</th>
                                             @foreach($reportForms as $form)
                                                 <th class="text-right">{{ $form['name'] }}</th>
                                             @endforeach
-                                            <th class="text-right">{{ $reportTable['mode'] === 'counts' ? 'Total accounts' : 'Total' }}</th>
+                                            <th class="text-right">{{ $reportTable['mode'] === 'counts' ? 'Total Accounts' : 'Total' }}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -582,19 +605,26 @@
     @if($sectionVisible('forms'))
     <section data-dashboard-section="forms" style="order: {{ $sectionOrder('forms') }}">
     @if(!empty($forms))
-    <div>
-        <h3 class="text-xs font-bold text-[var(--color-on-surface-dim)] uppercase tracking-widest mb-4">Campaign Forms</h3>
+    <div class="dashboard-section-block">
+        <div class="dashboard-section-heading">
+            <div>
+                <p class="dashboard-eyebrow" style="text-transform: none">Create Record</p>
+                <h3 class="dashboard-section-heading__title">Campaign Forms</h3>
+                <p class="dashboard-section-heading__description">Start a new submission using a form available to {{ $campaignName }}.</p>
+            </div>
+            <span class="dashboard-section-heading__meta">{{ count($forms) }} available</span>
+        </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-stagger">
             @foreach($forms as $formCode => $formConfig)
                 <a href="{{ route('forms.show', ['type' => $formCode, 'campaign' => $campaign]) }}"
-                   class="md-card p-5 flex items-center gap-4 group no-underline">
+                   class="md-card md-card--interactive p-5 flex items-center gap-4 group no-underline">
                     <div class="w-11 h-11 rounded-xl bg-[var(--color-primary-muted)] flex items-center justify-center shrink-0
                                 border border-[var(--color-primary)] group-hover:scale-105 transition-transform">
                         <x-icon name="document-text" class="w-5 h-5 text-[var(--color-primary)]" />
                     </div>
                     <div class="flex-1 min-w-0">
                         <h4 class="font-semibold text-[var(--color-on-surface)] truncate">{{ $formConfig['name'] ?? $formCode }}</h4>
-                        <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">Submit new record</p>
+                        <p class="text-xs text-[var(--color-on-surface-dim)] mt-0.5">Submit New Record</p>
                     </div>
                     <x-icon name="chevron-right" class="w-4 h-4 text-[var(--color-on-surface-dim)] group-hover:text-[var(--color-primary)] transition-colors shrink-0" />
                 </a>
@@ -608,6 +638,14 @@
     {{-- Quick links --}}
     @if($sectionVisible('quick_links'))
     <section data-dashboard-section="quick_links" style="order: {{ $sectionOrder('quick_links') }}">
+    <div class="dashboard-section-block">
+        <div class="dashboard-section-heading">
+            <div>
+                <p class="dashboard-eyebrow" style="text-transform: none">Workspace</p>
+                <h3 class="dashboard-section-heading__title">Quick Links</h3>
+                <p class="dashboard-section-heading__description">Jump to your recent records or attendance history.</p>
+            </div>
+        </div>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <a href="{{ route('records.index') }}" class="md-card md-card--interactive p-4 flex items-center gap-3 no-underline group">
             <x-icon name="clipboard-document-list" class="w-5 h-5 text-[var(--color-primary)]" />
@@ -625,6 +663,7 @@
             </div>
             <x-icon name="chevron-right" class="w-4 h-4 text-[var(--color-on-surface-dim)] group-hover:text-[var(--color-primary)]" />
         </a>
+    </div>
     </div>
     </section>
     @endif
@@ -848,7 +887,7 @@
                 labels: { style: { colors: config.textColor, fontSize: '11px' }, rotate: 0, hideOverlappingLabels: true },
                 axisBorder: { show: false },
                 axisTicks: { show: false },
-                title: { text: 'Day of month', style: { color: config.textColor, fontSize: '11px', fontWeight: 500 } },
+                title: { text: 'Day of Month', style: { color: config.textColor, fontSize: '11px', fontWeight: 500 } },
             },
             yaxis: {
                 ...(amountMode ? {} : { min: 0 }),
@@ -918,6 +957,7 @@
         }
 
         el.innerHTML = '';
+        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
         const chart = new ApexCharts(el, {
             series: [{ name: 'Submissions', data: values }],
             chart: {
@@ -927,7 +967,7 @@
                 toolbar: { show: false },
                 background: 'transparent',
                 fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-                animations: { enabled: true, easing: 'easeinout', speed: 600 },
+                animations: { enabled: !reduceMotion, easing: 'easeinout', speed: 600 },
             },
             colors: ['#e91e8c'],
             fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: .35, opacityTo: .03 } },
