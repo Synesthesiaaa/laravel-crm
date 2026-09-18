@@ -501,6 +501,7 @@ class DashboardSalesRangeTest extends TestCase
         $this->assertStringContainsString('Cash Sale', $monthToDateAccounts);
         $this->assertStringContainsString('Total Accounts', $monthToDateAccounts);
         $this->assertStringNotContainsString('Submitted amount', $monthToDateAccounts);
+        $this->assertStringNotContainsString('whitespace-nowrap', $monthToDateAccounts);
         $this->assertLessThan(
             strpos($content, 'data-report-table="month-to-date-accounts"'),
             strpos($content, 'data-report-table="daily-counts"'),
@@ -518,7 +519,8 @@ class DashboardSalesRangeTest extends TestCase
             '/<section[^>]*campaign-report-wide[^>]*data-report-table="month-to-date-submitted-amounts"/',
             $content,
         );
-        $this->assertSame(4, substr_count($content, 'class="report-table--wide"'));
+        $this->assertSame(4, substr_count($content, 'class="campaign-report-table"'));
+        $this->assertStringNotContainsString('report-table--wide', $content);
     }
 
     public function test_dashboard_renders_monthly_summary_comparison_and_accessible_data_table(): void

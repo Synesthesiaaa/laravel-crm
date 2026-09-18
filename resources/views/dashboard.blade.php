@@ -546,7 +546,7 @@
                     <div class="table-scroll-wrap campaign-report-table-wrap">
                         @if($reportTable['rows'] !== [])
                             <div class="md-table-wrap border-0 rounded-none shadow-none">
-                                <table class="report-table--wide">
+                                <table class="campaign-report-table">
                                     <thead>
                                         <tr>
                                             <th>Agent Name</th>
@@ -559,7 +559,7 @@
                                     <tbody>
                                         @foreach($reportTable['rows'] as $row)
                                             <tr>
-                                                <td class="font-medium text-[var(--color-on-surface)] whitespace-nowrap">{{ $row['agent'] }}</td>
+                                                <td class="font-medium text-[var(--color-on-surface)]">{{ $row['agent'] }}</td>
                                                 @foreach($reportForms as $form)
                                                     @if($reportTable['mode'] === 'counts')
                                                         <td class="text-right tabular-nums">{{ number_format($row['counts'][$form['code']] ?? 0) }}</td>
