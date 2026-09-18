@@ -13,10 +13,11 @@ class LoginTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_login_redirects_guest_to_login_page(): void
+    public function test_login_route_remains_available_to_guests(): void
     {
-        $response = $this->get('/');
-        $response->assertRedirect(route('login'));
+        $response = $this->get(route('login'));
+
+        $response->assertOk();
     }
 
     public function test_guest_login_page_renders_the_accessible_clarified_form_structure(): void
