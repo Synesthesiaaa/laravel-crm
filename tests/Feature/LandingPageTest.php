@@ -16,12 +16,12 @@ class LandingPageTest extends TestCase
         $response
             ->assertOk()
             ->assertViewIs('welcome')
-            ->assertSee('Run campaign calls and CRM work from one connected workspace')
+            ->assertSee('Handle calls, customer details, and follow-ups in one place')
             ->assertSee('See how it works')
             ->assertSee('Sign in')
-            ->assertSee('Browser calling')
-            ->assertSee('Campaign-aware workflows')
-            ->assertSee('Live call state')
-            ->assertSee('Reporting');
+            ->assertSee('Call from your browser')
+            ->assertSee('Customer details in one place')
+            ->assertSee('Up-to-date call status')
+            ->assertSee('Reports');
     }
 }
