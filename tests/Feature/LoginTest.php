@@ -55,6 +55,8 @@ class LoginTest extends TestCase
             ->assertSee('data-login-submit', false)
             ->assertSee('data-login-submit-label', false)
             ->assertSee('id="login-help"', false)
+            ->assertSee('href="'.route('home').'"', false)
+            ->assertSeeText('Back to landing')
             ->assertSee('Contact your supervisor or help desk', false)
             ->assertSee('aria-label="Switch to light mode"', false)
             ->assertDontSee('Campaign operations, in one workspace.', false)
@@ -164,7 +166,7 @@ class LoginTest extends TestCase
             '_token' => $logoutToken[1],
         ]);
 
-        $logoutResponse->assertRedirect(route('login'));
+        $logoutResponse->assertRedirect(route('home'));
         $this->assertGuest();
     }
 
@@ -229,7 +231,7 @@ class LoginTest extends TestCase
         $this->assertGuest();
     }
 
-    public function test_logout_redirects_to_login_and_marks_vicidial_session_logged_out_locally(): void
+    public function test_logout_redirects_to_landing_page_and_marks_vicidial_session_logged_out_locally(): void
     {
         config(['broadcasting.default' => 'unavailable-broadcast-connection']);
         Http::fake();
@@ -252,7 +254,7 @@ class LoginTest extends TestCase
             ])
             ->post(route('logout'));
 
-        $response->assertRedirect(route('login'));
+        $response->assertRedirect(route('home'));
         $this->assertGuest();
         $this->assertDatabaseHas('vicidial_agent_sessions', [
             'user_id' => $user->id,

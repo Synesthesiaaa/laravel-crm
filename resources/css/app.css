@@ -2429,6 +2429,21 @@ html[data-theme="light"] {
   .login-btn:active {
     background: var(--login-action-active);
   }
+  .login-btn--secondary {
+    margin-top: 0.75rem;
+    background: transparent;
+    border-color: var(--color-border-strong);
+    color: var(--color-on-surface);
+    text-decoration: none;
+  }
+  .login-btn--secondary:hover {
+    background: var(--color-surface-2);
+    border-color: var(--color-border-strong);
+    box-shadow: none;
+  }
+  .login-btn--secondary:active {
+    background: var(--color-surface-3);
+  }
   .login-btn:disabled {
     opacity: 0.55;
     cursor: not-allowed;

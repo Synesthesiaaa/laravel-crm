@@ -33,7 +33,7 @@
             <a href="{{ route('home') }}" class="min-w-0 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--color-primary)]" aria-label="{{ $brandName }} home">
                 <x-brand
                     :branding="$branding"
-                    class="max-w-[calc(100vw-8.5rem)] sm:max-w-xs [&>span:last-child]:truncate [&>span:last-child]:whitespace-nowrap"
+                    class="max-w-[calc(100vw-12rem)] sm:max-w-xs [&>span:last-child]:truncate [&>span:last-child]:whitespace-nowrap"
                 />
             </a>
 
@@ -43,11 +43,25 @@
                 <a class="transition-colors hover:text-[var(--color-on-surface)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--color-primary)]" href="#visibility">Reports</a>
             </nav>
 
-            <a href="{{ route('login') }}"
-               class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 text-sm font-semibold text-[var(--color-primary-foreground)] transition hover:bg-[var(--color-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--color-primary)]">
-                Sign in
-                <x-icon name="arrow-right-on-rectangle" class="h-4 w-4" />
-            </a>
+            <div class="flex shrink-0 items-center gap-2">
+                <button
+                    type="button"
+                    id="theme-toggle"
+                    class="theme-toggle inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] text-[var(--color-on-surface-muted)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-on-surface)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--color-primary)]"
+                    aria-label="Switch to light mode"
+                    title="Switch to light mode"
+                    aria-pressed="false"
+                >
+                    <x-icon name="moon" class="theme-icon-dark h-5 w-5" />
+                    <x-icon name="sun" class="theme-icon-light hidden h-5 w-5" />
+                </button>
+
+                <a href="{{ route('login') }}"
+                   class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 text-sm font-semibold text-[var(--color-primary-foreground)] transition hover:bg-[var(--color-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--color-primary)]">
+                    Sign in
+                    <x-icon name="arrow-right-on-rectangle" class="h-4 w-4" />
+                </a>
+            </div>
         </div>
     </header>
 
@@ -270,5 +284,34 @@
             <p class="text-sm text-[var(--color-on-surface-dim)]">A simpler CRM workspace for call center teams.</p>
         </div>
     </footer>
+    <script>
+      (function() {
+        var html = document.documentElement;
+        var btn = document.getElementById('theme-toggle');
+        var dark = btn && btn.querySelector('.theme-icon-dark');
+        var light = btn && btn.querySelector('.theme-icon-light');
+
+        function applyTheme(t) {
+          html.setAttribute('data-theme', t);
+          try { localStorage.setItem('theme', t); } catch (e) {}
+          if (dark) dark.classList.toggle('hidden', t === 'light');
+          if (light) light.classList.toggle('hidden', t !== 'light');
+          if (btn) {
+            var label = t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+            btn.setAttribute('aria-label', label);
+            btn.setAttribute('title', label);
+            btn.setAttribute('aria-pressed', t === 'light' ? 'true' : 'false');
+          }
+        }
+
+        if (btn) {
+          btn.addEventListener('click', function() {
+            applyTheme(html.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
+          });
+        }
+
+        applyTheme(html.getAttribute('data-theme') || 'dark');
+      })();
+    </script>
 </body>
 </html>

@@ -145,6 +145,10 @@
                         </div>
                     </form>
 
+                    <a href="{{ route('home') }}" class="login-btn login-btn--secondary">
+                        Back to landing
+                    </a>
+
                     <div id="login-help" class="login-help" tabindex="-1">
                         <strong>Need access help?</strong>
                         <span>Contact your supervisor or help desk if your account is locked or you still can't sign in.</span>

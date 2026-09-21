@@ -453,7 +453,7 @@ window.crmGracefulLogout = async function () {
         if (form) {
             HTMLFormElement.prototype.submit.call(form);
         } else {
-            window.location.href = '/login';
+            window.location.href = '/';
         }
     }
 };
