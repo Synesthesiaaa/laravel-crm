@@ -4,8 +4,10 @@ namespace Tests\Feature\Admin;
 
 use App\Models\AgentScreenField;
 use App\Models\Campaign;
+use App\Models\Form;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class AgentScreenAdminTest extends TestCase
@@ -136,6 +138,25 @@ class AgentScreenAdminTest extends TestCase
         ], $field->visibility);
     }
 
+    public function test_campaign_cache_is_cleared_when_field_changes(): void
+    {
+        Cache::put('campaigns_with_forms', ['stale' => ['name' => 'Stale']], 300);
+
+        $this->actingAs($this->superAdmin)
+            ->withSession($this->campaignSession())
+            ->post(route('admin.agent-screen.store'), [
+                'campaign_code' => 'mbsales',
+                'field_key' => 'cache_probe',
+                'field_label' => 'Cache Probe',
+                'field_type' => 'text',
+                'direction' => 'none',
+                'field_width' => 'full',
+            ])
+            ->assertRedirect(route('admin.agent-screen.index', ['campaign' => 'mbsales']));
+
+        $this->assertFalse(Cache::has('campaigns_with_forms'));
+    }
+
     public function test_store_rejects_invalid_visibility_operator(): void
     {
         $this->actingAs($this->superAdmin)
@@ -154,5 +175,117 @@ class AgentScreenAdminTest extends TestCase
                 ],
             ])
             ->assertSessionHasErrors(['visibility.operator']);
+    }
+
+    public function test_campaign_can_reference_its_selected_agent_webform(): void
+    {
+        $form = Form::create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'agent_capture',
+            'name' => 'Agent Capture',
+            'table_name' => 'agent_capture_records',
+            'is_active' => true,
+        ]);
+
+        $campaign = Campaign::query()->where('code', 'mbsales')->firstOrFail();
+        $campaign->update(['agent_webform_form_id' => $form->id]);
+
+        $this->assertSame($form->id, $campaign->refresh()->agent_webform_form_id);
+        $this->assertTrue($campaign->agentWebformForm->is($form));
+    }
+
+    public function test_admin_can_select_a_campaign_webform_and_copy_url_is_rendered(): void
+    {
+        $form = Form::create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'agent_capture',
+            'name' => 'Agent Capture',
+            'table_name' => 'agent_capture_records',
+            'is_active' => true,
+        ]);
+        AgentScreenField::create([
+            'campaign_code' => 'mbsales',
+            'field_key' => 'first_name',
+            'field_label' => 'First Name',
+            'vici_field' => 'first_name',
+            'direction' => 'get',
+            'field_order' => 1,
+        ]);
+
+        $this->actingAs($this->superAdmin)
+            ->withSession($this->campaignSession())
+            ->post(route('admin.agent-screen.webform.update'), [
+                'campaign_code' => 'mbsales',
+                'agent_webform_form_id' => $form->id,
+            ])
+            ->assertRedirect(route('admin.agent-screen.index', ['campaign' => 'mbsales']))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame($form->id, Campaign::query()->where('code', 'mbsales')->value('agent_webform_form_id'));
+
+        $this->actingAs($this->superAdmin)
+            ->withSession($this->campaignSession())
+            ->get(route('admin.agent-screen.index', ['campaign' => 'mbsales']))
+            ->assertOk()
+            ->assertSee('VAR'.url('/agent-webforms/mbsales'), false)
+            ->assertSee('Agent Capture');
+    }
+
+    public function test_admin_cannot_select_an_inactive_or_cross_campaign_webform(): void
+    {
+        $otherCampaign = Campaign::factory()->create(['code' => 'othercamp']);
+        $otherForm = Form::create([
+            'campaign_code' => $otherCampaign->code,
+            'form_code' => 'other',
+            'name' => 'Other Form',
+            'table_name' => 'other_records',
+            'is_active' => true,
+        ]);
+        $inactiveForm = Form::create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'inactive',
+            'name' => 'Inactive Form',
+            'table_name' => 'inactive_records',
+            'is_active' => false,
+        ]);
+
+        $campaign = Campaign::query()->where('code', 'mbsales')->firstOrFail();
+
+        foreach ([$otherForm->id, $inactiveForm->id] as $formId) {
+            $this->actingAs($this->superAdmin)
+                ->withSession($this->campaignSession())
+                ->from(route('admin.agent-screen.index', ['campaign' => 'mbsales']))
+                ->post(route('admin.agent-screen.webform.update'), [
+                    'campaign_code' => 'mbsales',
+                    'agent_webform_form_id' => $formId,
+                ])
+                ->assertSessionHasErrors('agent_webform_form_id');
+        }
+
+        $this->assertNull($campaign->refresh()->agent_webform_form_id);
+    }
+
+    public function test_admin_can_clear_a_campaign_webform_selection(): void
+    {
+        $form = Form::create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'agent_capture',
+            'name' => 'Agent Capture',
+            'table_name' => 'agent_capture_records',
+            'is_active' => true,
+        ]);
+        $campaign = Campaign::query()->where('code', 'mbsales')->firstOrFail();
+        $campaign->update(['agent_webform_form_id' => $form->id]);
+
+        $this->actingAs($this->superAdmin)
+            ->withSession($this->campaignSession())
+            ->post(route('admin.agent-screen.webform.update'), [
+                'campaign_code' => 'mbsales',
+                'agent_webform_form_id' => '',
+            ])
+            ->assertRedirect(route('admin.agent-screen.index', ['campaign' => 'mbsales']))
+            ->assertSessionHasNoErrors();
+
+        $this->assertNull($campaign->refresh()->agent_webform_form_id);
     }
 }

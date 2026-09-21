@@ -12,11 +12,40 @@ import TelephonyLogger from './telephony-logger';
 let _teardownAgentChannel = null;
 /** Skip redundant subscribe when userId + handler slots match the active subscription (duplicate inits). */
 let _agentChannelSig = null;
+let _teardownUserNotifications = null;
+let _userNotificationsSig = null;
+let _teardownDashboardChannel = null;
+let _dashboardChannelSig = null;
+let _teardownActivityLogChannel = null;
 
 const key = import.meta.env.VITE_REVERB_APP_KEY || import.meta.env.VITE_PUSHER_APP_KEY;
 const broadcaster = import.meta.env.VITE_BROADCAST_DRIVER || 'reverb';
 
 export const isBroadcastEnabled = () => !!key;
+
+function resolveBroadcastAuthEndpoint() {
+    const baseUrl = document.querySelector('meta[name="crm-base-url"]')?.getAttribute('content')?.trim();
+    if (baseUrl) {
+        return `${baseUrl}/broadcasting/auth`;
+    }
+
+    const currentPath = window.location.pathname;
+    const indexPhpPosition = currentPath.indexOf('/index.php');
+    if (indexPhpPosition >= 0) {
+        return `${currentPath.slice(0, indexPhpPosition + '/index.php'.length)}/broadcasting/auth`;
+    }
+
+    return '/broadcasting/auth';
+}
+
+export function isEchoConnected() {
+    const connection = window.Echo?.connector?.pusher?.connection;
+    if (connection?.state) {
+        return connection.state === 'connected';
+    }
+
+    return window.Alpine?.store?.('ws')?.state === 'connected';
+}
 
 export function initEcho() {
     if (!key) {
@@ -29,7 +58,10 @@ export function initEcho() {
     window.Pusher = Pusher;
 
     const useReverb = broadcaster === 'reverb' || !!key;
-    const baseConfig = { key };
+    const baseConfig = {
+        key,
+        authEndpoint: resolveBroadcastAuthEndpoint(),
+    };
 
     const config = useReverb
         ? {
@@ -134,6 +166,41 @@ export function subscribeAgentChannel(userId, onCallStateChanged, onVicidialEven
     return teardown;
 }
 
+export function subscribeUserNotifications(userId, handler) {
+    if (!window.Echo || !userId || typeof handler !== 'function') {
+        TelephonyLogger.warn('TelephonyEcho', 'User notification subscription skipped', { has_echo: !!window.Echo, user_id: userId });
+        return () => {};
+    }
+
+    if (typeof _teardownUserNotifications === 'function') {
+        try {
+            _teardownUserNotifications();
+        } catch (_) {}
+        _teardownUserNotifications = null;
+        _userNotificationsSig = null;
+    }
+
+    const channel = window.Echo.private(`App.Models.User.${userId}`);
+    channel.notification(handler);
+
+    TelephonyLogger.info('TelephonyEcho', 'Subscribed to user notifications', { user_id: userId });
+
+    _userNotificationsSig = `${userId}:${Date.now()}`;
+
+    const teardown = () => {
+        if (typeof channel.stopListeningForNotification === 'function') {
+            channel.stopListeningForNotification(handler);
+        }
+        if (_teardownUserNotifications === teardown) {
+            _teardownUserNotifications = null;
+            _userNotificationsSig = null;
+        }
+    };
+    _teardownUserNotifications = teardown;
+
+    return teardown;
+}
+
 /**
  * Subscribe to supervisor channel for telephony and disposition updates.
  */
@@ -161,6 +228,84 @@ export function subscribeSupervisorChannel(onCallStateChanged, onDispositionSave
 }
 
 /**
+ * Subscribe to campaign-scoped dashboard data invalidations.
+ * @param {string} campaignCode
+ * @param {(event: object) => void} handler
+ * @returns {() => void}
+ */
+export function subscribeDashboardChannel(campaignCode, handler) {
+    if (!window.Echo || !campaignCode || typeof handler !== 'function') {
+        TelephonyLogger.warn('TelephonyEcho', 'Dashboard channel subscription skipped', {
+            has_echo: !!window.Echo,
+            campaign: campaignCode,
+        });
+
+        return () => {};
+    }
+
+    const sig = String(campaignCode);
+    if (typeof _teardownDashboardChannel === 'function' && _dashboardChannelSig === sig) {
+        return _teardownDashboardChannel;
+    }
+
+    if (typeof _teardownDashboardChannel === 'function') {
+        try {
+            _teardownDashboardChannel();
+        } catch (_) {}
+        _teardownDashboardChannel = null;
+        _dashboardChannelSig = null;
+    }
+
+    const channel = window.Echo.private(`dashboard.${campaignCode}`);
+    channel.listen('.dashboard.data.updated', handler);
+    channel.listen('.dashboard.layout.updated', handler);
+    TelephonyLogger.info('TelephonyEcho', 'Subscribed to dashboard data channel', { campaign: campaignCode });
+
+    const teardown = () => {
+        channel.stopListening('.dashboard.data.updated');
+        channel.stopListening('.dashboard.layout.updated');
+        if (_teardownDashboardChannel === teardown) {
+            _teardownDashboardChannel = null;
+            _dashboardChannelSig = null;
+        }
+    };
+
+    _dashboardChannelSig = sig;
+    _teardownDashboardChannel = teardown;
+
+    return teardown;
+}
+
+/**
+ * Subscribe to the Super Admin activity stream.
+ * @param {(entry: object) => void} handler
+ * @returns {() => void}
+ */
+export function subscribeActivityLog(handler) {
+    if (!window.Echo || typeof handler !== 'function') {
+        TelephonyLogger.warn('TelephonyEcho', 'Activity log subscription skipped', { has_echo: !!window.Echo });
+
+        return () => {};
+    }
+
+    if (typeof _teardownActivityLogChannel === 'function') {
+        _teardownActivityLogChannel();
+    }
+
+    const channel = window.Echo.private('activity-log');
+    channel.listen('.activity.log.created', (payload) => handler(payload?.entry || payload));
+    TelephonyLogger.info('TelephonyEcho', 'Subscribed to activity log channel');
+
+    const teardown = () => {
+        channel.stopListening('.activity.log.created');
+        if (_teardownActivityLogChannel === teardown) _teardownActivityLogChannel = null;
+    };
+    _teardownActivityLogChannel = teardown;
+
+    return teardown;
+}
+
+/**
  * Join the agents presence channel for real-time online/offline tracking.
  * @param {object} handlers - { onHere, onJoining, onLeaving }
  */
@@ -179,8 +324,14 @@ export function joinAgentsPresence(handlers = {}) {
 // Expose for inline scripts (agent/supervisor blade)
 window.TelephonyEcho = {
     initEcho,
+    isEchoConnected,
     subscribeAgentChannel,
+    subscribeUserNotifications,
     subscribeSupervisorChannel,
+    subscribeDashboardChannel,
+    subscribeActivityLog,
     joinAgentsPresence,
     isBroadcastEnabled,
 };
+
+window.dispatchEvent(new CustomEvent('telephony-echo:ready'));

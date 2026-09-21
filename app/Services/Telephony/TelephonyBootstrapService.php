@@ -31,20 +31,15 @@ class TelephonyBootstrapService
             return;
         }
 
-        $campaigns = $this->campaignService->getCampaigns();
-        $candidate = $request->session()->get('vicidial_campaign')
-            ?? $request->session()->get('campaign');
-        $sessionCampaign = is_string($candidate) && $candidate !== '' ? $candidate : null;
+        $sessionCampaign = $request->session()->get('vicidial_campaign');
+        $sessionCampaign = is_string($sessionCampaign) && $sessionCampaign !== '' ? $sessionCampaign : null;
 
-        $campaign = null;
-        if ($sessionCampaign !== null && isset($campaigns[$sessionCampaign])) {
-            $campaign = $sessionCampaign;
-        } elseif (is_string($user->default_campaign) && $user->default_campaign !== '' && isset($campaigns[$user->default_campaign])) {
+        $campaign = $sessionCampaign;
+        if ($campaign === null && is_string($user->default_campaign) && $user->default_campaign !== '') {
             $campaign = $user->default_campaign;
-        } else {
-            $first = array_key_first($campaigns);
-            $campaign = $first ?: 'mbsales';
         }
+
+        $campaign ??= (string) config('vicidial.default_campaign', 'mbsales');
 
         $request->session()->put('telephony_bootstrap', [
             'campaign' => (string) $campaign,

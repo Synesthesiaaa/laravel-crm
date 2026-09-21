@@ -148,6 +148,7 @@ return [
             'path' => storage_path('logs/telephony.log'),
             'level' => 'info',
             'days' => env('LOG_TELEPHONY_DAYS', 30),
+            'permission' => 0664,
             'replace_placeholders' => true,
         ],
 
@@ -156,6 +157,7 @@ return [
             'path' => storage_path('logs/telephony-events.log'),
             'level' => 'info',
             'days' => env('LOG_TELEPHONY_EVENTS_DAYS', 14),
+            'permission' => 0664,
             'replace_placeholders' => true,
         ],
 
@@ -164,6 +166,7 @@ return [
             'path' => storage_path('logs/telephony-errors.log'),
             'level' => 'error',
             'days' => env('LOG_TELEPHONY_ERRORS_DAYS', 30),
+            'permission' => 0664,
             'replace_placeholders' => true,
         ],
 

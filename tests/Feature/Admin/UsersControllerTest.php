@@ -75,6 +75,27 @@ class UsersControllerTest extends TestCase
         $response->assertSessionHasErrors('username');
     }
 
+    public function test_store_validation_does_not_render_telephony_password_values(): void
+    {
+        $response = $this->actingAs($this->superAdmin)
+            ->withSession(['campaign' => 'test', 'campaign_name' => 'Test'])
+            ->from(route('admin.users.index'))
+            ->followingRedirects()
+            ->post(route('admin.users.store'), [
+                'username' => 'newagent',
+                'password' => 'Password1!',
+                'password_confirmation' => 'Password1!',
+                'role' => 'Agent',
+                'vici_pass' => 'browser-filled-vici-password',
+                'sip_password' => 'browser-filled-sip-password',
+            ]);
+
+        $response->assertOk();
+        $response->assertSee('Full name is required.');
+        $response->assertDontSee('browser-filled-vici-password', false);
+        $response->assertDontSee('browser-filled-sip-password', false);
+    }
+
     public function test_destroy_deletes_other_user(): void
     {
         $target = User::factory()->create(['role' => 'Agent']);

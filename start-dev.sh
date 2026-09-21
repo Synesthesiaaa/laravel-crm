@@ -52,7 +52,7 @@ echo $! >> "$PID_FILE"
 sleep 1
 
 # 3. Queue worker
-php artisan queue:work &
+php artisan queue:work --queue=telephony,default &
 echo $! >> "$PID_FILE"
 sleep 1
 

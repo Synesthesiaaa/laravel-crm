@@ -6,11 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\AgentCaptureRecord;
 use App\Models\AgentScreenField;
 use App\Services\CampaignService;
+use App\Support\PercentageValue;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -46,15 +46,11 @@ class CaptureRecordsController extends Controller
         ]);
     }
 
-    public function edit(Request $request, AgentCaptureRecord $record): View|RedirectResponse
+    public function edit(Request $request, int $record): View|RedirectResponse
     {
         $campaigns = $this->campaignsList();
         $campaign = $this->resolveCampaign($request, $campaigns);
-        if (! $this->recordBelongsToCampaign($record, $campaign)) {
-            return redirect()
-                ->route('admin.capture-records.index', ['campaign' => $campaign])
-                ->with('error', 'Invalid capture record.');
-        }
+        $record = $this->findRecordForCampaign($record, $campaign);
 
         return view('admin.capture_records_edit', [
             'campaign' => $campaign,
@@ -64,15 +60,11 @@ class CaptureRecordsController extends Controller
         ]);
     }
 
-    public function update(Request $request, AgentCaptureRecord $record): RedirectResponse
+    public function update(Request $request, int $record): RedirectResponse
     {
         $campaigns = $this->campaignsList();
         $campaign = $this->resolveCampaign($request, $campaigns);
-        if (! $this->recordBelongsToCampaign($record, $campaign)) {
-            return redirect()
-                ->route('admin.capture-records.index', ['campaign' => $campaign])
-                ->with('error', 'Invalid capture record.');
-        }
+        $record = $this->findRecordForCampaign($record, $campaign);
 
         $validated = $request->validate([
             'lead_id' => ['nullable', 'string', 'max:50'],
@@ -83,7 +75,7 @@ class CaptureRecordsController extends Controller
         $fields = $this->fieldsForCampaign($campaign);
         $captureData = $this->sanitizeCaptureData(
             (array) ($validated['capture_data'] ?? []),
-            $fields
+            $fields,
         );
 
         $record->update([
@@ -105,10 +97,7 @@ class CaptureRecordsController extends Controller
             'id' => ['required', 'integer', 'exists:agent_capture_records,id'],
         ]);
 
-        $record = AgentCaptureRecord::query()->findOrFail((int) $validated['id']);
-        if (! $this->recordBelongsToCampaign($record, $campaign)) {
-            return back()->with('error', 'Invalid capture record.');
-        }
+        $record = $this->findRecordForCampaign((int) $validated['id'], $campaign);
 
         $record->delete();
 
@@ -131,10 +120,15 @@ class CaptureRecordsController extends Controller
 
         $fields = $this->fieldsForCampaign($campaign);
         $fieldKeys = $fields->pluck('field_key')->values()->all();
+        $percentageFieldKeys = $fields
+            ->where('field_type', 'percentage')
+            ->pluck('field_key')
+            ->values()
+            ->all();
         $filename = 'capture-records-'.$campaign.'-'.date('Y-m-d_His').'.csv';
         $query = $this->buildFilteredQuery($campaign, $request);
 
-        return response()->streamDownload(function () use ($query, $fieldKeys) {
+        return response()->streamDownload(function () use ($query, $fieldKeys, $percentageFieldKeys) {
             $out = fopen('php://output', 'w');
             $header = ['id', 'campaign', 'created_at', 'agent', 'lead_id', 'phone_number', ...$fieldKeys];
             fputcsv($out, $header);
@@ -151,7 +145,10 @@ class CaptureRecordsController extends Controller
                 ];
 
                 foreach ($fieldKeys as $fieldKey) {
-                    $row[] = isset($captureData[$fieldKey]) ? (string) $captureData[$fieldKey] : '';
+                    $value = $captureData[$fieldKey] ?? '';
+                    $row[] = in_array($fieldKey, $percentageFieldKeys, true)
+                        ? PercentageValue::display($value)
+                        : (string) $value;
                 }
 
                 fputcsv($out, $row);
@@ -162,7 +159,7 @@ class CaptureRecordsController extends Controller
     }
 
     /**
-     * @return array<string, string>  code => display name
+     * @return array<string, string> code => display name
      */
     private function campaignsList(): array
     {
@@ -176,17 +173,8 @@ class CaptureRecordsController extends Controller
      */
     private function resolveCampaign(Request $request, array $campaigns): string
     {
-        $input = trim((string) $request->input('campaign', ''));
-        if ($input !== '' && array_key_exists($input, $campaigns)) {
-            return $input;
-        }
-
-        $session = (string) $request->session()->get('campaign', '');
-        if ($session !== '' && array_key_exists($session, $campaigns)) {
-            return $session;
-        }
-
-        return array_key_first($campaigns) ?? 'mbsales';
+        return $this->campaignService
+            ->resolveCampaignForRequest($request, (string) $request->input('campaign', ''))['code'];
     }
 
     /**
@@ -213,13 +201,13 @@ class CaptureRecordsController extends Controller
         return AgentCaptureRecord::query()
             ->where('campaign_code', $campaign)
             ->when($request->filled('agent'), function (Builder $query) use ($request) {
-                $query->where('agent', 'like', '%'.(string) $request->input('agent').'%');
+                $query->whereRaw("agent like ? escape '!'", ['%'.$this->escapeLike((string) $request->input('agent')).'%']);
             })
             ->when($request->filled('lead_id'), function (Builder $query) use ($request) {
-                $query->where('lead_id', 'like', '%'.(string) $request->input('lead_id').'%');
+                $query->whereRaw("lead_id like ? escape '!'", ['%'.$this->escapeLike((string) $request->input('lead_id')).'%']);
             })
             ->when($request->filled('phone'), function (Builder $query) use ($request) {
-                $query->where('phone_number', 'like', '%'.(string) $request->input('phone').'%');
+                $query->whereRaw("phone_number like ? escape '!'", ['%'.$this->escapeLike((string) $request->input('phone')).'%']);
             })
             ->when($request->filled('from_date'), function (Builder $query) use ($request) {
                 $query->whereDate('created_at', '>=', (string) $request->input('from_date'));
@@ -231,9 +219,17 @@ class CaptureRecordsController extends Controller
             ->orderByDesc('id');
     }
 
-    private function recordBelongsToCampaign(AgentCaptureRecord $record, string $campaign): bool
+    private function findRecordForCampaign(int $recordId, string $campaign): AgentCaptureRecord
     {
-        return (string) $record->campaign_code === $campaign;
+        return AgentCaptureRecord::query()
+            ->whereKey($recordId)
+            ->where('campaign_code', $campaign)
+            ->firstOrFail();
+    }
+
+    private function escapeLike(string $value): string
+    {
+        return str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $value);
     }
 
     /**
@@ -251,7 +247,10 @@ class CaptureRecordsController extends Controller
                 continue;
             }
 
-            $filtered[(string) $key] = is_string($value) ? $value : (string) $value;
+            $field = $fields->firstWhere('field_key', (string) $key);
+            $filtered[(string) $key] = (string) ($field->field_type ?? 'text') === 'percentage'
+                ? (PercentageValue::normalize($value) ?? '')
+                : (is_string($value) ? $value : (string) $value);
         }
 
         return $filtered;

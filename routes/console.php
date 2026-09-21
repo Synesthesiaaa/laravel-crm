@@ -29,10 +29,23 @@ Schedule::command('activitylog:clean --days=90')
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/scheduler.log'));
 
+// Prune durable read receipts for derived notification items.
+Schedule::call(function (): void {
+    app(\App\Services\Notifications\NotificationReadService::class)
+        ->prune((int) config('notifications.read_state_retention_days', 90));
+})->daily()->at('01:30')->name('prune-notification-read-states')->withoutOverlapping();
+
 // Prune stale queue jobs and failed jobs (keep 7 days)
 Schedule::command('queue:prune-failed --hours=168')
     ->daily()
     ->at('02:00')
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/scheduler.log'));
+
+// Permanently delete records covered by active form retention policies.
+Schedule::command('data-retention:run')
+    ->everyMinute()
+    ->withoutOverlapping(60)
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/scheduler.log'));
 
@@ -55,8 +68,23 @@ Schedule::job(new \App\Jobs\ReconcileCallStateJob)
     ->name('reconcile-call-state')
     ->withoutOverlapping(10);
 
-// Daily log rotation reminder (rotate logs older than configured days)
+// Surface recent failed application jobs as telephony alerts.
+Schedule::job(new \App\Jobs\ProcessTelephonyDeadLettersJob)
+    ->everyTenMinutes()
+    ->name('process-telephony-dead-letters')
+    ->withoutOverlapping(10);
+
+// Capture Horizon metrics for the dashboard.
 Schedule::command('horizon:snapshot')
     ->everyFiveMinutes()
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/scheduler.log'));
+
+// Keep local call history warm without making the scheduler perform remote I/O.
+if ((bool) config('vicidial.call_history_sync.schedule_enabled', true)) {
+    Schedule::command('vicidial:sync-call-history --recent')
+        ->everyMinute()
+        ->withoutOverlapping(2)
+        ->runInBackground()
+        ->appendOutputTo(storage_path('logs/scheduler.log'));
+}

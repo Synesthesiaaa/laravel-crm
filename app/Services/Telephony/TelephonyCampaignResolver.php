@@ -6,19 +6,26 @@ use Illuminate\Http\Request;
 
 /**
  * VICIdial / dialer campaign is stored separately from CRM session('campaign') so the softphone
- * does not overwrite the user's login campaign (forms, records, dispositions, etc.).
+ * does not follow CRM campaign switches unless the user explicitly chooses a softphone campaign.
  */
 final class TelephonyCampaignResolver
 {
     /**
-     * Softphone-selected campaign, or CRM campaign when the user has not chosen a dialer campaign.
+     * Softphone-selected campaign, then the user's default dialer campaign.
      */
     public static function forRequest(Request $request): string
     {
-        $crm = (string) $request->session()->get('campaign', 'mbsales');
         $vic = $request->session()->get('vicidial_campaign');
+        if (is_string($vic) && $vic !== '') {
+            return $vic;
+        }
 
-        return (is_string($vic) && $vic !== '') ? $vic : $crm;
+        $defaultCampaign = $request->user()?->default_campaign;
+        if (is_string($defaultCampaign) && $defaultCampaign !== '') {
+            return $defaultCampaign;
+        }
+
+        return 'mbsales';
     }
 
     /**

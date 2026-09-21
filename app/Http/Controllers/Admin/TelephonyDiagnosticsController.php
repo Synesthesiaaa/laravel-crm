@@ -3,15 +3,20 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Campaign;
 use App\Models\User;
-use App\Models\VicidialServer;
+use App\Services\Telephony\TelephonyDiagnosticsCampaignMappingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 
 class TelephonyDiagnosticsController extends Controller
 {
+    public function __construct(
+        protected TelephonyDiagnosticsCampaignMappingService $campaignMappingService,
+    ) {}
+
     /**
      * Run all telephony readiness checks and return a structured JSON result.
      * Each check has: label, status (ok|warn|fail), message.
@@ -41,12 +46,145 @@ class TelephonyDiagnosticsController extends Controller
         // 7. Media path (SIP.js vs ViciPhone) configuration
         $checks[] = $this->checkMediaPath();
 
+        // 8. Go-live readiness checks
+        $checks[] = $this->checkDatabaseConnection();
+        $checks[] = $this->checkMigrationStatus();
+        $checks[] = $this->checkRequiredTables();
+        $checks[] = $this->checkQueueFailures();
+        $checks[] = $this->checkWebhookSecrets();
+        $checks[] = $this->checkBroadcastingConfig();
+
+        $callUrlLinks = $this->buildCallUrlLinks();
         $overallOk = collect($checks)->every(fn ($c) => $c['status'] === 'ok');
 
         return response()->json([
             'ok' => $overallOk,
             'checks' => $checks,
+            'call_url_links' => $callUrlLinks,
         ]);
+    }
+
+    /**
+     * Build paste-ready Vicidial callback URLs for the diagnostics panel.
+     *
+     * @return array<int, array{key: string, label: string, vicidial_field: string, url: string}>
+     */
+    private function buildCallUrlLinks(): array
+    {
+        return [
+            $this->buildVicidialCallUrlLink(
+                key: 'start_call',
+                label: 'Start Call URL',
+                vicidialField: 'Start Call URL',
+                routeName: 'api.webhooks.vicidial.start-call',
+                parameters: [
+                    'campaign' => $this->vicidialMacro('campaign'),
+                    'lead_id' => $this->vicidialMacro('lead_id'),
+                    'phone_number' => $this->vicidialMacro('phone_number'),
+                    'call_id' => $this->vicidialMacro('call_id'),
+                    'user' => $this->vicidialMacro('user'),
+                    'phone_login' => $this->vicidialMacro('phone_login'),
+                ],
+            ),
+            $this->buildVicidialCallUrlLink(
+                key: 'dispo_call',
+                label: 'Dispo Call URL',
+                vicidialField: 'Dispo Call URL',
+                routeName: 'api.webhooks.vicidial.dispo-call',
+                parameters: [
+                    'campaign' => $this->vicidialMacro('campaign'),
+                    'lead_id' => $this->vicidialMacro('lead_id'),
+                    'phone_number' => $this->vicidialMacro('phone_number'),
+                    'call_id' => $this->vicidialMacro('call_id'),
+                    'user' => $this->vicidialMacro('user'),
+                    'phone_login' => $this->vicidialMacro('phone_login'),
+                    'dispo' => $this->vicidialMacro('dispo'),
+                    'talk_time' => $this->vicidialMacro('talk_time'),
+                    'call_notes' => $this->vicidialMacro('call_notes'),
+                    'callback_lead_status' => $this->vicidialMacro('callback_lead_status'),
+                    'callback_datetime' => $this->vicidialMacro('callback_datetime'),
+                    'term_reason' => $this->vicidialMacro('term_reason'),
+                ],
+            ),
+            $this->buildVicidialCallUrlLink(
+                key: 'no_agent_call',
+                label: 'No Agent Call URL',
+                vicidialField: 'No Agent Call URL',
+                routeName: 'api.webhooks.vicidial.no-agent-call',
+                parameters: [
+                    'campaign' => $this->vicidialMacro('campaign'),
+                    'lead_id' => $this->vicidialMacro('lead_id'),
+                    'phone_number' => $this->vicidialMacro('phone_number'),
+                    'call_id' => $this->vicidialMacro('call_id'),
+                    'user' => $this->vicidialMacro('user'),
+                    'phone_login' => $this->vicidialMacro('phone_login'),
+                    'status' => $this->vicidialMacro('status'),
+                ],
+            ),
+            $this->buildVicidialCallUrlLink(
+                key: 'dead_call_trigger',
+                label: 'Dead Call Trigger URL',
+                vicidialField: 'Dead Call Trigger URL',
+                routeName: 'api.webhooks.vicidial.dead-call-trigger',
+                parameters: [
+                    'campaign' => $this->vicidialMacro('campaign'),
+                    'lead_id' => $this->vicidialMacro('lead_id'),
+                    'phone_number' => $this->vicidialMacro('phone_number'),
+                    'call_id' => $this->vicidialMacro('call_id'),
+                    'user' => $this->vicidialMacro('user'),
+                    'phone_login' => $this->vicidialMacro('phone_login'),
+                    'dispo' => 'DEAD',
+                ],
+            ),
+            $this->buildVicidialCallUrlLink(
+                key: 'pause_max',
+                label: 'Pause Max URL',
+                vicidialField: 'Pause Max URL',
+                routeName: 'api.webhooks.vicidial.pause-max',
+                parameters: [
+                    'campaign' => $this->vicidialMacro('campaign'),
+                    'user' => $this->vicidialMacro('user'),
+                    'fullname' => $this->vicidialMacro('fullname'),
+                    'agent_email' => $this->vicidialMacro('agent_email'),
+                    'user_group' => $this->vicidialMacro('user_group'),
+                    'user_custom_one' => $this->vicidialMacro('user_custom_one'),
+                    'user_custom_two' => $this->vicidialMacro('user_custom_two'),
+                    'user_custom_three' => $this->vicidialMacro('user_custom_three'),
+                    'user_custom_four' => $this->vicidialMacro('user_custom_four'),
+                    'user_custom_five' => $this->vicidialMacro('user_custom_five'),
+                ],
+            ),
+        ];
+    }
+
+    /**
+     * Build a single paste-ready Vicidial callback URL definition.
+     *
+     * @param  array<string, string>  $parameters
+     * @return array{key: string, label: string, vicidial_field: string, url: string}
+     */
+    private function buildVicidialCallUrlLink(
+        string $key,
+        string $label,
+        string $vicidialField,
+        string $routeName,
+        array $parameters,
+    ): array {
+        $url = route($routeName, array_merge([
+            'sig' => (string) config('vicidial.call_url_secret', ''),
+        ], $parameters));
+
+        return [
+            'key' => $key,
+            'label' => $label,
+            'vicidial_field' => $vicidialField,
+            'url' => 'VAR'.$url,
+        ];
+    }
+
+    private function vicidialMacro(string $field): string
+    {
+        return '--A--'.$field.'--B--';
     }
 
     private function checkAgentApi(): array
@@ -165,41 +303,7 @@ class TelephonyDiagnosticsController extends Controller
 
     private function checkCampaignServerMappings(): array
     {
-        $campaigns = Campaign::pluck('code')->all();
-        if (empty($campaigns)) {
-            return ['label' => 'Campaign → ViciDial Server Mapping', 'status' => 'warn', 'message' => 'No campaigns found.'];
-        }
-
-        // Eager-load active servers keyed by campaign_code so we avoid N+1 queries.
-        $servers = VicidialServer::where('is_active', true)
-            ->whereIn('campaign_code', $campaigns)
-            ->get(['campaign_code', 'api_user', 'api_pass'])
-            ->keyBy('campaign_code');
-
-        $missing = [];
-        $noApiUser = [];
-        foreach ($campaigns as $code) {
-            $server = $servers->get($code);
-            if (! $server) {
-                $missing[] = $code;
-            } elseif (empty($server->api_user) || empty($server->api_pass)) {
-                $noApiUser[] = $code;
-            }
-        }
-
-        $issues = [];
-        if (! empty($missing)) {
-            $issues[] = 'No active server for: '.implode(', ', $missing);
-        }
-        if (! empty($noApiUser)) {
-            $issues[] = 'Missing Non-Agent API user/pass for: '.implode(', ', $noApiUser);
-        }
-
-        if (empty($issues)) {
-            return ['label' => 'Campaign → ViciDial Server Mapping', 'status' => 'ok', 'message' => count($campaigns).' campaign(s) all have active server mappings with Non-Agent API credentials.'];
-        }
-
-        return ['label' => 'Campaign → ViciDial Server Mapping', 'status' => 'warn', 'message' => implode('; ', $issues)];
+        return $this->campaignMappingService->checkCampaignServerMappings();
     }
 
     private function checkAgentCredentials(): array
@@ -273,6 +377,126 @@ class TelephonyDiagnosticsController extends Controller
             'label' => 'Telephony Media Path',
             'status' => 'ok',
             'message' => "media_path={$mediaPath}: {$description}",
+        ];
+    }
+
+    private function checkDatabaseConnection(): array
+    {
+        try {
+            DB::connection()->getPdo();
+
+            return ['label' => 'Database Connection', 'status' => 'ok', 'message' => 'Application database connection is available.'];
+        } catch (\Throwable $e) {
+            return ['label' => 'Database Connection', 'status' => 'fail', 'message' => 'Database connection failed: '.$e->getMessage()];
+        }
+    }
+
+    private function checkMigrationStatus(): array
+    {
+        if (! Schema::hasTable('migrations')) {
+            return ['label' => 'Migration Status', 'status' => 'fail', 'message' => 'The migrations table is missing.'];
+        }
+
+        $files = collect(glob(database_path('migrations/*.php')) ?: [])
+            ->map(fn (string $path): string => basename($path, '.php'));
+        $ran = DB::table('migrations')->pluck('migration');
+        $pending = $files->diff($ran)->values();
+
+        if ($pending->isEmpty()) {
+            return ['label' => 'Migration Status', 'status' => 'ok', 'message' => $files->count().' migration file(s) are applied.'];
+        }
+
+        return [
+            'label' => 'Migration Status',
+            'status' => 'fail',
+            'message' => $pending->count().' pending migration(s): '.$pending->take(5)->implode(', ').($pending->count() > 5 ? '...' : ''),
+        ];
+    }
+
+    private function checkRequiredTables(): array
+    {
+        $required = [
+            'users',
+            'campaigns',
+            'forms',
+            'form_fields',
+            'call_sessions',
+            'campaign_disposition_records',
+            'agent_capture_records',
+            'lead_hopper',
+            'lead_imports',
+            'vicidial_agent_sessions',
+            'telephony_alerts',
+            'personal_access_tokens',
+            'user_widget_layouts',
+        ];
+
+        $missing = array_values(array_filter($required, fn (string $table): bool => ! Schema::hasTable($table)));
+        if ($missing === []) {
+            return ['label' => 'Required Tables', 'status' => 'ok', 'message' => count($required).' required table(s) are present.'];
+        }
+
+        return ['label' => 'Required Tables', 'status' => 'fail', 'message' => 'Missing table(s): '.implode(', ', $missing)];
+    }
+
+    private function checkQueueFailures(): array
+    {
+        if (! Schema::hasTable('failed_jobs')) {
+            return ['label' => 'Queue Failed Jobs', 'status' => 'warn', 'message' => 'failed_jobs table is missing.'];
+        }
+
+        $count = (int) DB::table('failed_jobs')->where('failed_at', '>=', now()->subDay())->count();
+        if ($count === 0) {
+            return ['label' => 'Queue Failed Jobs', 'status' => 'ok', 'message' => 'No failed jobs in the last 24 hours.'];
+        }
+
+        return ['label' => 'Queue Failed Jobs', 'status' => $count > 10 ? 'fail' : 'warn', 'message' => "{$count} failed job(s) in the last 24 hours."];
+    }
+
+    private function checkWebhookSecrets(): array
+    {
+        $missing = [];
+        if ((string) config('asterisk.webhook_secret', '') === '') {
+            $missing[] = 'ASTERISK_AMI_WEBHOOK_SECRET';
+        }
+        if ((string) config('vicidial.events_webhook_secret', '') === '') {
+            $missing[] = 'VICIDIAL_EVENTS_WEBHOOK_SECRET';
+        }
+        if ((string) config('vicidial.call_url_secret', '') === '') {
+            $missing[] = 'VICIDIAL_CALL_URL_SECRET';
+        }
+
+        if ($missing === []) {
+            return ['label' => 'Webhook Secrets', 'status' => 'ok', 'message' => 'AMI, ViciDial push, and Vicidial call-url shared secrets are configured.'];
+        }
+
+        $status = app()->environment('production') ? 'fail' : 'warn';
+
+        return ['label' => 'Webhook Secrets', 'status' => $status, 'message' => 'Missing shared secret(s): '.implode(', ', $missing)];
+    }
+
+    private function checkBroadcastingConfig(): array
+    {
+        $connection = (string) config('broadcasting.default', 'null');
+        if ($connection === 'reverb') {
+            $missing = [];
+            foreach (['REVERB_APP_ID' => config('reverb.apps.apps.0.app_id'), 'REVERB_APP_KEY' => config('reverb.apps.apps.0.key'), 'REVERB_APP_SECRET' => config('reverb.apps.apps.0.secret')] as $name => $value) {
+                if ((string) $value === '') {
+                    $missing[] = $name;
+                }
+            }
+
+            if ($missing === []) {
+                return ['label' => 'Broadcasting Config', 'status' => 'ok', 'message' => 'Broadcasting uses Reverb and required app credentials are configured.'];
+            }
+
+            return ['label' => 'Broadcasting Config', 'status' => 'fail', 'message' => 'Broadcasting uses Reverb but is missing: '.implode(', ', $missing)];
+        }
+
+        return [
+            'label' => 'Broadcasting Config',
+            'status' => $connection === 'null' ? 'warn' : 'ok',
+            'message' => "Broadcasting connection is '{$connection}'. Real-time UI requires Reverb for production.",
         ];
     }
 }

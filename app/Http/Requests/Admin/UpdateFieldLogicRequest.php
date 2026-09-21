@@ -2,10 +2,13 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Admin\Concerns\NormalizesVisibilityInput;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateFieldLogicRequest extends FormRequest
 {
+    use NormalizesVisibilityInput;
+
     public function authorize(): bool
     {
         return $this->user()?->isAdmin() ?? false;
@@ -19,13 +22,14 @@ class UpdateFieldLogicRequest extends FormRequest
             'field_type' => ['sometimes', 'in:text,textarea,number,date,select,multiselect,percentage'],
             'options' => ['nullable', 'string', 'max:65535'],
             'is_required' => ['nullable', 'boolean'],
+            'is_sale_amount' => ['nullable', 'boolean'],
             'field_order' => ['nullable', 'integer'],
             'field_width' => ['nullable', 'in:full,half,third'],
             'visibility' => ['nullable', 'array'],
             'visibility.field' => ['nullable', 'string', 'max:80', 'regex:/^[a-zA-Z0-9_]+$/'],
             'visibility.operator' => ['nullable', 'in:equals,not_equals,in,not_in'],
             'visibility.values' => ['nullable', 'array'],
-            'visibility.values.*' => ['string', 'max:120'],
+            'visibility.values.*' => ['nullable', 'string', 'max:120'],
         ];
     }
 }

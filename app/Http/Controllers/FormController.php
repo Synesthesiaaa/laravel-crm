@@ -6,6 +6,7 @@ use App\Http\Requests\FormSubmissionRequest;
 use App\Repositories\FormFieldRepository;
 use App\Services\CampaignService;
 use App\Services\FormSubmissionService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -37,7 +38,7 @@ class FormController extends Controller
             'date' => now()->format('Y-m-d'),
         ]);
 
-        return view('forms.show', [
+        $viewData = [
             'campaign' => $campaign,
             'campaignName' => $campaignConfig['name'] ?? $campaign,
             'formType' => $type,
@@ -48,26 +49,51 @@ class FormController extends Controller
             'prefill' => $prefill,
             'leadId' => $request->query('lead_id'),
             'phoneNumber' => $request->query('phone_number'),
-        ]);
+        ];
+
+        if ($request->boolean('widget_embed')) {
+            return view('forms.widget', $viewData);
+        }
+
+        return view('forms.show', $viewData);
     }
 
-    public function store(FormSubmissionRequest $request): RedirectResponse
+    public function store(FormSubmissionRequest $request): JsonResponse|RedirectResponse
     {
         $campaign = $request->string('campaign')->trim()->toString();
         $formType = $request->string('form_type')->trim()->toString();
-        $agent = $request->user()->full_name ?? $request->user()->name ?? $request->user()->username ?? '';
+        $user = $request->user();
+        $agent = trim((string) ($user->full_name ?: $user->name ?: $user->username ?: ''));
 
         $result = $this->formSubmissionService->submit(
             $campaign,
             $formType,
             $request->all(),
             $agent,
+            (int) $user->id,
         );
 
         if (! $result->success) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $result->message ?? 'Submission failed.',
+                ], 422);
+            }
+
             return redirect()->back()
                 ->withInput()
                 ->with('error', $result->message ?? 'Submission failed.');
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Record saved successfully.',
+                'data' => [
+                    'record_id' => $result->data,
+                ],
+            ]);
         }
 
         return redirect()->route('forms.show', ['type' => $formType, 'campaign' => $campaign])

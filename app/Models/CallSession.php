@@ -45,6 +45,7 @@ class CallSession extends Model
         'linkedid',
         'channel',
         'vicidial_lead_id',
+        'vicidial_call_id',
         'dialed_at',
         'ringing_at',
         'answered_at',

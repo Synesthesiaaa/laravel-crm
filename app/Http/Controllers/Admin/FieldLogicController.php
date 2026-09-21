@@ -7,22 +7,26 @@ use App\Http\Requests\Admin\StoreFieldLogicRequest;
 use App\Http\Requests\Admin\UpdateFieldLogicRequest;
 use App\Models\FormField;
 use App\Services\CampaignService;
+use App\Services\DashboardStatsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class FieldLogicController extends Controller
 {
     public function __construct(
         protected CampaignService $campaignService,
+        protected DashboardStatsService $dashboardStats,
     ) {}
 
     public function index(Request $request): View
     {
-        $campaign = $request->session()->get('campaign', 'mbsales');
-        $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['forms' => []];
+        $resolved = $this->campaignService->resolveCampaignForRequest($request);
+        $campaign = $resolved['code'];
+        $campaignConfig = $resolved['config'];
         $forms = $campaignConfig['forms'] ?? [];
-        $formType = $request->query('form', array_key_first($forms) ?: '');
+        $formType = $forms === [] ? '' : (string) $request->query('form', array_key_first($forms) ?: '');
         if ($formType !== '' && ! isset($forms[$formType])) {
             $formType = array_key_first($forms) ?: '';
         }
@@ -34,10 +38,53 @@ class FieldLogicController extends Controller
 
         return view('admin.field_logic', [
             'campaign' => $campaign,
-            'campaignName' => $request->session()->get('campaign_name', 'CRM'),
+            'campaignName' => $campaignConfig['name'] ?? $campaign,
             'forms' => $forms,
             'formType' => $formType,
             'fields' => $fields,
+        ]);
+    }
+
+    public function edit(Request $request, FormField $formField): View
+    {
+        $resolved = $this->campaignService->resolveCampaignForRequest($request);
+        $campaign = $resolved['code'];
+        $campaignConfig = $resolved['config'];
+        $forms = $campaignConfig['forms'] ?? [];
+
+        $siblingFields = FormField::query()
+            ->where('campaign_code', $formField->campaign_code)
+            ->where('form_type', $formField->form_type)
+            ->where('id', '!=', $formField->id)
+            ->orderBy('field_order')
+            ->orderBy('id')
+            ->get();
+
+        $visibilityFieldOptions = $siblingFields
+            ->mapWithKeys(fn (FormField $field) => [
+                $field->field_name => $field->field_label !== ''
+                    ? $field->field_label.' ('.$field->field_name.')'
+                    : $field->field_name,
+            ])
+            ->all();
+
+        $visibility = is_array($formField->visibility) ? $formField->visibility : [];
+        $visibilityValuesText = '';
+        if (! empty($visibility['values']) && is_array($visibility['values'])) {
+            $visibilityValuesText = implode("\n", array_map(
+                static fn ($value) => is_scalar($value) ? (string) $value : '',
+                $visibility['values'],
+            ));
+        }
+
+        return view('admin.field_logic_edit', [
+            'campaign' => $campaign,
+            'campaignName' => $campaignConfig['name'] ?? $campaign,
+            'forms' => $forms,
+            'formType' => $formField->form_type,
+            'field' => $formField,
+            'visibilityFieldOptions' => $visibilityFieldOptions,
+            'visibilityValuesText' => old('visibility.values.0', $visibilityValuesText),
         ]);
     }
 
@@ -54,22 +101,30 @@ class FieldLogicController extends Controller
             $options = null;
         }
         $visibility = $this->normalizeVisibility($validated['visibility'] ?? null);
-        $maxOrder = FormField::where('campaign_code', $validated['campaign_code'])
-            ->where('form_type', $validated['form_type'])
-            ->max('field_order');
-        FormField::create([
-            'campaign_code' => $validated['campaign_code'],
-            'form_type' => $validated['form_type'],
-            'field_name' => $validated['field_name'],
-            'field_label' => $validated['field_label'],
-            'field_type' => $validated['field_type'],
-            'is_required' => $request->boolean('is_required'),
-            'field_order' => $validated['field_order'] ?? ($maxOrder ?? 0) + 1,
-            'field_width' => $validated['field_width'] ?? 'full',
-            'options' => $options,
-            'visibility' => $visibility,
-        ]);
+        $isSaleAmount = $request->boolean('is_sale_amount') && $validated['field_type'] === 'number';
+        DB::transaction(function () use ($request, $validated, $options, $visibility, $isSaleAmount): void {
+            $maxOrder = FormField::query()
+                ->where('campaign_code', $validated['campaign_code'])
+                ->where('form_type', $validated['form_type'])
+                ->lockForUpdate()
+                ->max('field_order');
+
+            FormField::create([
+                'campaign_code' => $validated['campaign_code'],
+                'form_type' => $validated['form_type'],
+                'field_name' => $validated['field_name'],
+                'field_label' => $validated['field_label'],
+                'field_type' => $validated['field_type'],
+                'is_required' => $request->boolean('is_required'),
+                'is_sale_amount' => $isSaleAmount,
+                'field_order' => $validated['field_order'] ?? ($maxOrder ?? 0) + 1,
+                'field_width' => $validated['field_width'] ?? 'full',
+                'options' => $options,
+                'visibility' => $visibility,
+            ]);
+        });
         $this->campaignService->clearCampaignsCache();
+        $this->dashboardStats->invalidate($validated['campaign_code']);
 
         return redirect()->route('admin.field-logic.index', ['form' => $validated['form_type']])
             ->with('success', 'Field added.');
@@ -90,17 +145,20 @@ class FieldLogicController extends Controller
             $options = null;
         }
         $visibility = $this->normalizeVisibility($validated['visibility'] ?? null);
+        $isSaleAmount = $request->boolean('is_sale_amount') && $newType === 'number';
         $field->update([
             'field_label' => $validated['field_label'],
             'field_name' => $validated['field_name'] ?? $field->field_name,
             'field_type' => $newType,
             'is_required' => $request->boolean('is_required'),
+            'is_sale_amount' => $isSaleAmount,
             'field_order' => $validated['field_order'] ?? $field->field_order,
             'field_width' => $validated['field_width'] ?? $field->field_width,
             'options' => $options,
             'visibility' => $visibility,
         ]);
         $this->campaignService->clearCampaignsCache();
+        $this->dashboardStats->invalidate($field->campaign_code);
 
         return redirect()->route('admin.field-logic.index', ['form' => $field->form_type])
             ->with('success', 'Field updated.');
@@ -172,8 +230,10 @@ class FieldLogicController extends Controller
         $id = (int) $request->input('id');
         $field = FormField::findOrFail($id);
         $formType = $field->form_type;
+        $campaignCode = $field->campaign_code;
         $field->delete();
         $this->campaignService->clearCampaignsCache();
+        $this->dashboardStats->invalidate($campaignCode);
 
         return redirect()->route('admin.field-logic.index', ['form' => $formType])
             ->with('success', 'Field deleted.');

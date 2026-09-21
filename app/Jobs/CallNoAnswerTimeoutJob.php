@@ -25,7 +25,6 @@ class CallNoAnswerTimeoutJob implements ShouldQueue
     public function __construct(
         public int $callSessionId,
     ) {
-        $this->delay(now()->addSeconds(30));
         $this->onQueue('default');
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\User;
 use App\Repositories\FormFieldRepository;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -104,6 +105,10 @@ class FormSubmissionRequest extends FormRequest
 
         $campaign = is_string($merged['campaign'] ?? null) ? trim($merged['campaign']) : '';
         $formType = is_string($merged['form_type'] ?? null) ? trim($merged['form_type']) : '';
+        if ($this->user()?->role === User::ROLE_AGENT) {
+            $merged['date'] = now()->toDateString();
+        }
+
         if ($campaign !== '' && $formType !== '') {
             $repo = app(FormFieldRepository::class);
             foreach ($repo->getFieldsForForm($campaign, $formType) as $field) {

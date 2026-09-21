@@ -5,17 +5,19 @@
 @section('header-title', 'Agent Screen')
 
 @section('content')
-<div x-data="agentScreen()" x-init="init()" data-campaign="{{ session('campaign', 'mbsales') }}" data-user-id="{{ auth()->id() }}" class="flex flex-col lg:flex-row gap-6 h-full">
+<script type="application/json" id="agent-screen-telephony-features">@json($telephonyFeatures ?? [])</script>
+<div x-data="agentScreen()" x-init="init()" data-agent-screen data-campaign="{{ session('campaign', 'mbsales') }}" data-user-id="{{ auth()->id() }}" class="flex flex-col lg:flex-row gap-6 h-full">
 
     {{-- WebSocket health banner --}}
     <div x-show="$store.ws.isDisconnected && !$store.ws.dismissed"
          x-transition.opacity
-         class="fixed top-0 left-0 right-0 z-50 flex items-center justify-center gap-3 px-4 py-2 text-sm font-medium text-amber-900 bg-amber-100 border-b border-amber-300 shadow-sm">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-amber-600 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+         class="ws-health-banner"
+         role="status">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 animate-pulse shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
         </svg>
         <span>Real-time updates unavailable &mdash; reconnecting<span class="animate-pulse">...</span></span>
-        <button @click="$store.ws.dismiss()" class="ml-2 text-amber-700 hover:text-amber-900 underline text-xs">Dismiss</button>
+        <button type="button" @click="$store.ws.dismiss()" class="btn-ghost text-xs py-1 px-2">Dismiss</button>
     </div>
     {{-- Reset dismissed when connection restored --}}
     <template x-effect="if ($store.ws.isConnected) $store.ws.dismissed = false"></template>
@@ -24,14 +26,14 @@
     <div class="flex-1 min-w-0 space-y-4">
 
         {{-- Current lead card --}}
-        <div class="md-card p-5">
+        <div class="md-card md-card--static p-5">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Lead Information</h3>
                 <div class="flex items-center gap-2">
                     <template x-if="featureEnabled('predictive_dialing')">
                         <button type="button"
                                 class="text-xs px-2 py-1 rounded-md border"
-                                :class="predictiveMode ? 'border-emerald-500 text-emerald-600 bg-emerald-50' : 'border-[var(--color-border)] text-[var(--color-on-surface-dim)]'"
+                                :class="predictiveMode ? 'status-chip-ready' : 'status-chip-idle'"
                                 @click="togglePredictiveMode()">
                             <span x-text="predictiveMode ? 'Predictive: ON' : 'Predictive: OFF'">Predictive: OFF</span>
                         </button>
@@ -40,22 +42,22 @@
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div class="form-field">
-                    <label class="form-label">Phone Number</label>
+                    <label for="agent-phone-number" class="form-label">Phone Number</label>
                     <div class="flex gap-2">
-                        <input type="text" x-model="phoneNumber" class="form-input flex-1" placeholder="+63 XXX XXX XXXX" />
-                        <button type="button" class="phone-dial-btn" @click="dial()" title="Call"
+                        <input id="agent-phone-number" type="text" x-model="phoneNumber" class="form-input flex-1" placeholder="+63 XXX XXX XXXX" />
+                        <button type="button" class="phone-dial-btn" @click="dial()" title="Call" aria-label="Dial phone number"
                                 :disabled="callState !== 'idle' || dialBlocked || !phoneNumber">
                             <x-icon name="phone" class="w-5 h-5" />
                         </button>
                     </div>
                 </div>
                 <div class="form-field">
-                    <label class="form-label">Lead ID</label>
-                    <input type="text" x-model="leadId" class="form-input" placeholder="ViciDial Lead ID" />
+                    <label for="agent-lead-id" class="form-label">Lead ID</label>
+                    <input id="agent-lead-id" type="text" x-model="leadId" class="form-input" placeholder="ViciDial Lead ID" />
                 </div>
                 <div class="form-field">
-                    <label class="form-label">Campaign</label>
-                    <input type="text" value="{{ session('campaign_name') }}" class="form-input" readonly />
+                    <label for="agent-campaign" class="form-label">Campaign</label>
+                    <input id="agent-campaign" type="text" value="{{ session('campaign_name') }}" class="form-input" readonly />
                 </div>
             </div>
         </div>
@@ -70,21 +72,24 @@
                   @submit.prevent="saveForm()"
                   class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 @foreach($fields as $field)
+                @php
+                    $captureFieldId = 'agent-capture-'.str_replace(['.', '[', ']', '_'], ['-', '-', '', '-'], $field->field_name);
+                @endphp
                 <div class="@if(($field->field_width ?? '') === 'full') sm:col-span-2 @endif"
                      data-capture-field
                      x-show="shouldShow('{{ $field->field_name }}', @js($field->visibility ?? null))">
                     @if($field->field_type === 'textarea')
                         <div class="form-field">
-                            <label class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
-                            <textarea class="form-textarea" name="{{ $field->field_name }}" rows="3"
+                            <label for="{{ $captureFieldId }}" class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
+                            <textarea id="{{ $captureFieldId }}" class="form-textarea" name="{{ $field->field_name }}" rows="3"
                                       x-model="values['{{ $field->field_name }}']"
                                       @if(!empty($field->placeholder)) placeholder="{{ $field->placeholder }}" @endif
                                       @if($field->required) required @endif></textarea>
                         </div>
                     @elseif($field->field_type === 'select')
                         <div class="form-field">
-                            <label class="form-label">{{ $field->label }}</label>
-                            <select class="form-select" name="{{ $field->field_name }}" x-model="values['{{ $field->field_name }}']" @if($field->required) required @endif>
+                            <label for="{{ $captureFieldId }}" class="form-label">{{ $field->label }}</label>
+                            <select id="{{ $captureFieldId }}" class="form-select" name="{{ $field->field_name }}" x-model="values['{{ $field->field_name }}']" @if($field->required) required @endif>
                                 <option value="">-- Select --</option>
                                 @foreach($field->options_array ?? [] as $opt)
                                     <option value="{{ $opt }}">{{ $opt }}</option>
@@ -93,9 +98,10 @@
                         </div>
                     @elseif($field->field_type === 'percentage')
                         <div class="form-field">
-                            <label class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
+                            <label for="{{ $captureFieldId }}" class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
                             <div class="relative">
                                 <input type="number"
+                                       id="{{ $captureFieldId }}"
                                        min="0"
                                        max="100"
                                        step="0.01"
@@ -110,8 +116,8 @@
                         </div>
                     @else
                         <div class="form-field">
-                            <label class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
-                            <input type="{{ ($field->field_type ?? 'text') === 'number' ? 'text' : ($field->field_type ?? 'text') }}" class="form-input"
+                            <label for="{{ $captureFieldId }}" class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
+                            <input id="{{ $captureFieldId }}" type="{{ ($field->field_type ?? 'text') === 'number' ? 'text' : ($field->field_type ?? 'text') }}" class="form-input"
                                    name="{{ $field->field_name }}"
                                    x-model="values['{{ $field->field_name }}']"
                                    @if(!empty($field->placeholder)) placeholder="{{ $field->placeholder }}" @endif
@@ -131,11 +137,12 @@
         </div>
         @else
         <div class="md-card p-8 text-center">
-            <x-icon name="computer-desktop" class="w-12 h-12 mx-auto mb-3 text-[var(--color-on-surface-dim)] opacity-40" />
-            <p class="text-sm text-[var(--color-on-surface-muted)]">No agent screen fields configured.</p>
-            @can('Super Admin')
-            <a href="{{ route('admin.agent-screen.index') }}" class="link-primary text-xs mt-2 inline-block">Configure fields →</a>
-            @endcan
+            <x-empty-state
+                icon="computer-desktop"
+                title="Agent fields are not configured"
+                description="This campaign has no fields to capture on the Agent Screen yet."
+                :action-href="$user?->isSuperAdmin() ? route('admin.agent-screen.index') : null"
+                action-text="Configure agent fields" />
         </div>
         @endif
 
@@ -144,7 +151,11 @@
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)] mb-4">Recent Activity</h3>
             <div class="timeline" id="activity-timeline">
                 <template x-if="recentCalls.length === 0">
-                    <p class="text-sm text-[var(--color-on-surface-dim)]">No recent activity.</p>
+                    <x-empty-state
+                        icon="clock"
+                        title="No recent call activity"
+                        description="Completed calls will appear here after a disposition is saved."
+                        class="crm-empty-state--compact" />
                 </template>
                 <template x-for="entry in recentCalls" :key="entry.id">
                     <div class="timeline-item pb-3">
@@ -165,7 +176,7 @@
     <div class="lg:w-72 xl:w-80 shrink-0 space-y-4">
 
         {{-- Call status --}}
-        <div class="md-card p-5">
+        <div class="md-card md-card--static p-5">
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)] mb-4">Call Controls</h3>
 
             <div class="text-center py-4">
@@ -191,15 +202,17 @@
 
                 {{-- Dial / Hangup buttons --}}
                 <div class="flex items-center justify-center gap-4">
-                    <button class="phone-dial-btn"
+                    <button type="button" class="phone-dial-btn"
                             @click="dial()"
+                            aria-label="Dial phone number"
                             x-show="callState === 'idle'"
                             :disabled="!phoneNumber || dialBlocked"
                             :title="!phoneNumber ? 'Enter a phone number first' : dialBlocked ? 'Complete disposition before dialing' : 'Click to dial'">
                         <x-icon name="phone" class="w-6 h-6" />
                     </button>
-                    <button class="phone-hangup-btn"
+                    <button type="button" class="phone-hangup-btn"
                             @click="hangup()"
+                            aria-label="Hang up call"
                             x-show="callState !== 'idle' && callState !== 'wrapup'">
                         <x-icon name="phone-x-mark" class="w-6 h-6" />
                     </button>
@@ -207,68 +220,117 @@
             </div>
         </div>
 
-        {{-- Disposition --}}
-        <div class="md-card p-5" x-show="callState === 'wrapup'">
-            <div class="flex items-center justify-between mb-3">
-                <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Disposition</h3>
-                {{-- Show dismiss only when there is an error so agent is never stuck --}}
-                <button type="button"
-                        class="btn-ghost text-xs text-[var(--color-danger)]"
-                        x-show="dispositionError"
-                        @click="dismissDisposition()"
-                        title="Dismiss and return to idle">
-                    <x-icon name="x-mark" class="w-3.5 h-3.5" />
-                    Dismiss
-                </button>
+        {{-- Advanced tools stay available without competing with the primary call state. --}}
+        <section id="agent-tool-panels" class="md-card md-card--static p-4 space-y-4" aria-labelledby="agent-tools-title">
+            <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <h3 id="agent-tools-title" class="text-sm font-semibold text-[var(--color-on-surface)]">Call tools</h3>
+                    <p class="text-xs text-[var(--color-on-surface-dim)] mt-1" x-text="activeTool ? toolDescription(activeTool) : 'Select a tool when you need it.'">Select a tool when you need it.</p>
+                </div>
+                <span class="status-chip status-chip-idle shrink-0" x-text="callStateLabel()">Ready</span>
             </div>
 
-            {{-- Error banner with retry hint --}}
-            <div x-show="dispositionError" class="mb-3 rounded-md border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/5 px-3 py-2">
-                <p class="text-xs text-[var(--color-danger)]" x-text="dispositionError"></p>
-                <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">Select a code and retry, or click Dismiss to return to idle.</p>
+            <div class="agent-tool-tabs" role="tablist" aria-label="Advanced call tools">
+                @if(($telephonyFeatures['ingroup_management'] ?? true) === true)
+                    <button type="button" id="agent-tool-tab-ingroup" class="agent-tool-tab" role="tab"
+                            aria-controls="agent-tool-panel-ingroup"
+                            :aria-selected="activeTool === 'ingroup'"
+                            :class="{ 'is-active': activeTool === 'ingroup' }"
+                            @click="openTool('ingroup')">
+                        <x-icon name="users" class="w-4 h-4" />
+                        <span>Groups</span>
+                    </button>
+                @endif
+                @if(($telephonyFeatures['transfer_controls'] ?? true) === true)
+                    <button type="button" id="agent-tool-tab-transfer" class="agent-tool-tab" role="tab"
+                            aria-controls="agent-tool-panel-transfer"
+                            :aria-selected="activeTool === 'transfer'"
+                            :class="{ 'is-active': activeTool === 'transfer' }"
+                            @click="openTool('transfer')">
+                        <x-icon name="phone" class="w-4 h-4" />
+                        <span>Transfer</span>
+                    </button>
+                @endif
+                @if(($telephonyFeatures['recording_controls'] ?? true) === true)
+                    <button type="button" id="agent-tool-tab-recording" class="agent-tool-tab" role="tab"
+                            aria-controls="agent-tool-panel-recording"
+                            :aria-selected="activeTool === 'recording'"
+                            :class="{ 'is-active': activeTool === 'recording' }"
+                            @click="openTool('recording')">
+                        <x-icon name="microphone" class="w-4 h-4" />
+                        <span>Recording</span>
+                    </button>
+                @endif
+                @if(($telephonyFeatures['dtmf_controls'] ?? true) === true)
+                    <button type="button" id="agent-tool-tab-dtmf" class="agent-tool-tab" role="tab"
+                            aria-controls="agent-tool-panel-dtmf"
+                            :aria-selected="activeTool === 'dtmf'"
+                            :class="{ 'is-active': activeTool === 'dtmf' }"
+                            @click="openTool('dtmf')">
+                        <x-icon name="tag" class="w-4 h-4" />
+                        <span>DTMF</span>
+                    </button>
+                @endif
+                @if(($telephonyFeatures['callback_controls'] ?? true) === true)
+                    <button type="button" id="agent-tool-tab-callback" class="agent-tool-tab" role="tab"
+                            aria-controls="agent-tool-panel-callback"
+                            :aria-selected="activeTool === 'callback'"
+                            :class="{ 'is-active': activeTool === 'callback' }"
+                            @click="openTool('callback')">
+                        <x-icon name="clock" class="w-4 h-4" />
+                        <span>Callback</span>
+                    </button>
+                @endif
+                @if(($telephonyFeatures['lead_tools'] ?? true) === true)
+                    <button type="button" id="agent-tool-tab-lead" class="agent-tool-tab" role="tab"
+                            aria-controls="agent-tool-panel-lead"
+                            :aria-selected="activeTool === 'lead'"
+                            :class="{ 'is-active': activeTool === 'lead' }"
+                            @click="openTool('lead')">
+                        <x-icon name="magnifying-glass" class="w-4 h-4" />
+                        <span>Lead</span>
+                    </button>
+                @endif
             </div>
 
-            <div class="form-field mb-3">
-                <label class="form-label">Code</label>
-                <select x-model="dispositionCode" class="form-select">
-                    <option value="">-- Select disposition --</option>
-                    @foreach($dispositionCodes ?? [] as $dc)
-                        @php
-                            $code = is_array($dc) ? ($dc['code'] ?? '') : ($dc->code ?? '');
-                            $label = is_array($dc) ? ($dc['label'] ?? $code) : ($dc->label ?? $code);
-                        @endphp
-                        <option value="{{ $code }}">{{ $label }}</option>
-                    @endforeach
-                </select>
+            <div x-show="!activeTool" x-cloak class="agent-tool-placeholder">
+                <x-empty-state
+                    icon="adjustments-horizontal"
+                    title="Choose a call tool"
+                    description="The primary dial and hangup controls stay above. Open a tab here only when you need an advanced operation." />
             </div>
-            <div class="form-field mb-3">
-                <label class="form-label">Notes</label>
-                <textarea x-model="dispositionNotes" class="form-textarea" rows="3" placeholder="Optional call notes..."></textarea>
-            </div>
-            <button class="btn-primary w-full" @click="saveDisposition()" :disabled="!dispositionCode || savingDisposition">
-                <x-icon name="check" class="w-4 h-4" />
-                <span x-text="savingDisposition ? 'Saving...' : (dispositionError ? 'Retry Save' : 'Save Disposition')">Save Disposition</span>
-            </button>
-        </div>
 
-        @if(($telephonyFeatures['ingroup_management'] ?? true) === true)
-            @include('agent.partials.ingroup-panel')
-        @endif
-        @if(($telephonyFeatures['transfer_controls'] ?? true) === true)
-            @include('agent.partials.transfer-panel')
-        @endif
-        @if(($telephonyFeatures['recording_controls'] ?? true) === true)
-            @include('agent.partials.recording-controls')
-        @endif
-        @if(($telephonyFeatures['dtmf_controls'] ?? true) === true)
-            @include('agent.partials.dtmf-keypad')
-        @endif
-        @if(($telephonyFeatures['callback_controls'] ?? true) === true)
-            @include('agent.partials.callback-form')
-        @endif
-        @if(($telephonyFeatures['lead_tools'] ?? true) === true)
-            @include('agent.partials.lead-search')
-        @endif
+            @if(($telephonyFeatures['ingroup_management'] ?? true) === true)
+                <div id="agent-tool-panel-ingroup" role="tabpanel" tabindex="0" aria-labelledby="agent-tool-tab-ingroup" x-show="activeTool === 'ingroup'" x-cloak>
+                    @include('agent.partials.ingroup-panel')
+                </div>
+            @endif
+            @if(($telephonyFeatures['transfer_controls'] ?? true) === true)
+                <div id="agent-tool-panel-transfer" role="tabpanel" tabindex="0" aria-labelledby="agent-tool-tab-transfer" x-show="activeTool === 'transfer'" x-cloak>
+                    @include('agent.partials.transfer-panel')
+                </div>
+            @endif
+            @if(($telephonyFeatures['recording_controls'] ?? true) === true)
+                <div id="agent-tool-panel-recording" role="tabpanel" tabindex="0" aria-labelledby="agent-tool-tab-recording" x-show="activeTool === 'recording'" x-cloak>
+                    @include('agent.partials.recording-controls')
+                </div>
+            @endif
+            @if(($telephonyFeatures['dtmf_controls'] ?? true) === true)
+                <div id="agent-tool-panel-dtmf" role="tabpanel" tabindex="0" aria-labelledby="agent-tool-tab-dtmf" x-show="activeTool === 'dtmf'" x-cloak>
+                    @include('agent.partials.dtmf-keypad')
+                </div>
+            @endif
+            @if(($telephonyFeatures['callback_controls'] ?? true) === true)
+                <div id="agent-tool-panel-callback" role="tabpanel" tabindex="0" aria-labelledby="agent-tool-tab-callback" x-show="activeTool === 'callback'" x-cloak>
+                    @include('agent.partials.callback-form')
+                </div>
+            @endif
+            @if(($telephonyFeatures['lead_tools'] ?? true) === true)
+                <div id="agent-tool-panel-lead" role="tabpanel" tabindex="0" aria-labelledby="agent-tool-tab-lead" x-show="activeTool === 'lead'" x-cloak>
+                    @include('agent.partials.lead-search')
+                </div>
+            @endif
+        </section>
 
     </div>
 </div>
@@ -295,6 +357,7 @@ window.agentScreen = function() {
         dialBlocked: false,
         predictiveMode: false,
         predictiveDelay: 3,
+        activeTool: null,
         _predictiveTimer: null,
         _leadHydrateTimer: null,
         _suppressLeadWatcher: false,
@@ -322,28 +385,37 @@ window.agentScreen = function() {
 
         _echoUnsubscribe: null,
         _statusPollInterval: null,
+        _vicidialStatusPollInterval: null,
         _activeLeadTimer: null,
         _activeLeadBaseIntervalMs: 5000,
+        _activeLeadFallbackIntervalMs: 5000,
+        _activeLeadRealtimeIntervalMs: 60000,
         _activeLeadBackoffMs: 5000,
         _activeLeadFailureCount: 0,
         _activeLeadMaxBackoffMs: 60000,
         _lastDetectedLeadId: '',
-        features: @js($telephonyFeatures ?? []),
+        _shortcutHandlers: [],
+        _dispositionSavedHandler: null,
+        _destroyed: false,
+        features: JSON.parse(document.getElementById('agent-screen-telephony-features')?.textContent || '[]'),
 
         init() {
+            this._destroyed = false;
             this.$watch('callState', (v) => Alpine.store('call').state = v);
             this.$watch('$store.call.duration', (v) => { this.duration = v; });
             this.$watch('$store.call.state', (v) => { if (v) this.callState = v; });
             this.$watch('$store.call.number', (v) => { if (v) this.phoneNumber = v; });
             this.$watch('$store.call.sessionId', (v) => { if (v) this.sessionId = v; });
             this.$watch('leadId', (value) => {
+                const trimmedLeadId = String(value || '').trim();
+                Alpine.store('call').setLeadId(trimmedLeadId || null);
                 if (this._suppressLeadWatcher) {
                     return;
                 }
                 if (this._leadHydrateTimer) {
                     clearTimeout(this._leadHydrateTimer);
                 }
-                const leadId = String(value || '').trim();
+                const leadId = trimmedLeadId;
                 if (!leadId || leadId === this._lastHydratedLeadId) {
                     return;
                 }
@@ -353,10 +425,6 @@ window.agentScreen = function() {
                 this.predictiveMode = false;
             }
             this.syncCallStatus();
-            if (this.featureEnabled('session_controls')) {
-                this.syncVicidialStatus();
-                this.scheduleActiveLeadProbe(0);
-            }
 
             const te = window.TelephonyEcho;
             const wsAvailable = te && te.initEcho && te.isBroadcastEnabled();
@@ -377,29 +445,86 @@ window.agentScreen = function() {
                 // With WS active, use a slow 60s heartbeat fallback instead of 15s polling
                 this._statusPollInterval = setInterval(() => this.syncCallStatus(), 60000);
                 if (this.featureEnabled('session_controls')) {
-                    setInterval(() => this.syncVicidialStatus(), 60000);
+                    this._vicidialStatusPollInterval = setInterval(() => this.syncVicidialStatus(), 60000);
                 }
             } else {
                 // No WebSocket — use 15s polling as before
                 this._statusPollInterval = setInterval(() => this.syncCallStatus(), 15000);
                 if (this.featureEnabled('session_controls')) {
-                    setInterval(() => this.syncVicidialStatus(), 15000);
+                    this._vicidialStatusPollInterval = setInterval(() => this.syncVicidialStatus(), 15000);
                 }
             }
 
-            window.addEventListener('telephony-shortcut-dial', () => this.dial());
-            window.addEventListener('telephony-shortcut-hangup', () => this.hangup());
-            window.addEventListener('telephony-shortcut-transfer', () => {
-                const panel = document.querySelector('[x-data=\"agentScreen()\"]');
-                if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            });
-            window.addEventListener('telephony-shortcut-recording', () => {
-                if (!this.featureEnabled('recording_controls')) return;
-                this.startRecording();
-            });
+            if (this.featureEnabled('session_controls')) {
+                this._activeLeadBaseIntervalMs = wsAvailable
+                    ? this._activeLeadRealtimeIntervalMs
+                    : this._activeLeadFallbackIntervalMs;
+                this.resetActiveLeadBackoff();
+                this.syncVicidialStatus();
+                this.probeActiveLead().finally(() => {
+                    if (!this._destroyed) {
+                        this.scheduleActiveLeadProbe(this._activeLeadBackoffMs);
+                    }
+                });
+            }
+
+            this._shortcutHandlers = [
+                ['telephony-shortcut-dial', () => this.dial()],
+                ['telephony-shortcut-hangup', () => this.hangup()],
+                ['telephony-shortcut-transfer', () => {
+                    if (!this.featureEnabled('transfer_controls')) return;
+                    this.openTool('transfer');
+                    requestAnimationFrame(() => {
+                        document.getElementById('agent-tool-panels')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    });
+                }],
+                ['telephony-shortcut-recording', () => {
+                    if (!this.featureEnabled('recording_controls')) return;
+                    this.startRecording();
+                }],
+            ];
+            this._shortcutHandlers.forEach(([eventName, handler]) => window.addEventListener(eventName, handler));
+
+            this._dispositionSavedHandler = () => {
+                this.resetAfterDisposition();
+            };
+            window.addEventListener('disposition-saved', this._dispositionSavedHandler);
         },
 
         /** CRM login campaign — hopper, forms, dispositions, lead tools. */
+        destroy() {
+            this._destroyed = true;
+
+            if (typeof this._echoUnsubscribe === 'function') {
+                try {
+                    this._echoUnsubscribe();
+                } catch {}
+            }
+            this._echoUnsubscribe = null;
+
+            clearInterval(this._statusPollInterval);
+            clearInterval(this._vicidialStatusPollInterval);
+            clearInterval(this.timer);
+            clearTimeout(this._activeLeadTimer);
+            clearTimeout(this._leadHydrateTimer);
+            clearTimeout(this._predictiveTimer);
+
+            this._statusPollInterval = null;
+            this._vicidialStatusPollInterval = null;
+            this.timer = null;
+            this._activeLeadTimer = null;
+            this._leadHydrateTimer = null;
+            this._predictiveTimer = null;
+
+            if (typeof this._dispositionSavedHandler === 'function') {
+                window.removeEventListener('disposition-saved', this._dispositionSavedHandler);
+            }
+            this._dispositionSavedHandler = null;
+
+            this._shortcutHandlers.forEach(([eventName, handler]) => window.removeEventListener(eventName, handler));
+            this._shortcutHandlers = [];
+        },
+
         crmCampaign() {
             return document.body?.dataset?.campaign || this.$el?.dataset?.campaign || 'mbsales';
         },
@@ -409,7 +534,7 @@ window.agentScreen = function() {
             return (
                 document.body?.dataset?.telephonyCampaign ||
                 Alpine.store('vicidial').campaign ||
-                this.crmCampaign()
+                'mbsales'
             );
         },
 
@@ -456,7 +581,7 @@ window.agentScreen = function() {
                 store.loggedIn = true;
                 store.status = 'ready';
                 window.dispatchEvent(new CustomEvent('vicidial-ws-phase', { detail: { phase: 'ready' } }));
-                if (window.TelephonyCore?.register) {
+                if (window.TelephonyMediaPath?.shouldUseSipMedia?.() === true && window.TelephonyCore?.register) {
                     window.TelephonyCore.register().catch(() => {});
                 }
             } else if (p.event === 'state_paused') {
@@ -466,11 +591,20 @@ window.agentScreen = function() {
                 store.loggedIn = false;
                 store.status = 'logged_out';
                 window.dispatchEvent(new CustomEvent('vicidial-ws-phase', { detail: { phase: 'idle' } }));
-                if (window.TelephonyCore?.destroy) {
+                if (window.TelephonyMediaPath?.shouldDestroySip?.() === true && window.TelephonyCore?.destroy) {
                     window.TelephonyCore.destroy().catch(() => {});
                 }
             } else if (p.event === 'dispo_set') {
-                // ViciDial confirmed disposition — no action needed if CRM already saved
+                const shouldReleaseWrapup = window.AgentVicidialEvents?.shouldReleaseWrapupForVicidialDisposition?.(p, {
+                    leadId: this.leadId,
+                    callState: this.callState,
+                    hasDispositionPending: this.hasDispositionPending,
+                    dialBlocked: this.dialBlocked,
+                });
+
+                if (shouldReleaseWrapup) {
+                    this.resetAfterDisposition();
+                }
             }
             store.lastSyncAt = p.timestamp || new Date().toISOString();
         },
@@ -556,6 +690,9 @@ window.agentScreen = function() {
         },
 
         async hydrateLead(leadIdOverride = null, phoneNumberOverride = null) {
+            if (this._destroyed) {
+                return;
+            }
             const leadId = String(leadIdOverride || this.leadId || '').trim();
             const phoneNumber = String(phoneNumberOverride || this.phoneNumber || '').trim();
             if (!leadId && !phoneNumber) {
@@ -574,6 +711,9 @@ window.agentScreen = function() {
                 const res = await window.axios.get('/api/leads/hydrate', {
                     params,
                 });
+                if (this._destroyed) {
+                    return;
+                }
                 const data = res.data?.data;
                 if (data) {
                     this.applyLeadData(data);
@@ -584,20 +724,21 @@ window.agentScreen = function() {
         },
 
         async probeActiveLead() {
+            if (this._destroyed) {
+                return;
+            }
             if (this.callState === 'wrapup' || this.savingDisposition) {
                 return;
             }
-            if (Alpine.store('ws')?.isConnected) {
-                this.resetActiveLeadBackoff();
-                return;
-            }
-
             try {
                 const response = await window.axios.get('/api/telephony/active-lead', {
                     params: {
                         campaign: this.telephonyCampaign(),
                     },
                 });
+                if (this._destroyed) {
+                    return;
+                }
                 const payload = response?.data || {};
                 if (payload.success === false) {
                     this.recordActiveLeadFailure();
@@ -624,7 +765,8 @@ window.agentScreen = function() {
                     && typeof payload.capture_data === 'object'
                     && Object.keys(payload.capture_data).length > 0;
 
-                if (leadId === this._lastDetectedLeadId && this.captureFormHasValues()) {
+                const detectedLeadKey = leadId || phoneNumber;
+                if (detectedLeadKey === this._lastDetectedLeadId && this.captureFormHasValues()) {
                     return;
                 }
 
@@ -634,8 +776,8 @@ window.agentScreen = function() {
                     capture_data: hasCaptureData ? payload.capture_data : {},
                 });
 
-                if (leadId) {
-                    this._lastDetectedLeadId = leadId;
+                if (detectedLeadKey) {
+                    this._lastDetectedLeadId = detectedLeadKey;
                 }
                 const shouldStartTimer = ['idle', 'ringing'].includes(this.callState);
                 if (shouldStartTimer) {
@@ -653,12 +795,20 @@ window.agentScreen = function() {
         },
 
         scheduleActiveLeadProbe(delayMs = this._activeLeadBaseIntervalMs) {
+            if (this._destroyed) {
+                return;
+            }
             if (this._activeLeadTimer) {
                 clearTimeout(this._activeLeadTimer);
             }
             this._activeLeadTimer = setTimeout(async () => {
+                if (this._destroyed) {
+                    return;
+                }
                 await this.probeActiveLead();
-                this.scheduleActiveLeadProbe(this._activeLeadBackoffMs);
+                if (!this._destroyed) {
+                    this.scheduleActiveLeadProbe(this._activeLeadBackoffMs);
+                }
             }, Math.max(0, Number(delayMs) || this._activeLeadBaseIntervalMs));
         },
 
@@ -680,9 +830,52 @@ window.agentScreen = function() {
             return !!this.features[key];
         },
 
+        openTool(tool) {
+            const featureByTool = {
+                ingroup: 'ingroup_management',
+                transfer: 'transfer_controls',
+                recording: 'recording_controls',
+                dtmf: 'dtmf_controls',
+                callback: 'callback_controls',
+                lead: 'lead_tools',
+            };
+            const feature = featureByTool[tool];
+            if (!feature || !this.featureEnabled(feature)) {
+                return;
+            }
+            this.activeTool = tool;
+        },
+
+        toolDescription(tool) {
+            return {
+                ingroup: 'Update the active in-groups for this session.',
+                transfer: 'Transfer, conference, park, or retrieve the current call.',
+                recording: 'Start, stop, or check the current call recording.',
+                dtmf: 'Send keypad tones to the current call.',
+                callback: 'Schedule or manage a callback for this lead.',
+                lead: 'Search, load, or switch the current lead.',
+            }[tool] || 'Select a tool when you need it.';
+        },
+
+        callStateLabel() {
+            return {
+                idle: 'Ready',
+                dialing: 'Dialing',
+                ringing: 'Ringing',
+                connected: 'Connected',
+                wrapup: 'Wrap-up',
+            }[this.callState] || 'Call state';
+        },
+
         async syncCallStatus() {
+            if (this._destroyed) {
+                return;
+            }
             try {
                 const res = await window.axios.get('/api/call/status');
+                if (this._destroyed) {
+                    return;
+                }
                 if (res.data.active && res.data.call) {
                     this.sessionId = res.data.call.session_id;
                     this.phoneNumber = res.data.call.phone_number || this.phoneNumber;
@@ -717,6 +910,9 @@ window.agentScreen = function() {
                     Alpine.store('call').state = 'idle';
                 }
             } catch (e) {
+                if (this._destroyed) {
+                    return;
+                }
                 // On network/auth error, reset to idle so the UI is never
                 // permanently stuck in a non-interactive state.
                 if (this.callState !== 'connected' && this.callState !== 'dialing' && this.callState !== 'ringing') {
@@ -729,8 +925,14 @@ window.agentScreen = function() {
         },
 
         async syncVicidialStatus() {
+            if (this._destroyed) {
+                return;
+            }
             try {
                 const data = await Alpine.store('vicidial').sync(this.telephonyCampaign());
+                if (this._destroyed) {
+                    return;
+                }
                 const raw = data?.agent_status?.data?.raw_response || '';
 
                 if (typeof raw === 'string' && raw.includes('INCALL')) {
@@ -1020,7 +1222,7 @@ window.agentScreen = function() {
         },
 
         async hangup() {
-            await Alpine.store('call').hangupWebRTC();
+            await Alpine.store('call').hangupWebRTC({ notifyBackend: false });
             clearInterval(this.timer);
             this.timer = null;
             Alpine.store('call').stopTimer();
@@ -1118,7 +1320,11 @@ window.agentScreen = function() {
             if (!this.featureEnabled('predictive_dialing')) return;
             if (!this.predictiveMode || this.callState !== 'idle') return;
             if (this._predictiveTimer) clearTimeout(this._predictiveTimer);
-            this._predictiveTimer = setTimeout(() => this.predictiveDial(), Math.max(1, this.predictiveDelay) * 1000);
+            this._predictiveTimer = setTimeout(() => {
+                if (!this._destroyed) {
+                    this.predictiveDial();
+                }
+            }, Math.max(1, this.predictiveDelay) * 1000);
         },
 
         async predictiveDial() {
@@ -1155,11 +1361,15 @@ window.agentScreen = function() {
             const form = document.getElementById('capture-form');
             if (!form) { this.saving = false; return; }
             const captureData = {};
+            const visibleFields = [];
             form.querySelectorAll('input, select, textarea').forEach(el => {
                 if (!el.name || el.name.startsWith('_')) return;
 
                 const wrapper = el.closest('[data-capture-field]');
                 if (wrapper && wrapper.offsetParent === null) return;
+                if (!visibleFields.includes(el.name)) {
+                    visibleFields.push(el.name);
+                }
 
                 if (el.type === 'checkbox') {
                     captureData[el.name] = el.checked ? '1' : '0';
@@ -1175,8 +1385,15 @@ window.agentScreen = function() {
                     lead_id: this.leadId,
                     phone_number: this.phoneNumber,
                     capture_data: captureData,
+                    visible_fields: visibleFields,
                 });
                 Alpine.store('toast').success('Record saved.');
+                window.dispatchEvent(new CustomEvent('form-submitted', {
+                    detail: {
+                        campaign: this.crmCampaign(),
+                        formType: 'campaign-capture',
+                    },
+                }));
                 this.clearForm();
             } catch (e) {
                 Alpine.store('toast').error(e.response?.data?.message || 'Failed to save record.');

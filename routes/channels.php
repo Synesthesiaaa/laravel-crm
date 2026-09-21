@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\User;
+use App\Services\CampaignService;
 use Illuminate\Support\Facades\Broadcast;
 
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
@@ -21,6 +23,13 @@ Broadcast::channel('telephony.supervisor', function ($user) {
 });
 
 /**
+ * Dashboard data invalidation channel, scoped to active campaigns.
+ */
+Broadcast::channel('dashboard.{campaign}', function (User $user, string $campaign) {
+    return app(CampaignService::class)->getCampaign($campaign) !== null;
+});
+
+/**
  * Presence channel: real-time agent online/offline tracking for supervisors.
  */
 Broadcast::channel('agents.online', function ($user) {
@@ -29,4 +38,11 @@ Broadcast::channel('agents.online', function ($user) {
         'name' => $user->name,
         'role' => $user->role ?? 'Agent',
     ];
+});
+
+/**
+ * Super Admin activity stream.
+ */
+Broadcast::channel('activity-log', function (User $user): bool {
+    return $user->isSuperAdmin();
 });

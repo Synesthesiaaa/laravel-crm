@@ -169,13 +169,18 @@ class LeadHydrationService
             $viciField = $this->resolveViciKey(
                 (string) $mapping->field_key,
                 $mapping->vici_field !== null ? (string) $mapping->vici_field : null,
-                $aliasIndex
+                $aliasIndex,
             );
-            if ($viciField === null || ! array_key_exists($viciField, $normalized)) {
+            if ($viciField === null) {
                 continue;
             }
 
-            $captureData[$mapping->field_key] = (string) $normalized[$viciField];
+            $rawFieldKey = $this->findRawFieldKey($viciField, $normalized, $aliasIndex);
+            if ($rawFieldKey === null) {
+                continue;
+            }
+
+            $captureData[$mapping->field_key] = (string) $normalized[$rawFieldKey];
         }
 
         return $captureData;
@@ -241,6 +246,26 @@ class LeadHydrationService
     }
 
     /**
+     * @param  array<string, string>  $normalized
+     * @param  array<string, string>  $aliasIndex
+     */
+    protected function findRawFieldKey(string $viciField, array $normalized, array $aliasIndex): ?string
+    {
+        if (array_key_exists($viciField, $normalized)) {
+            return $viciField;
+        }
+
+        $canonical = $aliasIndex[$viciField] ?? $viciField;
+        foreach ($normalized as $rawField => $_value) {
+            if (($aliasIndex[$rawField] ?? $rawField) === $canonical) {
+                return $rawField;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @param  array<string, string>  $rawFields
      */
     protected function resolveClientName(array $rawFields): ?string
@@ -280,6 +305,8 @@ class LeadHydrationService
             return '';
         }
 
-        return preg_match('/^[a-z0-9_]+$/', $field) ? $field : '';
+        $field = preg_replace('/[^a-z0-9]+/', '_', $field) ?: '';
+
+        return trim($field, '_');
     }
 }

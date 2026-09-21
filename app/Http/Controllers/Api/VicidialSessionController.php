@@ -3,26 +3,16 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\VicidialSessionApiRequest;
 use App\Services\Telephony\TelephonyCampaignResolver;
-use App\Services\Telephony\VicidialAgentCampaignsService;
 use App\Services\Telephony\VicidialSessionService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class VicidialSessionController extends Controller
 {
-    public function login(Request $request, VicidialSessionService $service): JsonResponse
+    public function login(VicidialSessionApiRequest $request, VicidialSessionService $service): JsonResponse
     {
-        $validated = $request->validate([
-            'campaign' => ['nullable', 'string', 'max:50'],
-            'phone_login' => ['nullable', 'string', 'max:32'],
-            'phone_pass' => ['nullable', 'string', 'max:32'],
-            'vd_login' => ['nullable', 'string', 'max:32'],
-            'vd_pass' => ['nullable', 'string', 'max:32'],
-            'blended' => ['nullable', 'boolean'],
-            'ingroups' => ['nullable', 'array'],
-            'ingroups.*' => ['string', 'max:32'],
-        ]);
+        $validated = $request->validated();
 
         $user = $request->user();
         $campaign = TelephonyCampaignResolver::resolve($request, $validated['campaign'] ?? null);
@@ -60,11 +50,9 @@ class VicidialSessionController extends Controller
      * Rebuild vicidial.php URL from the current CRM user (VD_login/VD_pass) and session phone_login
      * plus sip_password — same alignment as POST /session/login without overriding phone fields.
      */
-    public function iframeUrl(Request $request, VicidialSessionService $service): JsonResponse
+    public function iframeUrl(VicidialSessionApiRequest $request, VicidialSessionService $service): JsonResponse
     {
-        $validated = $request->validate([
-            'campaign' => ['nullable', 'string', 'max:50'],
-        ]);
+        $validated = $request->validated();
 
         $campaign = TelephonyCampaignResolver::resolve($request, $validated['campaign'] ?? null);
         $user = $request->user();
@@ -95,13 +83,12 @@ class VicidialSessionController extends Controller
      * is actually live in vicidial_live_agents. Returns `login_state: ready` on success
      * or `login_state: login_pending` if not yet usable.
      */
-    public function verify(Request $request, VicidialSessionService $service): JsonResponse
+    public function verify(VicidialSessionApiRequest $request, VicidialSessionService $service): JsonResponse
     {
+        $validated = $request->validated();
         $campaign = TelephonyCampaignResolver::resolve(
             $request,
-            $request->input('campaign') !== null && $request->input('campaign') !== ''
-                ? (string) $request->input('campaign')
-                : null,
+            $validated['campaign'] ?? null,
         );
         $result = $service->verifyLogin($request->user(), $campaign);
 
@@ -113,12 +100,9 @@ class VicidialSessionController extends Controller
         ], $result->success ? 200 : 202);
     }
 
-    public function pause(Request $request, VicidialSessionService $service): JsonResponse
+    public function pause(VicidialSessionApiRequest $request, VicidialSessionService $service): JsonResponse
     {
-        $validated = $request->validate([
-            'campaign' => ['nullable', 'string', 'max:50'],
-            'value' => ['required', 'string', 'in:PAUSE,RESUME,pause,resume'],
-        ]);
+        $validated = $request->validated();
 
         $campaign = TelephonyCampaignResolver::resolve($request, $validated['campaign'] ?? null);
         $result = $service->pauseAgent($request->user(), $campaign, strtoupper($validated['value']));
@@ -130,12 +114,9 @@ class VicidialSessionController extends Controller
         ], $result->success ? 200 : 422);
     }
 
-    public function pauseCode(Request $request, VicidialSessionService $service): JsonResponse
+    public function pauseCode(VicidialSessionApiRequest $request, VicidialSessionService $service): JsonResponse
     {
-        $validated = $request->validate([
-            'campaign' => ['nullable', 'string', 'max:50'],
-            'pause_code' => ['required', 'string', 'max:6'],
-        ]);
+        $validated = $request->validated();
 
         $campaign = TelephonyCampaignResolver::resolve($request, $validated['campaign'] ?? null);
         $result = $service->setPauseCode($request->user(), $campaign, $validated['pause_code']);
@@ -147,13 +128,12 @@ class VicidialSessionController extends Controller
         ], $result->success ? 200 : 422);
     }
 
-    public function logout(Request $request, VicidialSessionService $service): JsonResponse
+    public function logout(VicidialSessionApiRequest $request, VicidialSessionService $service): JsonResponse
     {
+        $validated = $request->validated();
         $campaign = TelephonyCampaignResolver::resolve(
             $request,
-            $request->input('campaign') !== null && $request->input('campaign') !== ''
-                ? (string) $request->input('campaign')
-                : null,
+            $validated['campaign'] ?? null,
         );
         $result = $service->logoutAgent($request->user(), $campaign);
 
@@ -164,15 +144,20 @@ class VicidialSessionController extends Controller
         ], $result->success ? 200 : 422);
     }
 
-    public function status(Request $request, VicidialSessionService $service): JsonResponse
+    public function status(VicidialSessionApiRequest $request, VicidialSessionService $service): JsonResponse
     {
+        $validated = $request->validated();
         $campaign = TelephonyCampaignResolver::resolve(
             $request,
-            $request->input('campaign') !== null && $request->input('campaign') !== ''
-                ? (string) $request->input('campaign')
-                : null,
+            $validated['campaign'] ?? null,
         );
         $status = $service->getAgentStatus($request->user(), $campaign);
+        if ($status->success) {
+            $syncedCampaign = $request->session()->get('vicidial_campaign');
+            if (is_string($syncedCampaign) && $syncedCampaign !== '') {
+                $campaign = $syncedCampaign;
+            }
+        }
         $queue = $service->getCallsInQueue($request->user(), $campaign);
         $ingroups = $service->getAgentInGroupInfo($request->user(), $campaign);
         $session = $service->getLocalSession($request->user(), $campaign);
@@ -200,15 +185,38 @@ class VicidialSessionController extends Controller
         ]);
     }
 
-    public function ingroups(Request $request, VicidialSessionService $service): JsonResponse
+    public function localStatus(VicidialSessionApiRequest $request, VicidialSessionService $service): JsonResponse
     {
-        $validated = $request->validate([
-            'campaign' => ['nullable', 'string', 'max:50'],
-            'action' => ['required', 'string', 'in:CHANGE,ADD,REMOVE,change,add,remove'],
-            'ingroups' => ['nullable', 'array'],
-            'ingroups.*' => ['string', 'max:32'],
-            'blended' => ['nullable', 'boolean'],
+        $validated = $request->validated();
+        $campaign = TelephonyCampaignResolver::resolve($request, $validated['campaign'] ?? null);
+        $session = $service->getLocalSession($request->user(), $campaign);
+
+        return response()->json([
+            'success' => true,
+            'session_iframe_agent_api_only' => (bool) config('vicidial.session_iframe_agent_api_only', false),
+            'local_session' => $session,
+            'agent_status' => [
+                'success' => true,
+                'message' => 'Local VICIdial session state.',
+                'data' => [],
+            ],
+            'queue' => [
+                'success' => true,
+                'message' => 'Queue status is available on the agent screen.',
+                'data' => ['count' => 0],
+            ],
+            'ingroup_info' => [
+                'success' => true,
+                'message' => 'Local session state only.',
+                'data' => [],
+            ],
+            'pause_codes' => config('vicidial.pause_codes', []),
         ]);
+    }
+
+    public function ingroups(VicidialSessionApiRequest $request, VicidialSessionService $service): JsonResponse
+    {
+        $validated = $request->validated();
 
         $campaign = TelephonyCampaignResolver::resolve($request, $validated['campaign'] ?? null);
         $result = $service->changeIngroups(
@@ -224,55 +232,5 @@ class VicidialSessionController extends Controller
             'message' => $result->message,
             'data' => $result->data,
         ], $result->success ? 200 : 422);
-    }
-
-    /**
-     * Campaigns the VICIdial agent user is allowed to log into (from Non-Agent API or DB).
-     */
-    public function agentCampaigns(Request $request, VicidialAgentCampaignsService $campaigns): JsonResponse
-    {
-        $request->validate([
-            'context_campaign' => ['nullable', 'string', 'max:50'],
-        ]);
-
-        $context = $request->query('context_campaign');
-        $result = $campaigns->getAllowedCampaignsForUser(
-            $request->user(),
-            is_string($context) && $context !== '' ? $context : null,
-        );
-
-        if (! $result->success) {
-            return response()->json([
-                'success' => false,
-                'message' => $result->message,
-                'data' => $result->data,
-            ], 422);
-        }
-
-        return response()->json([
-            'success' => true,
-            'campaigns' => $result->data['campaigns'] ?? [],
-            'source' => $result->data['source'] ?? null,
-            'server_campaign_code' => $result->data['server_campaign_code'] ?? null,
-        ]);
-    }
-
-    /**
-     * Persist softphone (VICIdial) campaign only — does not change CRM session('campaign').
-     */
-    public function selectCampaign(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'campaign' => ['required', 'string', 'max:50'],
-            'campaign_name' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $request->session()->put('vicidial_campaign', $validated['campaign']);
-        $request->session()->put(
-            'vicidial_campaign_name',
-            $validated['campaign_name'] ?? $validated['campaign'],
-        );
-
-        return response()->json(['success' => true]);
     }
 }

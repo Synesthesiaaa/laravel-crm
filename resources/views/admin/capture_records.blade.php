@@ -31,8 +31,7 @@
             <x-form.input name="phone" label="Phone" :value="$filters['phone']" />
             <x-form.input name="from_date" type="date" label="From" :value="$filters['from_date']" />
             <x-form.input name="to_date" type="date" label="To" :value="$filters['to_date']" />
-            <div class="form-field">
-                <label class="form-label">&nbsp;</label>
+            <div class="form-actions-bottom">
                 <div class="flex gap-2">
                     <button type="submit" class="btn-primary">
                         <x-icon name="funnel" class="w-4 h-4" />
@@ -87,10 +86,16 @@
                 </td>
                 <td>{{ $campaigns[$record->campaign_code] ?? $record->campaign_code }}</td>
                 <td>{{ $record->agent }}</td>
-                <td class="font-mono text-sm">{{ $record->lead_id ?? '—' }}</td>
-                <td class="font-mono text-sm">{{ $record->phone_number ?? '—' }}</td>
+                <td class="font-mono text-sm">{{ $record->lead_id ?? '-' }}</td>
+                <td class="font-mono text-sm">{{ $record->phone_number ?? '-' }}</td>
                 @foreach($fields as $field)
-                    <td>{{ $captureData[$field->field_key] ?? '—' }}</td>
+                    <td>
+                        @if(($field->field_type ?? '') === 'percentage')
+                            {{ \App\Support\PercentageValue::display($captureData[$field->field_key] ?? null) ?: '-' }}
+                        @else
+                            {{ $captureData[$field->field_key] ?? '-' }}
+                        @endif
+                    </td>
                 @endforeach
                 <td>
                     <div class="table-actions" x-data="{ async del(form) {
@@ -118,6 +123,8 @@
         @endforeach
     </tbody>
     @endif
+    <x-slot:footer>
+        <x-table.pagination :paginator="$records" />
+    </x-slot:footer>
 </x-table.index>
-<x-table.pagination :paginator="$records" />
 @endsection

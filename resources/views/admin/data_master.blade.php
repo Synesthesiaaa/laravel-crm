@@ -9,21 +9,35 @@
 
 <x-validation-errors />
 
+@if(empty($forms))
+    <x-alert type="warning" class="mb-4">No active forms are configured for this campaign.</x-alert>
+@endif
+
 <div class="md-card mb-4">
     <div class="p-4">
-        <form method="GET" action="{{ route('admin.data-master.index') }}" class="flex flex-wrap items-end gap-4">
+        <form method="GET" action="{{ route('admin.data-master.index') }}" data-soft-nav class="flex flex-wrap items-end gap-4">
             <x-form.select name="type" label="Form Type"
                 :options="collect($forms)->mapWithKeys(fn($v,$k) => [$k => $v['name'] ?? $k])->all()"
                 :selected="$type" :empty="false" />
-            <div class="form-field">
-                <label class="form-label">&nbsp;</label>
+            <div class="form-field min-w-[16rem] flex-1">
+                <label for="data-master-search" class="form-label">Search data</label>
+                <input id="data-master-search" type="search" name="search" value="{{ $search ?? '' }}"
+                       class="form-input" placeholder="Search across this form's records" maxlength="100">
+            </div>
+            <div class="form-actions-bottom">
                 <button type="submit" class="btn-primary"><x-icon name="funnel" class="w-4 h-4" /> Load</button>
+                @if(($search ?? '') !== '')
+                    <a href="{{ route('admin.data-master.index', ['type' => $type]) }}" class="btn-ghost" data-soft-nav-clear>
+                        Clear
+                    </a>
+                @endif
             </div>
         </form>
     </div>
 </div>
 
 @if($tableName)
+<div class="data-master-desktop-table">
 <x-table.index caption="Data master records">
     <thead>
         <tr>
@@ -34,13 +48,13 @@
         </tr>
     </thead>
     @if($records->isEmpty())
-        <x-table.empty :colspan="count($columns) + 1" message="No records found." />
+        <x-table.empty :colspan="count($columns) + 1" :message="($search ?? '') !== '' ? 'No records match this search.' : 'No records found.'" />
     @else
     <tbody>
         @foreach($records as $row)
             <tr>
                 @foreach($columns as $col)
-                    <td>{{ is_object($row) ? ($row->$col ?? '') : ($row[$col] ?? '') }}</td>
+                    <td>{{ $dataMasterService->formatValue($col, is_object($row) ? ($row->$col ?? '') : ($row[$col] ?? ''), $percentageColumns ?? []) }}</td>
                 @endforeach
                 <td>
                     <div class="table-actions" x-data="{ async del(form) {
@@ -69,8 +83,18 @@
         @endforeach
     </tbody>
     @endif
+    <x-slot:footer>
+        <x-table.pagination :paginator="$records" />
+    </x-slot:footer>
 </x-table.index>
-<x-table.pagination :paginator="$records" />
+</div>
+@elseif(empty($forms))
+<div class="md-card">
+    <div class="table-empty py-12">
+        <x-icon name="list-bullet" class="w-10 h-10 mx-auto mb-2" />
+        <p class="text-sm font-medium">No active forms are configured for this campaign.</p>
+    </div>
+</div>
 @else
 <div class="md-card">
     <div class="table-empty py-12">

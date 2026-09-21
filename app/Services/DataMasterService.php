@@ -3,12 +3,29 @@
 namespace App\Services;
 
 use App\Contracts\Repositories\FormFieldRepositoryInterface;
+use App\Support\PercentageValue;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class DataMasterService
 {
+    /**
+     * Framework-managed columns shown in Data Master when present in a record.
+     *
+     * @var list<string>
+     */
+    private const SYSTEM_COLUMNS = [
+        'id',
+        'date',
+        'request_id',
+        'agent',
+        'created_at',
+        'updated_at',
+    ];
+
     public function __construct(
         protected CampaignService $campaignService,
         protected FormFieldRepositoryInterface $formFieldRepository,
@@ -18,7 +35,7 @@ class DataMasterService
      * Build the default Data Master column layout for a given form.
      *
      * Order: `id` first, then fields defined in `form_fields` ordered by `field_order`,
-     * then any remaining DB columns (from the sample row) appended at the end.
+     * then approved framework-managed columns present in the sample row.
      * Headers use `field_label` where available, otherwise a humanized `field_name`.
      *
      * @param  array<int, string>|null  $availableColumns  Column names present in the actual DB row.
@@ -47,10 +64,14 @@ class DataMasterService
             $columns = array_values(array_unique(array_merge(['id'], $ordered)));
         } else {
             $available = array_values(array_unique($availableColumns));
-            $orderedInDb = array_values(array_intersect($ordered, $available));
-            $idFirst = in_array('id', $available, true) ? ['id'] : [];
-            $remaining = array_values(array_diff($available, $idFirst, $orderedInDb));
-            $columns = array_values(array_unique(array_merge($idFirst, $orderedInDb, $remaining)));
+            $orderedInDb = array_values(array_diff(
+                array_intersect($ordered, $available),
+                self::SYSTEM_COLUMNS,
+            ));
+            $systemInDb = array_values(array_intersect(self::SYSTEM_COLUMNS, $available));
+            $idFirst = in_array('id', $systemInDb, true) ? ['id'] : [];
+            $managed = array_values(array_diff($systemInDb, ['id']));
+            $columns = array_values(array_unique(array_merge($idFirst, $orderedInDb, $managed)));
         }
 
         foreach ($columns as $col) {
@@ -63,6 +84,28 @@ class DataMasterService
             'columns' => $columns,
             'headers' => $headers,
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getPercentageColumns(string $campaignCode, string $formType): array
+    {
+        return $this->formFieldRepository
+            ->getFieldsForForm($campaignCode, $formType)
+            ->where('field_type', 'percentage')
+            ->pluck('field_name')
+            ->values()
+            ->all();
+    }
+
+    public function formatValue(string $column, mixed $value, array $percentageColumns): string
+    {
+        if (in_array($column, $percentageColumns, true)) {
+            return PercentageValue::display($value);
+        }
+
+        return (string) ($value ?? '');
     }
 
     /**
@@ -84,14 +127,37 @@ class DataMasterService
         return $allowed;
     }
 
-    public function getRecords(string $tableName, array $allowedTables, int $perPage = 20): LengthAwarePaginator
-    {
+    public function getRecords(
+        string $tableName,
+        array $allowedTables,
+        int $perPage = 20,
+        ?string $search = null,
+    ): LengthAwarePaginator {
         if (! $this->isTableAllowed($tableName, $allowedTables)) {
             return new LengthAwarePaginator([], 0, $perPage);
         }
 
         try {
-            return DB::table($tableName)->orderByDesc('id')->paginate($perPage);
+            $query = DB::table($tableName)->orderByDesc('id');
+            $search = $search === null ? '' : trim($search);
+
+            if ($search !== '') {
+                $searchableColumns = array_values(array_filter(
+                    Schema::getColumnListing($tableName),
+                    static fn (mixed $column): bool => is_string($column)
+                        && preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $column) === 1,
+                ));
+
+                if ($searchableColumns !== []) {
+                    $query->where(function (Builder $query) use ($searchableColumns, $search): void {
+                        foreach ($searchableColumns as $column) {
+                            $query->orWhere($column, 'like', '%'.$search.'%');
+                        }
+                    });
+                }
+            }
+
+            return $query->paginate($perPage);
         } catch (\Throwable) {
             return new LengthAwarePaginator([], 0, $perPage);
         }
@@ -116,7 +182,33 @@ class DataMasterService
             return true;
         }
 
+        if (Schema::hasColumn($tableName, 'updated_at')) {
+            $updates['updated_at'] = now();
+        }
+
         return DB::table($tableName)->where('id', $id)->update($updates) >= 0;
+    }
+
+    public function storesPercentageAsNumeric(string $tableName, string $columnName): bool
+    {
+        if (! Schema::hasTable($tableName) || ! Schema::hasColumn($tableName, $columnName)) {
+            return false;
+        }
+
+        try {
+            return in_array(Schema::getColumnType($tableName, $columnName), [
+                'bigint',
+                'decimal',
+                'double',
+                'float',
+                'integer',
+                'numeric',
+                'smallint',
+                'tinyint',
+            ], true);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public function deleteRecord(string $tableName, int $id, array $allowedTables): bool

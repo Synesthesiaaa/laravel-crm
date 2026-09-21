@@ -156,6 +156,61 @@ class LeadHydrationServiceTest extends TestCase
         $this->assertSame(['customer_first_name' => 'AliasName'], $data['capture_data']);
     }
 
+    public function test_hydrate_matches_explicit_vici_field_to_alias_raw_key(): void
+    {
+        $user = User::factory()->create();
+
+        AgentScreenField::create([
+            'campaign_code' => 'mbsales',
+            'field_key' => 'customer_email',
+            'vici_field' => 'email',
+            'direction' => 'get',
+            'field_label' => 'Customer Email',
+            'field_order' => 1,
+            'field_width' => 'full',
+        ]);
+
+        $service = $this->makeService(OperationResult::success([
+            'rows' => [
+                ['lead_id', 'phone_number', 'email_address'],
+                ['606', '15556660000', 'alias@example.test'],
+            ],
+        ]));
+
+        $data = $service->hydrate($user, 'mbsales', 606, null);
+
+        $this->assertSame(['customer_email' => 'alias@example.test'], $data['capture_data']);
+    }
+
+    public function test_hydrate_normalizes_case_spaces_and_hyphens_in_raw_fields(): void
+    {
+        $user = User::factory()->create();
+
+        AgentScreenField::create([
+            'campaign_code' => 'mbsales',
+            'field_key' => 'first_name',
+            'vici_field' => null,
+            'direction' => 'get',
+            'field_label' => 'First Name',
+            'field_order' => 1,
+            'field_width' => 'full',
+        ]);
+
+        $service = $this->makeService(OperationResult::success([
+            'rows' => [
+                ['Lead ID', 'Phone Number', 'First Name', 'Last-Name'],
+                ['707', '15557770000', 'Casey', 'Normalized'],
+            ],
+        ]));
+
+        $data = $service->hydrate($user, 'mbsales', 707, null);
+
+        $this->assertSame('707', $data['lead_id']);
+        $this->assertSame('15557770000', $data['phone_number']);
+        $this->assertSame('Casey Normalized', $data['client_name']);
+        $this->assertSame(['first_name' => 'Casey'], $data['capture_data']);
+    }
+
     public function test_hydrate_returns_safe_defaults_when_vicidial_lookup_fails(): void
     {
         $user = User::factory()->create();

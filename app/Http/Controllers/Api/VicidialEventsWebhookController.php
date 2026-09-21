@@ -34,7 +34,19 @@ class VicidialEventsWebhookController extends Controller
     public function __invoke(Request $request): JsonResponse
     {
         $secret = config('vicidial.events_webhook_secret', '');
-        if ($secret !== '' && $request->header('X-Webhook-Secret') !== $secret) {
+        if ($secret === '') {
+            if (app()->environment('production')) {
+                $this->logger->warning('VicidialEventsWebhookController', 'ViciDial webhook rejected: secret missing in production');
+
+                return response()->json([
+                    'received' => false,
+                    'processed' => false,
+                    'error' => 'Webhook secret is not configured',
+                ], 503);
+            }
+        } elseif ($request->header('X-Webhook-Secret') !== $secret) {
+            $this->logger->warning('VicidialEventsWebhookController', 'ViciDial webhook rejected: invalid or missing secret');
+
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 
@@ -122,7 +134,13 @@ class VicidialEventsWebhookController extends Controller
         $session = CallSession::where('user_id', $user->id)->active()->orderByDesc('dialed_at')->first();
         if ($session && ! $session->isTerminal()) {
             $endReason = $event === 'call_dead' ? 'customer_hangup' : 'agent_hangup_vici';
-            $this->callStateService->recordHangup($session, ['end_reason' => $endReason]);
+            // VICIdial push events can arrive out of order, so a hangup event
+            // should still close the call as connected even if call_answered
+            // has not been processed yet.
+            $this->callStateService->transition($session, CallSession::STATUS_COMPLETED, [
+                'end_reason' => $endReason,
+                'assume_connected' => true,
+            ]);
         }
 
         return true;

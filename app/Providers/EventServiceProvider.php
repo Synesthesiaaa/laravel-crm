@@ -4,12 +4,14 @@ namespace App\Providers;
 
 use App\Events\CallOriginated;
 use App\Events\CallStateChanged;
+use App\Events\DashboardDataUpdated;
 use App\Events\DispositionSaved;
 use App\Events\FormSubmitted;
 use App\Events\LeadImported;
 use App\Events\UserLoggedIn;
 use App\Events\UserLoggedOut;
 use App\Listeners\InvalidateDashboardCache;
+use App\Listeners\InvalidateDashboardStats;
 use App\Listeners\LogCallOriginated;
 use App\Listeners\LogCallStateChanged;
 use App\Listeners\LogDispositionSaved;
@@ -21,6 +23,9 @@ use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvi
 class EventServiceProvider extends ServiceProvider
 {
     protected $listen = [
+        DashboardDataUpdated::class => [
+            InvalidateDashboardStats::class,
+        ],
         FormSubmitted::class => [
             LogFormSubmission::class,
             InvalidateDashboardCache::class,

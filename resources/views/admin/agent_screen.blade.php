@@ -64,14 +64,62 @@
     <div class="p-4">
         <form method="GET" action="{{ route('admin.agent-screen.index') }}" class="flex flex-wrap items-end gap-4">
             <x-form.select name="campaign" label="Campaign" :options="$campaignOptions" :selected="$selectedCampaign" />
-            <div class="form-field">
-                <label class="form-label">&nbsp;</label>
+            <div class="form-actions-bottom">
                 <button type="submit" class="btn-secondary">
                     <x-icon name="funnel" class="w-4 h-4" />
                     Load
                 </button>
             </div>
         </form>
+    </div>
+</div>
+
+<div class="md-card mb-6">
+    <div class="px-6 py-4 border-b border-[var(--color-border)]">
+        <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">VICIdial Web Form</h3>
+        <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">
+            Select the CRM Form that opens when this campaign sends an agent to its web form.
+        </p>
+    </div>
+    <div class="p-6" x-data="{ copied: false }">
+        <form method="POST" action="{{ route('admin.agent-screen.webform.update') }}" class="space-y-4">
+            @csrf
+            <input type="hidden" name="campaign_code" value="{{ $selectedCampaign }}">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <div class="form-field flex-1">
+                    <label class="form-label" for="agent_webform_form_id">CRM Form</label>
+                    <select id="agent_webform_form_id" name="agent_webform_form_id" class="form-select">
+                        <option value="">No web form configured</option>
+                        @foreach($webformOptions as $webformOption)
+                            <option value="{{ $webformOption->id }}" @selected($selectedWebformForm?->is($webformOption))>
+                                {{ $webformOption->name }} ({{ $webformOption->form_code }})
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <button type="submit" class="btn-primary">Save Web Form</button>
+            </div>
+        </form>
+
+        @if($vicidialWebformUrl)
+            <div class="mt-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <p class="text-sm font-medium text-[var(--color-on-surface)]">Paste into the VICIdial campaign Web Form field</p>
+                        <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">Agents must already be logged in to CRM.</p>
+                    </div>
+                    <button type="button" class="btn-secondary text-sm"
+                            @click="navigator.clipboard.writeText($refs.vicidialWebformUrl.value); copied = true; setTimeout(() => copied = false, 1500)">
+                        <span x-text="copied ? 'Copied' : 'Copy URL'">Copy URL</span>
+                    </button>
+                </div>
+                <input x-ref="vicidialWebformUrl" type="text" readonly
+                       value="{{ $vicidialWebformUrl }}"
+                       class="form-input mt-3 font-mono text-xs">
+            </div>
+        @else
+            <p class="mt-4 text-xs text-[var(--color-on-surface-dim)]">Save an active CRM Form to generate the campaign URL.</p>
+        @endif
     </div>
 </div>
 
@@ -152,7 +200,7 @@
                         <x-form.select name="visibility[field]" label="Source Field" :options="$visibilityFieldOptions" :selected="old('visibility.field')" />
                         <x-form.select name="visibility[operator]" label="Operator" :options="$visibilityOperatorOptions" :selected="old('visibility.operator')" />
                         <div class="form-field sm:col-span-3">
-                            <x-form.textarea name="visibility[values][]" label="Values (comma or newline separated)" :value="old('visibility.values.0')" rows="3" placeholder="Yes&#10;No" />
+                            <x-form.textarea name="visibility[values][0]" label="Values (comma or newline separated)" :value="old('visibility.values.0')" rows="3" placeholder="Yes&#10;No" />
                         </div>
                     </div>
                     <p class="text-xs text-[var(--color-on-surface-dim)] mt-2">If no rule is configured, the field is always visible.</p>
@@ -309,7 +357,7 @@
                                                 <x-form.select name="visibility[field]" label="Source Field" :options="$rowVisibilityFields" :selected="$rowVisibility['field'] ?? null" />
                                                 <x-form.select name="visibility[operator]" label="Operator" :options="$visibilityOperatorOptions" :selected="$rowVisibility['operator'] ?? null" />
                                                 <div class="form-field col-span-2">
-                                                    <x-form.textarea name="visibility[values][]" label="Values (comma or newline separated)" :value="$rowVisibilityValueText" rows="3" />
+                                                    <x-form.textarea name="visibility[values][0]" label="Values (comma or newline separated)" :value="$rowVisibilityValueText" rows="3" />
                                                 </div>
                                             </div>
                                         </div>

@@ -6,11 +6,10 @@ autostart=true
 autorestart=true
 startsecs=3
 startretries=10
-user=www-data
+user=crm
 numprocs=1
 redirect_stderr=true
 stdout_logfile=/var/www/laravel-crm/storage/logs/ami-listener.log
 stdout_logfile_maxbytes=20MB
 stdout_logfile_backups=10
 stopwaitsecs=15
-

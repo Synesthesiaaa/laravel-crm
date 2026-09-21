@@ -18,6 +18,10 @@ class EnsureTelephonyFeatureEnabled
         }
 
         if (! $this->featureService->isEnabled($feature)) {
+            if (! $request->expectsJson() && ! $request->is('api/*')) {
+                abort(403, 'This telephony feature is disabled by administrator.');
+            }
+
             return response()->json([
                 'ok' => false,
                 'message' => 'This telephony feature is disabled by administrator.',

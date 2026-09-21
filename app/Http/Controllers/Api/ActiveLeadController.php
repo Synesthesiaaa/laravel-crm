@@ -91,24 +91,76 @@ class ActiveLeadController extends Controller
      */
     private function extractStatusSnapshot(array $rows): ?array
     {
+        $headerIndex = [];
+
         foreach ($rows as $row) {
             if (! is_array($row) || $row === []) {
                 continue;
             }
 
-            $status = strtoupper(trim((string) ($row[0] ?? '')));
+            if ($this->looksLikeHeaderRow($row)) {
+                $headerIndex = $this->buildHeaderIndex($row);
+
+                continue;
+            }
+
+            $status = strtoupper(trim((string) $this->valueFromRow($row, $headerIndex, ['status'], 0)));
             if ($status === '' || $status === 'STATUS') {
                 continue;
             }
 
             return [
                 'status' => $status,
-                'lead_id' => $this->normalizeNullable($row[2] ?? null),
-                'phone_number' => $this->normalizeNullable($row[10] ?? null),
+                'lead_id' => $this->normalizeNullable($this->valueFromRow($row, $headerIndex, ['lead_id', 'leadid'], 2)),
+                'phone_number' => $this->normalizeNullable($this->valueFromRow($row, $headerIndex, ['phone_number', 'phone'], 10)),
             ];
         }
 
         return null;
+    }
+
+    /**
+     * @param  array<int, string>  $row
+     */
+    private function looksLikeHeaderRow(array $row): bool
+    {
+        $headers = array_map(fn ($value) => $this->normalizeHeader((string) $value), $row);
+
+        return in_array('status', $headers, true)
+            && (in_array('lead_id', $headers, true) || in_array('leadid', $headers, true) || in_array('phone_number', $headers, true));
+    }
+
+    /**
+     * @param  array<int, string>  $row
+     * @return array<string, int>
+     */
+    private function buildHeaderIndex(array $row): array
+    {
+        $index = [];
+        foreach ($row as $position => $header) {
+            $normalized = $this->normalizeHeader((string) $header);
+            if ($normalized !== '') {
+                $index[$normalized] = $position;
+            }
+        }
+
+        return $index;
+    }
+
+    /**
+     * @param  array<int, string>  $row
+     * @param  array<string, int>  $headerIndex
+     * @param  array<int, string>  $headerNames
+     */
+    private function valueFromRow(array $row, array $headerIndex, array $headerNames, int $fallbackIndex): mixed
+    {
+        foreach ($headerNames as $headerName) {
+            if (array_key_exists($headerName, $headerIndex)) {
+                return $row[$headerIndex[$headerName]] ?? null;
+            }
+        }
+
+        return $row[$fallbackIndex] ?? null;
     }
 
     private function normalizeNullable(mixed $value): ?string
@@ -116,6 +168,14 @@ class ActiveLeadController extends Controller
         $text = trim((string) $value);
 
         return $text !== '' ? $text : null;
+    }
+
+    private function normalizeHeader(string $value): string
+    {
+        $value = strtolower(trim($value));
+        $value = preg_replace('/[^a-z0-9]+/', '_', $value) ?: '';
+
+        return trim($value, '_');
     }
 
     private function deriveAgentState(string $statusCode): string

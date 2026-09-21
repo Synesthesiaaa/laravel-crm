@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Services\CampaignService;
+use App\Services\DashboardLayoutService;
+use App\Services\DashboardSalesRangeService;
 use App\Services\DashboardStatsService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -12,6 +14,8 @@ class DashboardController extends Controller
     public function __construct(
         protected CampaignService $campaignService,
         protected DashboardStatsService $dashboardStats,
+        protected DashboardLayoutService $dashboardLayoutService,
+        protected DashboardSalesRangeService $dashboardSalesRangeService,
     ) {}
 
     public function index(Request $request): View
@@ -20,11 +24,21 @@ class DashboardController extends Controller
         $campaignName = $request->session()->get('campaign_name', 'Dashboard');
         $campaignConfig = $this->campaignService->getCampaign($campaign) ?? ['forms' => []];
         $forms = $campaignConfig['forms'] ?? [];
-        $kpis = $this->dashboardStats->getKpisForCampaign($campaign);
+        $salesFilter = $this->dashboardSalesRangeService->resolve($request);
+        $kpis = $this->dashboardStats->getSalesKpisForCampaign(
+            $campaign,
+            $salesFilter['from'],
+            $salesFilter['until'],
+        );
+        $dashboardSummary = $this->dashboardStats->getDashboardSummaryForCampaign($campaign);
+        $dailyCampaignReport = $this->dashboardStats->getDailyCampaignReport(
+            $campaign,
+            now(config('app.timezone')),
+        );
         $dailyActivity = $this->dashboardStats->getLast24HourActivityTrend($campaign);
         $weeklyActivity = $this->dashboardStats->getWeeklyActivityTrend($campaign);
         $monthlyActivity = $this->dashboardStats->getMonthlyActivityTrend($campaign);
-        $agentLeaderboard = $this->dashboardStats->getAgentLeaderboard($campaign);
+        $dashboardLayout = $this->dashboardLayoutService->getForCampaign($campaign);
 
         return view('dashboard', [
             'campaign' => $campaign,
@@ -32,10 +46,15 @@ class DashboardController extends Controller
             'user' => $request->user(),
             'forms' => $forms,
             'kpis' => $kpis,
+            'dashboardSummary' => $dashboardSummary,
+            'dailyCampaignReport' => $dailyCampaignReport,
+            'salesFilter' => $salesFilter,
             'dailyActivity' => $dailyActivity,
             'weeklyActivity' => $weeklyActivity,
             'monthlyActivity' => $monthlyActivity,
-            'agentLeaderboard' => $agentLeaderboard,
+            'agentLeaderboard' => $kpis['agent_leaderboard'] ?? [],
+            'dashboardLayout' => $dashboardLayout,
+            'salesMode' => data_get($dashboardLayout, 'sales.mode', 'legacy'),
         ]);
     }
 }

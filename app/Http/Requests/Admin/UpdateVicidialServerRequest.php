@@ -17,6 +17,7 @@ class UpdateVicidialServerRequest extends FormRequest
             'campaign_code' => ['required', 'string', 'max:50'],
             'server_name' => ['required', 'string', 'max:100'],
             'api_url' => ['required', 'url', 'max:500'],
+            'non_agent_api_url' => ['nullable', 'url', 'max:500'],
             'db_host' => ['required', 'string', 'max:255'],
             'db_username' => ['required', 'string', 'max:100'],
             'db_password' => ['nullable', 'string', 'max:255'],

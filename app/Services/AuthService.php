@@ -81,12 +81,8 @@ class AuthService
         $campaign = TelephonyCampaignResolver::forRequest($request);
         if ($user) {
             $this->callOrchestration->forceCompleteAllForUser($user);
+            $this->vicidialSessionService->markLoggedOutLocally($user, $campaign);
 
-            try {
-                $this->vicidialSessionService->logoutAgent($user, $campaign);
-            } catch (\Throwable) {
-                // Best-effort telephony cleanup; auth logout must still complete.
-            }
             DB::transaction(function () use ($user): void {
                 $this->attendanceStatusService->autoCloseOnLogout($user, request()?->ip());
                 $this->attendanceRepository->log($user->id, 'logout', request()?->ip());

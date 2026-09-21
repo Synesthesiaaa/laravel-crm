@@ -36,6 +36,15 @@ class TelephonyPreflightCommand extends Command
 
         $broadcastConnection = (string) config('broadcasting.default');
         $rows[] = ['BROADCAST_CONNECTION', $broadcastConnection === 'reverb' ? 'OK' : 'WARN', $broadcastConnection];
+        if ($broadcastConnection === 'reverb') {
+            foreach ([
+                'REVERB_APP_ID' => config('reverb.apps.apps.0.app_id'),
+                'REVERB_APP_KEY' => config('reverb.apps.apps.0.key'),
+                'REVERB_APP_SECRET' => config('reverb.apps.apps.0.secret'),
+            ] as $name => $value) {
+                $rows[] = [$name, (string) $value !== '' ? 'OK' : 'MISSING', (string) $value !== '' ? '***set***' : '-'];
+            }
+        }
 
         $webhookRouteExists = Route::has('api.webhooks.ami');
         $callDialRouteExists = Route::has('api.call.dial');

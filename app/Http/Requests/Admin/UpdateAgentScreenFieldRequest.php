@@ -2,11 +2,14 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Admin\Concerns\NormalizesVisibilityInput;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdateAgentScreenFieldRequest extends FormRequest
 {
+    use NormalizesVisibilityInput;
+
     public function authorize(): bool
     {
         return $this->user()?->isSuperAdmin() ?? false;
@@ -37,7 +40,7 @@ class UpdateAgentScreenFieldRequest extends FormRequest
             'visibility.field' => ['nullable', 'string', 'max:80', 'regex:/^[a-zA-Z0-9_]+$/'],
             'visibility.operator' => ['nullable', 'in:equals,not_equals,in,not_in'],
             'visibility.values' => ['nullable', 'array'],
-            'visibility.values.*' => ['string', 'max:120'],
+            'visibility.values.*' => ['nullable', 'string', 'max:120'],
             'field_order' => ['nullable', 'integer', 'min:0'],
             'field_width' => ['nullable', 'in:full,half,third'],
         ];

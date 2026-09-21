@@ -2,17 +2,34 @@
 
 namespace App\Services;
 
+use App\Events\DashboardDataUpdated;
 use App\Events\FormSubmitted;
 use App\Repositories\FormFieldRepository;
 use App\Repositories\FormSubmissionRepository;
 use App\Support\OperationResult;
+use App\Support\PercentageValue;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Str;
 
 class FormSubmissionService
 {
+    /**
+     * Columns populated by the submission pipeline or framework internals.
+     *
+     * @var list<string>
+     */
+    private const SYSTEM_COLUMNS = [
+        'id',
+        'created_at',
+        'updated_at',
+        'date',
+        'request_id',
+        'agent',
+        'lead_id',
+        'phone_number',
+    ];
+
     public function __construct(
         protected CampaignService $campaignService,
         protected FormFieldRepository $formFieldRepository,
@@ -20,7 +37,7 @@ class FormSubmissionService
         protected CallHistoryService $callHistoryService,
     ) {}
 
-    public function submit(string $campaign, string $formType, array $data, string $agent): OperationResult
+    public function submit(string $campaign, string $formType, array $data, string $agent, ?int $userId = null): OperationResult
     {
         $formConfig = $this->campaignService->getFormConfig($campaign, $formType);
         if (! $formConfig) {
@@ -31,6 +48,9 @@ class FormSubmissionService
             return OperationResult::failure('Invalid table.');
         }
         $fields = $this->formFieldRepository->getFieldsForForm($campaign, $formType);
+        $fieldMap = $this->resolveStorageFieldMap($tableName, $fields);
+        $this->setStorageFieldNames($fields, $fieldMap);
+        $data = $this->mapSubmissionDataToStorageFields($data, $fieldMap);
         $this->ensureStorageTableAndColumns($tableName, $fields);
 
         $date = $this->sanitizeDate($data['date'] ?? '');
@@ -39,30 +59,37 @@ class FormSubmissionService
         }
 
         try {
-            $recordId = DB::transaction(function () use ($tableName, $fields, $data, $agent, $campaign, $formType, $date): int {
+            $recordId = DB::transaction(function () use ($tableName, $fields, $data, $agent, $userId, $campaign, $formType, $date): int {
                 $merged = array_merge($data, [
                     'date' => $date,
-                    'request_id' => (string) Str::ulid(),
+                    'request_id' => $this->generateUniqueRequestId($tableName),
                 ]);
-                $prepared = $this->prepareFormRow($fields, $merged, $agent);
+                $prepared = $this->prepareFormRow($fields, $merged, $agent, $tableName);
                 if ($prepared === null) {
                     throw new \RuntimeException('Invalid submission data.');
                 }
 
                 $id = $this->formSubmissionRepository->insert($tableName, $prepared);
-                $this->callHistoryService->logFormSubmission(
+                $historyResult = $this->callHistoryService->logFormSubmission(
                     $campaign,
                     $formType,
                     $id,
                     $agent,
                     isset($data['lead_id']) && $data['lead_id'] !== '' ? (int) $data['lead_id'] : null,
                     $data['phone_number'] ?? null,
+                    'RECORDED',
+                    null,
+                    $userId,
                 );
+                if (! $historyResult->success) {
+                    throw new \RuntimeException($historyResult->message ?? 'Unable to record form activity.');
+                }
 
                 return $id;
             });
 
             event(new FormSubmitted($campaign, $formType, $recordId, $agent));
+            event(new DashboardDataUpdated($campaign, $formType, $recordId, 'submitted'));
 
             return OperationResult::success($recordId);
         } catch (\Throwable $e) {
@@ -71,7 +98,7 @@ class FormSubmissionService
     }
 
     /** @return array<string, mixed>|null */
-    public function prepareFormRow(Collection $fields, array $data, string $agent): ?array
+    public function prepareFormRow(Collection $fields, array $data, string $agent, ?string $tableName = null): ?array
     {
         $date = $this->sanitizeDate($data['date'] ?? '');
         $requestId = trim((string) ($data['request_id'] ?? ''));
@@ -82,14 +109,17 @@ class FormSubmissionService
             'date' => $date,
             'request_id' => $requestId,
             'agent' => $agent,
+            'created_at' => now(),
+            'updated_at' => now(),
         ];
         foreach ($fields as $field) {
-            $colName = $field->field_name;
-            if (in_array($colName, ['date', 'request_id', 'agent', 'id', 'created_at', 'updated_at'], true)) {
+            $fieldName = $field->field_name;
+            $colName = $field->storage_field_name ?? $fieldName;
+            if (in_array($colName, self::SYSTEM_COLUMNS, true)) {
                 continue;
             }
             if ($field->field_type === 'multiselect') {
-                $raw = $data[$colName] ?? [];
+                $raw = $data[$colName] ?? $data[$fieldName] ?? [];
                 if (! is_array($raw)) {
                     $raw = [];
                 }
@@ -118,10 +148,15 @@ class FormSubmissionService
                 continue;
             }
 
-            $value = $data[$colName] ?? '';
+            $value = $data[$colName] ?? $data[$fieldName] ?? '';
             $value = is_string($value) ? trim($value) : $value;
             if ($field->field_type === 'number') {
                 $value = preg_replace('/[^0-9.]/', '', (string) $value);
+            }
+            if ($field->field_type === 'percentage') {
+                $value = $this->storesPercentageAsNumeric($tableName, $colName)
+                    ? PercentageValue::numeric($value)
+                    : PercentageValue::normalize($value);
             }
             if ($field->is_required && (string) $value === '') {
                 throw new \InvalidArgumentException("Field '{$colName}' is required.");
@@ -142,8 +177,6 @@ class FormSubmissionService
      */
     protected function ensureStorageTableAndColumns(string $tableName, Collection $fields): void
     {
-        $systemColumns = ['date', 'request_id', 'agent', 'id', 'created_at', 'updated_at'];
-
         if (! Schema::hasTable($tableName)) {
             Schema::create($tableName, function ($table) {
                 $table->id();
@@ -169,12 +202,22 @@ class FormSubmissionService
                     $table->string('agent', 255)->index();
                 });
             }
+            if (! Schema::hasColumn($tableName, 'created_at')) {
+                Schema::table($tableName, function ($table) {
+                    $table->timestamp('created_at')->nullable();
+                });
+            }
+            if (! Schema::hasColumn($tableName, 'updated_at')) {
+                Schema::table($tableName, function ($table) {
+                    $table->timestamp('updated_at')->nullable();
+                });
+            }
         }
 
         $missingFieldCols = [];
         foreach ($fields as $field) {
-            $colName = $field->field_name;
-            if (in_array($colName, $systemColumns, true)) {
+            $colName = $field->storage_field_name ?? $field->field_name;
+            if (in_array($colName, self::SYSTEM_COLUMNS, true)) {
                 continue;
             }
             if (! Schema::hasColumn($tableName, $colName)) {
@@ -189,7 +232,7 @@ class FormSubmissionService
         Schema::table($tableName, function ($table) use ($missingFieldCols) {
             foreach ($missingFieldCols as $field) {
                 /** @var \App\Models\FormField $field */
-                $colName = $field->field_name;
+                $colName = $field->storage_field_name ?? $field->field_name;
                 $nullable = ! $field->is_required;
                 $type = (string) $field->field_type;
 
@@ -215,6 +258,10 @@ class FormSubmissionService
                         $table->decimal($colName, 10, 2)->nullable($nullable);
 
                         break;
+                    case 'percentage':
+                        $table->string($colName, 50)->nullable($nullable);
+
+                        break;
                     case 'text':
                     default:
                         $table->string($colName, 255)->nullable($nullable);
@@ -225,6 +272,89 @@ class FormSubmissionService
         });
     }
 
+    /**
+     * Find a safe one-to-one mapping when a form field name and a storage column
+     * drift apart. Ambiguous differences are left untouched for normal schema
+     * validation and migration handling.
+     *
+     * @return array<string, string>
+     */
+    private function resolveStorageFieldMap(string $tableName, Collection $fields): array
+    {
+        if (! Schema::hasTable($tableName)) {
+            return [];
+        }
+
+        $storageColumns = Schema::getColumnListing($tableName);
+        $fieldNames = $fields
+            ->pluck('field_name')
+            ->filter(fn (mixed $fieldName): bool => is_string($fieldName) && $fieldName !== '')
+            ->unique()
+            ->values()
+            ->all();
+        $storageFieldNames = array_values(array_diff($storageColumns, self::SYSTEM_COLUMNS));
+        $unmatchedFields = array_values(array_diff($fieldNames, $storageColumns));
+        $unrepresentedColumns = array_values(array_diff($storageFieldNames, $fieldNames));
+
+        if (count($unmatchedFields) !== 1 || count($unrepresentedColumns) !== 1) {
+            return [];
+        }
+
+        return [$unmatchedFields[0] => $unrepresentedColumns[0]];
+    }
+
+    /**
+     * @param  array<string, string>  $fieldMap
+     */
+    private function setStorageFieldNames(Collection $fields, array $fieldMap): void
+    {
+        foreach ($fields as $field) {
+            $field->setAttribute(
+                'storage_field_name',
+                $fieldMap[$field->field_name] ?? $field->field_name,
+            );
+        }
+    }
+
+    /**
+     * @param  array<string, string>  $fieldMap
+     * @return array<string, mixed>
+     */
+    private function mapSubmissionDataToStorageFields(array $data, array $fieldMap): array
+    {
+        foreach ($fieldMap as $fieldName => $storageFieldName) {
+            if (array_key_exists($fieldName, $data) && ! array_key_exists($storageFieldName, $data)) {
+                $data[$storageFieldName] = $data[$fieldName];
+            }
+
+            unset($data[$fieldName]);
+        }
+
+        return $data;
+    }
+
+    protected function generateUniqueRequestId(string $tableName): string
+    {
+        for ($attempt = 0; $attempt < $this->requestIdGenerationAttempts(); $attempt++) {
+            $requestId = now()->format('YmdHis').$this->requestIdRandomSuffix();
+            if (! DB::table($tableName)->where('request_id', $requestId)->exists()) {
+                return $requestId;
+            }
+        }
+
+        throw new \RuntimeException('Unable to generate a unique request ID.');
+    }
+
+    protected function requestIdRandomSuffix(): string
+    {
+        return str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+    }
+
+    protected function requestIdGenerationAttempts(): int
+    {
+        return 10;
+    }
+
     private function sanitizeDate(string $input): string
     {
         $input = trim($input);
@@ -233,5 +363,27 @@ class FormSubmissionService
         }
 
         return '';
+    }
+
+    private function storesPercentageAsNumeric(?string $tableName, string $columnName): bool
+    {
+        if ($tableName === null || ! Schema::hasTable($tableName) || ! Schema::hasColumn($tableName, $columnName)) {
+            return false;
+        }
+
+        try {
+            return in_array(Schema::getColumnType($tableName, $columnName), [
+                'bigint',
+                'decimal',
+                'double',
+                'float',
+                'integer',
+                'numeric',
+                'smallint',
+                'tinyint',
+            ], true);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

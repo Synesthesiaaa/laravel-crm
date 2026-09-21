@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -46,6 +47,11 @@ class Form extends Model
     {
         return $this->hasMany(FormField::class, 'form_type', 'form_code')
             ->whereColumn('form_fields.campaign_code', 'forms.campaign_code');
+    }
+
+    public function retentionPolicy(): HasOne
+    {
+        return $this->hasOne(DataRetentionPolicy::class);
     }
 
     public function scopeActive(Builder $query): Builder

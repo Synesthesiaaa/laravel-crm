@@ -45,7 +45,7 @@ class LoginController extends Controller
             $request->incrementAttempts();
 
             throw ValidationException::withMessages([
-                'username' => [__('auth.failed')],
+                'username' => ["We couldn't sign you in with those details. Check your username and password, then try again."],
             ]);
         }
 
@@ -156,6 +156,6 @@ class LoginController extends Controller
     {
         $this->authService->logout();
 
-        return redirect()->route('login');
+        return redirect()->route('home');
     }
 }

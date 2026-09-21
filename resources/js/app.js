@@ -1,24 +1,106 @@
 import './bootstrap';
-import './echo';
 import './components';
 import './vicidial-session';
+import './widgets/workspace';
 import './phone-widget';
+import './quick-form-widget';
 import './soft-navigate';
 import './form-visibility';
+import './telephony-media-path';
+import './call-history';
 import TelephonyCore from './telephony-core';
+import { shouldReleaseWrapupForVicidialDisposition } from './agent-vicidial-events';
+
+window.AgentVicidialEvents = {
+    ...(window.AgentVicidialEvents || {}),
+    shouldReleaseWrapupForVicidialDisposition,
+};
+
+function reportClientWarning(error, context) {
+    if (window.axios?.isCancel?.(error) || error?.__crmPollBackoff) {
+        return;
+    }
+
+    console.warn(`[CRM] ${context}`, error);
+}
 
 // Make ApexCharts available for dynamic import in views
 window.ApexChartsLoader = () => import('apexcharts').then(m => m.default);
 
+const crmChartGroups = new Map();
+
+function destroyChart(chart) {
+    if (!chart) {
+        return;
+    }
+
+    try {
+        chart.destroy();
+    } catch (_) {
+        /* noop */
+    }
+}
+
+function getChartGroup(name) {
+    const key = String(name || 'default');
+    if (!crmChartGroups.has(key)) {
+        crmChartGroups.set(key, new Map());
+    }
+
+    return crmChartGroups.get(key);
+}
+
+window.crmCharts = {
+    register(group, key, chart) {
+        const groupKey = String(group || 'default');
+        const itemKey = String(key || '');
+        if (!itemKey || !chart) {
+            return chart;
+        }
+
+        const chartGroup = getChartGroup(groupKey);
+        const existing = chartGroup.get(itemKey);
+        if (existing && existing !== chart) {
+            destroyChart(existing);
+        }
+        chartGroup.set(itemKey, chart);
+
+        return chart;
+    },
+    destroyGroup(group) {
+        const chartGroup = crmChartGroups.get(String(group || 'default'));
+        if (!chartGroup) {
+            return;
+        }
+
+        chartGroup.forEach((chart) => destroyChart(chart));
+        chartGroup.clear();
+    },
+    destroyAll() {
+        crmChartGroups.forEach((chartGroup) => {
+            chartGroup.forEach((chart) => destroyChart(chart));
+            chartGroup.clear();
+        });
+    },
+    resizeGroup(group) {
+        const chartGroup = crmChartGroups.get(String(group || 'default'));
+        if (!chartGroup) {
+            return;
+        }
+
+        chartGroup.forEach((chart) => {
+            try {
+                chart.resize();
+            } catch (_) {
+                /* noop */
+            }
+        });
+    },
+};
+
 /** ApexCharts need a resize after layout is stable (full page load, sidebar transition, soft-nav). */
 window.resizeCrmDashboardCharts = function resizeCrmDashboardCharts() {
-    Object.values(window.__crmDashboardCharts || {}).forEach((c) => {
-        try {
-            c.resize();
-        } catch (_) {
-            /* noop */
-        }
-    });
+    window.crmCharts?.resizeGroup?.('dashboard');
 };
 
 function scheduleDashboardChartResize() {
@@ -45,8 +127,10 @@ import './attendance-status';
 
 const TELEPHONY_POLL_ENDPOINTS = [
     '/api/notifications',
+    '/api/notifications/summary',
     '/api/call/status',
     '/api/vicidial/session/status',
+    '/api/vicidial/session/local-status',
     '/api/sip/credentials',
     '/api/supervisor/agents',
     '/api/telephony/active-lead',
@@ -206,12 +290,14 @@ Alpine.store('sidebar', {
 Alpine.store('call', {
     state: 'idle', // idle | ringing | connected | hold | wrapup
     sessionId: null,
+    leadId: null,
     number: '',
     duration: 0,
     timer: null,
     transferState: 'idle',
     recording: false,
     inbound: false,
+    muted: false,
 
     startTimer() {
         this.duration = 0;
@@ -220,6 +306,7 @@ Alpine.store('call', {
     },
     stopTimer() { clearInterval(this.timer); this.timer = null; this.duration = 0; },
     setSessionId(id) { this.sessionId = id; },
+    setLeadId(id) { this.leadId = id; },
     formattedDuration() {
         const m = String(Math.floor(this.duration / 60)).padStart(2, '0');
         const s = String(this.duration % 60).padStart(2, '0');
@@ -227,8 +314,25 @@ Alpine.store('call', {
     },
 
     // ── WebRTC delegation ──────────────────────────────────────────────────
-    async hangupWebRTC() {
-        await window.TelephonyCore?.hangup();
+    async hangupWebRTC(options = {}) {
+        await window.TelephonyCore?.hangup(options);
+    },
+    toggleMuteWebRTC() {
+        this.muted = !this.muted;
+        if (this.muted) {
+            window.TelephonyCore?.mute();
+        } else {
+            window.TelephonyCore?.unmute();
+        }
+    },
+    async toggleHoldWebRTC() {
+        if (this.state === 'hold') {
+            await window.TelephonyCore?.unhold();
+
+            return;
+        }
+
+        await window.TelephonyCore?.hold();
     },
 });
 
@@ -257,10 +361,13 @@ Alpine.store('vicidial', {
     ingroupsRaw: '',
     ingroups: [],
     lastSyncAt: null,
-    async sync(campaign = null) {
+    async sync(campaign = null, options = {}) {
         try {
             const params = campaign ? { campaign } : {};
-            const { data } = await window.axios.get('/api/vicidial/session/status', { params });
+            const endpoint = options.remote === true
+                ? '/api/vicidial/session/status'
+                : '/api/vicidial/session/local-status';
+            const { data } = await window.axios.get(endpoint, { params });
             const session = data.local_session || {};
             const queue = data.queue?.data?.count ?? 0;
             const s = session.session_status || 'logged_out';
@@ -278,7 +385,8 @@ Alpine.store('vicidial', {
             }
             this.lastSyncAt = new Date().toISOString();
             return data;
-        } catch (_) {
+        } catch (error) {
+            reportClientWarning(error, 'Unable to sync VICIdial session status.');
             // silent: UI falls back to local values
             return null;
         }
@@ -289,27 +397,50 @@ window.Alpine = Alpine;
 window.TelephonyCore = TelephonyCore;
 
 /**
- * Graceful logout: hang up active call, unregister SIP.js, close Vicidial session,
- * blank the session iframe, then submit the real logout form.
+ * Graceful logout: do bounded browser cleanup, blank the session iframe, then
+ * submit the real logout form without waiting on external telephony APIs.
  *
  * Exposed on window so the header dropdown can call it from `@submit.prevent`
  * without a 15-line inline arrow function.
  */
+let crmLogoutInProgress = false;
+
 window.crmGracefulLogout = async function () {
+    if (crmLogoutInProgress) {
+        return;
+    }
+
+    crmLogoutInProgress = true;
+
+    const withTimeout = (promise, milliseconds) => Promise.race([
+        promise,
+        new Promise((resolve) => setTimeout(resolve, milliseconds)),
+    ]);
+
     try {
         const call = Alpine.store('call');
         if (call.state !== 'idle' && call.sessionId) {
-            try { await window.axios.post('/api/call/hangup', { session_id: call.sessionId }); } catch (_) {}
+            try {
+                await withTimeout(
+                    window.axios.post('/api/call/hangup', { session_id: call.sessionId }, { timeout: 750 }),
+                    750,
+                );
+            } catch (error) {
+                reportClientWarning(error, 'Unable to hang up active call during logout cleanup.');
+            }
         }
         call.state = 'idle';
         call.sessionId = null;
+        call.leadId = null;
         call.stopTimer();
 
-        if (window.TelephonyCore) {
-            try { await window.TelephonyCore.destroy(); } catch (_) {}
+        if (window.TelephonyCore && window.TelephonyMediaPath?.shouldDestroySip?.() === true) {
+            try {
+                await withTimeout(window.TelephonyCore.destroy(), 750);
+            } catch (error) {
+                reportClientWarning(error, 'Unable to destroy telephony client during logout cleanup.');
+            }
         }
-
-        try { await window.axios.post('/api/vicidial/session/logout'); } catch (_) {}
 
         const frame = document.getElementById('vici-session-frame');
         if (frame) {
@@ -322,12 +453,19 @@ window.crmGracefulLogout = async function () {
         if (form) {
             HTMLFormElement.prototype.submit.call(form);
         } else {
-            window.location.href = '/login';
+            window.location.href = '/';
         }
     }
 };
 
 Alpine.start();
+
+window.crmUiRuntime = {
+    ready: true,
+    alpine: window.Alpine === Alpine,
+    softNavigation: typeof window.crmSoftNav?.register === 'function',
+};
+document.documentElement.dataset.crmUiReady = 'true';
 
 // Global keyboard shortcuts
 document.addEventListener('keydown', (e) => {
@@ -341,8 +479,15 @@ document.addEventListener('keydown', (e) => {
         Alpine.store('search').close();
     }
 
-    // Telephony shortcuts (only active on agent views that listen to these events)
-    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+    // Telephony shortcuts belong to the Agent Screen only. Keep native browser
+    // shortcuts available elsewhere and while the agent is editing a field.
+    const shortcutTarget = e.target instanceof Element ? e.target : null;
+    const isEditing = shortcutTarget?.closest(
+        'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]',
+    );
+    const agentScreenActive = Boolean(document.querySelector('[data-agent-screen]'));
+
+    if (agentScreenActive && !isEditing && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
         const key = e.key.toLowerCase();
         const map = {
             d: 'telephony-shortcut-dial',
@@ -367,6 +512,8 @@ window.addEventListener('error', (event) => {
             line:    event.lineno,
             col:     event.colno,
             url:     location.href,
-        }).catch(() => {});
+        }, { timeout: 5000 }).catch((error) => {
+            reportClientWarning(error, 'Unable to submit client error report.');
+        });
     }
 });

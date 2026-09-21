@@ -3,13 +3,13 @@
 namespace App\Services;
 
 use App\Events\DispositionSaved;
+use App\Jobs\SyncVicidialDispositionJob;
 use App\Models\CallSession;
 use App\Models\CampaignDispositionRecord;
 use App\Models\DispositionCode;
 use App\Repositories\DispositionRepository;
 use App\Services\Telephony\CallStateService;
 use App\Services\Telephony\TelephonyLogger;
-use App\Services\Telephony\VicidialDispositionSyncService;
 use App\Support\OperationResult;
 use Illuminate\Support\Facades\DB;
 
@@ -17,7 +17,6 @@ class DispositionService
 {
     public function __construct(
         protected DispositionRepository $dispositionRepository,
-        protected VicidialDispositionSyncService $vicidialSync,
         protected CallStateService $callStateService,
         protected TelephonyLogger $telephonyLogger,
     ) {}
@@ -45,8 +44,12 @@ class DispositionService
         ?string $remarks = null,
         ?int $callDurationSeconds = null,
         ?string $leadDataJson = null,
+        bool $persistRecord = true,
+        bool $skipValidation = false,
     ): OperationResult {
-        $code = $this->resolveAndValidateCode($campaignCode, $dispositionCode, $dispositionLabel);
+        $code = $skipValidation
+            ? ['code' => $dispositionCode, 'label' => $dispositionLabel ?: $dispositionCode]
+            : $this->resolveAndValidateCode($campaignCode, $dispositionCode, $dispositionLabel);
         if (! $code) {
             return OperationResult::failure('Invalid or inactive disposition code for this campaign.');
         }
@@ -66,6 +69,7 @@ class DispositionService
                 ]);
                 $this->callStateService->transition($session, CallSession::STATUS_COMPLETED, [
                     'end_reason' => 'force_ended_on_disposition',
+                    'assume_connected' => true,
                 ], true);
                 $session->refresh();
 
@@ -84,7 +88,7 @@ class DispositionService
         }
 
         try {
-            DB::transaction(function () use (
+            $syncSessionId = DB::transaction(function () use (
                 $campaignCode,
                 $agent,
                 $dispositionCode,
@@ -94,21 +98,26 @@ class DispositionService
                 $phoneNumber,
                 $remarks,
                 $callDurationSeconds,
-                $leadDataJson
+                $leadDataJson,
+                $persistRecord
             ) {
-                $record = CampaignDispositionRecord::create([
-                    'call_session_id' => $callSessionId,
-                    'campaign_code' => $campaignCode,
-                    'agent' => $agent,
-                    'disposition_code' => $dispositionCode,
-                    'disposition_label' => $dispositionLabel,
-                    'lead_id' => $leadId,
-                    'phone_number' => $phoneNumber,
-                    'remarks' => $remarks,
-                    'call_duration_seconds' => $callDurationSeconds,
-                    'lead_data_json' => $leadDataJson ? (is_string($leadDataJson) ? json_decode($leadDataJson, true) : $leadDataJson) : null,
-                    'called_at' => now(),
-                ]);
+                $syncSessionId = null;
+
+                if ($persistRecord) {
+                    CampaignDispositionRecord::create([
+                        'call_session_id' => $callSessionId,
+                        'campaign_code' => $campaignCode,
+                        'agent' => $agent,
+                        'disposition_code' => $dispositionCode,
+                        'disposition_label' => $dispositionLabel,
+                        'lead_id' => $leadId,
+                        'phone_number' => $phoneNumber,
+                        'remarks' => $remarks,
+                        'call_duration_seconds' => $callDurationSeconds,
+                        'lead_data_json' => $leadDataJson ? (is_string($leadDataJson) ? json_decode($leadDataJson, true) : $leadDataJson) : null,
+                        'called_at' => now(),
+                    ]);
+                }
 
                 if ($callSessionId !== null) {
                     $session = CallSession::lockForUpdate()->find($callSessionId);
@@ -120,12 +129,20 @@ class DispositionService
                             'disposition_at' => now(),
                             'call_duration_seconds' => $callDurationSeconds ?? $session->call_duration_seconds,
                         ]);
-                        $this->vicidialSync->syncDispositionToVicidial($session->fresh());
+                        $syncSessionId = (int) $session->id;
                     }
                 }
 
-                event(new DispositionSaved($campaignCode, $agent, $dispositionCode, $leadId));
+                if ($persistRecord) {
+                    event(new DispositionSaved($campaignCode, $agent, $dispositionCode, $leadId));
+                }
+
+                return $syncSessionId;
             });
+
+            if ($syncSessionId !== null) {
+                SyncVicidialDispositionJob::dispatch($syncSessionId);
+            }
 
             return OperationResult::success();
         } catch (\Throwable $e) {

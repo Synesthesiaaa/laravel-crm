@@ -13,7 +13,7 @@ timeout /t 1 /nobreak >nul
 start /b php artisan reverb:start
 timeout /t 1 /nobreak >nul
 
-start /b php artisan queue:work
+start /b php artisan queue:work --queue=telephony,default
 timeout /t 1 /nobreak >nul
 
 start /b php artisan ami:listen

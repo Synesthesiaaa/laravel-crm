@@ -9,17 +9,19 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('attendance_status_types', function (Blueprint $table) {
-            $table->id();
-            $table->string('code', 30)->unique();
-            $table->string('label', 60);
-            $table->unsignedSmallInteger('sort_order')->default(0);
-            $table->boolean('is_active')->default(true);
-            $table->timestamps();
-        });
+        if (! Schema::hasTable('attendance_status_types')) {
+            Schema::create('attendance_status_types', function (Blueprint $table) {
+                $table->id();
+                $table->string('code', 30)->unique();
+                $table->string('label', 60);
+                $table->unsignedSmallInteger('sort_order')->default(0);
+                $table->boolean('is_active')->default(true);
+                $table->timestamps();
+            });
+        }
 
         $now = now();
-        DB::table('attendance_status_types')->insert([
+        DB::table('attendance_status_types')->upsert([
             [
                 'code' => 'lunch',
                 'label' => 'Lunch',
@@ -44,7 +46,7 @@ return new class extends Migration
                 'created_at' => $now,
                 'updated_at' => $now,
             ],
-        ]);
+        ], ['code'], ['label', 'sort_order', 'is_active', 'updated_at']);
     }
 
     public function down(): void

@@ -3,7 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\UpdateBrandingRequest;
+use App\Models\DataRetentionPolicy;
+use App\Models\Form;
+use App\Services\BrandingService;
 use App\Services\CampaignService;
+use App\Services\DataRetentionService;
 use App\Services\TelephonyFeatureService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,19 +18,51 @@ class ConfigurationController extends Controller
 {
     public function __construct(
         protected CampaignService $campaignService,
+        protected BrandingService $brandingService,
         protected TelephonyFeatureService $telephonyFeatureService,
+        protected DataRetentionService $dataRetentionService,
     ) {}
 
     public function index(Request $request): View
     {
         $tab = $request->query('tab', 'general');
         $campaigns = $this->campaignService->getCampaigns();
+        $retentionForms = Form::query()
+            ->where('is_active', true)
+            ->with('retentionPolicy')
+            ->orderBy('campaign_code')
+            ->orderBy('display_order')
+            ->orderBy('id')
+            ->get();
+        $retentionForms->each(function (Form $form): void {
+            $form->setRelation('formFields', $this->dataRetentionService->eligibleFields($form));
+        });
+        $selectedRetentionFormId = (int) $request->query('retention_form', 0);
+        if (! $retentionForms->contains('id', $selectedRetentionFormId)) {
+            $selectedRetentionFormId = (int) ($retentionForms->first()?->id ?? 0);
+        }
 
         return view('admin.configuration', [
             'tab' => $tab,
+            'brandingSettings' => $this->brandingService->resolve(),
             'campaigns' => $campaigns,
             'telephonyFeatures' => $this->telephonyFeatureService->getAll(),
+            'retentionForms' => $retentionForms,
+            'retentionPolicies' => DataRetentionPolicy::query()
+                ->with('form.campaign')
+                ->latest('id')
+                ->get(),
+            'selectedRetentionFormId' => $selectedRetentionFormId,
         ]);
+    }
+
+    public function updateBranding(UpdateBrandingRequest $request): RedirectResponse
+    {
+        $this->brandingService->update($request->validated());
+
+        return redirect()
+            ->route('admin.configuration', ['tab' => 'branding'])
+            ->with('status', 'Branding settings updated successfully.');
     }
 
     public function updateTelephonyFeatures(Request $request): RedirectResponse

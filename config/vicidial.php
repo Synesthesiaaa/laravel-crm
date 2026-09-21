@@ -15,6 +15,20 @@ return [
     'connect_timeout' => (int) env('VICI_CONNECT_TIMEOUT', 5),
     'retry_times' => (int) env('VICI_RETRY_TIMES', 2),
     'retry_sleep_ms' => (int) env('VICI_RETRY_SLEEP_MS', 500),
+    'agent_api_timeout' => (int) env('VICI_AGENT_API_TIMEOUT', 4),
+    'agent_connect_timeout' => (int) env('VICI_AGENT_CONNECT_TIMEOUT', 2),
+    'report_timezone' => env('VICI_REPORT_TIMEZONE', env('APP_TIMEZONE', 'UTC')),
+    'campaign_scope_cache_seconds' => (int) env('VICI_CAMPAIGN_SCOPE_CACHE_SECONDS', 60),
+    'campaign_catalog_cache_seconds' => (int) env('VICI_CAMPAIGN_CATALOG_CACHE_SECONDS', 60),
+    'call_history_sync' => [
+        'recent_window_minutes' => (int) env('VICI_CALL_HISTORY_RECENT_WINDOW_MINUTES', 15),
+        'overlap_minutes' => (int) env('VICI_CALL_HISTORY_OVERLAP_MINUTES', 5),
+        'chunk_size' => (int) env('VICI_CALL_HISTORY_SYNC_CHUNK_SIZE', 500),
+        'job_timeout_seconds' => (int) env('VICI_CALL_HISTORY_JOB_TIMEOUT_SECONDS', 120),
+        'retry_times' => (int) env('VICI_CALL_HISTORY_RETRY_TIMES', 3),
+        'stale_after_minutes' => (int) env('VICI_CALL_HISTORY_STALE_AFTER_MINUTES', 5),
+        'schedule_enabled' => env('VICI_CALL_HISTORY_SYNC_ENABLED', true),
+    ],
 
     /*
     |--------------------------------------------------------------------------
@@ -44,12 +58,62 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Report system disposition codes
+    |--------------------------------------------------------------------------
+    | Vicidial disposition codes that should be treated as system-generated.
+    | They can be hidden in the dashboard and excluded from CRM report rows.
+    */
+    'report_system_disposition_codes' => array_values(array_filter(array_map(
+        static fn ($code) => trim((string) $code),
+        explode(',', (string) env('VICI_REPORT_SYSTEM_DISPOSITION_CODES', '')),
+    ))),
+    'report_disposition_groups' => [
+        'contacted' => array_values(array_filter(array_map(
+            static fn ($code) => trim((string) $code),
+            explode(',', (string) env('VICI_REPORT_CONTACT_DISPOSITION_CODES', '')),
+        ))),
+        'qualified' => array_values(array_filter(array_map(
+            static fn ($code) => trim((string) $code),
+            explode(',', (string) env('VICI_REPORT_QUALIFIED_DISPOSITION_CODES', '')),
+        ))),
+        'successful' => array_values(array_filter(array_map(
+            static fn ($code) => trim((string) $code),
+            explode(',', (string) env('VICI_REPORT_SUCCESS_DISPOSITION_CODES', '')),
+        ))),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Supervisor operational thresholds
+    |--------------------------------------------------------------------------
+    | These values are deliberately conservative defaults. A queue is unknown
+    | when the required signal is not returned by VICIdial or CRM fallback.
+    */
+    'supervisor' => [
+        'poll_seconds' => (int) env('VICI_SUPERVISOR_POLL_SECONDS', 15),
+        'rolling_window_minutes' => (int) env('VICI_SUPERVISOR_ROLLING_WINDOW_MINUTES', 15),
+        'stale_after_seconds' => (int) env('VICI_SUPERVISOR_STALE_AFTER_SECONDS', 45),
+        // Opt in after measuring dashboard concurrency; zero avoids hiding
+        // fresh agent state during initial rollout.
+        'remote_cache_seconds' => (int) env('VICI_SUPERVISOR_REMOTE_CACHE_SECONDS', 0),
+        'queue' => [
+            'warning_waiting_calls' => (int) env('VICI_QUEUE_WARNING_WAITING_CALLS', 5),
+            'critical_waiting_calls' => (int) env('VICI_QUEUE_CRITICAL_WAITING_CALLS', 10),
+            'warning_oldest_wait_seconds' => (int) env('VICI_QUEUE_WARNING_OLDEST_WAIT_SECONDS', 60),
+            'critical_oldest_wait_seconds' => (int) env('VICI_QUEUE_CRITICAL_OLDEST_WAIT_SECONDS', 180),
+            'warning_no_available_agents' => (int) env('VICI_QUEUE_WARNING_NO_AVAILABLE_AGENTS', 1),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Agent session defaults
     |--------------------------------------------------------------------------
     */
     'pause_codes' => ['BREAK', 'LUNCH', 'MEET', 'COACH', 'SYSTEM'],
     'session_status_poll_seconds' => (int) env('VICI_SESSION_STATUS_POLL_SECONDS', 15),
     'auto_bootstrap_on_crm_login' => env('VICI_AUTO_BOOTSTRAP', false),
+    'default_campaign' => env('VICI_DEFAULT_CAMPAIGN', 'mbsales'),
 
     /*
     |--------------------------------------------------------------------------
@@ -99,21 +163,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Agent allowed campaigns (Non-Agent API agent_campaigns + DB fallback)
-    |--------------------------------------------------------------------------
-    | When true, GET /api/vicidial/session/agent-campaigns resolves campaigns the
-    | VICIdial user may log into (requires api_user/api_pass with permission, or
-    | MySQL access to vicidial_users / vicidial_campaigns).
-    */
-    'agent_campaigns_lookup_enabled' => env('VICI_AGENT_CAMPAIGNS_LOOKUP', true),
-
-    /*
-    |--------------------------------------------------------------------------
     | Agent Events Push webhook secret
     |--------------------------------------------------------------------------
     | Optional shared secret to validate ViciDial push event POSTs.
     */
     'events_webhook_secret' => env('VICIDIAL_EVENTS_WEBHOOK_SECRET', ''),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Vicidial Call URL shared secret
+    |--------------------------------------------------------------------------
+    | Optional shared secret to validate Vicidial campaign GET callbacks.
+    | Defaults to the agent push secret so one value can protect both paths.
+    */
+    'call_url_secret' => env('VICIDIAL_CALL_URL_SECRET', env('VICIDIAL_EVENTS_WEBHOOK_SECRET', '')),
 
     /*
     |--------------------------------------------------------------------------

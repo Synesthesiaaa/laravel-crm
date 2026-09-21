@@ -14,6 +14,9 @@
     $hasError = $error ?? ($errors->has($name) ? $errors->first($name) : null);
     $errorMsg = $error ?? ($errors->has($name) ? $errors->first($name) : null);
     $inputId  = 'field-' . str_replace(['.', '[', ']'], ['-', '-', ''], $name);
+    $describedBy = $errorMsg
+        ? $inputId.'-error'
+        : ($help ? $inputId.'-help' : null);
 @endphp
 <div class="form-field">
     @if($label)
@@ -26,13 +29,14 @@
         type="{{ $type }}"
         name="{{ $name }}"
         id="{{ $inputId }}"
-        value="{{ old($name, $value) }}"
+        @if($type !== 'password') value="{{ old($name, $value) }}" @endif
         @if($placeholder) placeholder="{{ $placeholder }}" @endif
         @if($required)  required @endif
         @if($readonly)  readonly @endif
         @if($disabled)  disabled @endif
         {{ $attributes->class(['form-input', 'error' => $hasError]) }}
-        @if($hasError) aria-invalid="true" aria-describedby="{{ $inputId }}-error" @endif
+        @if($hasError) aria-invalid="true" @endif
+        @if($describedBy) aria-describedby="{{ $describedBy }}" @endif
     >
     @if($errorMsg)
         <span id="{{ $inputId }}-error" class="form-error-msg" role="alert">
@@ -41,6 +45,6 @@
         </span>
     @endif
     @if($help && !$errorMsg)
-        <span class="form-help">{{ $help }}</span>
+        <span id="{{ $inputId }}-help" class="form-help">{{ $help }}</span>
     @endif
 </div>

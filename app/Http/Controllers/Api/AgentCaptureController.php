@@ -3,45 +3,52 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SyncVicidialLeadFieldsJob;
 use App\Models\AgentCaptureRecord;
 use App\Models\AgentScreenField;
-use App\Services\Telephony\LeadService;
-use App\Services\Telephony\TelephonyLogger;
+use App\Support\PercentageValue;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AgentCaptureController extends Controller
 {
-    public function __construct(
-        protected LeadService $leadService,
-        protected TelephonyLogger $telephonyLogger,
-    ) {}
-
     public function store(Request $request): JsonResponse
     {
+        $user = $request->user();
+
         $request->validate([
             'campaign_code' => ['required', 'string', 'max:50'],
-            'call_session_id' => ['nullable', 'integer', 'exists:call_sessions,id'],
+            'call_session_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('call_sessions', 'id')->where('user_id', $user->id),
+            ],
             'lead_id' => ['nullable', 'string', 'max:50'],
             'phone_number' => ['nullable', 'string', 'max:50'],
             'capture_data' => ['required', 'array'],
+            'visible_fields' => ['nullable', 'array'],
+            'visible_fields.*' => ['string', 'max:100'],
         ]);
 
         $campaign = $request->input('campaign_code');
         $fields = AgentScreenField::query()
             ->forCampaign($campaign)
-            ->get(['field_key', 'vici_field', 'direction']);
-        $allowedKeys = $fields->pluck('field_key')->toArray();
+            ->get(['field_key', 'vici_field', 'field_type', 'direction', 'is_required']);
+        $fieldsByKey = $fields->keyBy('field_key');
+        $allowedKeys = $fieldsByKey->keys()->toArray();
 
         $captureData = [];
         foreach ($request->input('capture_data', []) as $key => $value) {
             if (in_array($key, $allowedKeys, true)) {
-                $captureData[$key] = is_string($value) ? $value : (string) $value;
+                $field = $fieldsByKey->get($key);
+                $captureData[$key] = $this->normalizeCaptureValue($value, (string) ($field->field_type ?? 'text'));
             }
         }
 
-        $user = $request->user();
+        $this->validateRequiredCaptureData($request, $fields, $captureData);
 
         $record = AgentCaptureRecord::create([
             'campaign_code' => $campaign,
@@ -53,7 +60,7 @@ class AgentCaptureController extends Controller
             'capture_data' => $captureData,
         ]);
 
-        $this->syncPostFieldsToVicidial($request, $fields, $captureData, (string) $campaign);
+        $this->deferPostFieldsToVicidial($request, $fields, $captureData, (string) $campaign);
 
         return response()->json([
             'success' => true,
@@ -62,9 +69,40 @@ class AgentCaptureController extends Controller
     }
 
     /**
+     * @param  array<string, string>  $captureData
+     */
+    private function validateRequiredCaptureData(Request $request, Collection $fields, array $captureData): void
+    {
+        $visibleFields = collect($request->input('visible_fields', []))
+            ->filter(fn ($field) => is_string($field) && $field !== '')
+            ->values();
+        $hasVisibleFieldList = $request->has('visible_fields');
+        $errors = [];
+
+        foreach ($fields as $field) {
+            if (! (bool) ($field->is_required ?? false)) {
+                continue;
+            }
+
+            $fieldKey = (string) $field->field_key;
+            if ($hasVisibleFieldList && ! $visibleFields->contains($fieldKey)) {
+                continue;
+            }
+
+            if (trim((string) ($captureData[$fieldKey] ?? '')) === '') {
+                $errors["capture_data.{$fieldKey}"] = 'This field is required.';
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+    }
+
+    /**
      * Push mapped capture fields back to Vicidial for directions post/both.
      */
-    private function syncPostFieldsToVicidial(Request $request, Collection $fields, array $captureData, string $campaign): void
+    private function deferPostFieldsToVicidial(Request $request, Collection $fields, array $captureData, string $campaign): void
     {
         $leadId = trim((string) $request->input('lead_id', ''));
         if ($leadId === '') {
@@ -98,22 +136,15 @@ class AgentCaptureController extends Controller
             return;
         }
 
-        try {
-            $result = $this->leadService->updateFields($request->user(), $campaign, $updateFields);
-            if (! $result->success) {
-                $this->telephonyLogger->warning('AgentCaptureController', 'Vicidial update_fields push failed', [
-                    'campaign' => $campaign,
-                    'lead_id' => $leadId,
-                    'message' => $result->message,
-                    'mapped_fields' => array_keys($updateFields),
-                ]);
-            }
-        } catch (\Throwable $e) {
-            $this->telephonyLogger->warning('AgentCaptureController', 'Vicidial update_fields push threw exception', [
-                'campaign' => $campaign,
-                'lead_id' => $leadId,
-                'error' => $e->getMessage(),
-            ]);
+        SyncVicidialLeadFieldsJob::dispatch((int) $request->user()->id, $campaign, $updateFields);
+    }
+
+    private function normalizeCaptureValue(mixed $value, string $fieldType): string
+    {
+        if ($fieldType === 'percentage') {
+            return PercentageValue::normalize($value) ?? '';
         }
+
+        return is_string($value) ? $value : (string) $value;
     }
 }

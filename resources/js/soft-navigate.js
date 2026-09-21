@@ -6,6 +6,71 @@ function getCsrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 }
 
+const softNavScopes = new Map();
+let currentSoftNavScope = '';
+let currentSoftNavPhase = 'initial';
+let navigationSequence = 0;
+let navigationController = null;
+let foregroundNavigationPending = false;
+
+function normalizeSoftNavScope(value) {
+    return String(value || '').trim() || 'default';
+}
+
+function getSoftNavScopeFromUrl(url) {
+    try {
+        return normalizeSoftNavScope(new URL(url, window.location.origin).pathname);
+    } catch {
+        return normalizeSoftNavScope(window.location.pathname);
+    }
+}
+
+function runSoftNavHandler(scope, phase, detail) {
+    const handlers = softNavScopes.get(scope);
+    const handler = handlers?.[phase];
+    if (typeof handler !== 'function') {
+        return;
+    }
+
+    try {
+        handler(detail);
+    } catch (error) {
+        console.warn(`[soft-navigate] ${phase} handler failed for ${scope}`, error);
+    }
+}
+
+window.crmSoftNav = {
+    register(scope, handlers = {}) {
+        const key = normalizeSoftNavScope(scope);
+        softNavScopes.set(key, {
+            beforeSwap: typeof handlers.beforeSwap === 'function' ? handlers.beforeSwap : null,
+            afterSwap: typeof handlers.afterSwap === 'function' ? handlers.afterSwap : null,
+        });
+
+        return () => {
+            softNavScopes.delete(key);
+        };
+    },
+    unregister(scope) {
+        softNavScopes.delete(normalizeSoftNavScope(scope));
+    },
+    currentScope() {
+        return currentSoftNavScope || normalizeSoftNavScope(window.location.pathname);
+    },
+    currentPhase() {
+        return currentSoftNavPhase;
+    },
+    isRehydrating() {
+        return currentSoftNavPhase === 'rehydrating';
+    },
+    refresh({ shouldDefer = () => false } = {}) {
+        return softNavigate(window.location.href, { push: false, background: true, shouldDefer });
+    },
+    run(scope, phase, detail = {}) {
+        runSoftNavHandler(normalizeSoftNavScope(scope), phase, detail);
+    },
+};
+
 function removeInjectedPageScripts() {
     document.querySelectorAll('script[data-soft-nav-injected]').forEach((el) => el.remove());
 }
@@ -63,6 +128,31 @@ function syncSidebarActiveFromFetchedDocument(doc) {
     });
 }
 
+function syncCampaignStateFromFetchedDocument(doc) {
+    const nextBody = doc?.body;
+    const nextCampaign = String(nextBody?.dataset?.campaign || '').trim();
+    if (!nextCampaign || !document.body) {
+        return null;
+    }
+
+    const currentCampaign = String(document.body.dataset.campaign || '').trim();
+    const currentTelephonyCampaign = String(document.body.dataset.telephonyCampaign || '').trim();
+    const campaignName = String(nextBody.dataset.campaignName || nextCampaign).trim();
+
+    document.body.dataset.campaign = nextCampaign;
+    document.body.dataset.campaignName = campaignName;
+    document.body.dataset.telephonyCampaign = nextCampaign;
+
+    if (nextCampaign === currentCampaign && nextCampaign === currentTelephonyCampaign) {
+        return null;
+    }
+
+    return {
+        campaign: nextCampaign,
+        campaignName,
+    };
+}
+
 function executeScriptsAfterMarker(doc) {
     const marker = doc.getElementById('soft-nav-scripts-marker');
     if (!marker) {
@@ -86,7 +176,16 @@ function executeScriptsAfterMarker(doc) {
     }
 }
 
-async function softNavigate(url, { push = true } = {}) {
+async function softNavigate(url, { push = true, background = false, shouldDefer = () => false } = {}) {
+    if (background && (foregroundNavigationPending || shouldDefer())) {
+        return false;
+    }
+
+    const sequence = ++navigationSequence;
+    navigationController?.abort();
+    const controller = new AbortController();
+    navigationController = controller;
+    foregroundNavigationPending = !background;
     const mainLayout = document.getElementById('main-layout');
     if (!mainLayout) {
         window.location.href = url;
@@ -100,8 +199,11 @@ async function softNavigate(url, { push = true } = {}) {
     }
 
     let res;
+    let html;
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
     try {
         res = await fetch(url, {
+            signal: controller.signal,
             method: 'GET',
             credentials: 'same-origin',
             headers: {
@@ -110,9 +212,21 @@ async function softNavigate(url, { push = true } = {}) {
                 'X-CSRF-TOKEN': getCsrfToken(),
             },
         });
+        html = await res.text();
     } catch (_) {
-        window.location.href = url;
-        return;
+        if (sequence === navigationSequence && !background) {
+            window.Alpine?.store('toast')?.error?.('Could not load page. Please try again.');
+        }
+        return null;
+    } finally {
+        window.clearTimeout(timeout);
+        if (sequence === navigationSequence) {
+            foregroundNavigationPending = false;
+        }
+    }
+
+    if (sequence !== navigationSequence || (background && shouldDefer())) {
+        return false;
     }
 
     if (res.redirected || res.status === 401 || res.status === 403) {
@@ -125,7 +239,6 @@ async function softNavigate(url, { push = true } = {}) {
         return;
     }
 
-    const html = await res.text();
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
 
@@ -135,17 +248,43 @@ async function softNavigate(url, { push = true } = {}) {
         return;
     }
 
+    const campaignChange = syncCampaignStateFromFetchedDocument(doc);
+
+    const previousScope = currentSoftNavScope || normalizeSoftNavScope(window.location.pathname);
+    const nextScope = getSoftNavScopeFromUrl(url);
+    const scrollPosition = { x: window.scrollX, y: window.scrollY };
+    const scrollContainers = background
+        ? Array.from(mainLayout.querySelectorAll('[id]')).filter((element) => element.scrollTop || element.scrollLeft)
+            .map((element) => ({ id: element.id, top: element.scrollTop, left: element.scrollLeft }))
+        : [];
+
+    Alpine.store('modal')?.hide?.();
+    await Alpine.nextTick();
+    if (sequence !== navigationSequence) {
+        return false;
+    }
+
     try {
+        window.dispatchEvent(new CustomEvent('soft-navigate:before', {
+            detail: { url, scope: previousScope },
+        }));
+        runSoftNavHandler(previousScope, 'beforeSwap', { url, scope: previousScope, nextScope });
+
         if (typeof Alpine.destroyTree === 'function') {
             Alpine.destroyTree(mainLayout);
         }
     } catch (_) {}
+
+    window.crmSoftNav?.unregister?.(previousScope);
 
     removeInjectedPageScripts();
 
     mainLayout.innerHTML = nextMain.innerHTML;
 
     syncSidebarActiveFromFetchedDocument(doc);
+
+    currentSoftNavScope = nextScope;
+    currentSoftNavPhase = 'rehydrating';
 
     const titleEl = doc.querySelector('title');
     if (titleEl?.textContent) {
@@ -164,6 +303,23 @@ async function softNavigate(url, { push = true } = {}) {
         console.warn('[soft-navigate] Alpine.initTree failed', e);
     }
 
+    if (campaignChange) {
+        window.dispatchEvent(new CustomEvent('crm-campaign-changed', { detail: campaignChange }));
+    }
+
+    runSoftNavHandler(nextScope, 'afterSwap', { url, scope: nextScope, previousScope });
+
+    window.dispatchEvent(new CustomEvent('soft-navigate:after', {
+        detail: { url, scope: nextScope, previousScope },
+    }));
+
+    const nextMainContent = mainLayout.querySelector('#main-content');
+    if (!background && nextMainContent && typeof nextMainContent.focus === 'function') {
+        nextMainContent.focus({ preventScroll: true });
+    }
+
+    currentSoftNavPhase = 'idle';
+
     if (push) {
         try {
             window.history.pushState({ softNav: true }, '', url);
@@ -172,8 +328,21 @@ async function softNavigate(url, { push = true } = {}) {
 
     window.dispatchEvent(new CustomEvent('soft-navigate', { detail: { url } }));
 
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
+    if (background) {
+        scrollContainers.forEach(({ id, top, left }) => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.scrollTop = top;
+                element.scrollLeft = left;
+            }
+        });
+        window.scrollTo(scrollPosition.x, scrollPosition.y);
+    } else {
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+    }
+
+    return true;
 }
 
 function shouldInterceptAnchor(anchor, event) {
@@ -213,7 +382,26 @@ function shouldInterceptAnchor(anchor, event) {
     return true;
 }
 
+function getSoftNavFormUrl(form) {
+    const action = form.getAttribute('action') || window.location.href;
+    const url = new URL(action, window.location.href);
+    const params = new URLSearchParams();
+
+    new FormData(form).forEach((value, key) => {
+        if (typeof value === 'string') {
+            params.append(key, value);
+        }
+    });
+
+    url.search = params.toString();
+
+    return url;
+}
+
 function initSoftNavigate() {
+    currentSoftNavScope = normalizeSoftNavScope(window.location.pathname);
+    currentSoftNavPhase = 'idle';
+
     document.addEventListener(
         'click',
         (event) => {
@@ -223,6 +411,33 @@ function initSoftNavigate() {
             }
             event.preventDefault();
             softNavigate(anchor.href, { push: true });
+        },
+        true,
+    );
+
+    document.addEventListener(
+        'submit',
+        (event) => {
+            const form = event.target.closest?.('form[data-soft-nav]');
+            const method = (form?.getAttribute('method') || 'get').toLowerCase();
+
+            if (!form || method !== 'get' || event.defaultPrevented) {
+                return;
+            }
+
+            let url;
+            try {
+                url = getSoftNavFormUrl(form);
+            } catch (_) {
+                return;
+            }
+
+            if (url.origin !== window.location.origin) {
+                return;
+            }
+
+            event.preventDefault();
+            softNavigate(url.href, { push: true });
         },
         true,
     );

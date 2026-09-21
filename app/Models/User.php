@@ -73,6 +73,11 @@ class User extends Authenticatable
         return 'username';
     }
 
+    public function receivesBroadcastNotificationsOn(): string
+    {
+        return 'App.Models.User.'.$this->id;
+    }
+
     public function isSuperAdmin(): bool
     {
         return $this->role === self::ROLE_SUPER_ADMIN;
@@ -106,5 +111,15 @@ class User extends Authenticatable
     public function vicidialSessions(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(VicidialAgentSession::class);
+    }
+
+    public function widgetLayouts(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(UserWidgetLayout::class);
+    }
+
+    public function notificationReadStates(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(NotificationReadState::class);
     }
 }

@@ -18,15 +18,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Dashboard KPI rolling window (hours)
+    | Dashboard Calls KPI rolling window (hours)
     |--------------------------------------------------------------------------
     |
-    | Used for total calls, total sales, and top agent metrics on the main
-    | agent dashboard.
+    | Used for total calls on the main agent dashboard.
     |
     */
 
     'kpi_window_hours' => 9,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Dashboard Sales KPI rolling window (hours)
+    |--------------------------------------------------------------------------
+    |
+    | Used for total sales and top-agent sales metrics on the main dashboard.
+    |
+    */
+
+    'sales_kpi_window_hours' => 24,
 
     /*
     |--------------------------------------------------------------------------
@@ -51,5 +61,20 @@ return [
     */
 
     'last_24h_activity_cache_seconds' => 120,
+
+    /*
+    | Short-lived caches for the heavier sales scans used by the main dashboard.
+    | Cache generations are bumped by DashboardStatsService::invalidate().
+    */
+    'sales_kpi_cache_seconds' => 60,
+    'summary_cache_seconds' => 60,
+
+    /*
+    | Currency used by the executive dashboard summary. Override both values
+    | when a deployment reports monetary values in another currency.
+    */
+
+    'currency_code' => env('DASHBOARD_CURRENCY_CODE', 'PHP'),
+    'currency_symbol' => env('DASHBOARD_CURRENCY_SYMBOL', '₱'),
 
 ];

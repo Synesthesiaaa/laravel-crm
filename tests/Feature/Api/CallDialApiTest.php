@@ -38,7 +38,7 @@ class CallDialApiTest extends TestCase
             ->assertJsonPath('error.error_code', 'VICIDIAL_AGENT_NOT_LOGGED_IN');
     }
 
-    public function test_dial_returns_hydrated_lead_data_when_available(): void
+    public function test_dial_returns_immediately_and_leaves_lead_hydration_to_the_agent_screen(): void
     {
         config(['vicidial.require_vicidial_agent_session_before_dial' => false]);
 
@@ -56,23 +56,7 @@ class CallDialApiTest extends TestCase
         $this->instance(CallOrchestrationService::class, $orchestration);
 
         $hydration = Mockery::mock(LeadHydrationService::class);
-        $hydration->shouldReceive('hydrate')
-            ->once()
-            ->with(
-                Mockery::on(fn ($authUser) => (int) $authUser->id === (int) $user->id),
-                'mbsales',
-                123,
-                '15551234567'
-            )
-            ->andReturn([
-                'lead_id' => '123',
-                'phone_number' => '15551234567',
-                'client_name' => 'Jane Doe',
-                'capture_data' => [
-                    'customer_email' => 'jane@example.test',
-                ],
-                'raw_fields' => [],
-            ]);
+        $hydration->shouldNotReceive('hydrate');
         $this->instance(LeadHydrationService::class, $hydration);
 
         $this->actingAs($user)
@@ -84,7 +68,9 @@ class CallDialApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('session_id', 999)
-            ->assertJsonPath('client_name', 'Jane Doe')
-            ->assertJsonPath('lead_data.customer_email', 'jane@example.test');
+            ->assertJsonPath('lead_id', 123)
+            ->assertJsonPath('phone_number', '15551234567')
+            ->assertJsonPath('client_name', null)
+            ->assertJsonPath('lead_data', []);
     }
 }

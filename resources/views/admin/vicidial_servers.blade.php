@@ -21,14 +21,19 @@
         <form method="POST" action="{{ route('admin.vicidial-servers.store') }}"
               x-data="{ submitting: false }" @submit="submitting = true">
             @csrf
+            <p class="text-xs text-[var(--color-on-surface-dim)] mb-4">
+                Assign this server to a CRM campaign. Supervisor monitoring and actions always use this CRM campaign mapping, never the agent's VICIdial campaign.
+            </p>
             <p class="text-xs font-semibold text-[var(--color-on-surface-muted)] mb-3 uppercase tracking-wider">Connection</p>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                <x-form.select name="campaign_code" label="Campaign" required
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <x-form.select name="campaign_code" label="CRM Campaign" required
                     :options="collect($campaigns)->mapWithKeys(fn($v,$k) => [$k => $v['name'] ?? $k])->all()"
                     :empty="false" />
                 <x-form.input name="server_name" label="Server Name" required placeholder="e.g. Main ViciDial" />
                 <x-form.input name="api_url" type="url" label="Agent API URL" required placeholder="http://vici/agc/api.php" />
+                <x-form.input name="non_agent_api_url" type="url" label="Non-Agent API URL" placeholder="http://vici/non_agent_api.php" />
             </div>
+            <p class="form-help mb-4">Used for Supervisor reports. Leave blank only when VICIdial's standard Non-Agent endpoint can be derived from the Agent API URL.</p>
             <p class="text-xs font-semibold text-[var(--color-on-surface-muted)] mb-3 uppercase tracking-wider border-t border-[var(--color-border)] pt-4">Database</p>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                 <x-form.input name="db_host" label="DB Host" required placeholder="10.10.88.138" />
@@ -72,7 +77,7 @@
 
 <x-table.index caption="ViciDial servers">
     <x-table.head :columns="[
-        ['label' => 'Campaign'],
+        ['label' => 'CRM Campaign'],
         ['label' => 'Server Name'],
         ['label' => 'Agent API URL'],
         ['label' => 'Non-Agent API User'],
@@ -106,9 +111,13 @@
             </td>
             <td class="text-sm text-[var(--color-on-surface-muted)]">{{ $s->priority }}</td>
             <td>
-                <div class="table-actions" x-data="{ async del(form) {
+                <div class="table-actions" x-data="{ deleting: false, async del(form) {
+                    if (this.deleting) return;
                     const ok = await Alpine.store('confirm').ask('Delete server?', '{{ addslashes($s->server_name) }} will be removed.');
-                    if (ok) form.submit();
+                    if (!ok) return;
+                    this.deleting = true;
+                    window.crmLockSubmitForm?.(form, 'Deleting...');
+                    HTMLFormElement.prototype.submit.call(form);
                 }}">
                     <button type="button" class="btn-secondary text-xs px-2 py-1" @click="editOpen = !editOpen">
                         <x-icon name="pencil" class="w-3.5 h-3.5" />
@@ -118,6 +127,7 @@
                         @csrf
                         <input type="hidden" name="id" value="{{ $s->id }}">
                         <button type="button" class="btn-danger text-xs px-2 py-1"
+                                :disabled="deleting"
                                 @click="del($refs['delFormS{{ $s->id }}'])">
                             <x-icon name="trash" class="w-3.5 h-3.5" />
                             Delete
@@ -137,13 +147,15 @@
                     <div class="space-y-4">
                         <div>
                             <p class="text-xs font-semibold text-[var(--color-on-surface-muted)] mb-3 uppercase tracking-wider">Connection</p>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                <x-form.select name="campaign_code" label="Campaign" required
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <x-form.select name="campaign_code" label="CRM Campaign" required
                                     :options="collect($campaigns)->mapWithKeys(fn($v,$k) => [$k => $v['name'] ?? $k])->all()"
                                     :selected="$s->campaign_code" :empty="false" />
                                 <x-form.input name="server_name" label="Server Name" :value="old('server_name', $s->server_name)" required />
                                 <x-form.input name="api_url" type="url" label="Agent API URL" :value="old('api_url', $s->api_url)" required />
+                                <x-form.input name="non_agent_api_url" type="url" label="Non-Agent API URL" :value="old('non_agent_api_url', $s->non_agent_api_url)" />
                             </div>
+                            <p class="form-help mt-2">Used for Supervisor reports. Leave blank only when VICIdial's standard Non-Agent endpoint can be derived from the Agent API URL.</p>
                         </div>
                         <div class="border-t border-[var(--color-border)] pt-4">
                             <p class="text-xs font-semibold text-[var(--color-on-surface-muted)] mb-3 uppercase tracking-wider">Database</p>

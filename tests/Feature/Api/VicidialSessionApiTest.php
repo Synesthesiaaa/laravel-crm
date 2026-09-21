@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api;
 
+use App\Models\Campaign;
 use App\Models\User;
 use App\Models\VicidialAgentSession;
 use App\Models\VicidialServer;
@@ -9,7 +10,7 @@ use App\Services\Telephony\VicidialNonAgentApiService;
 use App\Services\Telephony\VicidialProxyService;
 use App\Support\OperationResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
 use Mockery;
 use Tests\TestCase;
 
@@ -30,6 +31,13 @@ class VicidialSessionApiTest extends TestCase
             'extension' => '6001',
             'sip_password' => 'sippass',
         ]);
+
+        Campaign::factory()->create([
+            'code' => 'testcamp',
+            'name' => 'Test Camp',
+        ]);
+
+        Cache::forget('campaigns_with_forms');
     }
 
     protected function tearDown(): void
@@ -193,6 +201,88 @@ class VicidialSessionApiTest extends TestCase
         $this->assertStringContainsString('VD_pass=typedpass', $iframeUrl);
     }
 
+    public function test_login_without_campaign_uses_saved_vicidial_campaign_not_crm_campaign(): void
+    {
+        $agentApi = Mockery::mock(VicidialProxyService::class);
+        $agentApi->shouldReceive('execute')
+            ->once()
+            ->with($this->agent, 'softcamp', 'login', Mockery::type('array'))
+            ->andReturn(['success' => true, 'raw_response' => 'SUCCESS', 'message' => null]);
+        $this->instance(VicidialProxyService::class, $agentApi);
+
+        $nonAgentApi = Mockery::mock(VicidialNonAgentApiService::class);
+        $nonAgentApi->shouldReceive('getServerForCampaign')
+            ->with('softcamp')
+            ->andReturn(null);
+        $this->instance(VicidialNonAgentApiService::class, $nonAgentApi);
+
+        $this->actingAs($this->agent)
+            ->withSession([
+                'campaign' => 'testcamp',
+                'campaign_name' => 'Test',
+                'vicidial_campaign' => 'softcamp',
+                'vicidial_campaign_name' => 'Softphone',
+            ])
+            ->postJson('/api/vicidial/session/login', [
+                'phone_login' => '6001',
+            ])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.iframe_alignment.vd_campaign', 'softcamp');
+
+        $this->assertDatabaseHas('vicidial_agent_sessions', [
+            'user_id' => $this->agent->id,
+            'campaign_code' => 'softcamp',
+            'session_status' => 'login_pending',
+        ]);
+        $this->assertSame('testcamp', session('campaign'));
+        $this->assertSame('softcamp', session('vicidial_campaign'));
+    }
+
+    public function test_login_does_not_use_another_campaign_server_for_unregistered_campaign(): void
+    {
+        $agentApi = Mockery::mock(VicidialProxyService::class);
+        $agentApi->shouldReceive('execute')
+            ->once()
+            ->withArgs(function (User $user, string $campaign, string $endpoint, array $params): bool {
+                return $user->id === $this->agent->id
+                    && $campaign === 'softcamp'
+                    && $endpoint === 'login'
+                    && isset($params['credentials']['vici_user'], $params['credentials']['vici_pass']);
+            })
+            ->andReturn([
+                'success' => true,
+                'raw_response' => 'SUCCESS: agent logged in',
+                'message' => null,
+            ]);
+        $this->instance(VicidialProxyService::class, $agentApi);
+
+        VicidialServer::factory()->create([
+            'campaign_code' => 'vicidial-main',
+            'api_url' => 'https://vici.example.com/agc/api.php',
+            'api_user' => 'apiu',
+            'api_pass' => 'apip',
+            'is_active' => true,
+            'is_default' => true,
+        ]);
+
+        $response = $this->actingAs($this->agent)
+            ->withSession([])
+            ->postJson('/api/vicidial/session/login', [
+                'campaign' => 'softcamp',
+                'phone_login' => '6001',
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.iframe_alignment.vd_campaign', 'softcamp')
+            ->assertJsonPath('iframe_url', null);
+
+        $this->assertFalse(session()->has('campaign'));
+        $this->assertFalse(session()->has('campaign_name'));
+        $this->assertSame('softcamp', session('vicidial_campaign'));
+    }
+
     public function test_login_response_contract_contains_required_fields(): void
     {
         $this->mockAgentApi(true);
@@ -295,6 +385,61 @@ class VicidialSessionApiTest extends TestCase
         ]);
     }
 
+    public function test_verify_promotes_session_to_ready_and_syncs_campaign_when_live_agent_uses_different_vicidial_campaign(): void
+    {
+        config(['vicidial.session_iframe_agent_api_only' => false]);
+
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'vici_user' => 'testagent',
+            'vici_pass' => 'testpass',
+            'extension' => '6001',
+            'sip_password' => 'sippass',
+            'default_campaign' => 'crmdefault',
+        ]);
+
+        VicidialAgentSession::factory()->create([
+            'user_id' => $user->id,
+            'campaign_code' => 'crmdefault',
+            'session_status' => 'login_pending',
+        ]);
+
+        $mock = Mockery::mock(VicidialNonAgentApiService::class);
+        $mock->shouldReceive('execute')
+            ->andReturn(OperationResult::success([
+                'raw_response' => "status|agent_user|campaign_id\nINCALL|testagent|softcamp",
+                'rows' => [
+                    ['status', 'agent_user', 'campaign_id'],
+                    ['INCALL', 'testagent', 'softcamp'],
+                ],
+            ]));
+        $mock->shouldReceive('getServerForCampaign')->andReturn(null);
+        $this->instance(VicidialNonAgentApiService::class, $mock);
+
+        $response = $this->actingAs($user)
+            ->withSession([
+                'campaign' => 'crmdefault',
+                'campaign_name' => 'CRM Default',
+            ])
+            ->postJson('/api/vicidial/session/verify');
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('login_state', 'ready')
+            ->assertJsonPath('data.iframe_alignment.vd_campaign', 'softcamp');
+
+        $this->assertSame('softcamp', session('vicidial_campaign'));
+        $this->assertDatabaseHas('vicidial_agent_sessions', [
+            'user_id' => $user->id,
+            'campaign_code' => 'softcamp',
+            'session_status' => 'ready',
+        ]);
+        $this->assertDatabaseMissing('vicidial_agent_sessions', [
+            'user_id' => $user->id,
+            'campaign_code' => 'crmdefault',
+        ]);
+    }
+
     public function test_verify_returns_pending_when_agent_not_yet_live(): void
     {
         config(['vicidial.session_iframe_agent_api_only' => false]);
@@ -384,11 +529,60 @@ class VicidialSessionApiTest extends TestCase
             ->assertJsonPath('login_state', 'login_pending')
             ->assertJsonPath('data.stop_verify_poll', false);
 
-        $this->assertStringContainsString('testcamp', (string) $response->json('message'));
+        $this->assertStringNotContainsString('testcamp', (string) $response->json('message'));
         $this->assertStringContainsString('testagent', (string) $response->json('message'));
 
         $this->assertDatabaseHas('vicidial_agent_sessions', [
             'user_id' => $this->agent->id,
+            'session_status' => 'login_pending',
+        ]);
+    }
+
+    public function test_verify_iframe_non_agent_success_without_matching_live_agent_stays_pending(): void
+    {
+        config(['vicidial.session_iframe_agent_api_only' => true]);
+        config(['vicidial.session_iframe_confirm_non_agent_live' => true]);
+        config(['vicidial.session_iframe_skip_non_agent_live_check' => false]);
+
+        $server = VicidialServer::factory()->create([
+            'campaign_code' => 'testcamp',
+            'api_url' => 'https://vici.example.com/agc/api.php',
+            'api_user' => 'apiu',
+            'api_pass' => 'apip',
+            'is_active' => true,
+            'is_default' => true,
+        ]);
+
+        VicidialAgentSession::factory()->create([
+            'user_id' => $this->agent->id,
+            'campaign_code' => 'testcamp',
+            'session_status' => 'login_pending',
+        ]);
+
+        $mock = Mockery::mock(VicidialNonAgentApiService::class);
+        $mock->shouldReceive('getServerForCampaign')->with('testcamp')->andReturn($server);
+        $mock->shouldReceive('execute')->andReturn(
+            OperationResult::success([
+                'raw_response' => "status|agent_user|campaign\nREADY|someone_else|othercamp",
+                'rows' => [
+                    ['status', 'agent_user', 'campaign'],
+                    ['READY', 'someone_else', 'othercamp'],
+                ],
+            ]),
+        );
+        $this->instance(VicidialNonAgentApiService::class, $mock);
+
+        $response = $this->actingAs($this->agent)
+            ->withSession($this->campaignSession())
+            ->postJson('/api/vicidial/session/verify', ['campaign' => 'testcamp'])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('login_state', 'login_pending');
+
+        $this->assertStringContainsString('testagent', (string) $response->json('message'));
+        $this->assertDatabaseHas('vicidial_agent_sessions', [
+            'user_id' => $this->agent->id,
+            'campaign_code' => 'testcamp',
             'session_status' => 'login_pending',
         ]);
     }
@@ -513,6 +707,114 @@ class VicidialSessionApiTest extends TestCase
             ->assertJsonPath('local_session.session_status', 'paused');
     }
 
+    public function test_local_status_returns_session_state_without_calling_vicidial_services(): void
+    {
+        VicidialAgentSession::factory()->create([
+            'user_id' => $this->agent->id,
+            'campaign_code' => 'testcamp',
+            'session_status' => 'ready',
+        ]);
+        $this->mockAgentApi(false);
+
+        $mock = Mockery::mock(VicidialNonAgentApiService::class);
+        $mock->shouldNotReceive('execute');
+        $this->instance(VicidialNonAgentApiService::class, $mock);
+
+        $this->actingAs($this->agent)
+            ->withSession($this->campaignSession())
+            ->getJson('/api/vicidial/session/local-status?campaign=testcamp')
+            ->assertOk()
+            ->assertJsonPath('local_session.session_status', 'ready')
+            ->assertJsonPath('queue.data.count', 0);
+    }
+
+    public function test_status_uses_synced_campaign_for_follow_up_calls_after_live_confirmation(): void
+    {
+        config(['vicidial.session_iframe_agent_api_only' => false]);
+
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'vici_user' => 'testagent',
+            'vici_pass' => 'testpass',
+            'extension' => '6001',
+            'sip_password' => 'sippass',
+            'default_campaign' => 'crmdefault',
+        ]);
+
+        $agentApi = Mockery::mock(VicidialProxyService::class);
+        $agentApi->shouldReceive('execute')
+            ->once()
+            ->withArgs(function ($userArg, string $campaignArg, string $endpoint, array $params) use ($user): bool {
+                return $userArg->id === $user->id
+                    && $campaignArg === 'softcamp'
+                    && $endpoint === 'calls_in_queue_count'
+                    && $params === ['value' => 'DISPLAY'];
+            })
+            ->andReturn(['success' => true, 'raw_response' => '0', 'message' => null]);
+        $this->instance(VicidialProxyService::class, $agentApi);
+
+        $callCount = 0;
+        $mock = Mockery::mock(VicidialNonAgentApiService::class);
+        $mock->shouldReceive('execute')
+            ->times(2)
+            ->andReturnUsing(function ($userArg, string $campaignArg, string $endpoint, array $params = [], bool $allowFallback = false) use (&$callCount, $user) {
+                $callCount++;
+
+                if ($callCount === 1) {
+                    $this->assertSame($user->id, $userArg->id);
+                    $this->assertSame('crmdefault', $campaignArg);
+                    $this->assertSame('agent_status', $endpoint);
+                    $this->assertTrue($allowFallback);
+
+                    return OperationResult::success([
+                        'raw_response' => "status|agent_user|campaign_id\nINCALL|testagent|softcamp",
+                        'rows' => [
+                            ['status', 'agent_user', 'campaign_id'],
+                            ['INCALL', 'testagent', 'softcamp'],
+                        ],
+                    ]);
+                }
+
+                $this->assertSame($user->id, $userArg->id);
+                $this->assertSame('softcamp', $campaignArg);
+
+                $this->assertSame('agent_ingroup_info', $endpoint);
+                $this->assertSame([
+                    'agent_user' => 'testagent',
+                    'stage' => 'text',
+                ], $params);
+                $this->assertTrue($allowFallback);
+
+                return OperationResult::success([
+                    'raw_response' => 'SUCCESS',
+                    'rows' => [],
+                ]);
+            });
+        $this->instance(VicidialNonAgentApiService::class, $mock);
+
+        $response = $this->actingAs($user)
+            ->withSession([
+                'campaign' => 'crmdefault',
+                'campaign_name' => 'CRM Default',
+            ])
+            ->getJson('/api/vicidial/session/status?campaign=crmdefault');
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('local_session.campaign_code', 'softcamp')
+            ->assertJsonPath('agent_status.data.raw_response', "status|agent_user|campaign_id\nINCALL|testagent|softcamp");
+
+        $this->assertSame('softcamp', session('vicidial_campaign'));
+        $this->assertDatabaseHas('vicidial_agent_sessions', [
+            'user_id' => $user->id,
+            'campaign_code' => 'softcamp',
+        ]);
+        $this->assertDatabaseMissing('vicidial_agent_sessions', [
+            'user_id' => $user->id,
+            'campaign_code' => 'crmdefault',
+        ]);
+    }
+
     public function test_status_skips_non_agent_when_iframe_agent_api_only(): void
     {
         config(['vicidial.session_iframe_agent_api_only' => true]);
@@ -561,60 +863,5 @@ class VicidialSessionApiTest extends TestCase
             ->getJson('/api/reports/agent-status?campaign=testcamp&agent_user=testagent');
 
         $this->assertContains($response->status(), [200, 422]);
-    }
-
-    // ── GET /api/vicidial/session/agent-campaigns ─────────────────────────────
-
-    public function test_agent_campaigns_requires_auth(): void
-    {
-        $this->getJson('/api/vicidial/session/agent-campaigns')->assertUnauthorized();
-    }
-
-    public function test_agent_campaigns_returns_list_from_non_agent_api(): void
-    {
-        VicidialServer::factory()->create([
-            'campaign_code' => 'testcamp',
-            'api_url' => 'https://vici.example.com/agc/api.php',
-            'api_user' => 'apiuser',
-            'api_pass' => 'apipass',
-            'db_host' => '',
-            'db_username' => '',
-            'db_password' => '',
-            'is_active' => true,
-            'is_default' => true,
-        ]);
-
-        Http::fake([
-            '*' => Http::response(
-                "user|allowed_campaigns_list|allowed_ingroups_list\ntestagent|CAMP1-CAMP2|ING1-ING2",
-                200,
-            ),
-        ]);
-
-        $this->actingAs($this->agent)
-            ->withSession($this->campaignSession())
-            ->getJson('/api/vicidial/session/agent-campaigns?context_campaign=testcamp')
-            ->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('source', 'non_agent_api')
-            ->assertJsonPath('campaigns.0.id', 'CAMP1')
-            ->assertJsonPath('campaigns.1.id', 'CAMP2');
-    }
-
-    public function test_select_campaign_updates_session(): void
-    {
-        $this->actingAs($this->agent)
-            ->withSession($this->campaignSession())
-            ->postJson('/api/vicidial/session/select-campaign', [
-                'campaign' => 'newcamp',
-                'campaign_name' => 'New Camp',
-            ])
-            ->assertOk()
-            ->assertJsonPath('success', true);
-
-        $this->assertSame('newcamp', session('vicidial_campaign'));
-        $this->assertSame('New Camp', session('vicidial_campaign_name'));
-        $this->assertSame('testcamp', session('campaign'));
-        $this->assertSame('Test', session('campaign_name'));
     }
 }

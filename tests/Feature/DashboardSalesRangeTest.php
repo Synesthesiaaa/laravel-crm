@@ -1,0 +1,642 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Campaign;
+use App\Models\CampaignDispositionRecord;
+use App\Models\Form;
+use App\Models\FormField;
+use App\Models\User;
+use App\Services\DashboardStatsService;
+use Carbon\Carbon;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Tests\TestCase;
+
+class DashboardSalesRangeTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Campaign::factory()->create([
+            'code' => 'mbsales',
+            'name' => 'MB Sales',
+        ]);
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
+    }
+
+    public function test_sales_kpis_use_marked_form_values_inside_the_selected_range(): void
+    {
+        $this->registerSalesForm('cash', 'Cash Sale', 'cash_sales');
+        $this->registerSalesForm('transfer', 'Bank Transfer', 'transfer_sales');
+
+        $this->insertSale('cash_sales', 'Alice', 999.00, '2026-05-15 05:59:59');
+        $this->insertSale('cash_sales', 'Alice', 100.00, '2026-05-15 06:00:00');
+        $this->insertSale('cash_sales', 'Alice', 25.00, '2026-05-15 17:59:59');
+        $this->insertSale('transfer_sales', 'Bob', 500.00, '2026-05-15 12:00:00');
+        $this->insertSale('transfer_sales', 'Bob', 700.00, '2026-05-15 18:00:00');
+
+        $kpis = app(DashboardStatsService::class)->getSalesKpisForCampaign(
+            'mbsales',
+            Carbon::parse('2026-05-15 06:00:00'),
+            Carbon::parse('2026-05-15 18:00:00'),
+        );
+
+        $this->assertSame(3, $kpis['sales']);
+        $this->assertSame(625.0, $kpis['sales_amount']);
+        $this->assertSame('Bob', $kpis['top_agent']);
+        $this->assertSame(1, $kpis['top_agent_sales']);
+        $this->assertSame(500.0, $kpis['top_agent_sales_amount']);
+
+        $breakdown = collect($kpis['sales_by_form'])->keyBy('form_code');
+        $this->assertSame(2, $breakdown['cash']['sales']);
+        $this->assertSame(125.0, $breakdown['cash']['sales_amount']);
+        $this->assertSame(1, $breakdown['transfer']['sales']);
+        $this->assertSame(500.0, $breakdown['transfer']['sales_amount']);
+    }
+
+    public function test_sales_kpis_return_a_selected_range_leaderboard_sorted_by_sales_amount_then_sales_count_then_name(): void
+    {
+        $this->registerSalesForm('cash', 'Cash Sale', 'cash_sales');
+
+        $this->insertSale('cash_sales', 'Alice', 100.00, '2026-05-15 07:00:00');
+        $this->insertSale('cash_sales', 'Alice', 25.00, '2026-05-15 08:00:00');
+        $this->insertSale('cash_sales', 'Bob', 200.00, '2026-05-15 09:00:00');
+        $this->insertSale('cash_sales', 'Carl', 300.00, '2026-05-15 10:00:00');
+        $this->insertSale('cash_sales', 'Aaron', 150.00, '2026-05-15 11:00:00');
+        $this->insertSale('cash_sales', 'Aaron', 150.00, '2026-05-15 12:00:00');
+        $this->insertSale('cash_sales', 'Amy', 300.00, '2026-05-15 13:00:00');
+        $this->insertSale('cash_sales', 'Zed', 300.00, '2026-05-15 14:00:00');
+        $this->insertSale('cash_sales', 'Zed', 999.00, '2026-05-15 19:00:00');
+
+        $kpis = app(DashboardStatsService::class)->getSalesKpisForCampaign(
+            'mbsales',
+            Carbon::parse('2026-05-15 06:00:00'),
+            Carbon::parse('2026-05-15 18:00:00'),
+        );
+
+        $this->assertSame([
+            ['agent' => 'Aaron', 'sales_count' => 2, 'sales_amount' => 300.0],
+            ['agent' => 'Amy', 'sales_count' => 1, 'sales_amount' => 300.0],
+            ['agent' => 'Carl', 'sales_count' => 1, 'sales_amount' => 300.0],
+            ['agent' => 'Zed', 'sales_count' => 1, 'sales_amount' => 300.0],
+            ['agent' => 'Bob', 'sales_count' => 1, 'sales_amount' => 200.0],
+            ['agent' => 'Alice', 'sales_count' => 2, 'sales_amount' => 125.0],
+        ], $kpis['agent_leaderboard']);
+    }
+
+    public function test_sales_kpis_ignore_dispositions_when_no_marked_form_sale_field_exists(): void
+    {
+        CampaignDispositionRecord::create([
+            'campaign_code' => 'mbsales',
+            'agent' => 'Disposition Agent',
+            'disposition_code' => 'SALE',
+            'called_at' => Carbon::parse('2026-05-15 10:00:00'),
+            'lead_data_json' => ['amount' => 999.00],
+        ]);
+
+        $kpis = app(DashboardStatsService::class)->getSalesKpisForCampaign(
+            'mbsales',
+            Carbon::parse('2026-05-15 06:00:00'),
+            Carbon::parse('2026-05-15 18:00:00'),
+        );
+
+        $this->assertSame(0, $kpis['sales']);
+        $this->assertSame(0.0, $kpis['sales_amount']);
+        $this->assertNull($kpis['top_agent']);
+        $this->assertSame([], $kpis['sales_by_form']);
+    }
+
+    public function test_marker_only_custom_rules_drive_selected_range_rolling_kpis_and_daily_report(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        $this->registerSalesForm('cash', 'Cash Sale', 'cash_sales');
+        app(\App\Services\DashboardLayoutService::class)->saveForCampaign(
+            'mbsales',
+            array_keys(\App\Services\DashboardLayoutService::sectionDefinitions()),
+            ['welcome'],
+            [
+                'mode' => 'custom',
+                'forms' => [[
+                    'form_code' => 'cash',
+                    'amount_field' => 'amount',
+                    'trigger' => 'marked_amount',
+                    'conditions' => [],
+                ]],
+            ],
+        );
+
+        $this->insertSale('cash_sales', 'Alice', 100.00, '2026-05-15 10:00:00');
+        $this->insertSale('cash_sales', 'Bob', 0.00, '2026-05-15 11:00:00');
+        DB::table('cash_sales')->insert([
+            'date' => '2026-05-15',
+            'request_id' => 'empty_'.uniqid(),
+            'agent' => 'Ignored',
+            'amount' => null,
+            'created_at' => '2026-05-15 11:30:00',
+            'updated_at' => '2026-05-15 11:30:00',
+        ]);
+
+        $range = app(DashboardStatsService::class)->getSalesKpisForCampaign(
+            'mbsales',
+            Carbon::parse('2026-05-15 06:00:00'),
+            Carbon::parse('2026-05-15 12:00:00'),
+        );
+
+        $this->assertSame(2, $range['sales']);
+        $this->assertSame(100.0, $range['sales_amount']);
+        $this->assertSame(['Alice', 'Bob'], array_column($range['agent_leaderboard'], 'agent'));
+
+        config(['dashboard.sales_kpi_window_hours' => 6]);
+        $rolling = app(DashboardStatsService::class)->getKpisForCampaign('mbsales');
+        $this->assertSame(2, $rolling['sales']);
+        $this->assertSame(100.0, $rolling['sales_amount']);
+
+        $report = app(DashboardStatsService::class)->getDailyCampaignReport(
+            'mbsales',
+            Carbon::parse('2026-05-15'),
+        );
+        $this->assertSame(2, $report['totals']['daily']['total_count']);
+        $this->assertSame(100.0, $report['totals']['daily']['total_amount']);
+    }
+
+    public function test_form_submission_custom_rules_count_rows_without_numeric_values_across_kpis_and_report(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        $this->registerSalesForm('submitted', 'Submitted Form', 'submitted_sales');
+        app(\App\Services\DashboardLayoutService::class)->saveForCampaign(
+            'mbsales',
+            array_keys(\App\Services\DashboardLayoutService::sectionDefinitions()),
+            ['welcome'],
+            [
+                'mode' => 'custom',
+                'forms' => [[
+                    'form_code' => 'submitted',
+                    'amount_field' => 'amount',
+                    'trigger' => 'form',
+                    'conditions' => [],
+                ]],
+            ],
+        );
+
+        $this->insertSale('submitted_sales', 'Alice', 100.00, '2026-05-15 10:00:00');
+        DB::table('submitted_sales')->insert([
+            'date' => '2026-05-15',
+            'request_id' => 'submitted_'.uniqid(),
+            'agent' => 'Bob',
+            'amount' => null,
+            'created_at' => '2026-05-15 11:00:00',
+            'updated_at' => '2026-05-15 11:00:00',
+        ]);
+
+        $range = app(DashboardStatsService::class)->getSalesKpisForCampaign(
+            'mbsales',
+            Carbon::parse('2026-05-15 06:00:00'),
+            Carbon::parse('2026-05-15 12:00:00'),
+        );
+
+        $this->assertSame(2, $range['sales']);
+        $this->assertSame(100.0, $range['sales_amount']);
+        $this->assertSame(['Alice', 'Bob'], array_column($range['agent_leaderboard'], 'agent'));
+
+        config(['dashboard.sales_kpi_window_hours' => 6]);
+        $rolling = app(DashboardStatsService::class)->getKpisForCampaign('mbsales');
+        $this->assertSame(2, $rolling['sales']);
+        $this->assertSame(100.0, $rolling['sales_amount']);
+
+        $report = app(DashboardStatsService::class)->getDailyCampaignReport(
+            'mbsales',
+            Carbon::parse('2026-05-15'),
+        );
+        $this->assertSame(2, $report['totals']['daily']['total_count']);
+        $this->assertSame(100.0, $report['totals']['daily']['total_amount']);
+    }
+
+    public function test_dashboard_defaults_the_sales_filter_to_the_current_business_day(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+
+        $response = $this->actingAs(User::factory()->create())
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertSee('name="sales_date"', false);
+        $response->assertSee('value="2026-05-15"', false);
+        $response->assertSee('name="sales_start"', false);
+        $response->assertSee('value="06:00"', false);
+        $response->assertSee('name="sales_end"', false);
+        $response->assertSee('value="18:00"', false);
+        $response->assertSee('No Activity in This Period', false);
+    }
+
+    public function test_dashboard_uses_requested_sales_filter_values_and_renders_the_sales_modal_trigger(): void
+    {
+        Cache::flush();
+
+        $response = $this->actingAs(User::factory()->create())
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('dashboard', [
+                'sales_date' => '2026-05-12',
+                'sales_start' => '07:30',
+                'sales_end' => '16:45',
+            ]));
+
+        $response->assertOk();
+        $response->assertSee('value="2026-05-12"', false);
+        $response->assertSee('value="07:30"', false);
+        $response->assertSee('value="16:45"', false);
+        $response->assertSee('Sales by Form', false);
+        $response->assertDontSee('x-on:mouseenter=', false);
+        $response->assertDontSee('x-on:focusin=', false);
+        $response->assertSee('x-on:click="$store.modal.show(\'sales-summary\')"', false);
+        $response->assertSee('x-on:click="$store.modal.show(\'agent-leaderboard\')"', false);
+        $response->assertSee('aria-haspopup="dialog"', false);
+        $response->assertSee('Daily Agent Leaderboard', false);
+        $response->assertSee('Agent Leaderboard', false);
+        $response->assertSee('class="stat-card h-full"', false);
+        $response->assertSee('class="dashboard-masthead"', false);
+        $response->assertSee('class="dashboard-signal-grid animate-stagger"', false);
+        $response->assertSee('class="stat-card stat-card--lead h-full"', false);
+        $response->assertSee('Sales in Selected Window', false);
+        $response->assertSee('class="dashboard-analysis-band mt-8"', false);
+        $response->assertSee('focus:ring-offset-[var(--color-surface)]', false);
+    }
+
+    public function test_dashboard_renders_selected_range_agent_leaderboard_amounts(): void
+    {
+        $this->registerSalesForm('cash', 'Cash Sale', 'cash_sales');
+
+        $this->insertSale('cash_sales', 'Alice', 100.00, '2026-05-12 07:00:00');
+        $this->insertSale('cash_sales', 'Bob', 250.00, '2026-05-12 08:00:00');
+        $this->insertSale('cash_sales', 'Outside', 999.00, '2026-05-12 19:00:00');
+
+        $response = $this->actingAs(User::factory()->create())
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('dashboard', [
+                'sales_date' => '2026-05-12',
+                'sales_start' => '06:00',
+                'sales_end' => '18:00',
+            ]));
+
+        $response->assertOk();
+        $response->assertSee('Daily Agent Leaderboard', false);
+        $response->assertSee('Alice', false);
+        $response->assertSee('Bob', false);
+        $response->assertSee('100.00', false);
+        $response->assertSee('250.00', false);
+        $response->assertDontSee('999.00', false);
+
+        $content = $response->getContent();
+
+        $this->assertSame(2, substr_count($content, '>Total</td>'));
+        $this->assertSame(2, substr_count($content, '<td class="text-right font-semibold tabular-nums">2</td>'));
+        $this->assertSame(2, substr_count($content, '<td class="text-right font-semibold tabular-nums">350.00</td>'));
+    }
+
+    public function test_amount_tables_and_chart_mode_can_be_hidden_with_populated_sales(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        $this->registerSalesForm('cash', 'Cash Sale', 'cash_sales');
+        $this->insertSale('cash_sales', 'Alice', 1234.56, '2026-05-15 07:00:00');
+        $service = app(\App\Services\DashboardLayoutService::class);
+        $sections = array_keys($service::sectionDefinitions());
+        $service->saveForCampaign('mbsales', $sections, $sections, amountConfig: ['charts' => false, 'tables' => false]);
+
+        $this->actingAs(User::factory()->create())
+            ->withSession(['campaign' => 'mbsales'])
+            ->get(route('dashboard'))->assertOk()
+            ->assertSee('Alice')
+            ->assertSee('Total Amount')
+            ->assertSee('Current Volume')
+            ->assertDontSee('Current Amount')
+            ->assertDontSee('Previous Amount')
+            ->assertDontSee('>Sale Amount</th>', false)
+            ->assertDontSee('>Total Amount</th>', false)
+            ->assertDontSee('>1,234.56</td>', false)
+            ->assertDontSee('aria-label="Chart measure"', false)
+            ->assertDontSee('data-report-table="daily-amounts"', false)
+            ->assertSee('data-report-table="daily-counts"', false);
+    }
+
+    public function test_daily_campaign_report_aggregates_daily_and_month_to_date_rows_by_agent(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        Cache::flush();
+        $this->registerSalesForm('cash', 'Cash Sale', 'cash_sales');
+        $this->registerSalesForm('transfer', 'Bank Transfer', 'transfer_sales');
+
+        $this->insertSale('cash_sales', 'Alice', 100.00, '2026-05-15 07:00:00');
+        $this->insertSale('cash_sales', 'Alice', 900.00, '2026-05-14 07:00:00');
+        $this->insertSale('cash_sales', 'Bob', 25.00, '2026-05-15 08:00:00');
+        $this->insertSale('transfer_sales', 'Alice', 50.00, '2026-05-15 09:00:00');
+        $this->insertSale('transfer_sales', 'Bob', 70.00, '2026-05-13 10:00:00');
+
+        $report = app(DashboardStatsService::class)->getDailyCampaignReport(
+            'mbsales',
+            Carbon::parse('2026-05-15'),
+        );
+
+        $this->assertSame([
+            ['code' => 'cash', 'name' => 'Cash Sale'],
+            ['code' => 'transfer', 'name' => 'Bank Transfer'],
+        ], $report['forms']);
+
+        $daily = collect($report['daily'])->keyBy('agent');
+        $this->assertSame(2, $daily['Alice']['total_count']);
+        $this->assertSame(150.0, $daily['Alice']['total_amount']);
+        $this->assertSame(1, $daily['Bob']['counts']['cash']);
+        $this->assertSame(0, $daily['Bob']['counts']['transfer']);
+        $this->assertSame(25.0, $daily['Bob']['total_amount']);
+        $this->assertSame(3, $report['totals']['daily']['total_count']);
+        $this->assertSame(175.0, $report['totals']['daily']['total_amount']);
+
+        $monthToDate = collect($report['month_to_date'])->keyBy('agent');
+        $this->assertSame(3, $monthToDate['Alice']['total_count']);
+        $this->assertSame(1050.0, $monthToDate['Alice']['total_amount']);
+        $this->assertSame(2, $monthToDate['Bob']['total_count']);
+        $this->assertSame(95.0, $monthToDate['Bob']['total_amount']);
+        $this->assertSame(5, $report['totals']['month_to_date']['total_count']);
+        $this->assertSame(1145.0, $report['totals']['month_to_date']['total_amount']);
+    }
+
+    public function test_daily_campaign_report_uses_custom_sales_rules_once_per_submission(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        Cache::flush();
+        Schema::create('custom_daily', function (Blueprint $table): void {
+            $table->id();
+            $table->date('date');
+            $table->string('agent')->nullable();
+            $table->string('tag_one')->nullable();
+            $table->string('tag_two')->nullable();
+            $table->decimal('amount', 12, 2)->nullable();
+            $table->timestamps();
+        });
+        Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => 'custom_daily',
+            'name' => 'Custom Daily',
+            'table_name' => 'custom_daily',
+            'display_order' => 1,
+            'is_active' => true,
+        ]);
+        FormField::query()->insert([
+            [
+                'campaign_code' => 'mbsales',
+                'form_type' => 'custom_daily',
+                'field_name' => 'tag_one',
+                'field_label' => 'Tag one',
+                'field_type' => 'text',
+                'field_order' => 1,
+            ],
+            [
+                'campaign_code' => 'mbsales',
+                'form_type' => 'custom_daily',
+                'field_name' => 'tag_two',
+                'field_label' => 'Tag two',
+                'field_type' => 'text',
+                'field_order' => 2,
+            ],
+            [
+                'campaign_code' => 'mbsales',
+                'form_type' => 'custom_daily',
+                'field_name' => 'amount',
+                'field_label' => 'Amount',
+                'field_type' => 'number',
+                'field_order' => 3,
+            ],
+        ]);
+        app(\App\Services\DashboardLayoutService::class)->saveForCampaign(
+            'mbsales',
+            array_keys(\App\Services\DashboardLayoutService::sectionDefinitions()),
+            ['welcome'],
+            [
+                'mode' => 'custom',
+                'forms' => [[
+                    'form_code' => 'custom_daily',
+                    'amount_field' => 'amount',
+                    'conditions' => [
+                        ['field_name' => 'tag_one', 'accepted_values' => ['yes']],
+                        ['field_name' => 'tag_two', 'accepted_values' => ['approved']],
+                    ],
+                ]],
+            ],
+            true,
+        );
+        DB::table('custom_daily')->insert([
+            ['date' => '2026-05-15', 'agent' => 'Alice', 'tag_one' => ' yes ', 'tag_two' => 'approved', 'amount' => 100, 'created_at' => '2026-05-15 07:00:00', 'updated_at' => '2026-05-15 07:00:00'],
+            ['date' => '2026-05-15', 'agent' => 'Bob', 'tag_one' => 'No', 'tag_two' => ' APPROVED ', 'amount' => 50, 'created_at' => '2026-05-15 08:00:00', 'updated_at' => '2026-05-15 08:00:00'],
+            ['date' => '2026-05-14', 'agent' => 'Alice', 'tag_one' => 'No', 'tag_two' => 'No', 'amount' => 900, 'created_at' => '2026-05-14 08:00:00', 'updated_at' => '2026-05-14 08:00:00'],
+        ]);
+
+        $report = app(DashboardStatsService::class)->getDailyCampaignReport('mbsales', Carbon::parse('2026-05-15'));
+
+        $this->assertSame([['code' => 'custom_daily', 'name' => 'Custom Daily']], $report['forms']);
+        $daily = collect($report['daily'])->keyBy('agent');
+        $this->assertSame(1, $daily['Alice']['total_count']);
+        $this->assertSame(100.0, $daily['Alice']['total_amount']);
+        $this->assertSame(1, $daily['Bob']['total_count']);
+        $this->assertSame(50.0, $daily['Bob']['total_amount']);
+        $this->assertSame(2, $report['totals']['daily']['total_count']);
+        $this->assertSame(2, $report['totals']['month_to_date']['total_count']);
+    }
+
+    public function test_daily_campaign_report_returns_a_stable_empty_shape_without_valid_forms(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        Cache::flush();
+
+        $report = app(DashboardStatsService::class)->getDailyCampaignReport(
+            'mbsales',
+            Carbon::parse('2026-05-15'),
+        );
+
+        $this->assertSame('2026-05-15', $report['date']);
+        $this->assertSame([], $report['forms']);
+        $this->assertSame([], $report['daily']);
+        $this->assertSame([], $report['month_to_date']);
+        $this->assertSame(0, $report['totals']['daily']['total_count']);
+        $this->assertSame(0.0, $report['totals']['month_to_date']['total_amount']);
+    }
+
+    public function test_dashboard_renders_campaign_report_tables_without_mpi_cards_label(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        Cache::flush();
+        $this->registerSalesForm('cash', 'Cash Sale', 'cash_sales');
+        $this->insertSale('cash_sales', 'Alice', 100.00, '2026-05-15 07:00:00');
+
+        $response = $this->actingAs(User::factory()->create())
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertSee('Daily Amounts', false);
+        $response->assertSee('Daily Counts', false);
+        $response->assertSee('Month to Date Accounts', false);
+        $response->assertSee('Month to Date Submitted Amounts', false);
+        $response->assertSee('Cash Sale', false);
+        $response->assertDontSee('MPI Cards', false);
+
+        $content = $response->getContent();
+        $sectionStart = strpos($content, 'data-report-table="month-to-date-accounts"');
+        $sectionEnd = $sectionStart === false ? false : strpos($content, '</section>', $sectionStart);
+        $monthToDateAccounts = $sectionStart === false || $sectionEnd === false
+            ? ''
+            : substr($content, $sectionStart, $sectionEnd - $sectionStart);
+
+        $this->assertStringContainsString('Cash Sale', $monthToDateAccounts);
+        $this->assertStringContainsString('Total Accounts', $monthToDateAccounts);
+        $this->assertStringNotContainsString('Submitted amount', $monthToDateAccounts);
+        $this->assertStringNotContainsString('whitespace-nowrap', $monthToDateAccounts);
+        $this->assertLessThan(
+            strpos($content, 'data-report-table="month-to-date-accounts"'),
+            strpos($content, 'data-report-table="daily-counts"'),
+        );
+        $this->assertLessThan(
+            strpos($content, 'data-report-table="daily-counts"'),
+            strpos($content, 'data-report-table="month-to-date-submitted-amounts"'),
+        );
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/<section[^>]*campaign-report-wide[^>]*data-report-table="daily-counts"/',
+            $content,
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/<section[^>]*campaign-report-wide[^>]*data-report-table="month-to-date-submitted-amounts"/',
+            $content,
+        );
+        $this->assertSame(4, substr_count($content, 'class="campaign-report-table"'));
+        $this->assertStringNotContainsString('report-table--wide', $content);
+    }
+
+    public function test_dashboard_renders_monthly_summary_comparison_and_accessible_data_table(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+        Cache::flush();
+        config(['dashboard.currency_symbol' => '$']);
+        $this->registerSalesForm('cash', 'Cash Sale', 'cash_sales');
+        $this->insertSale('cash_sales', 'Alice', 100.00, '2026-05-15 07:00:00');
+        $this->insertSale('cash_sales', 'Alice', 80.00, '2026-04-15 07:00:00');
+
+        $response = $this->actingAs(User::factory()->create())
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertSee('Monthly Performance', false);
+        $response->assertSee('Month to Date: May 1, 2026 - May 15, 2026', false);
+        $response->assertSee('Compared with Apr 1, 2026 - Apr 15, 2026', false);
+        $response->assertSee('Transactions', false);
+        $response->assertSee('Total Amount', false);
+        $response->assertSee('Transaction Change', false);
+        $response->assertSee('Amount Change', false);
+        $response->assertSee('id="chart-dashboard-summary"', false);
+        $response->assertSee('Chart measure', false);
+        $response->assertSee('View Daily Summary Data', false);
+        $response->assertSee('Daily current and previous period transaction and amount comparison', false);
+        $response->assertSee('Amount is the sum of numeric form fields marked as sale amounts for qualifying records.', false);
+        $response->assertSee('$100.00', false);
+        $response->assertSee('+$20.00', false);
+        $response->assertSee('25.00%', false);
+        $response->assertSee('No change vs last month', false);
+
+        $content = $response->getContent();
+        $tableStart = strpos($content, '<caption class="sr-only">Daily current and previous period transaction and amount comparison</caption>');
+        $tableEnd = $tableStart === false ? false : strpos($content, '</table>', $tableStart);
+        $summaryTable = $tableStart === false || $tableEnd === false
+            ? ''
+            : substr($content, $tableStart, $tableEnd - $tableStart + strlen('</table>'));
+
+        $headerPositions = array_map(
+            static fn (string $header): int|false => strpos($summaryTable, $header),
+            ['Current Volume', 'Previous Volume', 'Current Amount', 'Previous Amount'],
+        );
+
+        $this->assertNotFalse($tableStart);
+        $this->assertNotFalse($tableEnd);
+        $this->assertLessThan($headerPositions[1], $headerPositions[0]);
+        $this->assertLessThan($headerPositions[2], $headerPositions[1]);
+        $this->assertLessThan($headerPositions[3], $headerPositions[2]);
+        $this->assertMatchesRegularExpression(
+            '/<tfoot>.*?<th[^>]*scope="row"[^>]*>Total<\/th>.*?<td[^>]*>1<\/td>.*?<td[^>]*>1<\/td>.*?<td[^>]*>\$100\.00<\/td>.*?<td[^>]*>\$80\.00<\/td>.*?<\/tfoot>/s',
+            $summaryTable,
+        );
+    }
+
+    public function test_dashboard_reverts_invalid_sales_filters_to_the_default_business_hours(): void
+    {
+        Carbon::setTestNow('2026-05-15 12:00:00');
+
+        $response = $this->actingAs(User::factory()->create())
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('dashboard', [
+                'sales_date' => 'not-a-date',
+                'sales_start' => '18:00',
+                'sales_end' => '06:00',
+            ]));
+
+        $response->assertOk();
+        $response->assertSee('value="2026-05-15"', false);
+        $response->assertSee('value="06:00"', false);
+        $response->assertSee('value="18:00"', false);
+    }
+
+    private function registerSalesForm(string $formCode, string $name, string $tableName): void
+    {
+        Schema::create($tableName, function (Blueprint $table): void {
+            $table->id();
+            $table->date('date');
+            $table->string('request_id')->nullable();
+            $table->string('agent')->nullable();
+            $table->decimal('amount', 12, 2)->nullable();
+            $table->timestamps();
+        });
+
+        Form::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_code' => $formCode,
+            'name' => $name,
+            'table_name' => $tableName,
+            'display_order' => 1,
+            'is_active' => true,
+        ]);
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => $formCode,
+            'field_name' => 'amount',
+            'field_label' => 'Amount',
+            'field_type' => 'number',
+            'is_required' => false,
+            'is_sale_amount' => true,
+            'field_order' => 1,
+        ]);
+    }
+
+    private function insertSale(string $tableName, string $agent, float $amount, string $createdAt): void
+    {
+        $timestamp = Carbon::parse($createdAt);
+
+        DB::table($tableName)->insert([
+            'date' => $timestamp->toDateString(),
+            'request_id' => 'sale_'.uniqid(),
+            'agent' => $agent,
+            'amount' => $amount,
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ]);
+    }
+}

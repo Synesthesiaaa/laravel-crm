@@ -6,10 +6,32 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class FormField extends Model
 {
-    use SoftDeletes;
+    use LogsActivity, SoftDeletes;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly([
+                'campaign_code',
+                'form_type',
+                'field_name',
+                'field_label',
+                'field_type',
+                'is_required',
+                'is_sale_amount',
+                'field_order',
+                'options',
+                'field_width',
+                'visibility',
+            ])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
 
     protected $fillable = [
         'campaign_code',
@@ -18,6 +40,7 @@ class FormField extends Model
         'field_label',
         'field_type',
         'is_required',
+        'is_sale_amount',
         'field_order',
         'options',
         'vici_params',
@@ -29,6 +52,7 @@ class FormField extends Model
     {
         return [
             'is_required' => 'boolean',
+            'is_sale_amount' => 'boolean',
             'visibility' => 'array',
         ];
     }

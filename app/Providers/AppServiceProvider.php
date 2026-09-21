@@ -3,21 +3,30 @@
 namespace App\Providers;
 
 use App\Contracts\Repositories\DispositionRepositoryInterface;
+use App\Models\AgentScreenField;
 use App\Models\Campaign;
 use App\Models\DispositionCode;
 use App\Models\Form;
+use App\Models\FormField;
 use App\Models\VicidialServer;
+use App\Observers\ActivityObserver;
+use App\Observers\CampaignConfigurationObserver;
 use App\Policies\CampaignPolicy;
 use App\Policies\DispositionCodePolicy;
 use App\Policies\FormPolicy;
 use App\Policies\UserPolicy;
 use App\Policies\VicidialServerPolicy;
+use App\Services\BrandingService;
 use App\Services\CampaignService;
+use App\Services\DashboardLayoutService;
+use App\Services\DashboardSalesRuleService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\View;
+use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
+use Spatie\Activitylog\Models\Activity;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -25,11 +34,19 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->ensureTempDirectoryForPhp();
         $this->registerRepositoryBindings();
+        $this->app->scoped(DashboardLayoutService::class);
+        $this->app->scoped(DashboardSalesRuleService::class);
     }
 
     public function boot(): void
     {
+        Vite::useHotFile(storage_path('vite.hot'));
+
         Model::preventLazyLoading(! $this->app->isProduction());
+
+        View::composer('*', function ($view): void {
+            $view->with('branding', app(BrandingService::class)->resolve());
+        });
 
         Gate::policy(Campaign::class, CampaignPolicy::class);
         Gate::policy(\App\Models\User::class, UserPolicy::class);
@@ -37,11 +54,18 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(DispositionCode::class, DispositionCodePolicy::class);
         Gate::policy(VicidialServer::class, VicidialServerPolicy::class);
 
+        Campaign::observe(CampaignConfigurationObserver::class);
+        Form::observe(CampaignConfigurationObserver::class);
+        FormField::observe(CampaignConfigurationObserver::class);
+        AgentScreenField::observe(CampaignConfigurationObserver::class);
+        DispositionCode::observe(CampaignConfigurationObserver::class);
+        Activity::observe(ActivityObserver::class);
+
         View::composer(['layouts.app', 'layouts.sidebar'], function ($view) {
             $view->with('user', Auth::user());
-            $view->with('campaignConfig', app(CampaignService::class)->getCampaign(session('campaign', 'mbsales')) ?? ['forms' => []]);
+            $view->with('campaignConfig', app(CampaignService::class)->getCampaign((string) session('campaign', '')) ?? ['forms' => []]);
             $view->with('dispositionCodes', Auth::user()
-                ? app(DispositionRepositoryInterface::class)->getForCampaign(session('campaign', 'mbsales'))
+                ? app(DispositionRepositoryInterface::class)->getForCampaign((string) session('campaign', ''))
                 : collect());
         });
     }

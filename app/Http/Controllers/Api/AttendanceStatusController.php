@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\AttendanceStatusStartRequest;
 use App\Models\AttendanceStatusType;
 use App\Services\AttendanceStatusService;
 use Illuminate\Http\JsonResponse;
@@ -15,11 +16,9 @@ class AttendanceStatusController extends Controller
         protected AttendanceStatusService $attendanceStatusService,
     ) {}
 
-    public function start(Request $request): JsonResponse
+    public function start(AttendanceStatusStartRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'code' => ['required', 'string', 'max:30'],
-        ]);
+        $validated = $request->validated();
 
         try {
             $log = $this->attendanceStatusService->startStatus(

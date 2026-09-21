@@ -88,24 +88,40 @@ class VicidialProxyService
             $url .= '&phone_number='.urlencode($params['phone_number']);
         }
 
-        $timeout = config('vicidial.timeout', 10);
-        $connectTimeout = config('vicidial.connect_timeout', 5);
-        $retryTimes = config('vicidial.retry_times', 2);
+        $timeout = max(1, (int) config('vicidial.agent_api_timeout', 4));
+        $connectTimeout = max(1, (int) config('vicidial.agent_connect_timeout', 2));
+        $retryTimes = max(1, (int) config('vicidial.retry_times', 2));
         $retrySleepMs = config('vicidial.retry_sleep_ms', 500);
+        $attempts = $this->isRetrySafeAction($action, $params) ? $retryTimes : 1;
 
-        $response = Http::when(! config('vicidial.verify_ssl', true), fn ($h) => $h->withoutVerifying())
-            ->connectTimeout($connectTimeout)
-            ->timeout($timeout)
-            ->retry($retryTimes, $retrySleepMs, function (\Throwable $e, $request) use ($action, $campaign) {
-                $this->telephonyLogger->warning('VicidialProxyService', 'Retrying after failure', [
-                    'action' => $action,
-                    'campaign' => $campaign,
-                    'error' => $e->getMessage(),
-                ]);
+        try {
+            $response = Http::when(! config('vicidial.verify_ssl', true), fn ($h) => $h->withoutVerifying())
+                ->connectTimeout($connectTimeout)
+                ->timeout($timeout)
+                ->retry($attempts, $retrySleepMs, function (\Throwable $e, $request) use ($action, $campaign) {
+                    $this->telephonyLogger->warning('VicidialProxyService', 'Retrying after failure', [
+                        'action' => $action,
+                        'campaign' => $campaign,
+                        'error' => $e->getMessage(),
+                    ]);
 
-                return true;
-            })
-            ->get($url);
+                    return true;
+                })
+                ->get($url);
+        } catch (\Throwable $e) {
+            $this->telephonyLogger->warning('VicidialProxyService', 'Agent API transport failure', [
+                'action' => $action,
+                'campaign' => $campaign,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'raw_response' => '',
+                'message' => 'VICIdial is temporarily unavailable. Please try again.',
+                'failure_code' => CallErrors::VICIDIAL_UNAVAILABLE,
+            ];
+        }
 
         $body = $response->body();
         $normalized = strtolower(trim($body));
@@ -142,6 +158,16 @@ class VicidialProxyService
             'message' => $message,
             'failure_code' => $success ? null : $failureCode,
         ];
+    }
+
+    /**
+     * Only retry actions that are read-only. Replaying Agent API writes after a
+     * response timeout can duplicate dials or repeat state transitions.
+     */
+    private function isRetrySafeAction(string $action, array $params): bool
+    {
+        return $action === 'calls_in_queue_count'
+            || ($action === 'recording' && strtoupper((string) ($params['value'] ?? '')) === 'STATUS');
     }
 
     /**

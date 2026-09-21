@@ -1,26 +1,56 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    @php
+        $layoutBrandName = data_get($branding, 'name', config('app.name', 'CRM'));
+        $layoutFaviconUrl = data_get($branding, 'favicon_url', asset('favicon.ico'));
+    @endphp
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="crm-base-url" content="{{ rtrim(request()->getBaseUrl(), '/') }}">
+    <meta name="robots" content="noindex,nofollow,noarchive">
+    <meta name="description" content="Private CRM workspace for authenticated campaign and customer operations.">
     <script>
       (function() {
-        var t = localStorage.getItem('theme') || 'dark';
-        document.documentElement.setAttribute('data-theme', t);
+        var html = document.documentElement;
+        var t = 'dark';
+        var sidebarCollapsed = false;
+        try {
+          t = localStorage.getItem('theme') || 'dark';
+          sidebarCollapsed = localStorage.getItem('sidebar_collapsed') === 'true';
+        } catch (e) {}
+        html.setAttribute('data-theme', t);
+        window.syncSidebarCollapsedState = function(collapsed) {
+          if (collapsed) html.setAttribute('data-sidebar-collapsed', 'true');
+          else html.removeAttribute('data-sidebar-collapsed');
+        };
+        window.syncSidebarCollapsedState(sidebarCollapsed);
       })();
     </script>
-    <title>@yield('title', config('app.name'))</title>
-    {{-- Self-hosted DM Sans font (fallback to system) --}}
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+    <title>@hasSection('title')@yield('title') | @endif{{ $layoutBrandName }}</title>
+    <link rel="icon" href="{{ $layoutFaviconUrl }}">
+    <link rel="shortcut icon" href="{{ $layoutFaviconUrl }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @stack('styles')
 </head>
-<body class="min-h-screen flex" style="margin: 0;" x-data x-cloak
-      data-campaign="{{ session('campaign', 'mbsales') }}"
-      data-telephony-campaign="{{ session('vicidial_campaign') ?? session('campaign', 'mbsales') }}">
+@php
+    $layoutTelephonyCampaign = (string) (
+        session('campaign')
+        ?: session('vicidial_campaign')
+        ?: auth()->user()?->default_campaign
+        ?: config('vicidial.default_campaign', 'mbsales')
+    );
+    $layoutCampaignName = (string) (session('campaign_name') ?: $layoutTelephonyCampaign);
+@endphp
+<body class="min-h-screen flex crm-app-shell" x-data
+      data-campaign="{{ $layoutTelephonyCampaign }}"
+      data-campaign-name="{{ $layoutCampaignName }}"
+      data-telephony-campaign="{{ $layoutTelephonyCampaign }}"
+      data-user-id="{{ auth()->id() }}"
+      data-notification-poll-seconds="{{ config('notifications.summary_poll_seconds', 60) }}">
+
+    <a class="skip-link" href="#main-content">Skip to main content</a>
 
     {{-- Mobile sidebar overlay --}}
     <div x-show="$store.sidebar.mobileOpen"
@@ -30,8 +60,9 @@
          x-transition:leave="transition-opacity ease-in duration-150"
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0"
-         class="fixed inset-0 bg-black/60 z-30 lg:hidden"
+         class="fixed inset-0 bg-black/60 z-[60] lg:hidden"
          @click="$store.sidebar.closeMobile()"
+         aria-hidden="true"
          style="display: none;">
     </div>
 
@@ -39,28 +70,28 @@
 
     {{-- Main layout --}}
     <div id="main-layout"
-         class="flex-1 flex flex-col min-h-screen transition-all duration-[280ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
-         :class="{
-             'lg:ml-[280px]': !$store.sidebar.collapsed,
-             'lg:ml-[72px]':   $store.sidebar.collapsed,
-             'ml-0': true
-         }">
+         class="md-main-layout"
+         :data-collapsed="$store.sidebar.collapsed ? 'true' : 'false'">
 
         {{-- Sticky header --}}
-        <header class="md-header" role="banner">
+        <header class="md-header" role="banner" aria-label="Application header">
             <div class="flex items-center gap-3 min-w-0">
                 {{-- Mobile hamburger --}}
                 <button type="button"
                         class="lg:hidden btn-icon mr-1"
                         @click="$store.sidebar.openMobile()"
-                        aria-label="Open navigation">
+                        aria-label="Open navigation"
+                        aria-controls="sidebar"
+                        :aria-expanded="$store.sidebar.mobileOpen">
                     <x-icon name="bars-3" class="w-5 h-5" />
                 </button>
                 {{-- Desktop sidebar toggle --}}
                 <button type="button"
                         class="hidden lg:inline-flex btn-icon"
                         @click="$store.sidebar.toggle()"
-                        aria-label="Toggle sidebar">
+                        aria-label="Toggle sidebar"
+                        aria-controls="sidebar"
+                        :aria-expanded="!$store.sidebar.collapsed">
                     <x-icon name="bars-3" class="w-5 h-5" />
                 </button>
                 <h1 class="text-base font-semibold tracking-tight flex items-center gap-2 text-[var(--color-on-surface)] truncate">
@@ -86,15 +117,19 @@
                     <button type="button"
                             class="btn-icon relative"
                             @click="toggle()"
-                            aria-label="Notifications">
+                            aria-label="Notifications"
+                            aria-haspopup="true"
+                            :aria-expanded="open"
+                            aria-controls="notifications-menu">
                         <x-icon name="bell" class="w-4 h-4" />
                         <span x-show="unread > 0"
-                              x-text="unread > 9 ? '9+' : unread"
+                              x-text="unread > 99 ? '99+' : unread"
                               class="notification-badge">
                         </span>
                     </button>
                     {{-- Notifications dropdown --}}
-                    <div x-show="open"
+                    <div id="notifications-menu"
+                         x-show="open"
                          x-transition:enter="transition ease-out duration-150"
                          x-transition:enter-start="opacity-0 scale-95 -translate-y-1"
                          x-transition:enter-end="opacity-100 scale-100 translate-y-0"
@@ -105,33 +140,114 @@
                          class="notifications-dropdown"
                          style="display: none;">
                         <div class="flex items-center justify-between p-4 border-b border-[var(--color-border)]">
-                            <span class="font-semibold text-sm text-[var(--color-on-surface)]">Notifications</span>
-                            <button x-show="unread > 0" @click="markAllRead()" class="text-xs text-[var(--color-primary)] hover:underline">
+                            <div>
+                                <span class="font-semibold text-sm text-[var(--color-on-surface)]">Notifications</span>
+                                <p x-show="stale" class="text-[11px] text-amber-500 mt-0.5">Showing the last saved update</p>
+                            </div>
+                            <button type="button" x-show="unread > 0" @click="markAllRead()" class="btn-link text-xs">
                                 Mark all read
                             </button>
                         </div>
-                        <div class="max-h-80 overflow-y-auto">
-                            <template x-if="items.length === 0">
-                                <div class="p-6 text-center text-sm text-[var(--color-on-surface-dim)]">
-                                    <x-icon name="bell-slash" class="w-8 h-8 mx-auto mb-2 opacity-40" />
-                                    No notifications
+                        <div class="notifications-list max-h-96 overflow-y-auto" :aria-busy="loading">
+                            <div x-show="loading && !hasLoaded" class="notification-state" role="status" aria-live="polite">
+                                <x-icon name="arrow-path" class="w-5 h-5 animate-spin" aria-hidden="true" />
+                                <span>Loading notifications…</span>
+                            </div>
+                            <div x-show="error && !hasLoaded" class="notification-state notification-state-error" role="alert">
+                                <x-icon name="exclamation-triangle" class="w-5 h-5" aria-hidden="true" />
+                                <span class="flex-1">Notifications could not be loaded.</span>
+                                <button type="button" class="btn-ghost btn-xs" @click="load(true)">Retry</button>
+                            </div>
+                            <div x-show="error && hasLoaded" class="notification-state notification-state-error" role="alert">
+                                <span class="flex-1">Couldn’t refresh notifications.</span>
+                                <button type="button" class="btn-ghost btn-xs" @click="load(true)">Retry</button>
+                            </div>
+                            <template x-if="hasLoaded && !error && items.length === 0">
+                                <div class="notification-state notification-state-empty">
+                                    <x-icon name="bell-slash" class="w-8 h-8 opacity-40" aria-hidden="true" />
+                                    <span>No notifications yet</span>
                                 </div>
                             </template>
                             <template x-for="n in items" :key="n.id">
-                                <div class="notif-item" :class="{ 'notif-unread': !n.read }">
+                                <button type="button"
+                                        class="notif-item w-full text-left"
+                                        :class="{ 'notif-unread': !n.read }"
+                                        :aria-label="(n.read ? 'Read: ' : 'Unread: ') + (n.title || 'Notification')"
+                                        @click="openItem(n, $event)">
                                     <div class="flex items-start gap-3">
-                                        <div class="notif-dot shrink-0 mt-1.5" :class="n.type === 'error' ? 'bg-red-500' : n.type === 'warning' ? 'bg-amber-500' : n.type === 'success' ? 'bg-emerald-500' : 'bg-[var(--color-primary)]'"></div>
+                                        <div class="notif-category-icon shrink-0" :class="n.type === 'error' ? 'notif-icon-error' : n.type === 'warning' ? 'notif-icon-warning' : n.type === 'success' ? 'notif-icon-success' : 'notif-icon-info'" aria-hidden="true">
+                                            <template x-if="n.category === 'performance'"><x-icon name="chart-bar" class="w-4 h-4" /></template>
+                                            <template x-if="n.category === 'attendance'"><x-icon name="clock" class="w-4 h-4" /></template>
+                                            <template x-if="n.category === 'call_form'"><x-icon name="document-text" class="w-4 h-4" /></template>
+                                            <template x-if="n.category === 'supervisor' || !n.category"><x-icon name="bell" class="w-4 h-4" /></template>
+                                        </div>
                                         <div class="flex-1 min-w-0">
-                                            <p class="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]" x-text="n.source || 'Notification'"></p>
+                                            <div class="flex items-center justify-between gap-2">
+                                                <p class="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]" x-text="n.source || 'Notification'"></p>
+                                                <span class="text-[10px] font-semibold uppercase tracking-wide" :class="n.read ? 'text-[var(--color-on-surface-dim)]' : 'text-[var(--color-action)]'" x-text="n.read ? 'Read' : 'Unread'"></span>
+                                            </div>
                                             <p class="text-sm font-medium text-[var(--color-on-surface)] leading-snug mt-0.5" x-text="n.title || 'Update'"></p>
                                             <p class="text-xs text-[var(--color-on-surface-muted)] leading-snug mt-0.5" x-text="n.message"></p>
                                             <p class="text-[11px] text-[var(--color-on-surface-dim)] mt-1" x-text="n.time"></p>
                                         </div>
                                     </div>
-                                </div>
+                                </button>
                             </template>
                         </div>
                     </div>
+
+                    <template x-teleport="body">
+                        <x-modal name="notification-details" title="Notification details" maxWidth="xl" aria-describedby="notification-detail-description" @keydown.escape="$store.modal.hide()">
+                            <p id="notification-detail-description" class="sr-only">Review the selected notification details.</p>
+                            <div x-show="detailLoading" class="notification-modal-state" role="status" aria-live="polite">
+                                <x-icon name="arrow-path" class="w-5 h-5 animate-spin" aria-hidden="true" />
+                                <span>Loading details…</span>
+                            </div>
+                            <div x-show="detailError" class="notification-modal-state notification-state-error" role="alert">
+                                <span class="flex-1" x-text="detailError"></span>
+                                <button type="button" class="btn-ghost btn-xs" @click="retryDetail()">Retry</button>
+                            </div>
+                            <div x-show="!detailLoading && !detailError && detail" class="space-y-5">
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]" x-text="detail?.category?.replace('_', ' ') || 'Notification'"></p>
+                                    <p class="text-sm text-[var(--color-on-surface-muted)] mt-1" x-text="detail?.description || ''"></p>
+                                    <div x-show="detail?.date || detail?.range?.label" class="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-[var(--color-on-surface-dim)]">
+                                        <span x-show="detail?.date"><span class="font-semibold">Date:</span> <span x-text="detail?.date || ''"></span></span>
+                                        <span x-show="detail?.range?.label"><span class="font-semibold">Business hours:</span> <span x-text="detail?.range?.label || ''"></span></span>
+                                    </div>
+                                </div>
+                                <template x-for="(section, sectionIndex) in (detail?.sections || [])" :key="section.title + sectionIndex">
+                                    <section class="notification-detail-section">
+                                        <h4 class="text-sm font-semibold text-[var(--color-on-surface)]" x-text="section.title"></h4>
+                                        <p x-show="section.message" class="text-sm text-[var(--color-on-surface-muted)] mt-2 whitespace-pre-wrap" x-text="section.message"></p>
+                                        <div x-show="section.metrics?.length" class="notification-metrics-grid mt-3">
+                                            <template x-for="metric in (section.metrics || [])" :key="metric.label">
+                                                <div class="notification-metric">
+                                                    <span class="text-xs text-[var(--color-on-surface-dim)]" x-text="metric.label"></span>
+                                                    <strong class="text-sm text-[var(--color-on-surface)]" x-text="metric.value"></strong>
+                                                </div>
+                                            </template>
+                                        </div>
+                                        <dl x-show="section.fields?.length" class="notification-fields mt-3">
+                                            <template x-for="field in (section.fields || [])" :key="field.label">
+                                                <div><dt x-text="field.label"></dt><dd x-text="field.value"></dd></div>
+                                            </template>
+                                        </dl>
+                                        <div x-show="section.rows?.length" class="notification-table-wrap mt-3">
+                                            <table class="notification-table">
+                                                <thead><tr><th scope="col">Name</th><th scope="col">Sales</th><th x-show="section.rows?.[0]?.sales_amount !== undefined" scope="col" class="text-right">Amount</th></tr></thead>
+                                                <tbody>
+                                                    <template x-for="row in (section.rows || [])" :key="row.name || row.agent">
+                                                        <tr><th scope="row" x-text="row.name || row.agent"></th><td x-text="row.sales_count ?? 0"></td><td x-show="row.sales_amount !== undefined" class="text-right tabular-nums" x-text="row.sales_amount"></td></tr>
+                                                    </template>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </section>
+                                </template>
+                            </div>
+                        </x-modal>
+                    </template>
                 </div>
 
                 {{-- Call status indicator (telephony) --}}
@@ -146,7 +262,7 @@
                      style="display: none;">
                     <x-icon name="phone" class="w-3.5 h-3.5" />
                     <span x-show="$store.call.state === 'ringing'">Ringing...</span>
-                    <span x-show="$store.call.state === 'connected'" x-text="'On Call · ' + $store.call.formattedDuration()"></span>
+                    <span x-show="$store.call.state === 'connected'" x-text="'On Call - ' + $store.call.formattedDuration()"></span>
                     <span x-show="$store.call.state === 'hold'">On Hold</span>
                     <span x-show="$store.call.state === 'wrapup'">Wrap-up</span>
                 </div>
@@ -156,12 +272,12 @@
                      style="display: none;">
                     <x-icon name="signal" class="w-3.5 h-3.5" />
                     <span x-text="'Vici: ' + ($store.vicidial.status || 'ready')"></span>
-                    <span x-show="$store.vicidial.pauseCode">· <span x-text="$store.vicidial.pauseCode"></span></span>
-                    <span>· Q:<span x-text="$store.vicidial.queueCount"></span></span>
+                    <span x-show="$store.vicidial.pauseCode">- <span x-text="$store.vicidial.pauseCode"></span></span>
+                    <span>- Q:<span x-text="$store.vicidial.queueCount"></span></span>
                 </div>
 
                 {{-- Theme toggle --}}
-                <button type="button" id="theme-toggle" class="btn-icon theme-toggle" aria-label="Toggle theme">
+                <button type="button" id="theme-toggle" class="btn-icon theme-toggle" aria-label="Toggle theme" aria-pressed="false">
                     <x-icon name="moon" class="theme-icon-dark w-4 h-4" />
                     <x-icon name="sun" class="theme-icon-light w-4 h-4 hidden" />
                 </button>
@@ -169,9 +285,12 @@
                 {{-- User dropdown --}}
                 <div class="relative" x-data="{ open: false }">
                     <button type="button"
-                            class="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-[var(--color-surface-3)] transition-colors text-sm"
-                            @click="open = !open">
-                        <div class="w-7 h-7 rounded-full bg-[var(--color-primary-muted)] border border-[var(--color-primary)] flex items-center justify-center text-[var(--color-primary)] font-bold text-xs uppercase">
+                            class="header-user-trigger flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-[var(--color-surface-3)] transition-colors text-sm"
+                            @click="open = !open"
+                            aria-haspopup="true"
+                            :aria-expanded="open"
+                            aria-controls="user-menu">
+                        <div class="w-7 h-7 rounded-full bg-[var(--color-primary-muted)] border border-[var(--color-primary)] flex items-center justify-center text-[var(--color-action)] font-bold text-xs uppercase">
                             {{ substr($user->full_name ?? $user->username ?? 'U', 0, 1) }}
                         </div>
                         <span class="hidden sm:block text-[var(--color-on-surface-muted)] max-w-[120px] truncate">
@@ -179,7 +298,8 @@
                         </span>
                         <x-icon name="chevron-down" class="w-3.5 h-3.5 text-[var(--color-on-surface-dim)]" />
                     </button>
-                    <div x-show="open"
+                    <div id="user-menu"
+                         x-show="open"
                          x-transition:enter="transition ease-out duration-150"
                          x-transition:enter-start="opacity-0 scale-95 -translate-y-1"
                          x-transition:enter-end="opacity-100 scale-100 translate-y-0"
@@ -212,7 +332,7 @@
         </header>
 
         {{-- Page content --}}
-        <main class="content-padding flex-1 p-6 lg:p-8" id="main-content">
+        <main class="content-padding flex-1 p-6 lg:p-8" id="main-content" tabindex="-1" aria-label="Main content">
             @yield('content')
         </main>
     </div>
@@ -385,6 +505,7 @@
          class="modal-backdrop"
          style="display: none;"
          x-data="dispositionModal()"
+         x-cloak
          x-trap.noscroll="$store.call.state === 'wrapup'">
         <div class="modal-box max-w-md" @click.stop>
             <div class="modal-header">
@@ -458,6 +579,7 @@
     @auth
     <audio id="remoteAudio" autoplay playsinline style="display:none;" aria-hidden="true"></audio>
     @include('partials.phone-widget')
+    @include('partials.quick-form-widget')
     @php
         $telephonyBootstrap = session()->pull('telephony_bootstrap');
     @endphp
@@ -535,13 +657,12 @@
             //    extension (documented: config/webrtc.php `media_path`).
             //    TelephonyCore is a singleton – calling register() when already
             //    registered is a no-op, so page navigation is safe.
-            const mediaPath = window.__telephonyMediaPath || 'sipjs';
-            if (window.TelephonyCore && (mediaPath === 'sipjs' || mediaPath === 'both')) {
+            if (window.TelephonyCore && window.TelephonyMediaPath?.shouldUseSipMedia?.() === true) {
                 window.TelephonyCore.register().catch(err => {
                     console.warn('[TelephonyInit] SIP register error:', err);
                 });
             }
-            if (mediaPath === 'both') {
+            if (window.TelephonyMediaPath?.isDual?.() === true) {
                 console.warn('[TelephonyInit] media_path=both: both SIP.js and ViciPhone are active. Use only while migrating.');
             }
         })();
@@ -564,6 +685,7 @@
           if (btn) {
             btn.setAttribute('aria-label', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
             btn.setAttribute('title', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+            btn.setAttribute('aria-pressed', t === 'light' ? 'true' : 'false');
           }
         }
         document.addEventListener('click', function (e) {

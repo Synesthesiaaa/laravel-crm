@@ -1,3 +1,5 @@
+import { shouldUseSipMedia } from './telephony-media-path';
+
 const DEFAULT_VERIFY_MAX = 15;
 const DEFAULT_VERIFY_DELAY_MS = 1500;
 const DEFAULT_TIMEOUT_MS = 20000;
@@ -49,9 +51,25 @@ function cancelVerify(ctx) {
     }
 }
 
+function syncWidgetCampaign(ctx, campaign) {
+    if (ctx?.vici && typeof campaign === 'string' && campaign.trim() !== '') {
+        ctx.vici.vici_campaign = campaign.trim();
+    }
+}
+
+function syncWidgetCampaignFromResponse(data, ctx) {
+    const campaign = data?.iframe_alignment?.vd_campaign
+        || data?.session?.campaign_code
+        || data?.local_session?.campaign_code
+        || null;
+
+    syncWidgetCampaign(ctx, campaign);
+}
+
 async function syncStatus(campaign, ctx = null) {
     const effectiveCampaign = getCampaign(campaign);
-    const data = await window.Alpine.store('vicidial').sync(effectiveCampaign);
+    const data = await window.Alpine.store('vicidial').sync(effectiveCampaign, { remote: true });
+    syncWidgetCampaignFromResponse(data, ctx);
     const localStatus = data?.local_session?.session_status || '';
 
     if (['ready', 'paused', 'in_call'].includes(localStatus)) {
@@ -63,8 +81,20 @@ async function syncStatus(campaign, ctx = null) {
     return data;
 }
 
-async function pollVerify(campaign, ctx = null, maxAttempts = DEFAULT_VERIFY_MAX) {
+function finishNonBlockingAttempt(ctx) {
+    cancelVerify(ctx);
+    phaseSet(ctx, 'idle');
+    loadingSet(ctx, false);
+    state.inflight = false;
+}
+
+async function pollVerify(campaign, ctx = null, maxAttempts = DEFAULT_VERIFY_MAX, options = {}) {
     if (state.verifyCount >= maxAttempts) {
+        if (options.nonBlocking) {
+            finishNonBlockingAttempt(ctx);
+            return false;
+        }
+
         cancelVerify(ctx);
         phaseSet(ctx, 'timeout');
         loadingSet(ctx, false);
@@ -84,6 +114,11 @@ async function pollVerify(campaign, ctx = null, maxAttempts = DEFAULT_VERIFY_MAX
         try {
             const res = await window.axios.post('/api/vicidial/session/verify', { campaign });
             if (res.data?.success === false && res.data?.data?.stop_verify_poll) {
+                if (options.nonBlocking) {
+                    finishNonBlockingAttempt(ctx);
+                    return;
+                }
+
                 cancelVerify(ctx);
                 phaseSet(ctx, 'failed');
                 loadingSet(ctx, false);
@@ -98,8 +133,9 @@ async function pollVerify(campaign, ctx = null, maxAttempts = DEFAULT_VERIFY_MAX
                 loadingSet(ctx, false);
                 state.inflight = false;
                 window.Alpine.store('toast').success('VICIdial session is live and ready.');
+                syncWidgetCampaignFromResponse(res.data?.data ?? {}, ctx);
                 await syncStatus(campaign, ctx);
-                if (window.TelephonyCore?.register) {
+                if (shouldUseSipMedia() && window.TelephonyCore?.register) {
                     window.TelephonyCore.register().catch(() => {});
                 }
                 return;
@@ -108,7 +144,7 @@ async function pollVerify(campaign, ctx = null, maxAttempts = DEFAULT_VERIFY_MAX
             // 202 pending and transient errors should continue polling.
         }
 
-        await pollVerify(campaign, ctx, maxAttempts);
+        await pollVerify(campaign, ctx, maxAttempts, options);
     }, DEFAULT_VERIFY_DELAY_MS);
 
     return true;
@@ -117,7 +153,7 @@ async function pollVerify(campaign, ctx = null, maxAttempts = DEFAULT_VERIFY_MAX
 /**
  * Single verify after iframe load (used when Non-Agent polling is disabled).
  */
-async function verifyOnceAfterIframeLoad(campaign, ctx = null) {
+async function verifyOnceAfterIframeLoad(campaign, ctx = null, options = {}) {
     const effectiveCampaign = getCampaign(campaign);
     phaseSet(ctx, 'syncing');
     state.verifyCount = 1;
@@ -130,6 +166,11 @@ async function verifyOnceAfterIframeLoad(campaign, ctx = null) {
         cancelVerify(ctx);
 
         if (res.data?.success === false && res.data?.data?.stop_verify_poll) {
+            if (options.nonBlocking) {
+                finishNonBlockingAttempt(ctx);
+                return;
+            }
+
             phaseSet(ctx, 'failed');
             loadingSet(ctx, false);
             state.inflight = false;
@@ -147,8 +188,9 @@ async function verifyOnceAfterIframeLoad(campaign, ctx = null) {
                     ? 'VICIdial session ready (iframe load; Non-Agent status disabled).'
                     : 'VICIdial session is live and ready.'
             );
+            syncWidgetCampaignFromResponse(res.data?.data ?? {}, ctx);
             await syncStatus(effectiveCampaign, ctx);
-            if (window.TelephonyCore?.register) {
+            if (shouldUseSipMedia() && window.TelephonyCore?.register) {
                 window.TelephonyCore.register().catch(() => {});
             }
             return;
@@ -160,8 +202,13 @@ async function verifyOnceAfterIframeLoad(campaign, ctx = null) {
         if (ctx?.vici) {
             ctx.vici._verifyPollCount = 1;
         }
-        await pollVerify(effectiveCampaign, ctx, DEFAULT_VERIFY_MAX);
+        await pollVerify(effectiveCampaign, ctx, DEFAULT_VERIFY_MAX, options);
     } catch (e) {
+        if (options.nonBlocking) {
+            finishNonBlockingAttempt(ctx);
+            return;
+        }
+
         cancelVerify(ctx);
         phaseSet(ctx, 'failed');
         loadingSet(ctx, false);
@@ -182,19 +229,30 @@ function clearFrame() {
     frame.src = 'about:blank';
 }
 
+function resetForCampaignChange(ctx = null) {
+    cancelVerify(ctx);
+    state.inflight = false;
+    clearFrame();
+    phaseSet(ctx, 'idle');
+    loadingSet(ctx, false);
+}
+
 /**
- * Reload the session iframe from a stored URL when the server session is still login_pending
- * (e.g. after full page refresh mid-login). Avoids a second POST /session/login.
+ * Reload the session iframe from a stored URL when the server session is still active.
+ *
+ * Covers both mid-login recovery (`login_pending`) and page reloads after Vicidial has
+ * already confirmed a usable session (`ready`, `paused`, `in_call`).
  */
 async function maybeReconnectPending(localSession, campaign, ctx = null) {
     const effectiveCampaign = getCampaign(campaign);
+    const sessionStatus = localSession?.session_status || '';
+    const needsVerify = sessionStatus === 'login_pending';
+    const canRestore = ['login_pending', 'ready', 'paused', 'in_call'].includes(sessionStatus);
+
     if (state.inflight) {
         return false;
     }
-    if (window.Alpine.store('vicidial').loggedIn) {
-        return false;
-    }
-    if (!localSession || localSession.session_status !== 'login_pending') {
+    if (!localSession || !canRestore) {
         return false;
     }
 
@@ -232,16 +290,25 @@ async function maybeReconnectPending(localSession, campaign, ctx = null) {
     }
 
     frame.onload = () => {
-        if (isIframeAgentApiOnly()) {
-            verifyOnceAfterIframeLoad(effectiveCampaign, ctx).catch(() => {});
-        } else {
-            phaseSet(ctx, 'syncing');
-            state.verifyCount = 0;
-            if (ctx?.vici) {
-                ctx.vici._verifyPollCount = 0;
+        if (needsVerify) {
+            if (isIframeAgentApiOnly()) {
+                verifyOnceAfterIframeLoad(effectiveCampaign, ctx).catch(() => {});
+            } else {
+                phaseSet(ctx, 'syncing');
+                state.verifyCount = 0;
+                if (ctx?.vici) {
+                    ctx.vici._verifyPollCount = 0;
+                }
+                pollVerify(effectiveCampaign, ctx, DEFAULT_VERIFY_MAX).catch(() => {});
             }
-            pollVerify(effectiveCampaign, ctx, DEFAULT_VERIFY_MAX).catch(() => {});
+            return;
         }
+
+        cancelVerify(ctx);
+        phaseSet(ctx, 'ready');
+        loadingSet(ctx, false);
+        state.inflight = false;
+        syncStatus(effectiveCampaign, ctx).catch(() => {});
     };
     frame.onerror = () => {
         cancelVerify(ctx);
@@ -282,6 +349,7 @@ async function login({
     ingroups = [],
     ctx = null,
     maxAttempts = DEFAULT_VERIFY_MAX,
+    nonBlocking = false,
 } = {}) {
     const effectiveCampaign = getCampaign(campaign);
     if (state.inflight) return false;
@@ -312,7 +380,13 @@ async function login({
                 ctx.vici.vd_login = alignment.vd_login;
             }
         }
+        syncWidgetCampaignFromResponse(res.data?.data ?? {}, ctx);
         if (!iframeUrl) {
+            if (nonBlocking) {
+                finishNonBlockingAttempt(ctx);
+                return false;
+            }
+
             phaseSet(ctx, 'failed');
             loadingSet(ctx, false);
             state.inflight = false;
@@ -324,6 +398,11 @@ async function login({
 
         const frame = getFrame();
         if (!frame) {
+            if (nonBlocking) {
+                finishNonBlockingAttempt(ctx);
+                return false;
+            }
+
             phaseSet(ctx, 'failed');
             loadingSet(ctx, false);
             state.inflight = false;
@@ -337,17 +416,22 @@ async function login({
         }
         frame.onload = () => {
             if (isIframeAgentApiOnly()) {
-                verifyOnceAfterIframeLoad(effectiveCampaign, ctx).catch(() => {});
+                verifyOnceAfterIframeLoad(effectiveCampaign, ctx, { nonBlocking }).catch(() => {});
             } else {
                 phaseSet(ctx, 'syncing');
                 state.verifyCount = 0;
                 if (ctx?.vici) {
                     ctx.vici._verifyPollCount = 0;
                 }
-                pollVerify(effectiveCampaign, ctx, maxAttempts).catch(() => {});
+                pollVerify(effectiveCampaign, ctx, maxAttempts, { nonBlocking }).catch(() => {});
             }
         };
         frame.onerror = () => {
+            if (nonBlocking) {
+                finishNonBlockingAttempt(ctx);
+                return;
+            }
+
             cancelVerify(ctx);
             phaseSet(ctx, 'failed');
             loadingSet(ctx, false);
@@ -359,6 +443,11 @@ async function login({
         state.verifyTimeout = setTimeout(() => {
             const phase = ctx?.vici?.phase ?? '';
             if (phase === 'iframe_loading' || phase === 'syncing' || phase === 'requesting') {
+                if (nonBlocking) {
+                    finishNonBlockingAttempt(ctx);
+                    return;
+                }
+
                 cancelVerify(ctx);
                 phaseSet(ctx, 'timeout');
                 loadingSet(ctx, false);
@@ -370,6 +459,11 @@ async function login({
 
         return true;
     } catch (e) {
+        if (nonBlocking) {
+            finishNonBlockingAttempt(ctx);
+            return false;
+        }
+
         phaseSet(ctx, 'failed');
         loadingSet(ctx, false);
         state.inflight = false;
@@ -424,7 +518,7 @@ async function logout(campaign = null, ctx = null) {
         await window.axios.post('/api/vicidial/session/logout', { campaign: effectiveCampaign });
         phaseSet(ctx, 'idle');
         clearFrame();
-        if (window.TelephonyCore?.destroy) {
+        if (shouldUseSipMedia() && window.TelephonyCore?.destroy) {
             window.TelephonyCore.destroy().catch(() => {});
         }
         window.Alpine.store('toast').info('VICIdial session logged out.');
@@ -517,6 +611,7 @@ const VicidialSession = {
     popout,
     cancelVerify,
     clearFrame,
+    resetForCampaignChange,
     get inflight() {
         return state.inflight;
     },

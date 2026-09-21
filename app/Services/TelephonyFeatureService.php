@@ -16,6 +16,19 @@ class TelephonyFeatureService
         'callback_controls',
         'lead_tools',
         'predictive_dialing',
+        'agent_screen_access',
+    ];
+
+    private const DEFAULTS = [
+        'session_controls' => true,
+        'ingroup_management' => true,
+        'transfer_controls' => true,
+        'recording_controls' => true,
+        'dtmf_controls' => true,
+        'callback_controls' => true,
+        'lead_tools' => true,
+        'predictive_dialing' => true,
+        'agent_screen_access' => false,
     ];
 
     private const CACHE_KEY = 'telephony_feature_flags_v1';
@@ -31,7 +44,8 @@ class TelephonyFeatureService
             $result = [];
             foreach (self::FEATURE_KEYS as $key) {
                 $settingKey = $this->toSettingKey($key);
-                $result[$key] = $this->castBool($rows[$settingKey] ?? '1');
+                $default = self::DEFAULTS[$key] ?? true;
+                $result[$key] = $this->castBool($rows[$settingKey] ?? ($default ? '1' : '0'));
             }
 
             return $result;
@@ -51,6 +65,8 @@ class TelephonyFeatureService
 
     public function updateMany(array $values): void
     {
+        $before = $this->getAll();
+
         foreach (self::FEATURE_KEYS as $feature) {
             $enabled = ! empty($values[$feature]);
             SystemSetting::query()->updateOrCreate(
@@ -60,6 +76,24 @@ class TelephonyFeatureService
         }
 
         $this->flush();
+        $after = $this->getAll();
+
+        if ($before === $after) {
+            return;
+        }
+
+        $logger = activity('configuration')
+            ->event('updated')
+            ->withProperties([
+                'attributes' => ['features' => $after],
+                'old' => ['features' => $before],
+            ]);
+
+        if (auth()->check()) {
+            $logger->causedBy(auth()->user());
+        }
+
+        $logger->log('Telephony feature access updated');
     }
 
     public function flush(): void
