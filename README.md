@@ -6,7 +6,7 @@ Laravel CRM is a Laravel 12 customer relationship management platform built for 
 
 - [Overview](#overview)
 - [Features](#features)
-- [Screenshot Gallery](#screenshot-gallery)
+- [Documentation Data Safety](#documentation-data-safety)
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
 - [Installation Guide](#installation-guide)
@@ -36,20 +36,13 @@ The codebase follows the Laravel 12 application structure and uses Blade views, 
 - Predictive dialing support with local lead hopper workflows
 - Structured logging for audit, security, telephony, and rate-limit events
 
-## Screenshot Gallery
+## Documentation Data Safety
 
-These screenshots were captured from a seeded local development instance so readers can quickly understand the main areas of the application.
+This README intentionally avoids application screenshots and operational records that could expose campaign, customer, agent, or form data.
 
-| View | Screenshot |
-|------|------------|
-| Login | ![Laravel CRM login screen](docs/images/login-screen.png) |
-| Dashboard | ![Laravel CRM dashboard](docs/images/dashboard.png) |
-| Agent workspace | ![Laravel CRM agent workspace](docs/images/agent-screen.png) |
-| Telephony reports | ![Laravel CRM telephony reports](docs/images/reports.png) |
-| Management dashboard | ![Laravel CRM management dashboard](docs/images/admin-dashboard.png) |
-| Campaign form | ![Laravel CRM campaign form](docs/images/form-ezycash.png) |
+Use placeholders in documentation examples. If screenshots are added later, capture them only from a dedicated test campaign with synthetic users, leads, form fields, phone numbers, dispositions, and report data.
 
-The gallery is intentionally broad: it shows the authentication flow, the campaign dashboard, agent tools, reporting, administration, and a sample form screen.
+Do not use production records, real customer information, live campaign identifiers, credentials, internal endpoints, or other operational data in public documentation.
 
 ## Prerequisites
 
