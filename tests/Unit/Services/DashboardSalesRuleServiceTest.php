@@ -103,6 +103,45 @@ class DashboardSalesRuleServiceTest extends TestCase
         $this->assertCount(1, $fieldSelects);
     }
 
+    public function test_campaign_fields_are_loaded_once_across_rule_editor_and_validation_work(): void
+    {
+        $this->seed(CampaignSeeder::class);
+        FormField::query()->create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount',
+            'field_label' => 'EzyCash Amount',
+            'field_type' => 'number',
+            'is_required' => false,
+            'is_sale_amount' => true,
+            'field_order' => 1,
+        ]);
+
+        $config = [
+            'mode' => 'custom',
+            'forms' => [[
+                'form_code' => 'ezycash',
+                'amount_field' => 'ezycash_amount',
+                'trigger' => 'marked_amount',
+                'conditions' => [],
+            ]],
+        ];
+
+        $service = app(DashboardSalesRuleService::class);
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $service->resolveForCampaign('mbsales', $config);
+        $service->editorData('mbsales');
+        $service->validationErrors('mbsales', $config);
+
+        $fieldSelects = collect(DB::getQueryLog())
+            ->filter(fn (array $query): bool => str_contains(strtolower($query['query']), 'form_fields'))
+            ->filter(fn (array $query): bool => str_starts_with(ltrim(strtolower($query['query'])), 'select'));
+
+        $this->assertCount(1, $fieldSelects);
+    }
+
     public function test_custom_mode_returns_warnings_for_stale_references_without_falling_back(): void
     {
         $this->seed(CampaignSeeder::class);

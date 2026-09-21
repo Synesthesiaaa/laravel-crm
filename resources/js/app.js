@@ -479,8 +479,15 @@ document.addEventListener('keydown', (e) => {
         Alpine.store('search').close();
     }
 
-    // Telephony shortcuts (only active on agent views that listen to these events)
-    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+    // Telephony shortcuts belong to the Agent Screen only. Keep native browser
+    // shortcuts available elsewhere and while the agent is editing a field.
+    const shortcutTarget = e.target instanceof Element ? e.target : null;
+    const isEditing = shortcutTarget?.closest(
+        'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]',
+    );
+    const agentScreenActive = Boolean(document.querySelector('[data-agent-screen]'));
+
+    if (agentScreenActive && !isEditing && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
         const key = e.key.toLowerCase();
         const map = {
             d: 'telephony-shortcut-dial',

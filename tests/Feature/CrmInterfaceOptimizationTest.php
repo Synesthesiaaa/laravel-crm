@@ -80,7 +80,7 @@ final class CrmInterfaceOptimizationTest extends TestCase
         $response->assertOk();
         $response->assertSee('id="reports-date-start"', false);
         $response->assertSee('id="reports-date-end"', false);
-        $response->assertSee('More filters', false);
+        $response->assertSee('More Filters', false);
         $response->assertSee('aria-controls="reports-advanced-filters"', false);
         $response->assertSee('id="reports-advanced-filters"', false);
         $response->assertSee('id="reports-disposition-scope" class="form-select"', false);
@@ -210,8 +210,8 @@ final class CrmInterfaceOptimizationTest extends TestCase
         $this->assertMatchesRegularExpression('/<summary[^>]*text-\[var\(--color-action\)\]/s', $callHistory);
         $this->assertGreaterThanOrEqual(4, substr_count($supervisor, 'text-[var(--color-action)]'));
         $this->assertGreaterThanOrEqual(2, substr_count($recordsList, 'text-[var(--color-action)]'));
-        $this->assertStringContainsString("bg-[var(--color-primary-muted)] text-[var(--color-action)]", $dashboard);
-        $this->assertStringContainsString("bg-[var(--color-primary-muted)] text-[var(--color-action)]", $adminDashboard);
+        $this->assertStringContainsString('bg-[var(--color-primary-muted)] text-[var(--color-action)]', $dashboard);
+        $this->assertStringContainsString('bg-[var(--color-primary-muted)] text-[var(--color-action)]', $adminDashboard);
         $this->assertStringContainsString('bg-[var(--color-primary)] text-[var(--color-primary-foreground)]', $clickToCall);
         $this->assertStringNotContainsString('bg-[var(--color-primary)] text-white', $clickToCall);
     }

@@ -80,6 +80,7 @@
        }"
        x-data
        x-init="$watch('$store.sidebar.collapsed', value => window.syncSidebarCollapsedState(value))"
+       x-trap.inert.noscroll="$store.sidebar.mobileOpen"
        @keydown.escape="$store.sidebar.closeMobile()"
        >
 

@@ -28,6 +28,9 @@ class DashboardSalesRuleService
     /** @var array<string, array{mode: string, forms: list<array<string, mixed>>, warnings: list<string>}> */
     private array $resolvedRules = [];
 
+    /** @var array<string, Collection<string, Collection<int, FormField>>> */
+    private array $campaignFieldGroups = [];
+
     public function __construct(
         protected CampaignRepository $campaignRepository,
     ) {}
@@ -63,6 +66,7 @@ class DashboardSalesRuleService
         $formGroups = is_array($salesConfig['forms'] ?? null) ? $salesConfig['forms'] : [];
         $warnings = [];
         $forms = [];
+        $campaignFields = $this->campaignFieldsByForm($campaignCode);
 
         foreach ($formGroups as $formGroup) {
             if (! is_array($formGroup)) {
@@ -88,10 +92,7 @@ class DashboardSalesRuleService
                 continue;
             }
 
-            $fields = FormField::query()
-                ->where('campaign_code', $campaignCode)
-                ->where('form_type', $formCode)
-                ->get(['field_name', 'field_label', 'field_type', 'is_sale_amount']);
+            $fields = $campaignFields->get($formCode, collect());
             $fieldsByName = $fields->keyBy(static fn (FormField $field): string => (string) $field->field_name);
 
             $amountField = $this->resolveAmountField(
@@ -171,6 +172,7 @@ class DashboardSalesRuleService
         $campaignForms = $campaigns[$campaignCode]['forms'] ?? [];
         $allowedTables = $this->campaignRepository->getAllFormTableNames();
         $editorForms = [];
+        $campaignFields = $this->campaignFieldsByForm($campaignCode);
 
         foreach ($campaignForms as $formCode => $formConfig) {
             $tableName = (string) ($formConfig['table_name'] ?? $formConfig['table'] ?? '');
@@ -178,12 +180,7 @@ class DashboardSalesRuleService
                 continue;
             }
 
-            $fields = FormField::query()
-                ->where('campaign_code', $campaignCode)
-                ->where('form_type', (string) $formCode)
-                ->orderBy('field_order')
-                ->orderBy('id')
-                ->get(['field_name', 'field_label', 'field_type', 'options', 'is_sale_amount'])
+            $fields = $campaignFields->get((string) $formCode, collect())
                 ->filter(fn (FormField $field): bool => Schema::hasColumn($tableName, (string) $field->field_name))
                 ->map(fn (FormField $field): array => [
                     'name' => (string) $field->field_name,
@@ -389,6 +386,7 @@ class DashboardSalesRuleService
         $campaignForms = $campaigns[$campaignCode]['forms'] ?? [];
         $allowedTables = $this->campaignRepository->getAllFormTableNames();
         $metadata = [];
+        $campaignFields = $this->campaignFieldsByForm($campaignCode);
 
         foreach ($campaignForms as $formCode => $formConfig) {
             $tableName = (string) ($formConfig['table_name'] ?? $formConfig['table'] ?? '');
@@ -396,10 +394,7 @@ class DashboardSalesRuleService
                 continue;
             }
 
-            $fields = FormField::query()
-                ->where('campaign_code', $campaignCode)
-                ->where('form_type', (string) $formCode)
-                ->get(['field_name', 'field_type', 'is_sale_amount'])
+            $fields = $campaignFields->get((string) $formCode, collect())
                 ->filter(fn (FormField $field): bool => Schema::hasColumn($tableName, (string) $field->field_name))
                 ->mapWithKeys(fn (FormField $field): array => [(string) $field->field_name => [
                     'type' => (string) $field->field_type,
@@ -415,6 +410,36 @@ class DashboardSalesRuleService
         }
 
         return $metadata;
+    }
+
+    /**
+     * Load active campaign form fields once per service instance so rule resolution,
+     * editor metadata, and validation do not issue one query per form.
+     *
+     * @return Collection<string, Collection<int, FormField>>
+     */
+    private function campaignFieldsByForm(string $campaignCode): Collection
+    {
+        if (array_key_exists($campaignCode, $this->campaignFieldGroups)) {
+            return $this->campaignFieldGroups[$campaignCode];
+        }
+
+        return $this->campaignFieldGroups[$campaignCode] = FormField::query()
+            ->where('campaign_code', $campaignCode)
+            ->orderBy('form_type')
+            ->orderBy('field_order')
+            ->orderBy('id')
+            ->get([
+                'id',
+                'form_type',
+                'field_name',
+                'field_label',
+                'field_type',
+                'options',
+                'is_sale_amount',
+                'field_order',
+            ])
+            ->groupBy(static fn (FormField $field): string => (string) $field->form_type);
     }
 
     /**

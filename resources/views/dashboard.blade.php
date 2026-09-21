@@ -199,6 +199,7 @@
                     <details class="mt-4 border-t border-[var(--color-border)] pt-3">
                         <summary class="cursor-pointer text-xs font-semibold text-[var(--color-on-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">View Daily Summary Data</summary>
                         <div class="md-table-wrap mt-3">
+                            <div class="table-scroll-wrap">
                             <table>
                                 <caption class="sr-only">Daily current and previous period {{ $amountVisible('tables') ? 'transaction and amount' : 'transaction' }} comparison</caption>
                                 <thead>
@@ -237,6 +238,7 @@
                                     </tr>
                                 </tfoot>
                             </table>
+                            </div>
                         </div>
                     </details>
                 @else
@@ -276,6 +278,7 @@
 
             <div class="md-table-wrap mt-4">
                 @if(!empty($kpis['sales_by_form']))
+                    <div class="table-scroll-wrap">
                     <table>
                         <thead>
                             <tr>
@@ -298,6 +301,7 @@
                             @endforeach
                         </tbody>
                     </table>
+                    </div>
                 @else
                     <p class="table-empty py-8 text-center text-sm text-[var(--color-on-surface-dim)]">{{ $salesMode === 'custom' ? 'No custom sales rules matched this range.' : 'No marked form sale fields are available for this campaign.' }}</p>
                 @endif
@@ -331,6 +335,7 @@
 
             <div class="md-table-wrap mt-4">
                 @if(!empty($agentLeaderboard))
+                    <div class="table-scroll-wrap">
                     <table>
                         <thead>
                             <tr>
@@ -364,6 +369,7 @@
                             </tr>
                         </tfoot>
                     </table>
+                    </div>
                 @else
                     <p class="table-empty py-8 text-center text-sm text-[var(--color-on-surface-dim)]">No qualifying form sales are available for this range.</p>
                 @endif
@@ -444,6 +450,7 @@
         </div>
         <div class="md-table-wrap">
             @if(!empty($agentLeaderboard))
+                <div class="table-scroll-wrap">
                 <table>
                     <thead>
                         <tr>
@@ -477,6 +484,7 @@
                         </tr>
                     </tfoot>
                 </table>
+                </div>
             @else
                 <p class="table-empty py-8 text-center text-sm text-[var(--color-on-surface-dim)]">No qualifying form sales are available for this range.</p>
             @endif
