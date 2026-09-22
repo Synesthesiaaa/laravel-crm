@@ -68,15 +68,17 @@
                      class="filter-disclosure grid-cols-1 sm:grid-cols-2 xl:grid-cols-5"
                      x-show="advancedFiltersOpen"
                      x-cloak>
-                    <label class="form-field">
-                        <span class="form-label">Agent</span>
-                        <select class="form-select" x-model="filters.agent" @change="applyFilters()">
-                            <option value="">All agents</option>
-                            <template x-for="agent in filterOptions.agents || []" :key="agent.value">
-                                <option :value="agent.value" x-text="agent.label"></option>
-                            </template>
-                        </select>
-                    </label>
+                    @unless($personal)
+                        <label class="form-field">
+                            <span class="form-label">Agent</span>
+                            <select class="form-select" x-model="filters.agent" @change="applyFilters()">
+                                <option value="">All agents</option>
+                                <template x-for="agent in filterOptions.agents || []" :key="agent.value">
+                                    <option :value="agent.value" x-text="agent.label"></option>
+                                </template>
+                            </select>
+                        </label>
+                    @endunless
                     <label class="form-field">
                         <span class="form-label">Status</span>
                         <select class="form-select" x-model="filters.status" @change="applyFilters()">

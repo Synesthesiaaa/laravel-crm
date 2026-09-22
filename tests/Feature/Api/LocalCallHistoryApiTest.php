@@ -72,6 +72,37 @@ final class LocalCallHistoryApiTest extends TestCase
             ->assertJsonPath('pagination.total', 1);
     }
 
+    public function test_agent_status_health_uses_personal_record_count_and_hides_campaign_sync_counts(): void
+    {
+        $agent = User::factory()->create([
+            'role' => User::ROLE_AGENT,
+            'vici_user' => 'health_agent',
+        ]);
+        TelephonyCallHistory::factory()->create([
+            'vicidial_server_id' => $this->server->id,
+            'crm_campaign_id' => $this->campaign->id,
+            'vicidial_user' => 'health_agent',
+            'call_date' => now()->subMinute(),
+        ]);
+        TelephonyCallHistory::factory()->create([
+            'vicidial_server_id' => $this->server->id,
+            'crm_campaign_id' => $this->campaign->id,
+            'vicidial_user' => 'other_agent',
+            'call_date' => now()->subMinutes(2),
+        ]);
+
+        $response = $this->actingAs($agent)
+            ->withSession(['campaign' => 'mbsales'])
+            ->getJson(route('api.call-history.status'));
+
+        $response->assertOk()
+            ->assertJsonPath('source_health.total_local_records', 1)
+            ->assertJsonMissingPath('source_health.last_rows_received')
+            ->assertJsonMissingPath('source_health.last_rows_inserted')
+            ->assertJsonMissingPath('source_health.last_rows_updated')
+            ->assertJsonMissingPath('source_health.last_call_at');
+    }
+
     public function test_local_api_applies_lead_phone_and_mapped_campaign_filters(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);

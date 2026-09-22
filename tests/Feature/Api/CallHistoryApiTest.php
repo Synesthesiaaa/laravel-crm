@@ -58,12 +58,41 @@ final class CallHistoryApiTest extends TestCase
 
         $this->actingAs($agent)
             ->withSession(['campaign' => 'mbsales'])
-            ->getJson(route('api.call-history'))
+            ->getJson(route('api.call-history', ['agent' => 'other_agent']))
             ->assertOk()
             ->assertJsonPath('data.0.unique_call_id', 'api-1')
             ->assertJsonPath('data.0.agent.name', 'API Agent')
             ->assertJsonPath('pagination.total', 1)
+            ->assertJsonPath('filters.applied.agent', 'agent_api')
+            ->assertJsonCount(0, 'filters.available.agents')
             ->assertJsonPath('source_health.source', 'local_database');
+    }
+
+    public function test_team_leader_can_view_and_filter_campaign_call_history_by_agent(): void
+    {
+        $teamLeader = User::factory()->create(['role' => User::ROLE_TEAM_LEADER]);
+        TelephonyCallHistory::factory()->create([
+            'vicidial_server_id' => $this->server->id,
+            'crm_campaign_id' => $this->campaign->id,
+            'source_unique_id' => 'leader-agent-a',
+            'vicidial_user' => 'agent_a',
+            'call_date' => now()->subMinute(),
+        ]);
+        TelephonyCallHistory::factory()->create([
+            'vicidial_server_id' => $this->server->id,
+            'crm_campaign_id' => $this->campaign->id,
+            'source_unique_id' => 'leader-agent-b',
+            'vicidial_user' => 'agent_b',
+            'call_date' => now()->subMinutes(2),
+        ]);
+
+        $this->actingAs($teamLeader)
+            ->withSession(['campaign' => 'mbsales'])
+            ->getJson(route('api.call-history', ['agent' => 'agent_b']))
+            ->assertOk()
+            ->assertJsonPath('pagination.total', 1)
+            ->assertJsonPath('data.0.unique_call_id', 'leader-agent-b')
+            ->assertJsonCount(2, 'filters.available.agents');
     }
 
     public function test_api_reports_confirmed_empty_separately_from_an_unavailable_scope(): void

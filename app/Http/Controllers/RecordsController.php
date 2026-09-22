@@ -13,6 +13,7 @@ class RecordsController extends Controller
 
         return view('records.index', [
             'campaign' => $campaign,
+            'personal' => ! $request->user()->isTeamLeader(),
         ]);
     }
 }

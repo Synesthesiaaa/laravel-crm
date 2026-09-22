@@ -72,7 +72,7 @@ final class RecordsTest extends TestCase
             ->assertSee('id="call-history-advanced-filters"', false);
     }
 
-    public function test_call_history_select_controls_use_form_select_styling(): void
+    public function test_personal_call_history_hides_cross_agent_filter_but_keeps_other_select_styling(): void
     {
         $agent = User::factory()->create(['role' => User::ROLE_AGENT, 'vici_user' => 'agent_selects']);
 
@@ -82,13 +82,27 @@ final class RecordsTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        foreach (['filters.agent', 'filters.status', 'filters.disposition', 'filters.vicidial_campaign', 'filters.direction'] as $model) {
+        $this->assertStringNotContainsString('x-model="filters.agent"', $html);
+
+        foreach (['filters.status', 'filters.disposition', 'filters.vicidial_campaign', 'filters.direction'] as $model) {
             $this->assertMatchesRegularExpression(
                 '/<select(?=[^>]*class="[^"]*form-select[^"]*")(?=[^>]*x-model="'.preg_quote($model, '/').'")[^>]*>/i',
                 $html,
                 "Expected {$model} to use form-select styling.",
             );
         }
+    }
+
+    public function test_team_leader_call_history_keeps_agent_filter_available(): void
+    {
+        $teamLeader = User::factory()->create(['role' => User::ROLE_TEAM_LEADER]);
+
+        $this->actingAs($teamLeader)
+            ->withSession(['campaign' => 'mbsales'])
+            ->get(route('records.index'))
+            ->assertOk()
+            ->assertSee('x-model="filters.agent"', false)
+            ->assertSee('All agents');
     }
 
     public function test_crm_submission_history_is_not_rendered_as_telephony_history(): void

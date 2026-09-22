@@ -34,9 +34,12 @@ class CallHistoryController extends Controller
             $request->user(),
             $campaign,
             $validated,
-            ! $request->user()->isTeamLeader(),
             (int) ($validated['per_page'] ?? 25),
         );
+
+        if (! $request->user()->isTeamLeader()) {
+            $validated['agent'] = (string) ($request->user()->vici_user ?? '');
+        }
         $data = collect($page->records->getCollection())
             ->map(fn (mixed $record): array => (new HistoricalCallResource($record))->toArray($request))
             ->values()
@@ -113,7 +116,7 @@ class CallHistoryController extends Controller
                     'success' => false,
                     'state' => 'unavailable',
                     'message' => 'Call History refresh could not be queued. Please try again.',
-                    'source_health' => $this->localCallHistory->syncHealth($campaign),
+                    'source_health' => $this->localCallHistory->syncHealth($campaign, $request->user()),
                 ], 503);
             }
         }
@@ -123,7 +126,7 @@ class CallHistoryController extends Controller
             'state' => 'queued',
             'message' => $alreadyRunning ? 'A Call History refresh is already in progress.' : 'Call History refresh queued.',
             'duplicate_suppressed' => $alreadyRunning,
-            'source_health' => $this->localCallHistory->syncHealth($campaign),
+            'source_health' => $this->localCallHistory->syncHealth($campaign, $request->user()),
         ], 202);
     }
 
@@ -138,7 +141,7 @@ class CallHistoryController extends Controller
         return response()->json([
             'success' => true,
             'state' => 'ready',
-            'source_health' => $this->localCallHistory->syncHealth($campaign),
+            'source_health' => $this->localCallHistory->syncHealth($campaign, $request->user()),
         ]);
     }
 }

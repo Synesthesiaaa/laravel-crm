@@ -25,10 +25,9 @@ class CallHistoryService
         User $viewer,
         string $campaignCode,
         array $filters = [],
-        bool $personal = false,
         int $perPage = 25,
     ): HistoricalCallHistoryPage {
-        return $this->localCallHistory->getPage($viewer, $campaignCode, $filters, $personal, $perPage);
+        return $this->localCallHistory->getPage($viewer, $campaignCode, $filters, $perPage);
 
     }
 

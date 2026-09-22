@@ -7,5 +7,5 @@
 @section('content')
 <x-page-header title="Call History" :breadcrumbs="['Call History' => null]" />
 
-@include('records.partials.call-history-panel', ['campaign' => $campaign, 'personal' => true])
+@include('records.partials.call-history-panel', ['campaign' => $campaign, 'personal' => $personal])
 @endsection

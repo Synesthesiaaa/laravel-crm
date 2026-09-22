@@ -26,7 +26,6 @@ class LocalCallHistoryQueryService
         User $viewer,
         string $campaignCode,
         array $filters = [],
-        bool $personal = false,
         int $perPage = 25,
     ): HistoricalCallHistoryPage {
         $scope = $this->scopeResolver->resolve($campaignCode);
@@ -67,7 +66,7 @@ class LocalCallHistoryQueryService
         $dispositionData = $this->dispositionData($campaignCode);
         $filterOptions['dispositions'] = $dispositionData['options'];
         $personalAgent = null;
-        if ($personal) {
+        if (! $viewer->isTeamLeader()) {
             $personalAgent = trim((string) ($viewer->vici_user ?? ''));
             if ($personalAgent === '') {
                 return $this->unavailablePage(
@@ -78,7 +77,6 @@ class LocalCallHistoryQueryService
                     $perPage,
                 );
             }
-            $filters['agent'] = $personalAgent;
         }
 
         $timezone = (string) config('vicidial.report_timezone', config('app.timezone', 'UTC'));
@@ -92,7 +90,13 @@ class LocalCallHistoryQueryService
             ->where('call_date', '>=', $startDate.' 00:00:00')
             ->where('call_date', '<=', $endDate.' 23:59:59');
 
-        $filterOptions['agents'] = $this->agentOptions($baseQuery->clone()->pluck('vicidial_user')->filter()->unique()->sort()->values()->all());
+        if ($personalAgent !== null) {
+            $baseQuery->whereRaw('LOWER(vicidial_user) = ?', [strtolower($personalAgent)]);
+        }
+
+        $filterOptions['agents'] = $personalAgent === null
+            ? $this->agentOptions($baseQuery->clone()->pluck('vicidial_user')->filter()->unique()->sort()->values()->all())
+            : [];
         $filterOptions['statuses'] = $baseQuery->clone()->pluck('status')->filter()->map(fn (mixed $status): string => (string) $status)->unique()->sort()->values()->all();
         $filterOptions['campaigns'] = $selectedCampaignCodes;
 
@@ -103,7 +107,7 @@ class LocalCallHistoryQueryService
         } elseif (trim((string) ($filters['status'] ?? '')) !== '') {
             $query->where('status', trim((string) $filters['status']));
         }
-        if (($agent = trim((string) ($filters['agent'] ?? ''))) !== '') {
+        if ($personalAgent === null && ($agent = trim((string) ($filters['agent'] ?? ''))) !== '') {
             $query->whereRaw('LOWER(vicidial_user) = ?', [strtolower($agent)]);
         }
         if (($phone = trim((string) ($filters['phone'] ?? ''))) !== '') {
@@ -149,7 +153,12 @@ class LocalCallHistoryQueryService
                 $paginator->appends(request()->query());
             }
 
-            $health = $this->sourceHealth($scope->server->getKey(), $scope->campaign->getKey(), $total);
+            $health = $this->sourceHealth(
+                $scope->server->getKey(),
+                $scope->campaign->getKey(),
+                $total,
+                $personalAgent !== null,
+            );
             $health['mapped_campaign_count'] = count($campaignCodes);
             $state = $total > 0 ? 'data' : ($health['sync_status'] === VicidialCallHistorySyncState::STATUS_HEALTHY ? 'confirmed_empty' : 'syncing');
             if ($health['status'] === 'stale' && $total === 0) {
@@ -179,7 +188,7 @@ class LocalCallHistoryQueryService
     /**
      * @return array<string, mixed>
      */
-    public function syncHealth(string $campaignCode): array
+    public function syncHealth(string $campaignCode, ?User $viewer = null): array
     {
         $scope = $this->scopeResolver->resolve($campaignCode);
         if ($scope->server === null || ! $scope->campaign->exists) {
@@ -192,7 +201,26 @@ class LocalCallHistoryQueryService
             ];
         }
 
-        $health = $this->sourceHealth($scope->server->getKey(), $scope->campaign->getKey());
+        $personalAgent = $viewer !== null && ! $viewer->isTeamLeader()
+            ? trim((string) ($viewer->vici_user ?? ''))
+            : null;
+        $total = null;
+        if ($personalAgent !== null) {
+            $total = $personalAgent === ''
+                ? 0
+                : TelephonyCallHistory::query()
+                    ->where('vicidial_server_id', $scope->server->getKey())
+                    ->where('crm_campaign_id', $scope->campaign->getKey())
+                    ->whereRaw('LOWER(vicidial_user) = ?', [strtolower($personalAgent)])
+                    ->count();
+        }
+
+        $health = $this->sourceHealth(
+            $scope->server->getKey(),
+            $scope->campaign->getKey(),
+            $total,
+            $personalAgent !== null,
+        );
         $health['mapped_campaign_count'] = count($scope->historicalCampaignCodes());
 
         return $health;
@@ -238,7 +266,7 @@ class LocalCallHistoryQueryService
     /**
      * @return array<string, mixed>
      */
-    protected function sourceHealth(int $serverId, int $campaignId, ?int $total = null): array
+    protected function sourceHealth(int $serverId, int $campaignId, ?int $total = null, bool $personal = false): array
     {
         $state = VicidialCallHistorySyncState::query()->forScope($serverId, $campaignId)->first();
         $lastSuccess = $state?->last_successful_sync_at;
@@ -248,7 +276,7 @@ class LocalCallHistoryQueryService
             || $lastSuccess === null
             || $lastSuccess->lt(now()->subMinutes($staleAfter));
 
-        return [
+        $health = [
             'source' => 'local_database',
             'availability' => 'available',
             'status' => $isStale ? 'stale' : 'healthy',
@@ -271,6 +299,19 @@ class LocalCallHistoryQueryService
                 ->where('crm_campaign_id', $campaignId)
                 ->count(),
         ];
+
+        if ($personal) {
+            unset(
+                $health['last_call_at'],
+                $health['current_window_start'],
+                $health['current_window_end'],
+                $health['last_rows_received'],
+                $health['last_rows_inserted'],
+                $health['last_rows_updated'],
+            );
+        }
+
+        return $health;
     }
 
     /**
