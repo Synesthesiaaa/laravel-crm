@@ -9,9 +9,11 @@ use App\Models\Form;
 use App\Services\BrandingService;
 use App\Services\CampaignService;
 use App\Services\DataRetentionService;
+use App\Services\Telephony\ReportDispositionSettingsService;
 use App\Services\TelephonyFeatureService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class ConfigurationController extends Controller
@@ -21,6 +23,7 @@ class ConfigurationController extends Controller
         protected BrandingService $brandingService,
         protected TelephonyFeatureService $telephonyFeatureService,
         protected DataRetentionService $dataRetentionService,
+        protected ReportDispositionSettingsService $reportDispositionSettingsService,
     ) {}
 
     public function index(Request $request): View
@@ -47,6 +50,7 @@ class ConfigurationController extends Controller
             'brandingSettings' => $this->brandingService->resolve(),
             'campaigns' => $campaigns,
             'telephonyFeatures' => $this->telephonyFeatureService->getAll(),
+            'reportDispositionSettings' => $this->reportDispositionSettingsService->resolve(),
             'retentionForms' => $retentionForms,
             'retentionPolicies' => DataRetentionPolicy::query()
                 ->with('form.campaign')
@@ -77,5 +81,27 @@ class ConfigurationController extends Controller
         return redirect()
             ->route('admin.configuration', ['tab' => 'telephony'])
             ->with('status', 'Telephony feature access updated.');
+    }
+
+    public function updateReportDispositions(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'hide_system_dispositions' => ['nullable', 'boolean'],
+            'system_disposition_codes' => ['nullable', 'string', 'max:1000'],
+        ]);
+        $hideSystemDispositions = $request->boolean('hide_system_dispositions');
+        $codes = (string) ($validated['system_disposition_codes'] ?? '');
+
+        if ($hideSystemDispositions && $this->reportDispositionSettingsService->normalizeCodes($codes) === []) {
+            throw ValidationException::withMessages([
+                'system_disposition_codes' => 'Add at least one VICIdial system disposition code before enabling this option.',
+            ]);
+        }
+
+        $this->reportDispositionSettingsService->update($hideSystemDispositions, $codes);
+
+        return redirect()
+            ->route('admin.configuration', ['tab' => 'disposition'])
+            ->with('status', 'Report disposition settings updated.');
     }
 }

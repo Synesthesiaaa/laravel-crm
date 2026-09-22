@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Models\CallSession;
 use App\Models\Campaign;
 use App\Models\CampaignVicidialMapping;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\VicidialServer;
+use App\Services\Telephony\ReportDispositionSettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -245,6 +247,64 @@ class ReportsDashboardTest extends TestCase
             return ($request->data()['function'] ?? null) === 'call_status_stats'
                 && ($request->data()['campaigns'] ?? null) === 'CAMP_A-CAMP_B';
         });
+    }
+
+    public function test_configured_system_dispositions_are_forced_out_of_historical_report_totals(): void
+    {
+        SystemSetting::query()->insert([
+            [
+                'setting_key' => ReportDispositionSettingsService::HIDE_SYSTEM_DISPOSITIONS_KEY,
+                'setting_value' => '1',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'setting_key' => ReportDispositionSettingsService::SYSTEM_DISPOSITION_CODES_KEY,
+                'setting_value' => 'NA,AB',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+        $this->app->make(ReportDispositionSettingsService::class)->flush();
+        $campaign = Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+        $server = VicidialServer::factory()->create([
+            'campaign_code' => 'campaign-a',
+            'api_url' => 'https://reports-a.example/agc/api.php',
+            'api_user' => 'report-user',
+            'api_pass' => 'report-pass',
+        ]);
+        $this->mapCampaign($campaign, $server, 'TESTCAMP');
+        $this->app->make(\App\Services\CampaignService::class)->clearCampaignsCache();
+
+        Http::fake(function ($request) {
+            return match ($request->data()['function'] ?? null) {
+                'call_status_stats' => Http::response('TESTCAMP|10|2|08-10|SALE-3,NA-4,AB-3', 200),
+                'agent_stats_export' => Http::response("user|campaign|full_name|calls|total_talk_time\nagent-a|TESTCAMP|Agent A|10|600", 200),
+                'call_dispo_report' => Http::response("campaign|ingroup|SALE|NA|AB\nTESTCAMP|IN|3|4|3", 200),
+                default => Http::response('', 200),
+            };
+        });
+
+        $user = User::factory()->create(['role' => User::ROLE_TEAM_LEADER]);
+        $response = $this->actingAs($user)
+            ->withSession(['campaign' => 'campaign-a', 'campaign_name' => 'Campaign A'])
+            ->getJson(route('api.reports.dashboard', [
+                'campaign' => 'campaign-a',
+                'query_date' => '2026-08-20',
+                'end_date' => '2026-08-20',
+                'disposition_scope' => 'all',
+            ]));
+
+        $response->assertOk()
+            ->assertJsonPath('data.filters.disposition_scope', 'exclude_system')
+            ->assertJsonPath('data.summary.total_calls', 3)
+            ->assertJsonPath('data.summary.answered_calls', 2)
+            ->assertJsonPath('data.summary.answer_rate', 66.67)
+            ->assertJsonPath('data.campaigns.0.total_calls', 3)
+            ->assertJsonPath('data.disposition_summary.total_calls', 3)
+            ->assertJsonPath('data.status_totals.SALE', 3)
+            ->assertJsonMissingPath('data.status_totals.NA')
+            ->assertJsonMissingPath('data.status_totals.AB');
     }
 
     public function test_live_and_today_reports_reuse_one_normalized_snapshot_and_keep_scopes_explicit(): void

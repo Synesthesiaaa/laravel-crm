@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\CampaignService;
 use App\Services\Telephony\CrmCampaignVicidialScopeResolver;
+use App\Services\Telephony\ReportDispositionSettingsService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -12,6 +13,7 @@ class ReportsController extends Controller
     public function __construct(
         protected CampaignService $campaignService,
         protected CrmCampaignVicidialScopeResolver $scopeResolver,
+        protected ReportDispositionSettingsService $reportDispositionSettingsService,
     ) {}
 
     public function index(Request $request): View
@@ -34,6 +36,7 @@ class ReportsController extends Controller
                 ?? $request->session()->get('campaign_name', 'CRM'),
             'reportCampaigns' => $campaigns,
             'vicidialCampaignCodes' => $scope?->historicalCampaignCodes() ?? [],
+            'reportDispositionSettings' => $this->reportDispositionSettingsService->resolve(),
         ]);
     }
 }

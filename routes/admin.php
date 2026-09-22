@@ -42,6 +42,7 @@ Route::middleware('role:Team Leader,Admin,Super Admin')->prefix('admin')->name('
         Route::post('configuration/retention/{policy}/run', [\App\Http\Controllers\Admin\DataRetentionController::class, 'run'])->name('configuration.retention.run');
         Route::delete('configuration/retention/{policy}', [\App\Http\Controllers\Admin\DataRetentionController::class, 'destroy'])->name('configuration.retention.destroy');
         Route::post('configuration/branding', [\App\Http\Controllers\Admin\ConfigurationController::class, 'updateBranding'])->name('configuration.branding.update');
+        Route::post('configuration/report-dispositions', [\App\Http\Controllers\Admin\ConfigurationController::class, 'updateReportDispositions'])->name('configuration.report-dispositions.update');
         Route::post('configuration/telephony-features', [\App\Http\Controllers\Admin\ConfigurationController::class, 'updateTelephonyFeatures'])->name('configuration.telephony-features.update');
         Route::post('configuration/telephony-diagnostics', \App\Http\Controllers\Admin\TelephonyDiagnosticsController::class)->name('configuration.telephony-diagnostics');
         Route::get('users', [\App\Http\Controllers\Admin\UsersController::class, 'index'])->name('users.index');

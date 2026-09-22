@@ -11,6 +11,7 @@ class HistoricalTelephonyReportService
     public function __construct(
         protected ReportingService $reportingService,
         protected CrmCampaignVicidialScopeResolver $scopeResolver,
+        protected ?ReportDispositionSettingsService $reportDispositionSettingsService,
     ) {}
 
     /**
@@ -19,6 +20,7 @@ class HistoricalTelephonyReportService
      */
     public function dashboard(User $user, string $crmCampaign, array $filters): array
     {
+        $filters['disposition_scope'] = $this->effectiveDispositionScope($filters);
         $period = $this->period($filters);
         $scope = $this->scopeResolver->resolve($crmCampaign);
         $allowedCampaignCodes = $scope->historicalCampaignCodes();
@@ -32,14 +34,14 @@ class HistoricalTelephonyReportService
         if ($selectedCampaignCodes === []) {
             return $this->unavailableDashboard($crmCampaign, $period, $filters, $scope, 'No permitted VICIdial campaigns matched the selected filter.');
         }
-        $dispositionScope = (string) ($filters['disposition_scope'] ?? 'all');
+        $dispositionScope = (string) $filters['disposition_scope'];
         $campaignFilter = $selectedCampaignCodes === null
             ? ($filters['campaigns'] ?? '---ALL---')
             : implode('|', $selectedCampaignCodes);
         $params = [
             'campaigns' => $campaignFilter,
             'ingroups' => $filters['ingroups'] ?? null,
-            'disposition_scope' => $filters['disposition_scope'] ?? 'all',
+            'disposition_scope' => $dispositionScope,
             'query_date' => $period['start']->format('Y-m-d'),
             'end_date' => $period['end']->format('Y-m-d'),
             'timezone' => $period['timezone'],
@@ -59,6 +61,7 @@ class HistoricalTelephonyReportService
             $dispositionScope,
             $selectedCampaignCodes,
         );
+        $callStatus = $this->applyScopedDispositionTotals($callStatus, $dispositions, $dispositionScope);
         $summary = $this->summary($callStatus, $agents, $dispositions);
         $callStatus['campaigns'] = $this->addCampaignDispositionRates($callStatus['campaigns'], $dispositions);
 
@@ -86,7 +89,7 @@ class HistoricalTelephonyReportService
                 'query_date' => $period['start']->format('Y-m-d'),
                 'end_date' => $period['end']->format('Y-m-d'),
                 'timezone' => $period['timezone'],
-                'disposition_scope' => $filters['disposition_scope'] ?? 'all',
+                'disposition_scope' => $dispositionScope,
                 'comparison' => $comparisonMode,
             ],
             'availability' => $sourceStatus,
@@ -262,6 +265,11 @@ class HistoricalTelephonyReportService
             $previous['call_dispo'] ?? null,
             (string) ($params['disposition_scope'] ?? 'all'),
             $allowedCampaignCodes,
+        );
+        $previousStatus = $this->applyScopedDispositionTotals(
+            $previousStatus,
+            $previousDispositions,
+            (string) ($params['disposition_scope'] ?? 'all'),
         );
         $previousSummary = $this->summary($previousStatus, $previousAgents, $previousDispositions);
         $metrics = [];
@@ -1120,12 +1128,75 @@ class HistoricalTelephonyReportService
      */
     protected function systemDispositionCodes(): array
     {
+        $configuredCodes = $this->reportDispositionSettingsService?->systemDispositionCodes()
+            ?? (array) config('vicidial.report_system_disposition_codes', []);
         $codes = array_map(
             fn (mixed $code): string => $this->normalizeCode($code),
-            (array) config('vicidial.report_system_disposition_codes', []),
+            $configuredCodes,
         );
 
         return array_fill_keys(array_values(array_filter($codes)), 'system');
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    protected function effectiveDispositionScope(array $filters): string
+    {
+        if ($this->reportDispositionSettingsService?->hideSystemDispositions() === true) {
+            return 'exclude_system';
+        }
+
+        $scope = (string) ($filters['disposition_scope'] ?? 'all');
+
+        return in_array($scope, ['all', 'exclude_system', 'system_only'], true) ? $scope : 'all';
+    }
+
+    /**
+     * Align headline and campaign call totals with the filtered disposition rows.
+     * VICIdial call-status totals include automatic retry results even after the
+     * visible status/disposition breakdown has excluded those system codes.
+     *
+     * @param  array<string, mixed>  $callStatus
+     * @param  array<string, mixed>  $dispositions
+     * @return array<string, mixed>
+     */
+    protected function applyScopedDispositionTotals(array $callStatus, array $dispositions, string $scope): array
+    {
+        if ($scope !== 'exclude_system'
+            || ! in_array($dispositions['state'] ?? null, ['data', 'confirmed_zero'], true)
+            || ! is_numeric($dispositions['total_calls'] ?? null)) {
+            return $callStatus;
+        }
+
+        $callStatus['total_calls'] = (int) $dispositions['total_calls'];
+        $campaignTotals = [];
+        foreach ((array) ($dispositions['rows'] ?? []) as $row) {
+            $campaign = $this->normalizeCode($row['campaign'] ?? '');
+            if ($campaign === '' || ! is_numeric($row['total_calls'] ?? null)) {
+                continue;
+            }
+            $campaignTotals[$campaign] = (int) $row['total_calls'];
+        }
+
+        if (! is_array($callStatus['campaigns'] ?? null)) {
+            return $callStatus;
+        }
+
+        foreach ($callStatus['campaigns'] as &$campaign) {
+            $campaignCode = $this->normalizeCode($campaign['campaign'] ?? '');
+            if (! array_key_exists($campaignCode, $campaignTotals)) {
+                continue;
+            }
+            $campaign['total_calls'] = $campaignTotals[$campaignCode];
+            $answered = $campaign['answered_calls'] ?? null;
+            $campaign['answer_rate'] = is_numeric($answered) && $campaign['total_calls'] > 0
+                ? round(((float) $answered / $campaign['total_calls']) * 100, 2)
+                : ($campaign['total_calls'] === 0 && (int) $answered === 0 ? 0 : null);
+        }
+        unset($campaign);
+
+        return $callStatus;
     }
 
     /**

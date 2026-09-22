@@ -50,7 +50,7 @@ class HistoricalTelephonyReportServiceTest extends TestCase
                 ],
             ));
 
-        $service = new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver());
+        $service = new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver(), null);
         $data = $service->dashboard(
             User::factory()->make(),
             'crm-campaign',
@@ -95,7 +95,7 @@ class HistoricalTelephonyReportServiceTest extends TestCase
                 [['campaign', 'ingroup', 'SALE'], ['campaign-a', 'IN', '4']],
             ));
 
-        $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver()))->dashboard(
+        $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver(), null))->dashboard(
             User::factory()->make(),
             'crm-campaign',
             ['query_date' => '2026-08-20', 'end_date' => '2026-08-26'],
@@ -122,7 +122,7 @@ class HistoricalTelephonyReportServiceTest extends TestCase
                 ),
             );
 
-        $service = new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver());
+        $service = new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver(), null);
         $data = $service->dashboard(
             User::factory()->make(),
             'crm-campaign',
@@ -140,6 +140,45 @@ class HistoricalTelephonyReportServiceTest extends TestCase
         $this->assertSame('2026-08-19', $data['comparison']['period']['end']);
     }
 
+    public function test_system_disposition_exclusion_is_applied_to_both_comparison_periods(): void
+    {
+        config()->set('vicidial.report_system_disposition_codes', ['SYS']);
+
+        $reporting = Mockery::mock(ReportingService::class);
+        $reporting->shouldReceive('historicalSnapshot')
+            ->twice()
+            ->andReturn(
+                $this->snapshot(
+                    [['campaign-a', '10', '2', '', 'SALE-4,SYS-6']],
+                    [['user', 'campaign', 'calls'], ['agent-a', 'campaign-a', '10']],
+                    [['campaign', 'ingroup', 'SALE', 'SYS'], ['campaign-a', 'IN', '4', '6']],
+                ),
+                $this->snapshot(
+                    [['campaign-a', '20', '2', '', 'SALE-5,SYS-15']],
+                    [['user', 'campaign', 'calls'], ['agent-a', 'campaign-a', '20']],
+                    [['campaign', 'ingroup', 'SALE', 'SYS'], ['campaign-a', 'IN', '5', '15']],
+                ),
+            );
+
+        $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver(), null))->dashboard(
+            User::factory()->make(),
+            'crm-campaign',
+            [
+                'query_date' => '2026-08-20',
+                'end_date' => '2026-08-20',
+                'comparison' => 'previous_day',
+                'disposition_scope' => 'exclude_system',
+            ],
+        );
+
+        $this->assertSame(4, $data['comparison']['metrics']['total_calls']['current']);
+        $this->assertSame(5, $data['comparison']['metrics']['total_calls']['previous']);
+        $this->assertSame(-20.0, $data['comparison']['metrics']['total_calls']['change']);
+        $this->assertSame(50.0, $data['comparison']['metrics']['answer_rate']['current']);
+        $this->assertSame(40.0, $data['comparison']['metrics']['answer_rate']['previous']);
+        $this->assertSame(10.0, $data['comparison']['metrics']['answer_rate']['change']);
+    }
+
     public function test_answer_rate_is_weighted_from_raw_campaign_totals(): void
     {
         $reporting = Mockery::mock(ReportingService::class);
@@ -154,7 +193,7 @@ class HistoricalTelephonyReportServiceTest extends TestCase
                 [['campaign', 'ingroup', 'SALE'], ['campaign-a', 'IN', '10']],
             ));
 
-        $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver()))->dashboard(
+        $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver(), null))->dashboard(
             User::factory()->make(),
             'crm-campaign',
             ['query_date' => '2026-08-20', 'end_date' => '2026-08-26'],
@@ -178,12 +217,12 @@ class HistoricalTelephonyReportServiceTest extends TestCase
         $reporting->shouldReceive('historicalSnapshot')
             ->once()
             ->andReturn($this->snapshot(
-                [['campaign-a', '10', '4', '', 'SALE-3,SYS-7']],
+                [['campaign-a', '10', '2', '', 'SALE-3,SYS-7']],
                 [['user', 'campaign', 'calls'], ['agent-a', 'campaign-a', '10']],
                 [['campaign', 'ingroup', 'SYS', 'SALE'], ['campaign-a', 'IN', '7', '3']],
             ));
 
-        $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver()))->dashboard(
+        $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver(), null))->dashboard(
             User::factory()->make(),
             'crm-campaign',
             [
@@ -193,7 +232,11 @@ class HistoricalTelephonyReportServiceTest extends TestCase
             ],
         );
 
-        $this->assertSame(30.0, $data['summary']['contact_rate']);
+        $this->assertSame(3, $data['summary']['total_calls']);
+        $this->assertSame(2, $data['summary']['answered_calls']);
+        $this->assertSame(66.67, $data['summary']['answer_rate']);
+        $this->assertSame(100.0, $data['summary']['contact_rate']);
+        $this->assertSame(3, $data['campaigns'][0]['total_calls']);
         $this->assertSame(['SALE'], $data['dispositions']['labels']);
         $this->assertSame(['SALE' => 3], $data['status_totals']);
         $this->assertSame('SALE', $data['campaigns'][0]['top_status']);
@@ -213,7 +256,7 @@ class HistoricalTelephonyReportServiceTest extends TestCase
                 [['campaign', 'ingroup', 'SYS', 'SALE'], ['campaign-a', 'IN', '7', '3']],
             ));
 
-        $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver()))->dashboard(
+        $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver(), null))->dashboard(
             User::factory()->make(),
             'crm-campaign',
             [
@@ -243,7 +286,7 @@ class HistoricalTelephonyReportServiceTest extends TestCase
                 [['campaign', 'ingroup', 'SYS', 'SALE'], ['campaign-a', 'IN', '7', '3']],
             ));
 
-        $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver()))->dashboard(
+        $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver(), null))->dashboard(
             User::factory()->make(),
             'crm-campaign',
             [

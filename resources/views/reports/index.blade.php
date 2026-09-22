@@ -124,12 +124,13 @@
                 </div>
                 <div class="form-field">
                     <label class="form-label" for="reports-disposition-scope">Disposition Scope</label>
-                    <select id="reports-disposition-scope" class="form-select" x-model="filters.disposition_scope" @change="refreshAll()">
+                    <select id="reports-disposition-scope" class="form-select" x-model="filters.disposition_scope" @change="refreshAll()" x-bind:disabled="systemDispositionFilterLocked">
                         <template x-for="option in dispositionScopeOptions" :key="option.value">
                             <option :value="option.value" x-text="option.label"></option>
                         </template>
                     </select>
                     <p class="form-help">
+                        <span x-show="systemDispositionFilterLocked" x-cloak>Locked by System Configuration. </span>
                         System codes:
                         <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="systemDispositionCodes.length ? systemDispositionCodes.join(', ') : 'None configured'"></span>
                     </p>
@@ -647,7 +648,7 @@ window.telephonyReports = function () {
             query_date: new Date().toISOString().slice(0, 10),
             end_date: new Date().toISOString().slice(0, 10),
             timezone: @json(config('vicidial.report_timezone', config('app.timezone', 'UTC'))),
-            disposition_scope: 'all',
+            disposition_scope: @json(($reportDispositionSettings['hide_system_dispositions'] ?? false) ? 'exclude_system' : 'all'),
             comparison: 'none',
         },
         mappedCampaigns: @json($vicidialCampaignCodes ?? []),
@@ -656,7 +657,8 @@ window.telephonyReports = function () {
             { value: 'exclude_system', label: 'Hide System Dispositions' },
             { value: 'system_only', label: 'System Dispositions Only' },
         ],
-        systemDispositionCodes: @json(config('vicidial.report_system_disposition_codes', [])),
+        systemDispositionCodes: @json($reportDispositionSettings['system_disposition_codes'] ?? config('vicidial.report_system_disposition_codes', [])),
+        systemDispositionFilterLocked: @json((bool) ($reportDispositionSettings['hide_system_dispositions'] ?? false)),
         recordingFilters: {
             agent_user: '',
             lead_id: '',
@@ -669,7 +671,7 @@ window.telephonyReports = function () {
             recording: null,
         },
         dashboard: {
-            scopeLabel: 'All Dispositions',
+            scopeLabel: @json(($reportDispositionSettings['hide_system_dispositions'] ?? false) ? 'Hide System Dispositions' : 'All Dispositions'),
             overview: {
                 campaign: @json($campaignName),
                 totalCalls: null,
