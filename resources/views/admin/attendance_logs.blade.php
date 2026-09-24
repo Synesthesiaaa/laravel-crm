@@ -42,9 +42,7 @@
             <tr>
                 <td class="font-medium">{{ $log->user->full_name ?? $log->user->username ?? $log->user_id }}</td>
                 <td>
-                    <x-badge :type="$log->event_type === 'login' ? 'active' : ($log->event_type === 'logout' ? 'inactive' : 'info')">
-                        {{ $log->eventDisplayLabel() }}
-                    </x-badge>
+                    <x-attendance.event-badge :log="$log" />
                 </td>
                 <td class="font-mono text-sm text-[var(--color-on-surface-muted)]">{{ $log->event_time?->timezone(config('app.timezone'))->format('Y-m-d H:i:s T') }}</td>
                 <td class="font-mono text-sm text-[var(--color-on-surface-dim)]">{{ $log->ip_address ?? '-' }}</td>

@@ -5,66 +5,45 @@
 @section('header-title', 'My Attendance')
 
 @section('content')
-<x-page-header title="My Attendance" :breadcrumbs="['Attendance' => null]" />
+<x-page-header
+    title="My Attendance"
+    description="Review your attendance activity and manage your current away status."
+    :breadcrumbs="['Attendance' => null]"
+/>
 
-<div class="md-hero mb-6">
-    <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div class="min-w-0 flex-1">
-            <h2 class="text-lg font-bold text-[var(--color-on-surface)]">{{ $user->full_name ?? $user->name ?? $user->username }}</h2>
-            <p class="text-[var(--color-on-surface-muted)] text-sm mt-1">Your login and attendance events.</p>
+<div class="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
+    <div class="md-hero">
+        <div class="flex h-full flex-col gap-5">
+            <div class="min-w-0 flex-1">
+                <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]">Attendance overview</p>
+                <h2 class="text-lg font-bold text-[var(--color-on-surface)]">{{ $user->full_name ?? $user->name ?? $user->username }}</h2>
+                <p class="mt-1 text-sm text-[var(--color-on-surface-muted)]">Your login, logout, and away-status activity is recorded here.</p>
+            </div>
             @if($lastEvent)
-                <p class="text-[var(--color-on-surface-muted)] mt-3 text-sm">
-                    Last event:
-                    <x-badge :type="$lastEvent->event_type === 'login' ? 'active' : ($lastEvent->event_type === 'logout' ? 'inactive' : 'info')">{{ $lastEvent->eventDisplayLabel() }}</x-badge>
-                    <span class="ml-1">{{ $lastEvent->event_time?->timezone(config('app.timezone'))->format('M j, Y g:i A T') }}</span>
-                </p>
+                <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--color-on-surface-muted)]">
+                    <span class="font-medium text-[var(--color-on-surface-dim)]">Last recorded event</span>
+                    <x-attendance.event-badge :log="$lastEvent" />
+                    <span>{{ $lastEvent->event_time?->timezone(config('app.timezone'))->format('M j, Y g:i A T') }}</span>
+                </div>
             @endif
+            <x-app-live-clock class="mt-auto w-full" />
         </div>
-        <x-app-live-clock class="w-full shrink-0 md:max-w-sm" />
     </div>
-</div>
-
-<div class="md-card mb-4" x-data="attendanceStatusPanel()" x-init="init()">
-    <div class="px-6 py-4 border-b border-[var(--color-border)]">
-        <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">{{ __('Away status') }}</h3>
-        <p class="text-xs text-[var(--color-on-surface-muted)] mt-1">{{ __('Start or end lunch, break, or other statuses configured by your administrator. Login and logout are recorded automatically.') }}</p>
-    </div>
-    <div class="p-6">
-        <p class="text-sm text-[var(--color-on-surface-muted)]" x-show="!ready">{{ __('Loading...') }}</p>
-        <template x-if="ready && open">
-            <div class="flex flex-wrap items-center gap-3">
-                <x-badge type="info"><span x-text="open?.label"></span></x-badge>
-                <span class="text-sm text-[var(--color-on-surface-muted)]" x-show="open?.started_at">
-                    {{ __('Since') }} <span x-text="formatStarted(open?.started_at)"></span>
-                </span>
-                <button type="button" class="btn-primary" :disabled="loading" @click="end()">
-                    <x-icon name="check" class="w-4 h-4" />
-                    {{ __('End status') }}
-                </button>
-            </div>
-        </template>
-        <template x-if="ready && !open && types.length">
-            <div class="flex flex-wrap gap-2">
-                <template x-for="t in types" :key="t.code">
-                    <button type="button" class="btn-secondary text-sm" :disabled="loading" @click="start(t.code)" x-text="'{{ __('Start') }} ' + t.label"></button>
-                </template>
-            </div>
-        </template>
-        <p class="text-sm text-[var(--color-on-surface-dim)]" x-show="ready && !open && !types.length">
-            {{ __('No away statuses are available. Ask a Super Admin to configure them under Admin > Attendance Statuses.') }}
-        </p>
-    </div>
+    <x-attendance.status-panel class="h-full" />
 </div>
 
 <div class="md-card mb-4">
-    <div class="p-4">
-        <form method="GET" action="{{ route('attendance.index') }}" class="flex items-end gap-4">
-            <x-form.input name="date" type="date" label="Date" :value="$date" />
-            <div class="form-actions-bottom">
-                <button type="submit" class="btn-primary">
+    <div class="p-4 sm:p-5">
+        <form method="GET" action="{{ route('attendance.index') }}" data-soft-nav class="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <x-form.input name="date" type="date" label="Attendance date" :value="$date" class="sm:min-w-56" />
+            <div class="form-actions-bottom flex w-full gap-2 sm:w-auto">
+                <button type="submit" class="btn-primary flex-1 sm:flex-none">
                     <x-icon name="magnifying-glass" class="w-4 h-4" />
-                    View
+                    View activity
                 </button>
+                @if($date !== now()->format('Y-m-d'))
+                    <a href="{{ route('attendance.index') }}" class="btn-secondary flex-1 sm:flex-none">Today</a>
+                @endif
             </div>
         </form>
     </div>
@@ -79,9 +58,7 @@
         @foreach($logs as $log)
             <tr>
                 <td>
-                    <x-badge :type="$log->event_type === 'login' ? 'active' : ($log->event_type === 'logout' ? 'inactive' : 'info')">
-                        {{ $log->eventDisplayLabel() }}
-                    </x-badge>
+                    <x-attendance.event-badge :log="$log" />
                 </td>
                 <td class="font-mono text-sm text-[var(--color-on-surface-muted)]">{{ $log->event_time?->timezone(config('app.timezone'))->format('Y-m-d H:i:s T') }}</td>
                 <td class="font-mono text-sm text-[var(--color-on-surface-dim)]">{{ $log->ip_address ?? '-' }}</td>

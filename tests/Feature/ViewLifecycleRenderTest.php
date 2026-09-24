@@ -38,8 +38,9 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertSee('id="main-content"', false);
         $response->assertSee('tabindex="-1"', false);
         $response->assertSee('aria-controls="sidebar"', false);
-        $response->assertSee('sidebar-section-toggle', false);
-        $response->assertSee('aria-controls="sidebar-section-telephony"', false);
+        $response->assertDontSee('sidebar-section-telephony', false);
+        $response->assertDontSee('Toggle Telephony navigation', false);
+        $response->assertSee('>Attendance</span>', false);
         $response->assertSee('window.crmGracefulLogout && window.crmGracefulLogout()', false);
         $response->assertSee('window.TelephonyMediaPath?.shouldUseSipMedia?.() === true', false);
         $response->assertSee('window.TelephonyMediaPath?.isDual?.() === true', false);

@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Contracts\Repositories\AttendanceRepositoryInterface;
 use App\Http\Controllers\Controller;
 use App\Models\AttendanceStatusType;
-use App\Repositories\AttendanceRepository;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class AttendanceLogsController extends Controller
 {
     public function __construct(
-        protected AttendanceRepository $attendanceRepository,
+        protected AttendanceRepositoryInterface $attendanceRepository,
     ) {}
 
     public function index(Request $request): View

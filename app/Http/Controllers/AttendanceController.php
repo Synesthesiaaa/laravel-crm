@@ -2,20 +2,23 @@
 
 namespace App\Http\Controllers;
 
-use App\Repositories\AttendanceRepository;
+use App\Contracts\Repositories\AttendanceRepositoryInterface;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class AttendanceController extends Controller
 {
     public function __construct(
-        protected AttendanceRepository $attendanceRepository,
+        protected AttendanceRepositoryInterface $attendanceRepository,
     ) {}
 
     public function index(Request $request): View
     {
         $user = $request->user();
-        $date = $request->get('date', now()->format('Y-m-d'));
+        $validated = $request->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+        $date = $validated['date'] ?? now()->format('Y-m-d');
         $logs = $this->attendanceRepository->getLogs($user->id, $date, 50);
         $lastEvent = $this->attendanceRepository->getLastEvent($user->id);
 

@@ -78,7 +78,7 @@ class AttendanceStatusController extends Controller
     {
         $open = $this->attendanceStatusService->getOpenStatus($request->user());
         if ($open !== null) {
-            $open->load('statusType');
+            $open->loadMissing('statusType');
         }
 
         $types = AttendanceStatusType::query()

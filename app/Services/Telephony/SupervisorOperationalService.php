@@ -2,6 +2,7 @@
 
 namespace App\Services\Telephony;
 
+use App\Models\AttendanceLog;
 use App\Models\CallSession;
 use App\Models\CampaignDispositionRecord;
 use App\Models\User;
@@ -54,7 +55,10 @@ class SupervisorOperationalService
                     });
             })
             ->with(['attendanceLogs' => function ($query) use ($today): void {
-                $query->whereDate('event_time', $today)->orderByDesc('event_time');
+                $query->whereDate('event_time', $today)
+                    ->whereIn('event_type', AttendanceLog::SYSTEM_EVENT_TYPES)
+                    ->orderByDesc('event_time')
+                    ->orderByDesc('id');
             }])
             ->get();
 
@@ -70,7 +74,10 @@ class SupervisorOperationalService
                     ...$remoteUserIds,
                 ])))
                 ->with(['attendanceLogs' => function ($query) use ($today): void {
-                    $query->whereDate('event_time', $today)->orderByDesc('event_time');
+                    $query->whereDate('event_time', $today)
+                        ->whereIn('event_type', AttendanceLog::SYSTEM_EVENT_TYPES)
+                        ->orderByDesc('event_time')
+                        ->orderByDesc('id');
                 }])
                 ->get();
         }

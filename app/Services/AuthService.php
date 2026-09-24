@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
+use App\Contracts\Repositories\AttendanceRepositoryInterface;
 use App\Events\UserLoggedIn;
 use App\Events\UserLoggedOut;
 use App\Models\User;
-use App\Repositories\AttendanceRepository;
 use App\Repositories\UserRepository;
 use App\Services\Telephony\CallOrchestrationService;
 use App\Services\Telephony\TelephonyCampaignResolver;
@@ -18,7 +18,7 @@ class AuthService
 {
     public function __construct(
         protected UserRepository $userRepository,
-        protected AttendanceRepository $attendanceRepository,
+        protected AttendanceRepositoryInterface $attendanceRepository,
         protected AttendanceStatusService $attendanceStatusService,
         protected CallOrchestrationService $callOrchestration,
         protected VicidialSessionService $vicidialSessionService,

@@ -58,6 +58,11 @@ class AttendanceStatusService
             ]);
         }
 
+        return $this->closeStatus($user, $open, $ip);
+    }
+
+    private function closeStatus(User $user, AttendanceLog $open, ?string $ip): AttendanceLog
+    {
         $type = $open->statusType;
         if (! $type) {
             throw ValidationException::withMessages([
@@ -84,11 +89,17 @@ class AttendanceStatusService
     public function getOpenStatus(User $user): ?AttendanceLog
     {
         $logs = AttendanceLog::query()
+            ->select([
+                'id',
+                'user_id',
+                'attendance_status_type_id',
+                'direction',
+                'event_time',
+            ])
             ->where('user_id', $user->id)
             ->whereDate('event_time', today())
             ->whereNotNull('attendance_status_type_id')
             ->whereNotNull('direction')
-            ->with('statusType')
             ->orderBy('event_time')
             ->orderBy('id')
             ->get();
@@ -104,7 +115,7 @@ class AttendanceStatusService
             }
         }
 
-        return $open;
+        return $open?->loadMissing('statusType');
     }
 
     /**
@@ -112,12 +123,13 @@ class AttendanceStatusService
      */
     public function autoCloseOnLogout(User $user, ?string $ip): void
     {
-        if ($this->getOpenStatus($user) === null) {
+        $open = $this->getOpenStatus($user);
+        if ($open === null) {
             return;
         }
 
         try {
-            $this->endStatus($user, $ip);
+            $this->closeStatus($user, $open, $ip);
         } catch (ValidationException) {
             // Should not happen if getOpenStatus matched; ignore to not block logout.
         }

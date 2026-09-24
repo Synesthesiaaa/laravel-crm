@@ -108,6 +108,45 @@ class SupervisorAgentsApiTest extends TestCase
             ->assertJsonPath('agents.0.dispositions', 1);
     }
 
+    public function test_custom_attendance_status_does_not_make_a_logged_in_agent_appear_offline(): void
+    {
+        $campaign = Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+        $server = VicidialServer::factory()->create([
+            'campaign_code' => 'campaign-a',
+            'api_user' => null,
+            'api_pass' => null,
+        ]);
+        $this->mapCampaign($campaign, $server, 'campaign-a');
+        $this->app->make(CampaignService::class)->clearCampaignsCache();
+
+        $supervisor = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+        $agent = User::factory()->create([
+            'role' => User::ROLE_AGENT,
+            'full_name' => 'Away Status Agent',
+            'default_campaign' => 'campaign-a',
+        ]);
+        AttendanceLog::create([
+            'user_id' => $agent->id,
+            'event_type' => 'login',
+            'event_time' => now()->subMinute(),
+        ]);
+        AttendanceLog::create([
+            'user_id' => $agent->id,
+            'event_type' => 'break_start',
+            'direction' => AttendanceLog::DIRECTION_START,
+            'event_time' => now(),
+        ]);
+
+        $response = $this->actingAs($supervisor)
+            ->withSession(['campaign' => 'campaign-a', 'campaign_name' => 'Campaign A'])
+            ->getJson(route('api.supervisor.agents'));
+
+        $response->assertOk()
+            ->assertJsonPath('agents.0.id', $agent->id)
+            ->assertJsonPath('agents.0.state', 'AVAILABLE')
+            ->assertJsonPath('agents.0.status', 'available');
+    }
+
     public function test_supervisor_deduplicates_an_agent_across_multiple_mapped_vicidial_campaigns(): void
     {
         $campaign = Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);

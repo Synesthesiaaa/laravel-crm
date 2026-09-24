@@ -28,10 +28,8 @@
     $navItems = [
         ['route' => 'dashboard',    'label' => 'Dashboard',    'icon' => 'chart-bar'],
         ['route' => 'records.index','label' => 'Call History', 'icon' => 'clipboard-document-list'],
-    ];
-    $telephonyItems = [
-        ['route' => 'agent.index',    'label' => 'Agent Screen', 'icon' => 'speaker-wave'],
         ['route' => 'attendance.index','label' => 'Attendance',  'icon' => 'clock'],
+        ['route' => 'agent.index',    'label' => 'Agent Screen', 'icon' => 'speaker-wave'],
     ];
     $adminItems = [
         ['route' => 'admin.dashboard',               'label' => 'Management Dashboard', 'icon' => 'shield-check'],
@@ -66,7 +64,6 @@
 
         return false;
     };
-    $telephonySectionActive = $sidebarSectionActive($telephonyItems);
     $formsSectionActive = request()->routeIs('forms.show');
     $adminSectionActive = $sidebarSectionActive($adminItems);
     $superAdminSectionActive = $sidebarSectionActive($superAdminItems);
@@ -100,7 +97,6 @@
          aria-label="Primary destinations"
          x-data="{
              expandedSections: @js([
-                 'telephony' => $telephonySectionActive,
                  'forms' => $formsSectionActive,
                  'admin' => $adminSectionActive,
                  'super-admin' => $superAdminSectionActive,
@@ -111,6 +107,7 @@
          }">
         {{-- Main --}}
         @foreach($navItems as $item)
+            @if($item['route'] !== 'agent.index' || $agentScreenVisible)
             <a href="{{ route($item['route']) }}"
                class="sidebar-item {{ $sidebarLinkActive($item['route']) ? 'active' : '' }}"
                title="{{ $item['label'] }}"
@@ -119,33 +116,8 @@
                 <x-icon :name="$item['icon']" class="sidebar-icon shrink-0" />
                 <span class="sidebar-item-label">{{ $item['label'] }}</span>
             </a>
+            @endif
         @endforeach
-
-        {{-- Telephony section --}}
-        <button type="button"
-                class="sidebar-section-toggle"
-                @click="$store.sidebar.collapsed ? ($store.sidebar.toggle(), expandedSections.telephony = true) : toggleSection('telephony')"
-                :aria-expanded="expandedSections.telephony"
-                aria-controls="sidebar-section-telephony"
-                title="Toggle Telephony navigation">
-            <x-icon name="phone" class="sidebar-section-toggle-icon" />
-            <span class="sidebar-section-toggle-label">Telephony</span>
-            <x-icon name="chevron-down" class="sidebar-section-chevron" x-bind:class="expandedSections.telephony ? 'is-open' : ''" />
-        </button>
-        <div id="sidebar-section-telephony" class="sidebar-section-items" x-show="expandedSections.telephony" :aria-hidden="! expandedSections.telephony">
-            @foreach($telephonyItems as $item)
-                @if($item['route'] !== 'agent.index' || $agentScreenVisible)
-                <a href="{{ route($item['route']) }}"
-                   class="sidebar-item {{ $sidebarLinkActive($item['route']) ? 'active' : '' }}"
-                   title="{{ $item['label'] }}"
-                   @if($sidebarLinkActive($item['route'])) aria-current="page" @endif
-                   @click="$store.sidebar.closeMobile()">
-                    <x-icon :name="$item['icon']" class="sidebar-icon shrink-0" />
-                    <span class="sidebar-item-label">{{ $item['label'] }}</span>
-                </a>
-                @endif
-            @endforeach
-        </div>
 
         {{-- Campaign Forms --}}
         @if(!empty($forms))

@@ -14,7 +14,9 @@ const source = fs.readFileSync(
 function loadAttendancePanel({ currentResponses = [] } = {}) {
     const factories = new Map();
     const toasts = [];
+    const events = [];
     let reloads = 0;
+    let refreshes = 0;
     let alpineInit = null;
     const queuedCurrentResponses = [...currentResponses];
 
@@ -35,7 +37,12 @@ function loadAttendancePanel({ currentResponses = [] } = {}) {
         axios: {
             async get(url) {
                 assert.equal(url, '/api/attendance/current');
-                return { data: queuedCurrentResponses.shift() ?? { success: true, open: null, types: [] } };
+                const response = queuedCurrentResponses.shift() ?? { success: true, open: null, types: [] };
+                if (response instanceof Error) {
+                    throw response;
+                }
+
+                return { data: response };
             },
             async post(url, payload) {
                 if (url === '/api/attendance/start') {
@@ -47,12 +54,15 @@ function loadAttendancePanel({ currentResponses = [] } = {}) {
                 return { data: { success: true, log: { event_type: 'lunch_end' } } };
             },
         },
-        dispatchEvent() {},
+        dispatchEvent(event) { events.push(event); },
         location: {
             reload() { reloads += 1; },
         },
         crmSoftNav: {
-            async refresh() { return true; },
+            async refresh() {
+                refreshes += 1;
+                return true;
+            },
         },
     };
 
@@ -78,7 +88,9 @@ function loadAttendancePanel({ currentResponses = [] } = {}) {
     return {
         component: factories.get('attendanceStatusPanel')(),
         get reloads() { return reloads; },
+        get refreshes() { return refreshes; },
         toasts,
+        events,
     };
 }
 
@@ -96,6 +108,8 @@ test('starting an away status updates in place without reloading the telephony p
     assert.equal(harness.reloads, 0);
     assert.equal(harness.component.open.code, 'lunch');
     assert.equal(harness.component.loading, false);
+    assert.equal(harness.refreshes, 1);
+    assert.equal(harness.events[0].detail.action, 'start');
 });
 
 test('ending an away status updates in place without reloading the telephony page', async () => {
@@ -108,5 +122,42 @@ test('ending an away status updates in place without reloading the telephony pag
 
     assert.equal(harness.reloads, 0);
     assert.equal(harness.component.open, null);
+    assert.equal(harness.component.loading, false);
+    assert.equal(harness.refreshes, 1);
+    assert.equal(harness.events[0].detail.action, 'end');
+});
+
+test('refresh replaces stale status types when the server returns an empty list', async () => {
+    const harness = loadAttendancePanel({
+        currentResponses: [
+            { success: true, open: null, types: [{ code: 'lunch', label: 'Lunch' }] },
+            { success: true, open: null, types: [] },
+        ],
+    });
+
+    await harness.component.refresh();
+    assert.equal(harness.component.types.length, 1);
+
+    await harness.component.refresh();
+    assert.equal(harness.component.types.length, 0);
+});
+
+test('initial load failure becomes a retryable panel error instead of an empty state', async () => {
+    const harness = loadAttendancePanel({
+        currentResponses: [
+            new Error('network down'),
+            { success: true, open: null, types: [{ code: 'lunch', label: 'Lunch' }] },
+        ],
+    });
+
+    await harness.component.init();
+
+    assert.equal(harness.component.ready, true);
+    assert.match(harness.component.error, /Could not load attendance statuses/);
+
+    await harness.component.retry();
+
+    assert.equal(harness.component.error, null);
+    assert.equal(harness.component.types[0].code, 'lunch');
     assert.equal(harness.component.loading, false);
 });
