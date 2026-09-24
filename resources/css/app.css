@@ -863,6 +863,44 @@ html[data-theme="light"] {
     scrollbar-gutter: stable both-edges;
   }
 
+  .attendance-realtime-table {
+    border: 0;
+    border-radius: 0;
+  }
+  .attendance-realtime-table .table-scroll-wrap {
+    max-height: min(48vh, 31rem);
+    overflow: auto;
+    scrollbar-gutter: stable;
+  }
+  .attendance-realtime-table table {
+    min-width: 70rem;
+    table-layout: auto;
+  }
+  .attendance-realtime-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--color-surface-2);
+    box-shadow: 0 1px 0 var(--color-border);
+    font-size: .6875rem;
+    letter-spacing: .06em;
+  }
+  .attendance-realtime-table td {
+    height: 3.75rem;
+  }
+  .attendance-realtime-table th:nth-child(1),
+  .attendance-realtime-table td:nth-child(1) {
+    width: 18rem;
+  }
+  .attendance-realtime-table th:nth-child(2),
+  .attendance-realtime-table td:nth-child(2) {
+    width: 7rem;
+  }
+  .attendance-realtime-table th:nth-child(n+3),
+  .attendance-realtime-table td:nth-child(n+3) {
+    white-space: nowrap;
+  }
+
   .data-master-desktop-table {
     min-width: 0;
     max-width: 100%;

@@ -124,6 +124,7 @@ import focus from '@alpinejs/focus';
 import collapse from '@alpinejs/collapse';
 import intersect from '@alpinejs/intersect';
 import './attendance-status';
+import './attendance-realtime';
 
 const TELEPHONY_POLL_ENDPOINTS = [
     '/api/notifications',

@@ -139,6 +139,9 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::post('api/notifications/read', \App\Http\Controllers\Api\MarkNotificationReadController::class)->name('api.notifications.read')->middleware('throttle:api');
     Route::get('api/search', \App\Http\Controllers\Api\GlobalSearchController::class)->name('api.search')->middleware('throttle:api');
     Route::get('api/supervisor/agents', \App\Http\Controllers\Api\SupervisorAgentsController::class)->name('api.supervisor.agents')->middleware(['role:Team Leader,Admin,Super Admin', 'throttle:telephony-poll', 'log_throttle']);
+    Route::get('api/attendance/realtime', \App\Http\Controllers\Api\AttendanceRealtimeController::class)
+        ->name('api.attendance.realtime')
+        ->middleware(['role:Team Leader,Admin,Super Admin', 'throttle:telephony-poll', 'log_throttle']);
     Route::post('api/notifications/read-all', \App\Http\Controllers\Api\MarkNotificationsReadController::class)->name('api.notifications.read-all')->middleware('throttle:api');
     Route::post('api/disposition/save', \App\Http\Controllers\Api\SaveDispositionController::class)->name('api.disposition.save')->middleware('throttle:api');
     Route::post('api/client-errors', fn () => response()->json(['ok' => true]))->name('api.client-errors');

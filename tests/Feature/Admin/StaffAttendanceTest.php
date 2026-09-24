@@ -59,6 +59,8 @@ final class StaffAttendanceTest extends TestCase
         $response->assertOk();
         $response->assertSee('Review staff login, logout, and away-status activity from one audit view.');
         $response->assertSee('Visible events');
+        $response->assertSee('Realtime Attendance Sessions');
+        $response->assertSee(route('api.attendance.realtime'), false);
         $response->assertSee('Filter attendance activity');
         $response->assertSee('data-soft-nav', false);
         $response->assertSee('Sample Agent');

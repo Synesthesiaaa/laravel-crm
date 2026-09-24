@@ -15,6 +15,8 @@
     $hasFilters = $filters['user_id'] !== null || $filters['date'] !== null || $filters['event'] !== null;
 @endphp
 
+<x-attendance.realtime-table />
+
 <div class="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
     <x-stat-card
         label="Visible events"
