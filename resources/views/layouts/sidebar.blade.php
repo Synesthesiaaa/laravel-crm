@@ -44,17 +44,7 @@
         ['route' => 'admin.field-logic.index',        'label' => 'Field Logic',         'icon' => 'cog-6-tooth'],
         ['route' => 'admin.extraction.index',         'label' => 'Extraction',          'icon' => 'arrow-down-tray'],
     ];
-    $superAdminItems = [
-        ['route' => 'admin.users.index',           'label' => 'User Access',      'icon' => 'users'],
-        ['route' => 'admin.vicidial-servers.index', 'label' => 'ViciDial Servers', 'icon' => 'server'],
-        ['route' => 'admin.campaigns.index',        'label' => 'Campaigns',        'icon' => 'building-office'],
-        ['route' => 'admin.forms.index',            'label' => 'Forms',            'icon' => 'document-text'],
-        ['route' => 'admin.lead-hopper.index',      'label' => 'Lead Hopper',      'icon' => 'list-bullet'],
-        ['route' => 'admin.agent-screen.index',     'label' => 'Agent Screen Configuration', 'icon' => 'computer-desktop'],
-        ['route' => 'admin.attendance-statuses.index', 'label' => 'Attendance Statuses', 'icon' => 'clock'],
-        ['route' => 'admin.configuration',          'label' => 'Configuration',    'icon' => 'cog-6-tooth'],
-        ['route' => 'admin.activity-log.index',     'label' => 'Activity Log',      'icon' => 'document-text'],
-    ];
+    $superAdminItems = \App\Support\AdminNavigation::superAdminItems();
     $sidebarSectionActive = static function (array $items) use ($sidebarLinkActive): bool {
         foreach ($items as $item) {
             if ($sidebarLinkActive($item['route'])) {

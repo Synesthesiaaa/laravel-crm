@@ -21,11 +21,13 @@ class UsersController extends Controller
 
     public function index(Request $request): View
     {
-        $users = User::withCount('attendanceLogs')->orderBy('username')->get();
+        $users = User::query()
+            ->orderBy('username')
+            ->paginate(25)
+            ->withQueryString();
 
         return view('admin.users', [
             'users' => $users,
-            'campaignName' => $request->session()->get('campaign_name', 'CRM'),
             'campaignOptions' => $this->campaignService->getCampaigns(),
         ]);
     }

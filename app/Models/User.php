@@ -32,6 +32,19 @@ class User extends Authenticatable
 
     public const ROLE_AGENT = 'Agent';
 
+    public const ROLES = [
+        self::ROLE_AGENT,
+        self::ROLE_TEAM_LEADER,
+        self::ROLE_ADMIN,
+        self::ROLE_SUPER_ADMIN,
+    ];
+
+    /** @return array<string, string> */
+    public static function roleOptions(): array
+    {
+        return array_combine(self::ROLES, self::ROLES);
+    }
+
     protected $fillable = [
         'username',
         'name',

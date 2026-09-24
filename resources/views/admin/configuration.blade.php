@@ -5,36 +5,21 @@
 @section('header-title', 'System Configuration')
 
 @section('content')
-<x-page-header title="System Configuration"
+<x-page-header title="System Configuration" description="Manage system-wide settings, integrations, reporting rules, and data lifecycle controls."
     :breadcrumbs="['Admin' => route('admin.dashboard'), 'Configuration' => null]" />
 
 <div class="md-card">
-    <div class="flex max-w-full gap-2 overflow-x-auto p-4 border-b border-[var(--color-border)]">
-        <a href="?tab=general"
-           class="{{ !in_array(($tab ?? ''), ['branding', 'disposition', 'telephony', 'diagnostics', 'retention'], true) ? 'btn-primary' : 'btn-secondary' }} shrink-0 text-sm">
-            General
-        </a>
-        <a href="?tab=branding"
-           class="{{ ($tab ?? '') === 'branding' ? 'btn-primary' : 'btn-secondary' }} shrink-0 text-sm">
-            Branding
-        </a>
-        <a href="?tab=disposition"
-           class="{{ ($tab ?? '') === 'disposition' ? 'btn-primary' : 'btn-secondary' }} shrink-0 text-sm">
-            Disposition
-        </a>
-        <a href="?tab=telephony"
-           class="{{ ($tab ?? '') === 'telephony' ? 'btn-primary' : 'btn-secondary' }} shrink-0 text-sm">
-            Telephony Features
-        </a>
-        <a href="?tab=diagnostics"
-           class="{{ ($tab ?? '') === 'diagnostics' ? 'btn-primary' : 'btn-secondary' }} shrink-0 text-sm">
-            Diagnostics
-        </a>
-        <a href="?tab=retention"
-           class="{{ ($tab ?? '') === 'retention' ? 'btn-primary' : 'btn-secondary' }} shrink-0 text-sm">
-            Data Retention
-        </a>
-    </div>
+    <x-admin.tabs
+        label="System configuration sections"
+        :active="$tab"
+        :tabs="[
+            ['key' => 'general', 'label' => 'General', 'href' => route('admin.configuration', ['tab' => 'general'])],
+            ['key' => 'branding', 'label' => 'Branding', 'href' => route('admin.configuration', ['tab' => 'branding'])],
+            ['key' => 'disposition', 'label' => 'Disposition', 'href' => route('admin.configuration', ['tab' => 'disposition'])],
+            ['key' => 'telephony', 'label' => 'Telephony Features', 'href' => route('admin.configuration', ['tab' => 'telephony'])],
+            ['key' => 'diagnostics', 'label' => 'Diagnostics', 'href' => route('admin.configuration', ['tab' => 'diagnostics'])],
+            ['key' => 'retention', 'label' => 'Data Retention', 'href' => route('admin.configuration', ['tab' => 'retention'])],
+        ]" />
     <div class="p-6">
         @if(session('status'))
             <x-alert type="success" class="mb-4">

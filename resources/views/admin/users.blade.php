@@ -11,11 +11,7 @@
 <x-validation-errors />
 
 {{-- Add user form --}}
-<div class="md-card mb-6">
-    <div class="px-6 py-4 border-b border-[var(--color-border)]">
-        <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Add New User</h3>
-    </div>
-    <div class="p-6">
+<x-admin.panel title="Add New User" description="Create a staff account and optionally configure its VICIdial and browser-calling defaults." class="mb-6">
         <form method="POST" action="{{ route('admin.users.store') }}"
               x-data="{ submitting: false }" @submit="submitting = true">
             @csrf
@@ -25,63 +21,10 @@
                 <x-form.input name="password" type="password" label="Password" autocomplete="new-password" required />
                 <x-form.input name="password_confirmation" type="password" label="Confirm Password" autocomplete="new-password" required />
                 <x-form.select name="role" label="Role"
-                    :options="['Agent' => 'Agent', 'Team Leader' => 'Team Leader', 'Admin' => 'Admin', 'Super Admin' => 'Super Admin']"
+                    :options="\App\Models\User::roleOptions()"
                     :selected="old('role', 'Agent')" :empty="false" />
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
-                <div class="col-span-full">
-                    <p class="text-xs font-medium text-[var(--color-on-surface-muted)] mb-3">ViciDial Agent Credentials (required for telephony)</p>
-                </div>
-                <x-form.input name="vici_user" label="ViciDial Username" :value="old('vici_user')"
-                    help="Must match ViciDial agent username" />
-                <x-form.input name="vici_pass" type="password" label="ViciDial Password"
-                    autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
-                    help="Must match ViciDial agent password" />
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
-                <div class="col-span-full">
-                    <p class="text-xs font-medium text-[var(--color-on-surface-muted)] mb-3">WebRTC / SIP (optional – required for browser calling)</p>
-                </div>
-                <x-form.input name="extension" label="SIP Extension" :value="old('extension')"
-                    help="e.g. 6001 – must match sip.conf endpoint" />
-                <x-form.input name="sip_password" type="password" label="SIP Password"
-                    autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
-                    help="Min 4 chars – must match pjsip.conf auth password" />
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
-                <div class="col-span-full">
-                    <p class="text-xs font-medium text-[var(--color-on-surface-muted)] mb-3">CRM telephony auto-start (requires <code class="text-[10px]">VICI_AUTO_BOOTSTRAP</code> in .env)</p>
-                </div>
-                <div class="form-field sm:col-span-2">
-                    <label class="form-label" for="default_campaign_new">Default campaign</label>
-                    <select id="default_campaign_new" name="default_campaign" class="form-select">
-                        <option value="">— Use login / session campaign —</option>
-                        @foreach($campaignOptions ?? [] as $code => $cfg)
-                            <option value="{{ $code }}" @selected(old('default_campaign') === $code)>{{ $cfg['name'] ?? $code }}</option>
-                        @endforeach
-                    </select>
-                    <p class="text-[11px] text-[var(--color-on-surface-dim)] mt-1">Fallback when staging VICIdial bootstrap after CRM login.</p>
-                </div>
-                <div class="form-field flex items-end gap-3 pb-1">
-                    <input type="hidden" name="auto_vici_login" value="0">
-                    <label class="inline-flex items-center gap-2 text-sm cursor-pointer">
-                        <input type="checkbox" name="auto_vici_login" value="1" class="rounded border-[var(--color-border)]" @checked(old('auto_vici_login')) />
-                        Auto VICIdial login after CRM sign-in
-                    </label>
-                </div>
-                <div class="form-field flex items-end gap-3 pb-1">
-                    <input type="hidden" name="default_blended" value="0">
-                    <label class="inline-flex items-center gap-2 text-sm cursor-pointer">
-                        <input type="checkbox" name="default_blended" value="1" class="rounded border-[var(--color-border)]" @checked(old('default_blended', true)) />
-                        Default blended
-                    </label>
-                </div>
-                <div class="form-field sm:col-span-2 col-span-full">
-                    <label class="form-label" for="default_ingroups_new">Default in-groups</label>
-                    <textarea id="default_ingroups_new" name="default_ingroups" class="form-textarea" rows="2"
-                              placeholder="Space or comma separated, e.g. SALES SUPPORT">{{ old('default_ingroups') }}</textarea>
-                </div>
-            </div>
+            <x-admin.user-telephony-fields :campaign-options="$campaignOptions ?? []" />
             <div class="mt-4">
                 <button type="submit" class="btn-primary" :disabled="submitting">
                     <x-icon name="plus" class="w-4 h-4" />
@@ -89,8 +32,7 @@
                 </button>
             </div>
         </form>
-    </div>
-</div>
+</x-admin.panel>
 
 {{-- Users table --}}
 <x-table.index caption="User accounts">
@@ -155,68 +97,12 @@
                             <x-form.input name="username" label="Username" :value="old('username', $usr->username)" required />
                             <x-form.input name="full_name" label="Full Name" :value="old('full_name', $usr->full_name ?? $usr->name)" required />
                             <x-form.select name="role" label="Role"
-                                :options="['Agent' => 'Agent', 'Team Leader' => 'Team Leader', 'Admin' => 'Admin', 'Super Admin' => 'Super Admin']"
+                                :options="\App\Models\User::roleOptions()"
                                 :selected="old('role', $usr->role)" :empty="false" />
                             <x-form.input name="password" type="password" label="New Password" autocomplete="new-password" help="Leave blank to keep" />
                             <x-form.input name="password_confirmation" type="password" label="Confirm" autocomplete="new-password" />
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
-                            <div class="col-span-full">
-                                <p class="text-xs font-medium text-[var(--color-on-surface-muted)] mb-3">ViciDial Agent Credentials</p>
-                            </div>
-                            <x-form.input name="vici_user" label="ViciDial Username"
-                                :value="old('vici_user', $usr->vici_user)"
-                                help="Must match ViciDial agent username" />
-                            <x-form.input name="vici_pass" type="password" label="ViciDial Password"
-                                autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
-                                help="Leave blank to keep current" />
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
-                            <div class="col-span-full">
-                                <p class="text-xs font-medium text-[var(--color-on-surface-muted)] mb-3">WebRTC / SIP</p>
-                            </div>
-                            <x-form.input name="extension" label="SIP Extension"
-                                :value="old('extension', $usr->extension)"
-                                help="e.g. 6001 – must match sip.conf" />
-                            <x-form.input name="sip_password" type="password" label="SIP Password"
-                                autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
-                                help="Leave blank to keep current" />
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
-                            <div class="col-span-full">
-                                <p class="text-xs font-medium text-[var(--color-on-surface-muted)] mb-3">CRM telephony auto-start</p>
-                            </div>
-                            <div class="form-field sm:col-span-2">
-                                <label class="form-label" for="default_campaign_{{ $usr->id }}">Default campaign</label>
-                                <select id="default_campaign_{{ $usr->id }}" name="default_campaign" class="form-select">
-                                    <option value="">— Use login / session campaign —</option>
-                                    @foreach($campaignOptions ?? [] as $code => $cfg)
-                                        <option value="{{ $code }}" @selected(old('default_campaign', $usr->default_campaign) === $code)>{{ $cfg['name'] ?? $code }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div class="form-field flex items-end gap-3 pb-1">
-                                <input type="hidden" name="auto_vici_login" value="0">
-                                <label class="inline-flex items-center gap-2 text-sm cursor-pointer">
-                                    <input type="checkbox" name="auto_vici_login" value="1" class="rounded border-[var(--color-border)]"
-                                           @checked(old('auto_vici_login', $usr->auto_vici_login)) />
-                                    Auto VICIdial login after CRM sign-in
-                                </label>
-                            </div>
-                            <div class="form-field flex items-end gap-3 pb-1">
-                                <input type="hidden" name="default_blended" value="0">
-                                <label class="inline-flex items-center gap-2 text-sm cursor-pointer">
-                                    <input type="checkbox" name="default_blended" value="1" class="rounded border-[var(--color-border)]"
-                                           @checked(old('default_blended', $usr->default_blended ?? true)) />
-                                    Default blended
-                                </label>
-                            </div>
-                            <div class="form-field sm:col-span-2 col-span-full">
-                                <label class="form-label" for="default_ingroups_{{ $usr->id }}">Default in-groups</label>
-                                <textarea id="default_ingroups_{{ $usr->id }}" name="default_ingroups" class="form-textarea" rows="2"
-                                          placeholder="Space or comma separated">{{ old('default_ingroups', $usr->default_ingroups) }}</textarea>
-                            </div>
-                        </div>
+                        <x-admin.user-telephony-fields :user="$usr" :campaign-options="$campaignOptions ?? []" />
                         <div class="mt-4">
                             <button type="submit" class="btn-primary text-sm" :disabled="submitting">
                                 <x-icon name="check" class="w-4 h-4" />

@@ -479,16 +479,7 @@
     @if($user->isSuperAdmin())
     <div>
         <h3 class="text-xs font-bold text-[var(--color-on-surface-dim)] uppercase tracking-widest mb-4">Super Admin</h3>
-        @php
-        $superLinks = [
-            ['route' => 'admin.users.index',             'icon' => 'users',          'label' => 'User Access',       'desc' => 'Manage users & roles'],
-            ['route' => 'admin.vicidial-servers.index',  'icon' => 'server',         'label' => 'ViciDial Servers',  'desc' => 'API & DB connections'],
-            ['route' => 'admin.campaigns.index',         'icon' => 'building-office','label' => 'Campaigns',         'desc' => 'Manage campaigns'],
-            ['route' => 'admin.forms.index',             'icon' => 'document-text',  'label' => 'Forms',             'desc' => 'Form definitions'],
-            ['route' => 'admin.agent-screen.index',      'icon' => 'computer-desktop','label' => 'Agent Screen',     'desc' => 'Agent screen fields'],
-            ['route' => 'admin.configuration',           'icon' => 'cog-6-tooth',    'label' => 'Configuration',     'desc' => 'System settings'],
-        ];
-        @endphp
+        @php($superLinks = \App\Support\AdminNavigation::superAdminItems())
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 animate-stagger">
             @foreach($superLinks as $link)
                 @if($link['route'] !== 'admin.agent-screen.index' || $agentScreenVisible)

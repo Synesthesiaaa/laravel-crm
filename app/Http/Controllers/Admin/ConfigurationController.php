@@ -18,6 +18,8 @@ use Illuminate\View\View;
 
 class ConfigurationController extends Controller
 {
+    private const TABS = ['general', 'branding', 'disposition', 'telephony', 'diagnostics', 'retention'];
+
     public function __construct(
         protected CampaignService $campaignService,
         protected BrandingService $brandingService,
@@ -28,8 +30,36 @@ class ConfigurationController extends Controller
 
     public function index(Request $request): View
     {
-        $tab = $request->query('tab', 'general');
-        $campaigns = $this->campaignService->getCampaigns();
+        $tab = (string) $request->query('tab', 'general');
+        if (! in_array($tab, self::TABS, true)) {
+            $tab = 'general';
+        }
+
+        $data = ['tab' => $tab];
+
+        $data += match ($tab) {
+            'branding' => [
+                'brandingSettings' => $this->brandingService->resolve(),
+            ],
+            'disposition' => [
+                'reportDispositionSettings' => $this->reportDispositionSettingsService->resolve(),
+            ],
+            'telephony' => [
+                'telephonyFeatures' => $this->telephonyFeatureService->getAll(),
+            ],
+            'retention' => $this->retentionTabData($request),
+            'diagnostics' => [],
+            default => [
+                'campaigns' => $this->campaignService->getCampaigns(),
+            ],
+        };
+
+        return view('admin.configuration', $data);
+    }
+
+    /** @return array<string, mixed> */
+    private function retentionTabData(Request $request): array
+    {
         $retentionForms = Form::query()
             ->where('is_active', true)
             ->with('retentionPolicy')
@@ -37,27 +67,26 @@ class ConfigurationController extends Controller
             ->orderBy('display_order')
             ->orderBy('id')
             ->get();
-        $retentionForms->each(function (Form $form): void {
-            $form->setRelation('formFields', $this->dataRetentionService->eligibleFields($form));
-        });
         $selectedRetentionFormId = (int) $request->query('retention_form', 0);
         if (! $retentionForms->contains('id', $selectedRetentionFormId)) {
             $selectedRetentionFormId = (int) ($retentionForms->first()?->id ?? 0);
         }
+        $selectedRetentionForm = $retentionForms->firstWhere('id', $selectedRetentionFormId);
+        if ($selectedRetentionForm instanceof Form) {
+            $selectedRetentionForm->setRelation(
+                'formFields',
+                $this->dataRetentionService->eligibleFields($selectedRetentionForm),
+            );
+        }
 
-        return view('admin.configuration', [
-            'tab' => $tab,
-            'brandingSettings' => $this->brandingService->resolve(),
-            'campaigns' => $campaigns,
-            'telephonyFeatures' => $this->telephonyFeatureService->getAll(),
-            'reportDispositionSettings' => $this->reportDispositionSettingsService->resolve(),
+        return [
             'retentionForms' => $retentionForms,
             'retentionPolicies' => DataRetentionPolicy::query()
                 ->with('form.campaign')
                 ->latest('id')
                 ->get(),
             'selectedRetentionFormId' => $selectedRetentionFormId,
-        ]);
+        ];
     }
 
     public function updateBranding(UpdateBrandingRequest $request): RedirectResponse

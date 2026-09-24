@@ -11,11 +11,7 @@
 <x-validation-errors />
 
 {{-- Add campaign form --}}
-<div class="md-card mb-6">
-    <div class="px-6 py-4 border-b border-[var(--color-border)]">
-        <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Add Campaign</h3>
-    </div>
-    <div class="p-6">
+<x-admin.panel title="Add Campaign" description="Create a CRM campaign and configure its predictive dialing defaults." class="mb-6">
         <form method="POST" action="{{ route('admin.campaigns.store') }}"
               x-data="{ submitting: false }" @submit="submitting = true">
             @csrf
@@ -36,8 +32,7 @@
                 </button>
             </div>
         </form>
-    </div>
-</div>
+</x-admin.panel>
 
 {{-- Campaigns table --}}
 <x-table.index caption="Campaigns list">

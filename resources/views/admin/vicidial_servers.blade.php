@@ -5,19 +5,12 @@
 @section('header-title', 'ViciDial Servers')
 
 @section('content')
-<x-page-header title="ViciDial Servers"
+<x-page-header title="VICIdial Servers" description="Manage the API and database connections used by CRM telephony features."
     :breadcrumbs="['Admin' => route('admin.dashboard'), 'ViciDial Servers' => null]" />
 
 <x-validation-errors />
 
-<div class="md-card mb-6">
-    <div class="px-6 py-4 border-b border-[var(--color-border)] flex items-center justify-between">
-        <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Add Server</h3>
-        <x-alert type="info" class="text-xs py-1 px-2 m-0">
-            <code class="text-xs">api_user</code> / <code class="text-xs">api_pass</code> are used by the Non-Agent API (reports, callbacks, lead ops).
-        </x-alert>
-    </div>
-    <div class="p-6">
+<x-admin.panel title="Add Server" description="Assign a VICIdial connection to a CRM campaign. Non-Agent API credentials are used by reports, callbacks, and lead operations." class="mb-6">
         <form method="POST" action="{{ route('admin.vicidial-servers.store') }}"
               x-data="{ submitting: false }" @submit="submitting = true">
             @csrf
@@ -72,8 +65,7 @@
                 </button>
             </div>
         </form>
-    </div>
-</div>
+</x-admin.panel>
 
 <x-table.index caption="ViciDial servers">
     <x-table.head :columns="[

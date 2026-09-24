@@ -15,11 +15,8 @@
     @endif
     <x-validation-errors />
 
-    <nav class="mb-4 text-sm text-[var(--color-on-surface-dim)]" aria-label="Breadcrumb">
-        <a href="{{ route('admin.dashboard') }}" class="link-primary">Admin</a>
-        <span class="mx-1.5">/</span>
-        <span class="text-[var(--color-on-surface-muted)]">Forms</span>
-    </nav>
+    <x-page-header title="Forms" description="Manage the form definitions available within each CRM campaign."
+        :breadcrumbs="['Admin' => route('admin.dashboard'), 'Forms' => null]" />
 
     <div class="md-card mb-6 md-card--static">
         <div class="p-4">
@@ -42,11 +39,7 @@
         </div>
     </div>
 
-    <div class="md-card mb-6 md-card--static">
-        <div class="px-6 py-4 border-b border-[var(--color-border)]">
-            <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Add Form</h3>
-        </div>
-        <div class="p-6">
+    <x-admin.panel title="Add Form" description="Create a form for the selected campaign and bind it to its storage table." class="mb-6">
             <form method="POST" action="{{ route('admin.forms.store') }}"
                   x-data="{ submitting: false }" @submit="submitting = true">
                 @csrf
@@ -67,8 +60,7 @@
                     </button>
                 </div>
             </form>
-        </div>
-    </div>
+    </x-admin.panel>
 
     <x-table.index caption="Campaign forms">
         <x-table.head :columns="[

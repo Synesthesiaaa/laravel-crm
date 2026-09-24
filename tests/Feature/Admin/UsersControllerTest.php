@@ -42,6 +42,22 @@ class UsersControllerTest extends TestCase
         $response->assertOk();
     }
 
+    public function test_users_list_is_paginated_for_large_staff_directories(): void
+    {
+        User::factory()->count(30)->create(['role' => User::ROLE_AGENT]);
+
+        $response = $this->actingAs($this->superAdmin)
+            ->withSession(['campaign' => 'test', 'campaign_name' => 'Test'])
+            ->get(route('admin.users.index'));
+
+        $response->assertOk();
+        $response->assertViewHas('users', function ($users): bool {
+            return $users instanceof \Illuminate\Pagination\LengthAwarePaginator
+                && $users->perPage() === 25
+                && $users->total() === 31;
+        });
+    }
+
     public function test_store_creates_user(): void
     {
         $response = $this->actingAs($this->superAdmin)

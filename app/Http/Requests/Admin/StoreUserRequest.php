@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreUserRequest extends FormRequest
 {
@@ -25,7 +27,7 @@ class StoreUserRequest extends FormRequest
             'username' => ['required', 'string', 'max:80', 'unique:users,username'],
             'full_name' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string', 'min:8', 'confirmed', 'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/'],
-            'role' => ['required', 'in:Super Admin,Admin,Team Leader,Agent'],
+            'role' => ['required', Rule::in(User::ROLES)],
             'vici_user' => ['nullable', 'string', 'max:80'],
             'extension' => ['nullable', 'string', 'max:50'],
             'vici_pass' => ['nullable', 'string', 'max:255'],

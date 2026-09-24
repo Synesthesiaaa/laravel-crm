@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateUserRequest extends FormRequest
 {
@@ -26,7 +28,7 @@ class UpdateUserRequest extends FormRequest
         return [
             'username' => ['required', 'string', 'max:80', "unique:users,username,{$userId}"],
             'full_name' => ['required', 'string', 'max:255'],
-            'role' => ['required', 'in:Super Admin,Admin,Team Leader,Agent'],
+            'role' => ['required', Rule::in(User::ROLES)],
             'vici_user' => ['nullable', 'string', 'max:80'],
             'extension' => ['nullable', 'string', 'max:50'],
             'vici_pass' => ['nullable', 'string', 'max:255'],
