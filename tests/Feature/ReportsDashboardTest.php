@@ -278,7 +278,9 @@ class ReportsDashboardTest extends TestCase
 
         Http::fake(function ($request) {
             return match ($request->data()['function'] ?? null) {
-                'call_status_stats' => Http::response('TESTCAMP|10|2|08-10|SALE-3,NA-4,AB-3', 200),
+                'call_status_stats' => ($request->data()['statuses'] ?? null) === 'SALE'
+                    ? Http::response('TESTCAMP|3|1|08-3|SALE-3', 200)
+                    : Http::response('TESTCAMP|10|2|08-10|SALE-3,NA-4,AB-3', 200),
                 'agent_stats_export' => Http::response("user|campaign|full_name|calls|total_talk_time\nagent-a|TESTCAMP|Agent A|10|600", 200),
                 'call_dispo_report' => Http::response("campaign|ingroup|SALE|NA|AB\nTESTCAMP|IN|3|4|3", 200),
                 default => Http::response('', 200),
@@ -298,13 +300,18 @@ class ReportsDashboardTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('data.filters.disposition_scope', 'exclude_system')
             ->assertJsonPath('data.summary.total_calls', 3)
-            ->assertJsonPath('data.summary.answered_calls', 2)
-            ->assertJsonPath('data.summary.answer_rate', 66.67)
+            ->assertJsonPath('data.summary.answered_calls', 1)
+            ->assertJsonPath('data.summary.answer_rate', 33.33)
             ->assertJsonPath('data.campaigns.0.total_calls', 3)
             ->assertJsonPath('data.disposition_summary.total_calls', 3)
             ->assertJsonPath('data.status_totals.SALE', 3)
             ->assertJsonMissingPath('data.status_totals.NA')
             ->assertJsonMissingPath('data.status_totals.AB');
+
+        Http::assertSent(function ($request): bool {
+            return ($request->data()['function'] ?? null) === 'call_status_stats'
+                && ($request->data()['statuses'] ?? null) === 'SALE';
+        });
     }
 
     public function test_live_and_today_reports_reuse_one_normalized_snapshot_and_keep_scopes_explicit(): void

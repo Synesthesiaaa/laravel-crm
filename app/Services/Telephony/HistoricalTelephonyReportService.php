@@ -54,14 +54,22 @@ class HistoricalTelephonyReportService
             $params,
             ['connect_timeout' => 3, 'timeout' => 10, 'retry_times' => 1],
         );
-        $callStatus = $this->parseCallStatus($current['call_status'] ?? null, $selectedCampaignCodes, $dispositionScope);
         $agents = $this->parseAgentStats($current['agent_stats'] ?? null, $selectedCampaignCodes);
         $dispositions = $this->parseDispositions(
             $current['call_dispo'] ?? null,
             $dispositionScope,
             $selectedCampaignCodes,
         );
-        $callStatus = $this->applyScopedDispositionTotals($callStatus, $dispositions, $dispositionScope);
+        [$callStatus, $callStatusResult] = $this->scopedCallStatus(
+            $user,
+            $crmCampaign,
+            $params,
+            $current['call_status'] ?? null,
+            $dispositions,
+            $selectedCampaignCodes,
+            $dispositionScope,
+        );
+        $current['call_status'] = $callStatusResult;
         $summary = $this->summary($callStatus, $agents, $dispositions);
         $callStatus['campaigns'] = $this->addCampaignDispositionRates($callStatus['campaigns'], $dispositions);
 
@@ -255,22 +263,22 @@ class HistoricalTelephonyReportService
             $previousParams,
             ['connect_timeout' => 3, 'timeout' => 10, 'retry_times' => 1],
         );
-        $previousStatus = $this->parseCallStatus(
-            $previous['call_status'] ?? null,
-            $allowedCampaignCodes,
-            (string) ($params['disposition_scope'] ?? 'all'),
-        );
         $previousAgents = $this->parseAgentStats($previous['agent_stats'] ?? null, $allowedCampaignCodes);
         $previousDispositions = $this->parseDispositions(
             $previous['call_dispo'] ?? null,
             (string) ($params['disposition_scope'] ?? 'all'),
             $allowedCampaignCodes,
         );
-        $previousStatus = $this->applyScopedDispositionTotals(
-            $previousStatus,
+        [$previousStatus, $previousCallStatusResult] = $this->scopedCallStatus(
+            $user,
+            $crmCampaign,
+            $previousParams,
+            $previous['call_status'] ?? null,
             $previousDispositions,
+            $allowedCampaignCodes,
             (string) ($params['disposition_scope'] ?? 'all'),
         );
+        $previous['call_status'] = $previousCallStatusResult;
         $previousSummary = $this->summary($previousStatus, $previousAgents, $previousDispositions);
         $metrics = [];
         foreach ([
@@ -1153,6 +1161,141 @@ class HistoricalTelephonyReportService
     }
 
     /**
+     * Resolve call totals and human-answered totals from the exact same VICIdial
+     * disposition population. For scoped reports, VICIdial is queried again with
+     * its statuses filter so Answered and Answer Rate are not mixed with raw calls
+     * that the report has already excluded.
+     *
+     * @param  array<string, mixed>  $params
+     * @param  array<string, mixed>  $dispositions
+     * @param  array<int, string>|null  $allowedCampaignCodes
+     * @return array{0: array<string, mixed>, 1: ?OperationResult}
+     */
+    protected function scopedCallStatus(
+        User $user,
+        string $crmCampaign,
+        array $params,
+        ?OperationResult $rawResult,
+        array $dispositions,
+        ?array $allowedCampaignCodes,
+        string $scope,
+    ): array {
+        $raw = $this->parseCallStatus($rawResult, $allowedCampaignCodes, $scope);
+        if ($scope === 'all') {
+            return [$raw, $rawResult];
+        }
+
+        if (! in_array($dispositions['state'] ?? null, ['data', 'confirmed_zero'], true)
+            || ! is_numeric($dispositions['total_calls'] ?? null)) {
+            return [$this->withoutUnverifiableScopedAnswerMetrics($raw), $rawResult];
+        }
+
+        $statusCodes = array_values(array_filter(array_map(
+            fn (mixed $code): string => $this->normalizeCode($code),
+            array_keys((array) ($dispositions['code_totals'] ?? [])),
+        )));
+        if ($statusCodes === []) {
+            return [$this->zeroScopedCallStatus($raw, $dispositions), $rawResult];
+        }
+
+        $filteredResult = $this->reportingService->callStatusStats(
+            $user,
+            $crmCampaign,
+            [
+                ...$params,
+                'statuses' => implode('-', $statusCodes),
+            ],
+            ['connect_timeout' => 3, 'timeout' => 10, 'retry_times' => 1],
+        );
+        $filtered = $this->parseCallStatus($filteredResult, $allowedCampaignCodes, 'all');
+        if (($filtered['available'] ?? false) === true
+            && in_array($filtered['state'] ?? null, ['data', 'confirmed_zero', 'degraded'], true)
+            && $this->hasConsistentAnswerMetrics($filtered)) {
+            return [$filtered, $filteredResult];
+        }
+
+        return [
+            $this->withoutUnverifiableScopedAnswerMetrics(
+                $this->applyScopedDispositionTotals($raw, $dispositions, $scope),
+            ),
+            $filteredResult,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $callStatus
+     * @return array<string, mixed>
+     */
+    protected function withoutUnverifiableScopedAnswerMetrics(array $callStatus): array
+    {
+        if (($callStatus['available'] ?? false) === true) {
+            $callStatus['state'] = 'degraded';
+        }
+        $callStatus['answered_calls'] = null;
+        if (is_array($callStatus['campaigns'] ?? null)) {
+            foreach ($callStatus['campaigns'] as &$campaign) {
+                $campaign['answered_calls'] = null;
+                $campaign['answer_rate'] = null;
+            }
+            unset($campaign);
+        }
+
+        return $callStatus;
+    }
+
+    /**
+     * @param  array<string, mixed>  $callStatus
+     * @param  array<string, mixed>  $dispositions
+     * @return array<string, mixed>
+     */
+    protected function zeroScopedCallStatus(array $callStatus, array $dispositions): array
+    {
+        $callStatus = $this->applyScopedDispositionTotals($callStatus, $dispositions, 'exclude_system');
+        $callStatus['total_calls'] = 0;
+        $callStatus['answered_calls'] = 0;
+        if (is_array($callStatus['campaigns'] ?? null)) {
+            foreach ($callStatus['campaigns'] as &$campaign) {
+                $campaign['total_calls'] = 0;
+                $campaign['answered_calls'] = 0;
+                $campaign['answer_rate'] = 0;
+            }
+            unset($campaign);
+        }
+
+        return $callStatus;
+    }
+
+    /**
+     * @param  array<string, mixed>  $callStatus
+     */
+    protected function hasConsistentAnswerMetrics(array $callStatus): bool
+    {
+        $total = $callStatus['total_calls'] ?? null;
+        $answered = $callStatus['answered_calls'] ?? null;
+        if (! is_numeric($total) || ! is_numeric($answered)) {
+            return false;
+        }
+        if ((float) $total < 0 || (float) $answered < 0 || (float) $answered > (float) $total) {
+            return false;
+        }
+
+        foreach ((array) ($callStatus['campaigns'] ?? []) as $campaign) {
+            $campaignTotal = $campaign['total_calls'] ?? null;
+            $campaignAnswered = $campaign['answered_calls'] ?? null;
+            if (! is_numeric($campaignTotal) || ! is_numeric($campaignAnswered)) {
+                return false;
+            }
+            if ((float) $campaignTotal < 0
+                || (float) $campaignAnswered < 0
+                || (float) $campaignAnswered > (float) $campaignTotal) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Align headline and campaign call totals with the filtered disposition rows.
      * VICIdial call-status totals include automatic retry results even after the
      * visible status/disposition breakdown has excluded those system codes.
@@ -1163,7 +1306,7 @@ class HistoricalTelephonyReportService
      */
     protected function applyScopedDispositionTotals(array $callStatus, array $dispositions, string $scope): array
     {
-        if ($scope !== 'exclude_system'
+        if (! in_array($scope, ['exclude_system', 'system_only'], true)
             || ! in_array($dispositions['state'] ?? null, ['data', 'confirmed_zero'], true)
             || ! is_numeric($dispositions['total_calls'] ?? null)) {
             return $callStatus;
