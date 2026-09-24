@@ -10,6 +10,7 @@
     x-data="{
         tz: @js($appTz),
         line: '',
+        timer: null,
         init() {
             const opts = {
                 timeZone: this.tz,
@@ -31,7 +32,13 @@
                 }
             };
             tick();
-            setInterval(tick, 1000);
+            this.timer = setInterval(tick, 1000);
+        },
+        destroy() {
+            if (this.timer) {
+                clearInterval(this.timer);
+                this.timer = null;
+            }
         },
     }">
     <p class="text-xs font-medium uppercase tracking-wide text-[var(--color-on-surface-muted)]">{{ $label }}</p>

@@ -41,12 +41,28 @@ class AttendanceRepository implements AttendanceRepositoryInterface
         int $limit = 50,
         ?string $eventFilter = null,
     ): Collection {
-        $q = AttendanceLog::with(['user', 'statusType'])->orderByDesc('event_time');
+        $q = AttendanceLog::query()
+            ->select([
+                'id',
+                'user_id',
+                'event_type',
+                'attendance_status_type_id',
+                'direction',
+                'event_time',
+                'ip_address',
+            ])
+            ->with([
+                'user:id,username,full_name',
+                'statusType:id,label',
+            ])
+            ->orderByDesc('event_time')
+            ->orderByDesc('id');
+
         if ($userId !== null) {
             $q->where('user_id', $userId);
         }
         if ($date !== null) {
-            $q->whereDate('event_time', $date);
+            $q->forDate($date);
         }
         if ($eventFilter === 'login') {
             $q->where('event_type', 'login');

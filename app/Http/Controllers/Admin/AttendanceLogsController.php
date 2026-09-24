@@ -4,8 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Contracts\Repositories\AttendanceRepositoryInterface;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\AttendanceLogsIndexRequest;
+use App\Models\AttendanceLog;
 use App\Models\AttendanceStatusType;
-use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class AttendanceLogsController extends Controller
@@ -14,20 +15,40 @@ class AttendanceLogsController extends Controller
         protected AttendanceRepositoryInterface $attendanceRepository,
     ) {}
 
-    public function index(Request $request): View
+    public function index(AttendanceLogsIndexRequest $request): View
     {
-        $userId = $request->query('user_id') ? (int) $request->query('user_id') : null;
-        $date = $request->query('date');
-        $event = $request->query('event');
-        $eventFilter = is_string($event) && $event !== '' ? $event : null;
-        $logs = $this->attendanceRepository->getLogs($userId, $date, 100, $eventFilter);
+        $filters = $request->attendanceFilters();
+        $resultLimit = 100;
+        $logs = $this->attendanceRepository->getLogs(
+            $filters['user_id'],
+            $filters['date'],
+            $resultLimit,
+            $filters['event'],
+        );
+        $statusTypes = AttendanceStatusType::query()
+            ->select(['id', 'label'])
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+        $eventOptions = collect([
+            'login' => 'Login',
+            'logout' => 'Logout',
+        ]);
+        foreach ($statusTypes as $statusType) {
+            $eventOptions->put((string) $statusType->id, $statusType->label);
+        }
 
         return view('admin.attendance_logs', [
             'logs' => $logs,
-            'statusTypes' => AttendanceStatusType::query()
-                ->orderBy('sort_order')
-                ->orderBy('id')
-                ->get(),
+            'filters' => $filters,
+            'eventOptions' => $eventOptions,
+            'resultLimit' => $resultLimit,
+            'summary' => [
+                'total' => $logs->count(),
+                'login' => $logs->where('event_type', 'login')->count(),
+                'logout' => $logs->where('event_type', 'logout')->count(),
+                'away' => $logs->whereNotIn('event_type', AttendanceLog::SYSTEM_EVENT_TYPES)->count(),
+            ],
         ]);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -67,7 +68,11 @@ class AttendanceLog extends Model
 
     public function scopeForDate(Builder $query, string $date): Builder
     {
-        return $query->whereDate('event_time', $date);
+        $start = CarbonImmutable::createFromFormat('Y-m-d', $date, config('app.timezone'))->startOfDay();
+
+        return $query
+            ->where('event_time', '>=', $start)
+            ->where('event_time', '<', $start->addDay());
     }
 
     public function scopeRecent(Builder $query, int $days = 7): Builder

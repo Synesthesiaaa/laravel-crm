@@ -60,7 +60,7 @@
                 <td>
                     <x-attendance.event-badge :log="$log" />
                 </td>
-                <td class="font-mono text-sm text-[var(--color-on-surface-muted)]">{{ $log->event_time?->timezone(config('app.timezone'))->format('Y-m-d H:i:s T') }}</td>
+                <td><x-attendance.event-time :log="$log" /></td>
                 <td class="font-mono text-sm text-[var(--color-on-surface-dim)]">{{ $log->ip_address ?? '-' }}</td>
             </tr>
         @endforeach
