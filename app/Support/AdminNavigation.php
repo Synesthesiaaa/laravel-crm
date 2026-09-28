@@ -5,6 +5,28 @@ namespace App\Support;
 final class AdminNavigation
 {
     /**
+     * Administration destinations shared by the sidebar and management dashboard.
+     *
+     * @return list<array{route: string, label: string, icon: string, desc: string}>
+     */
+    public static function adminItems(): array
+    {
+        return [
+            ['route' => 'admin.dashboard', 'label' => 'Management Dashboard', 'icon' => 'shield-check', 'desc' => 'Overview of campaign activity and administration tools'],
+            ['route' => 'admin.supervisor', 'label' => 'Supervisor', 'icon' => 'signal', 'desc' => 'Monitor active agents and campaign activity in real time'],
+            ['route' => 'admin.attendance.index', 'label' => 'Staff Attendance', 'icon' => 'clock', 'desc' => 'Review realtime attendance sessions and login history'],
+            ['route' => 'admin.records.index', 'label' => 'Records List', 'icon' => 'table-cells', 'desc' => 'Browse call history and form submissions'],
+            ['route' => 'admin.data-master.index', 'label' => 'Data Master', 'icon' => 'list-bullet', 'desc' => 'Review and maintain campaign form records'],
+            ['route' => 'admin.capture-records.index', 'label' => 'Capture Records', 'icon' => 'clipboard-document-check', 'desc' => 'Review and maintain agent capture submissions'],
+            ['route' => 'reports.index', 'label' => 'Reports', 'icon' => 'chart-pie', 'desc' => 'Analyze campaign performance and telephony outcomes'],
+            ['route' => 'admin.disposition-records.index', 'label' => 'Disposition Records', 'icon' => 'clipboard-document-list', 'desc' => 'Review lead and disposition history'],
+            ['route' => 'admin.disposition-codes.index', 'label' => 'Disposition Codes', 'icon' => 'tag', 'desc' => 'Manage campaign-specific outcome codes'],
+            ['route' => 'admin.field-logic.index', 'label' => 'Field Logic', 'icon' => 'cog-6-tooth', 'desc' => 'Configure form fields and validation rules'],
+            ['route' => 'admin.extraction.index', 'label' => 'Extraction', 'icon' => 'arrow-down-tray', 'desc' => 'Export campaign form data to CSV'],
+        ];
+    }
+
+    /**
      * Super Admin destinations shared by the sidebar and management dashboard.
      *
      * @return list<array{route: string, label: string, icon: string, desc: string}>

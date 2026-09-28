@@ -6,6 +6,8 @@ import './phone-widget';
 import './quick-form-widget';
 import './soft-navigate';
 import './form-visibility';
+import './admin-dashboard-layout';
+import './admin-telephony-diagnostics';
 import './telephony-media-path';
 import './call-history';
 import TelephonyCore from './telephony-core';

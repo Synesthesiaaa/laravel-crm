@@ -31,19 +31,7 @@
         ['route' => 'attendance.index','label' => 'Attendance',  'icon' => 'clock'],
         ['route' => 'agent.index',    'label' => 'Agent Screen', 'icon' => 'speaker-wave'],
     ];
-    $adminItems = [
-        ['route' => 'admin.dashboard',               'label' => 'Management Dashboard', 'icon' => 'shield-check'],
-        ['route' => 'admin.supervisor',              'label' => 'Supervisor',          'icon' => 'signal'],
-        ['route' => 'admin.attendance.index',         'label' => 'Staff Attendance',    'icon' => 'clock'],
-        ['route' => 'admin.records.index',            'label' => 'Records List',        'icon' => 'table-cells'],
-        ['route' => 'admin.data-master.index',        'label' => 'Data Master',         'icon' => 'list-bullet'],
-        ['route' => 'admin.capture-records.index',    'label' => 'Capture Records',     'icon' => 'clipboard-document-check'],
-        ['route' => 'reports.index',                  'label' => 'Reports',             'icon' => 'chart-pie'],
-        ['route' => 'admin.disposition-records.index','label' => 'Disposition Records', 'icon' => 'clipboard-document-list'],
-        ['route' => 'admin.disposition-codes.index',  'label' => 'Disposition Codes',   'icon' => 'tag'],
-        ['route' => 'admin.field-logic.index',        'label' => 'Field Logic',         'icon' => 'cog-6-tooth'],
-        ['route' => 'admin.extraction.index',         'label' => 'Extraction',          'icon' => 'arrow-down-tray'],
-    ];
+    $adminItems = \App\Support\AdminNavigation::adminItems();
     $superAdminItems = \App\Support\AdminNavigation::superAdminItems();
     $sidebarSectionActive = static function (array $items) use ($sidebarLinkActive): bool {
         foreach ($items as $item) {

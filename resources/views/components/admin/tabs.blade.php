@@ -9,8 +9,11 @@
         @foreach($tabs as $tab)
             @php($isActive = ($tab['key'] ?? null) === $active)
             <a href="{{ $tab['href'] ?? '#' }}"
-               class="inline-flex min-h-10 shrink-0 items-center rounded-lg px-3 py-2 text-sm font-semibold transition-colors {{ $isActive ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-on-surface-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-on-surface)]' }}"
+               class="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors {{ $isActive ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-on-surface-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-on-surface)]' }}"
                @if($isActive) aria-current="page" @endif>
+                @if(!empty($tab['icon']))
+                    <x-icon :name="$tab['icon']" class="h-4 w-4 shrink-0" />
+                @endif
                 {{ $tab['label'] ?? $tab['key'] ?? '' }}
             </a>
         @endforeach

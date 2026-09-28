@@ -10,6 +10,7 @@ use App\Services\CampaignService;
 use App\Services\DashboardLayoutService;
 use App\Services\DashboardSalesRuleService;
 use App\Services\DashboardStatsService;
+use App\Services\TelephonyFeatureService;
 use Illuminate\Broadcasting\BroadcastException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ class AdminDashboardController extends Controller
         protected DashboardLayoutService $layoutService,
         protected DashboardSalesRuleService $salesRuleService,
         protected DashboardStatsService $dashboardStats,
+        protected TelephonyFeatureService $telephonyFeatureService,
     ) {}
 
     public function index(Request $request): View
@@ -30,20 +32,31 @@ class AdminDashboardController extends Controller
         $campaigns = $this->campaignService->getCampaigns();
         $campaign = $this->resolveCampaignCode($request, $campaigns);
         $campaignConfig = $campaigns[$campaign];
-        $dashboardLayout = $this->layoutService->getForCampaign($campaign);
+        $user = $request->user();
 
-        return view('admin.dashboard', [
+        $data = [
             'campaign' => $campaign,
             'campaignName' => $campaignConfig['name'] ?? $campaign,
             'campaigns' => $campaigns,
             'stats' => $this->dashboardService->getFormStats($campaign),
             'userCount' => $this->dashboardService->getTotalUserCount(),
-            'dashboardLayout' => $dashboardLayout,
-            'dashboardSections' => DashboardLayoutService::sectionDefinitions(),
-            'salesConfiguration' => $this->salesRuleService->resolveForCampaign($campaign, $dashboardLayout['sales'] ?? null),
-            'salesEditorForms' => $this->salesRuleService->editorData($campaign),
-            'user' => $request->user(),
-        ]);
+            'user' => $user,
+            'agentScreenVisible' => $user->isSuperAdmin()
+                ? $this->telephonyFeatureService->isEnabled('agent_screen_access')
+                : false,
+        ];
+
+        if ($user->isAdmin()) {
+            $dashboardLayout = $this->layoutService->getForCampaign($campaign);
+            $data += [
+                'dashboardLayout' => $dashboardLayout,
+                'dashboardSections' => DashboardLayoutService::sectionDefinitions(),
+                'salesConfiguration' => $this->salesRuleService->resolveForCampaign($campaign, $dashboardLayout['sales'] ?? null),
+                'salesEditorForms' => $this->salesRuleService->editorData($campaign),
+            ];
+        }
+
+        return view('admin.dashboard', $data);
     }
 
     public function updateLayout(DashboardLayoutUpdateRequest $request): RedirectResponse

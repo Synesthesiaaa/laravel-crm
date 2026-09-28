@@ -95,6 +95,21 @@ class AdminDashboardLayoutTest extends TestCase
         $this->assertSame('mbsales', session('campaign'));
     }
 
+    public function test_team_leader_dashboard_does_not_prepare_admin_only_layout_editor_data(): void
+    {
+        $teamLeader = User::factory()->create(['role' => User::ROLE_TEAM_LEADER]);
+
+        $response = $this->actingAs($teamLeader)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
+            ->get(route('admin.dashboard'));
+
+        $response->assertOk()
+            ->assertViewMissing('dashboardLayout')
+            ->assertViewMissing('dashboardSections')
+            ->assertViewMissing('salesConfiguration')
+            ->assertViewMissing('salesEditorForms');
+    }
+
     public function test_admin_can_save_custom_sales_rules_for_the_selected_campaign(): void
     {
         Event::fake([DashboardLayoutUpdated::class]);
