@@ -18,7 +18,7 @@ class HistoricalTelephonyReportService
      * @param  array<string, mixed>  $filters
      * @return array<string, mixed>
      */
-    public function dashboard(User $user, string $crmCampaign, array $filters): array
+    public function dashboard(?User $user, string $crmCampaign, array $filters): array
     {
         $filters['disposition_scope'] = $this->effectiveDispositionScope($filters);
         $period = $this->period($filters);
@@ -224,7 +224,7 @@ class HistoricalTelephonyReportService
      * @return array<string, mixed>
      */
     protected function comparison(
-        User $user,
+        ?User $user,
         string $crmCampaign,
         array $params,
         array $period,
@@ -1172,7 +1172,7 @@ class HistoricalTelephonyReportService
      * @return array{0: array<string, mixed>, 1: ?OperationResult}
      */
     protected function scopedCallStatus(
-        User $user,
+        ?User $user,
         string $crmCampaign,
         array $params,
         ?OperationResult $rawResult,

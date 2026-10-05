@@ -13,6 +13,7 @@ export default defineConfig({
                 'resources/css/app.css',
                 'resources/js/app.js',
                 'resources/js/agent-capture-webform-entry.js',
+                'resources/js/operations-insights.js',
             ],
             hotFile: 'storage/vite.hot',
             refresh: true,

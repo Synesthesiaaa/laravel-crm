@@ -23,7 +23,7 @@ class VicidialNonAgentApiService
     protected VicidialEndpointResolver $endpointResolver;
 
     public function execute(
-        User $user,
+        ?User $user,
         string $campaign,
         string $function,
         array $params = [],
@@ -43,7 +43,7 @@ class VicidialNonAgentApiService
     }
 
     public function executeOnServer(
-        User $user,
+        ?User $user,
         \App\Models\VicidialServer $server,
         string $campaign,
         string $function,
@@ -61,8 +61,8 @@ class VicidialNonAgentApiService
             ));
         }
 
-        $apiUser = $useServerCredentials ? (string) ($server->api_user ?? '') : (string) ($user->vici_user ?? '');
-        $apiPass = $useServerCredentials ? (string) ($server->api_pass ?? '') : (string) ($user->vici_pass ?? '');
+        $apiUser = $useServerCredentials ? (string) ($server->api_user ?? '') : (string) ($user?->vici_user ?? '');
+        $apiPass = $useServerCredentials ? (string) ($server->api_pass ?? '') : (string) ($user?->vici_pass ?? '');
 
         if ($apiUser === '' || $apiPass === '') {
             return OperationResult::failure('Missing VICIdial API credentials for Non-Agent API.', null, $this->baseMeta(
@@ -114,7 +114,7 @@ class VicidialNonAgentApiService
      * @return array<string, OperationResult>
      */
     public function executeBatch(
-        User $user,
+        ?User $user,
         string $campaign,
         array $requests,
         bool $useServerCredentials = true,
@@ -135,8 +135,8 @@ class VicidialNonAgentApiService
             return $this->failedBatch($requests, 'Non-Agent API URL is not configured.', 'NOT_CONFIGURED');
         }
 
-        $apiUser = $useServerCredentials ? (string) ($server->api_user ?? '') : (string) ($user->vici_user ?? '');
-        $apiPass = $useServerCredentials ? (string) ($server->api_pass ?? '') : (string) ($user->vici_pass ?? '');
+        $apiUser = $useServerCredentials ? (string) ($server->api_user ?? '') : (string) ($user?->vici_user ?? '');
+        $apiPass = $useServerCredentials ? (string) ($server->api_pass ?? '') : (string) ($user?->vici_pass ?? '');
         if ($apiUser === '' || $apiPass === '') {
             return $this->failedBatch($requests, 'Missing VICIdial API credentials for Non-Agent API.', 'AUTHENTICATION_FAILED');
         }

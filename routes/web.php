@@ -8,11 +8,16 @@ use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FormController;
+use App\Http\Controllers\OperationsInsightsController;
 use App\Http\Controllers\RecordsController;
 use App\Http\Controllers\ReportsController;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome')->name('home');
+Route::get('/operations-insights', [OperationsInsightsController::class, 'index'])->name('operations-insights');
+Route::get('/api/operations-insights', [OperationsInsightsController::class, 'data'])
+    ->middleware('throttle:60,1')
+    ->name('api.operations-insights');
 
 Route::middleware('guest')->group(function () {
     Route::get('login', [LoginController::class, 'showLoginForm'])->name('login');

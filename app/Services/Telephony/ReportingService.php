@@ -14,7 +14,7 @@ class ReportingService
         protected CrmCampaignVicidialScopeResolver $scopeResolver,
     ) {}
 
-    public function callStatusStats(User $user, string $campaign, array $params, array $httpOptions = []): OperationResult
+    public function callStatusStats(?User $user, string $campaign, array $params, array $httpOptions = []): OperationResult
     {
         $campaigns = $this->scopedCampaigns($campaign, $params['campaigns'] ?? null);
         if ($campaigns instanceof OperationResult) {
@@ -90,7 +90,7 @@ class ReportingService
      * @param  array<string, int>  $httpOptions
      * @return array<string, OperationResult>
      */
-    public function supervisorSnapshot(User $user, string $campaign, string $queryDate, array $httpOptions = [], ?VicidialServer $server = null): array
+    public function supervisorSnapshot(?User $user, string $campaign, string $queryDate, array $httpOptions = [], ?VicidialServer $server = null): array
     {
         $scope = $this->scopeResolver->resolve($campaign);
         $server = $scope->server;
@@ -178,7 +178,7 @@ class ReportingService
      * @param  array<string, int>  $httpOptions
      * @return array<string, OperationResult>
      */
-    public function historicalSnapshot(User $user, string $campaign, array $params, array $httpOptions = [], ?VicidialServer $server = null): array
+    public function historicalSnapshot(?User $user, string $campaign, array $params, array $httpOptions = [], ?VicidialServer $server = null): array
     {
         $server ??= $this->scopeResolver?->resolve($campaign)->server;
         $campaigns = $this->scopedCampaigns($campaign, $params['campaigns'] ?? null);
@@ -239,7 +239,7 @@ class ReportingService
         ], true);
     }
 
-    public function userGroupStatus(User $user, string $campaign, string $groups, array $httpOptions = []): OperationResult
+    public function userGroupStatus(?User $user, string $campaign, string $groups, array $httpOptions = []): OperationResult
     {
         $campaigns = $this->scopedCampaigns($campaign, null, false);
         if ($campaigns instanceof OperationResult) {
@@ -315,7 +315,7 @@ class ReportingService
     }
 
     private function executeScoped(
-        User $user,
+        ?User $user,
         string $campaign,
         string $function,
         array $params,
