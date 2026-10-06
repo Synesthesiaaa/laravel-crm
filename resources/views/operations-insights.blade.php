@@ -52,6 +52,17 @@
                         <p class="truncate text-xs text-[var(--color-on-surface-dim)]">Campaign Performance &amp; Reporting</p>
                     </div>
                 </div>
+                <button
+                    id="operations-theme-toggle"
+                    type="button"
+                    @click="toggleTheme()"
+                    :aria-label="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+                    :title="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+                    class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-1)] text-[var(--color-on-surface-muted)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-on-surface)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+                >
+                    <span x-show="theme === 'dark'" aria-hidden="true"><x-icon name="sun" class="h-4.5 w-4.5" /></span>
+                    <span x-show="theme === 'light'" x-cloak aria-hidden="true"><x-icon name="moon" class="h-4.5 w-4.5" /></span>
+                </button>
             </div>
         </header>
 
@@ -68,7 +79,7 @@
                         <div class="grid gap-3 sm:grid-cols-[minmax(190px,1fr)_auto]">
                             <label class="grid gap-1.5 text-xs font-semibold text-[var(--color-on-surface-muted)]" for="operations-campaign">
                                 Campaign
-                                <select id="operations-campaign" x-model="campaign" @change="refreshAll()" class="min-h-10 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-on-surface)] outline-none focus:border-[var(--color-primary)]">
+                                <select id="operations-campaign" x-model="campaign" @change="campaignChanged()" class="min-h-10 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-on-surface)] outline-none focus:border-[var(--color-primary)]">
                                     @foreach ($campaigns as $campaign)
                                         <option value="{{ $campaign['code'] }}">{{ $campaign['name'] }}</option>
                                     @endforeach
@@ -83,8 +94,9 @@
 
                     <div class="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         <div class="inline-flex w-fit rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1" role="tablist" aria-label="Dashboard sections">
-                            <button type="button" @click="section = 'dashboard'; renderChartsSoon()" :class="section === 'dashboard' ? 'bg-[var(--color-surface-2)] text-[var(--color-on-surface)] shadow-sm' : 'text-[var(--color-on-surface-muted)]'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" role="tab">Overview</button>
-                            <button type="button" @click="section = 'reports'; renderChartsSoon()" :class="section === 'reports' ? 'bg-[var(--color-surface-2)] text-[var(--color-on-surface)] shadow-sm' : 'text-[var(--color-on-surface-muted)]'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" role="tab">Call Reports</button>
+                            <button type="button" @click="setSection('dashboard')" :class="section === 'dashboard' ? 'bg-[var(--color-surface-2)] text-[var(--color-on-surface)] shadow-sm' : 'text-[var(--color-on-surface-muted)]'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" role="tab">Overview</button>
+                            <button type="button" @click="setSection('reports')" :class="section === 'reports' ? 'bg-[var(--color-surface-2)] text-[var(--color-on-surface)] shadow-sm' : 'text-[var(--color-on-surface-muted)]'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" role="tab">Call Reports</button>
+                            <button type="button" @click="setSection('records')" :class="section === 'records' ? 'bg-[var(--color-surface-2)] text-[var(--color-on-surface)] shadow-sm' : 'text-[var(--color-on-surface-muted)]'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" role="tab">Data Records</button>
                         </div>
                         <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--color-on-surface-dim)]">
                             <span x-show="data?.context?.campaign?.name" x-text="data?.context?.campaign?.name"></span>
@@ -238,6 +250,73 @@
                             </div>
                         </template>
                     </section>
+
+                    <section x-show="section === 'records'" class="space-y-5 p-4 sm:p-5">
+                        <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+                            <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                                <div>
+                                    <h2 class="font-semibold">Submitted form records</h2>
+                                    <p class="mt-1 text-xs text-[var(--color-on-surface-dim)]">Browse submissions for the selected campaign and form.</p>
+                                </div>
+                                <form @submit.prevent="recordsPage = 1; fetchRecords()" class="grid gap-3 sm:grid-cols-[minmax(180px,240px)_minmax(220px,1fr)_auto]">
+                                    <label class="grid gap-1 text-xs font-semibold text-[var(--color-on-surface-muted)]">
+                                        Form
+                                        <select x-model="recordsForm" @change="recordsPage = 1; recordsSearch = ''; fetchRecords()" class="min-h-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-1)] px-3 text-sm">
+                                            <template x-for="form in recordsData?.forms || []" :key="form.code">
+                                                <option :value="form.code" x-text="form.name"></option>
+                                            </template>
+                                        </select>
+                                    </label>
+                                    <label class="grid gap-1 text-xs font-semibold text-[var(--color-on-surface-muted)]">
+                                        Search records
+                                        <input type="search" x-model="recordsSearch" maxlength="100" placeholder="Search this form" class="min-h-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-1)] px-3 text-sm">
+                                    </label>
+                                    <button type="submit" :disabled="recordsLoading" class="inline-flex min-h-10 items-center justify-center self-end rounded-lg bg-[var(--color-primary)] px-4 text-sm font-semibold text-[var(--color-primary-foreground)] disabled:opacity-60">
+                                        <span x-text="recordsLoading ? 'Loading…' : 'Search'"></span>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div x-show="recordsError" x-cloak class="rounded-xl border border-[var(--color-danger)]/20 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-danger)]" x-text="recordsError"></div>
+
+                        <article class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <h2 class="font-semibold" x-text="recordsData?.selected_form?.name || 'Data Records'"></h2>
+                                    <p class="mt-1 text-xs text-[var(--color-on-surface-dim)]"><span x-text="number(recordsData?.pagination?.total || 0)"></span> submitted records</p>
+                                </div>
+                                <button type="button" x-show="recordsSearch" @click="recordsSearch = ''; recordsPage = 1; fetchRecords()" class="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs font-semibold text-[var(--color-on-surface-muted)]">Clear search</button>
+                            </div>
+
+                            <div x-show="recordsLoading && !recordsData" class="grid min-h-[220px] place-items-center">
+                                <p class="text-sm text-[var(--color-on-surface-muted)]">Loading submitted records…</p>
+                            </div>
+                            <div x-show="!recordsLoading || recordsData" class="mt-3 overflow-auto rounded-lg border border-[var(--color-border)]">
+                                <table id="operations-data-records-table" class="operations-table w-full text-sm">
+                                    <thead class="sticky top-0 bg-[var(--color-surface-1)]">
+                                        <tr><template x-for="column in recordsData?.columns || []" :key="column.key"><th x-text="column.label"></th></template></tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="(row, index) in recordsData?.records || []" :key="row.id || index">
+                                            <tr><template x-for="column in recordsData?.columns || []" :key="column.key"><td x-text="row[column.key] || '—'"></td></template></tr>
+                                        </template>
+                                        <tr x-show="!(recordsData?.records || []).length">
+                                            <td :colspan="Math.max(1, (recordsData?.columns || []).length)" class="text-center text-[var(--color-on-surface-dim)]">No submitted records found.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--color-on-surface-muted)]">
+                                <span x-text="recordsPageLabel()"></span>
+                                <div class="flex gap-2">
+                                    <button type="button" @click="changeRecordsPage(-1)" :disabled="recordsLoading || (recordsData?.pagination?.current_page || 1) <= 1" class="rounded-lg border border-[var(--color-border)] px-3 py-2 font-semibold disabled:cursor-not-allowed disabled:opacity-40">Previous</button>
+                                    <button type="button" @click="changeRecordsPage(1)" :disabled="recordsLoading || (recordsData?.pagination?.current_page || 1) >= (recordsData?.pagination?.last_page || 1)" class="rounded-lg border border-[var(--color-border)] px-3 py-2 font-semibold disabled:cursor-not-allowed disabled:opacity-40">Next</button>
+                                </div>
+                            </div>
+                        </article>
+                    </section>
                 </div>
             </section>
 
@@ -259,6 +338,7 @@
             return {
                 section: 'dashboard',
                 mode: 'historical',
+                theme: document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark',
                 campaign: options.selectedCampaign,
                 queryDate: formatDate(start),
                 endDate: formatDate(today),
@@ -270,6 +350,12 @@
                 error: null,
                 lastUpdated: null,
                 pollTimer: null,
+                recordsData: null,
+                recordsLoading: false,
+                recordsError: null,
+                recordsForm: '',
+                recordsSearch: '',
+                recordsPage: 1,
 
                 get dashboard() { return this.data?.dashboard || {}; },
                 get reports() { return this.data?.reports || {}; },
@@ -277,6 +363,35 @@
                 init() {
                     this.refreshAll();
                     this.$watch('section', () => this.renderChartsSoon());
+                },
+
+                toggleTheme() {
+                    this.theme = this.theme === 'dark' ? 'light' : 'dark';
+                    document.documentElement.setAttribute('data-theme', this.theme);
+                    try {
+                        localStorage.setItem('theme', this.theme);
+                    } catch (_) {}
+                    if (this.section !== 'records') {
+                        this.renderChartsSoon();
+                    }
+                },
+
+                setSection(section) {
+                    this.section = section;
+                    if (section === 'records') {
+                        this.fetchRecords();
+                        return;
+                    }
+                    this.renderChartsSoon();
+                },
+
+                campaignChanged() {
+                    this.recordsData = null;
+                    this.recordsForm = '';
+                    this.recordsSearch = '';
+                    this.recordsPage = 1;
+                    this.refreshAll();
+                    if (this.section === 'records') this.fetchRecords();
                 },
 
                 cleanup() {
@@ -335,6 +450,51 @@
                     } finally {
                         this.loading = false;
                     }
+                },
+
+                async fetchRecords() {
+                    if (this.recordsLoading) return;
+                    this.recordsLoading = true;
+                    this.recordsError = null;
+                    const params = new URLSearchParams({
+                        campaign: this.campaign,
+                        page: String(this.recordsPage),
+                    });
+                    if (this.recordsForm) params.set('form', this.recordsForm);
+                    if (this.recordsSearch.trim()) params.set('search', this.recordsSearch.trim());
+
+                    try {
+                        const response = await fetch(`/api/operations-insights/records?${params.toString()}`, {
+                            headers: { Accept: 'application/json' },
+                            credentials: 'same-origin',
+                        });
+                        const payload = await response.json();
+                        if (!response.ok || payload?.success !== true) {
+                            throw new Error(payload?.message || 'Submitted records could not be loaded.');
+                        }
+                        this.recordsData = payload.data;
+                        this.recordsForm = payload.data?.selected_form?.code || '';
+                        this.recordsPage = payload.data?.pagination?.current_page || 1;
+                    } catch (error) {
+                        this.recordsError = error?.message || 'Submitted records could not be loaded.';
+                    } finally {
+                        this.recordsLoading = false;
+                    }
+                },
+
+                changeRecordsPage(direction) {
+                    const current = Number(this.recordsData?.pagination?.current_page || 1);
+                    const last = Number(this.recordsData?.pagination?.last_page || 1);
+                    const next = Math.min(last, Math.max(1, current + direction));
+                    if (next === current) return;
+                    this.recordsPage = next;
+                    this.fetchRecords();
+                },
+
+                recordsPageLabel() {
+                    const pagination = this.recordsData?.pagination;
+                    if (!pagination) return '';
+                    return `Page ${pagination.current_page} of ${pagination.last_page}`;
                 },
 
                 renderChartsSoon() {

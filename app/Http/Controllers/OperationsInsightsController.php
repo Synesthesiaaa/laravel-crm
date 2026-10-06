@@ -6,6 +6,7 @@ use App\Services\CampaignService;
 use App\Services\DashboardLayoutService;
 use App\Services\DashboardSalesRangeService;
 use App\Services\DashboardStatsService;
+use App\Services\DataMasterService;
 use App\Services\Telephony\HistoricalTelephonyReportService;
 use App\Services\Telephony\RealtimeTelephonyReportService;
 use Illuminate\Contracts\Support\Arrayable;
@@ -20,6 +21,7 @@ class OperationsInsightsController extends Controller
 
     public function __construct(
         protected CampaignService $campaignService,
+        protected DataMasterService $dataMasterService,
         protected DashboardStatsService $dashboardStatsService,
         protected DashboardLayoutService $dashboardLayoutService,
         protected DashboardSalesRangeService $dashboardSalesRangeService,
@@ -127,6 +129,114 @@ class OperationsInsightsController extends Controller
                 ],
                 'dashboard' => $dashboard,
                 'reports' => $reports,
+            ],
+        ])->header('Cache-Control', 'private, no-store');
+    }
+
+    public function records(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'campaign' => ['nullable', 'string', 'max:100'],
+            'form' => ['nullable', 'string', 'max:100'],
+            'search' => ['nullable', 'string', 'max:100'],
+            'page' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $campaigns = $this->campaignService->getCampaigns();
+        $campaign = $this->resolveCampaign($request, $campaigns);
+        $campaignConfig = $campaigns[$campaign] ?? [];
+        $forms = is_array($campaignConfig['forms'] ?? null) ? $campaignConfig['forms'] : [];
+        $requestedForm = trim((string) ($validated['form'] ?? ''));
+
+        if ($requestedForm !== '' && ! isset($forms[$requestedForm])) {
+            throw ValidationException::withMessages([
+                'form' => 'The selected form is not available for this campaign.',
+            ]);
+        }
+
+        $form = $requestedForm !== '' ? $requestedForm : (string) array_key_first($forms);
+        if ($form === '' || ! isset($forms[$form])) {
+            return response()->json([
+                'success' => true,
+                'message' => null,
+                'data' => [
+                    'forms' => [],
+                    'selected_form' => null,
+                    'columns' => [],
+                    'records' => [],
+                    'pagination' => [
+                        'current_page' => 1,
+                        'last_page' => 1,
+                        'per_page' => 20,
+                        'total' => 0,
+                    ],
+                ],
+            ])->header('Cache-Control', 'private, no-store');
+        }
+
+        $formConfig = $forms[$form];
+        $tableName = (string) ($formConfig['table_name'] ?? $formConfig['table'] ?? '');
+        $allowedTables = $this->dataMasterService->getAllowedTables($campaignConfig);
+        $search = trim((string) ($validated['search'] ?? ''));
+        $records = $this->dataMasterService->getRecords(
+            $tableName,
+            $allowedTables,
+            search: $search !== '' ? $search : null,
+        );
+
+        $first = $records->first();
+        $available = $first ? array_keys((array) $first) : null;
+        $layout = $this->dataMasterService->getColumnLayout($campaign, $form, $available);
+        $percentageColumns = $this->dataMasterService->getPercentageColumns($campaign, $form);
+        $columns = collect($layout['columns'] ?? [])
+            ->map(fn (string $column): array => [
+                'key' => $column,
+                'label' => (string) (($layout['headers'] ?? [])[$column] ?? $column),
+            ])
+            ->values()
+            ->all();
+        $rows = collect($records->items())
+            ->map(function (mixed $record) use ($columns, $percentageColumns): array {
+                $record = $this->publicArray($record);
+
+                return collect($columns)
+                    ->mapWithKeys(function (array $column) use ($record, $percentageColumns): array {
+                        $key = $column['key'];
+
+                        return [$key => $this->dataMasterService->formatValue(
+                            $key,
+                            $record[$key] ?? null,
+                            $percentageColumns,
+                        )];
+                    })
+                    ->all();
+            })
+            ->values()
+            ->all();
+
+        return response()->json([
+            'success' => true,
+            'message' => null,
+            'data' => [
+                'forms' => collect($forms)
+                    ->map(fn (array $config, string $code): array => [
+                        'code' => $code,
+                        'name' => (string) ($config['name'] ?? $code),
+                    ])
+                    ->values()
+                    ->all(),
+                'selected_form' => [
+                    'code' => $form,
+                    'name' => (string) ($formConfig['name'] ?? $form),
+                ],
+                'columns' => $columns,
+                'records' => $rows,
+                'pagination' => [
+                    'current_page' => $records->currentPage(),
+                    'last_page' => $records->lastPage(),
+                    'per_page' => $records->perPage(),
+                    'total' => $records->total(),
+                ],
             ],
         ])->header('Cache-Control', 'private, no-store');
     }

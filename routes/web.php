@@ -18,6 +18,9 @@ Route::get('/operations-insights', [OperationsInsightsController::class, 'index'
 Route::get('/api/operations-insights', [OperationsInsightsController::class, 'data'])
     ->middleware('throttle:60,1')
     ->name('api.operations-insights');
+Route::get('/api/operations-insights/records', [OperationsInsightsController::class, 'records'])
+    ->middleware('throttle:60,1')
+    ->name('api.operations-insights.records');
 
 Route::middleware('guest')->group(function () {
     Route::get('login', [LoginController::class, 'showLoginForm'])->name('login');

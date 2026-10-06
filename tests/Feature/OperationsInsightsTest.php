@@ -5,11 +5,15 @@ namespace Tests\Feature;
 use App\Models\CallSession;
 use App\Models\Campaign;
 use App\Models\CampaignVicidialMapping;
+use App\Models\Form;
+use App\Models\FormField;
 use App\Models\VicidialServer;
 use App\Services\DashboardLayoutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class OperationsInsightsTest extends TestCase
@@ -30,6 +34,7 @@ class OperationsInsightsTest extends TestCase
             ->assertSee('Campaign Performance &amp; Reporting', false)
             ->assertSee('Overview')
             ->assertSee('Call Reports')
+            ->assertSee('Data Records')
             ->assertSee('Past Performance')
             ->assertSee('Live Activity')
             ->assertSee('Today')
@@ -37,6 +42,9 @@ class OperationsInsightsTest extends TestCase
             ->assertSee('id="operations-campaign"', false)
             ->assertSee('operations-activity-chart', false)
             ->assertSee('operations-report-agent-table', false)
+            ->assertSee('id="operations-theme-toggle"', false)
+            ->assertSee('toggleTheme()', false)
+            ->assertSee("localStorage.setItem('theme'", false)
             ->assertSee('refreshAll()', false)
             ->assertSee("sectionVisible('kpis')", false)
             ->assertSee("sectionVisible('activity')", false)
@@ -57,6 +65,104 @@ class OperationsInsightsTest extends TestCase
         $this->assertStringNotContainsString('resources/js/app.js', $viewSource);
 
         $this->get('/readonly-dashboard')->assertNotFound();
+    }
+
+    public function test_guest_can_view_paginated_form_submissions_without_write_actions(): void
+    {
+        Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+        Form::create([
+            'campaign_code' => 'campaign-a',
+            'form_code' => 'applications',
+            'name' => 'Applications',
+            'table_name' => 'operations_applications',
+            'display_order' => 1,
+            'is_active' => true,
+        ]);
+        FormField::create([
+            'campaign_code' => 'campaign-a',
+            'form_type' => 'applications',
+            'field_name' => 'customer_name',
+            'field_label' => 'Customer Name',
+            'field_type' => 'text',
+            'is_required' => false,
+            'field_order' => 1,
+        ]);
+        FormField::create([
+            'campaign_code' => 'campaign-a',
+            'form_type' => 'applications',
+            'field_name' => 'status',
+            'field_label' => 'Application Status',
+            'field_type' => 'text',
+            'is_required' => false,
+            'field_order' => 2,
+        ]);
+        Schema::create('operations_applications', function ($table): void {
+            $table->id();
+            $table->string('customer_name');
+            $table->string('status');
+            $table->string('internal_note')->nullable();
+            $table->string('agent')->nullable();
+            $table->timestamps();
+        });
+        DB::table('operations_applications')->insert([
+            [
+                'customer_name' => 'Alice Example',
+                'status' => 'Approved',
+                'internal_note' => 'Do not expose this legacy column',
+                'agent' => 'agent-1',
+                'created_at' => now()->subMinute(),
+                'updated_at' => now()->subMinute(),
+            ],
+            [
+                'customer_name' => 'Bob Example',
+                'status' => 'Pending',
+                'internal_note' => 'Hidden',
+                'agent' => 'agent-2',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+        $this->app->make(\App\Services\CampaignService::class)->clearCampaignsCache();
+
+        $response = $this->getJson('/api/operations-insights/records?campaign=campaign-a&form=applications&search=Bob');
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.selected_form.code', 'applications')
+            ->assertJsonPath('data.selected_form.name', 'Applications')
+            ->assertJsonPath('data.columns.0.key', 'id')
+            ->assertJsonPath('data.columns.1.key', 'customer_name')
+            ->assertJsonPath('data.columns.1.label', 'Customer Name')
+            ->assertJsonPath('data.columns.2.key', 'status')
+            ->assertJsonPath('data.columns.2.label', 'Application Status')
+            ->assertJsonPath('data.records.0.customer_name', 'Bob Example')
+            ->assertJsonPath('data.records.0.status', 'Pending')
+            ->assertJsonPath('data.pagination.total', 1)
+            ->assertJsonMissingPath('data.records.0.internal_note');
+        $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
+
+        $response->assertJsonMissingPath('data.records.0.actions')
+            ->assertJsonMissingPath('data.records.0.edit_url')
+            ->assertJsonMissingPath('data.records.0.delete_url');
+    }
+
+    public function test_operations_records_endpoint_only_allows_forms_from_the_selected_campaign(): void
+    {
+        Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+        Campaign::factory()->create(['code' => 'campaign-b', 'name' => 'Campaign B']);
+        Form::create([
+            'campaign_code' => 'campaign-b',
+            'form_code' => 'private-form',
+            'name' => 'Private Form',
+            'table_name' => 'private_form_records',
+            'display_order' => 1,
+            'is_active' => true,
+        ]);
+        $this->app->make(\App\Services\CampaignService::class)->clearCampaignsCache();
+
+        $this->getJson('/api/operations-insights/records?campaign=campaign-a&form=private-form')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('form');
     }
 
     public function test_guest_can_load_historical_dashboard_and_report_data_with_server_reporting_credentials(): void

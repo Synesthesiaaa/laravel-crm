@@ -14,6 +14,10 @@ use Illuminate\Support\Facades\Schema;
 
 class FormSubmissionService
 {
+    private const WIDE_NUMBER_PRECISION = 65;
+
+    private const WIDE_NUMBER_SCALE = 2;
+
     /**
      * Columns populated by the submission pipeline or framework internals.
      *
@@ -225,51 +229,145 @@ class FormSubmissionService
             }
         }
 
-        if (empty($missingFieldCols)) {
+        if (! empty($missingFieldCols)) {
+            Schema::table($tableName, function ($table) use ($missingFieldCols) {
+                foreach ($missingFieldCols as $field) {
+                    /** @var \App\Models\FormField $field */
+                    $colName = $field->storage_field_name ?? $field->field_name;
+                    $nullable = ! $field->is_required;
+                    $type = (string) $field->field_type;
+
+                    switch ($type) {
+                        case 'textarea':
+                            $table->text($colName)->nullable($nullable);
+
+                            break;
+                        case 'date':
+                            $table->date($colName)->nullable($nullable);
+
+                            break;
+                        case 'select':
+                            $table->string($colName, 255)->nullable($nullable);
+
+                            break;
+                        case 'multiselect':
+                            $table->text($colName)->nullable($nullable);
+
+                            break;
+                        case 'number':
+                            if ($this->isIdentifierField($colName)) {
+                                $table->string($colName, 255)->nullable($nullable);
+                            } else {
+                                $table->decimal($colName, self::WIDE_NUMBER_PRECISION, self::WIDE_NUMBER_SCALE)->nullable($nullable);
+                            }
+
+                            break;
+                        case 'percentage':
+                            $table->string($colName, 50)->nullable($nullable);
+
+                            break;
+                        case 'text':
+                        default:
+                            $table->string($colName, 255)->nullable($nullable);
+
+                            break;
+                    }
+                }
+            });
+        }
+
+        $this->alignNumericStorageColumns($tableName, $fields);
+    }
+
+    private function alignNumericStorageColumns(string $tableName, Collection $fields): void
+    {
+        $needsAlignment = $fields->contains(function ($field): bool {
+            $colName = $field->storage_field_name ?? $field->field_name;
+
+            return (string) $field->field_type === 'number' || $this->isIdentifierField($colName);
+        });
+        if (! $needsAlignment) {
             return;
         }
 
-        Schema::table($tableName, function ($table) use ($missingFieldCols) {
-            foreach ($missingFieldCols as $field) {
-                /** @var \App\Models\FormField $field */
-                $colName = $field->storage_field_name ?? $field->field_name;
-                $nullable = ! $field->is_required;
-                $type = (string) $field->field_type;
+        $columns = collect(Schema::getColumns($tableName))->keyBy('name');
+        $stringColumns = [];
+        $wideNumberColumns = [];
 
-                switch ($type) {
-                    case 'textarea':
-                        $table->text($colName)->nullable($nullable);
+        foreach ($fields as $field) {
+            $colName = $field->storage_field_name ?? $field->field_name;
+            if (in_array($colName, self::SYSTEM_COLUMNS, true)) {
+                continue;
+            }
 
-                        break;
-                    case 'date':
-                        $table->date($colName)->nullable($nullable);
+            $column = $columns->get($colName);
+            if (! is_array($column)) {
+                continue;
+            }
 
-                        break;
-                    case 'select':
-                        $table->string($colName, 255)->nullable($nullable);
+            $columnType = strtolower((string) ($column['type_name'] ?? $column['type'] ?? ''));
+            if (! $this->isNumericColumnType($columnType)) {
+                continue;
+            }
 
-                        break;
-                    case 'multiselect':
-                        $table->text($colName)->nullable($nullable);
+            $nullable = (bool) ($column['nullable'] ?? true);
+            if ($this->isIdentifierField($colName)) {
+                $stringColumns[$colName] = $nullable;
 
-                        break;
-                    case 'number':
-                        // Most of your known numeric fields (amount/rate) use 2 decimals.
-                        $table->decimal($colName, 10, 2)->nullable($nullable);
+                continue;
+            }
 
-                        break;
-                    case 'percentage':
-                        $table->string($colName, 50)->nullable($nullable);
+            if ((string) $field->field_type !== 'number' || $this->isWideDecimalColumn($column)) {
+                continue;
+            }
 
-                        break;
-                    case 'text':
-                    default:
-                        $table->string($colName, 255)->nullable($nullable);
+            $wideNumberColumns[$colName] = $nullable;
+        }
 
-                        break;
-                }
+        if ($stringColumns === [] && $wideNumberColumns === []) {
+            return;
+        }
+
+        Schema::table($tableName, function ($table) use ($stringColumns, $wideNumberColumns) {
+            foreach ($stringColumns as $colName => $nullable) {
+                $table->string($colName, 255)->nullable($nullable)->change();
+            }
+
+            foreach ($wideNumberColumns as $colName => $nullable) {
+                $table->decimal($colName, self::WIDE_NUMBER_PRECISION, self::WIDE_NUMBER_SCALE)
+                    ->nullable($nullable)
+                    ->change();
             }
         });
+    }
+
+    private function isIdentifierField(string $columnName): bool
+    {
+        $columnName = strtolower($columnName);
+
+        return preg_match('/(^|_)(phone|mobile|telephone)($|_)/', $columnName) === 1
+            || preg_match('/(^|_)(id|code|number|no|num)$/', $columnName) === 1;
+    }
+
+    private function isNumericColumnType(string $columnType): bool
+    {
+        return preg_match('/^(bigint|decimal|double|float|integer|mediumint|numeric|real|smallint|tinyint)/', $columnType) === 1;
+    }
+
+    /** @param array<string, mixed> $column */
+    private function isWideDecimalColumn(array $column): bool
+    {
+        if (DB::connection()->getDriverName() === 'sqlite'
+            && strtolower((string) ($column['type_name'] ?? '')) === 'numeric') {
+            return true;
+        }
+
+        $definition = strtolower((string) ($column['type'] ?? ''));
+
+        return preg_match(
+            '/decimal\(\s*'.self::WIDE_NUMBER_PRECISION.'\s*,\s*'.self::WIDE_NUMBER_SCALE.'\s*\)/',
+            $definition,
+        ) === 1;
     }
 
     /**

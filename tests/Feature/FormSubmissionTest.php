@@ -95,6 +95,64 @@ class FormSubmissionTest extends TestCase
         }
     }
 
+    public function test_form_submit_accepts_long_numeric_values_without_overflow(): void
+    {
+        FormField::create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'cebuana_customer_number',
+            'field_label' => 'Cebuana Customer Number',
+            'field_type' => 'number',
+            'is_required' => true,
+            'field_order' => 20,
+        ]);
+        FormField::create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'dormancy_months',
+            'field_label' => 'Dormancy Months',
+            'field_type' => 'number',
+            'is_required' => true,
+            'field_order' => 21,
+        ]);
+
+        Schema::table('ezycash', function ($table): void {
+            $table->unsignedBigInteger('cebuana_customer_number')->nullable();
+            $table->unsignedBigInteger('dormancy_months')->nullable();
+        });
+
+        $user = User::factory()->create(['username' => 'agent1']);
+        $customerNumber = '0012345678901234567890';
+        $longNumericValue = '12345678901234567890';
+
+        $response = $this->actingAs($user)->post(route('forms.store'), [
+            'campaign' => 'mbsales',
+            'form_type' => 'ezycash',
+            'date' => now()->format('Y-m-d'),
+            'cardholder_name' => 'Long Number Test',
+            'mpi_credit_card_no' => '4111111111111111',
+            'bank' => 'Test Bank',
+            'account_type' => 'Savings',
+            'account_number' => '123456',
+            'surname' => 'Doe',
+            'first_name' => 'John',
+            'ezycash_amount' => '100.00',
+            'term' => '12',
+            'rate' => '5.00',
+            'cebuana_customer_number' => $customerNumber,
+            'dormancy_months' => $longNumericValue,
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+        $this->assertSame(
+            $customerNumber,
+            (string) DB::table('ezycash')->where('cardholder_name', 'Long Number Test')->value('cebuana_customer_number'),
+        );
+        $dormancyColumn = collect(Schema::getColumns('ezycash'))->firstWhere('name', 'dormancy_months');
+        $this->assertContains($dormancyColumn['type_name'] ?? null, ['decimal', 'numeric']);
+    }
+
     public function test_agent_submission_uses_the_current_server_date_even_when_request_contains_a_different_date(): void
     {
         Carbon::setTestNow('2026-08-17 10:30:00');
