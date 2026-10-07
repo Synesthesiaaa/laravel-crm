@@ -11,7 +11,9 @@ recipient CSVs, and queued deliveries in batches.
    are encrypted using AES-256 and require a user password.
 2. Configure a real email service in `.env`, e.g. `MAIL_MAILER=smtp` with
    `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD` and
-   `MAIL_FROM_ADDRESS`. The Laravel `log` or `array` mailers cannot deliver
+   `MAIL_FROM_ADDRESS`. Set `APP_URL` to the externally reachable HTTPS URL
+   of this CRM so that recipient unsubscribe links work outside your local network.
+   The Laravel `log` or `array` mailers cannot deliver
    real messages; the send action refuses these in normal usage.
 3. Use `QUEUE_CONNECTION=redis` (or `database`). For Redis set
    `REDIS_QUEUE_RETRY_AFTER=1200` so the queue visibility window exceeds the
