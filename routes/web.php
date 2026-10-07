@@ -14,6 +14,10 @@ use App\Http\Controllers\ReportsController;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome')->name('home');
+Route::get('email/unsubscribe/{recipient}', [\App\Http\Controllers\EmailUnsubscribeController::class, 'show'])
+    ->middleware('signed')->name('email-campaigns.unsubscribe');
+Route::post('email/unsubscribe/{recipient}', [\App\Http\Controllers\EmailUnsubscribeController::class, 'store'])
+    ->middleware(['signed', 'throttle:10,1']);
 Route::get('/operations-insights', [OperationsInsightsController::class, 'index'])->name('operations-insights');
 Route::get('/api/operations-insights', [OperationsInsightsController::class, 'data'])
     ->middleware('throttle:60,1')

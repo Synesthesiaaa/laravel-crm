@@ -17,7 +17,8 @@
         "pusher/pusher-php-server": "*",
         "spatie/laravel-activitylog": "^4.12",
         "spatie/laravel-permission": "^6.24",
-        "symfony/css-selector": "7.0"
+        "symfony/css-selector": "7.0",
+        "tecnickcom/tcpdf": "6.10"
     },
     "require-dev": {
         "cweagans/composer-patches": "^1.7",

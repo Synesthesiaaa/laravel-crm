@@ -35,6 +35,14 @@ Route::middleware('role:Team Leader,Admin,Super Admin')->prefix('admin')->name('
     Route::post('extraction', [\App\Http\Controllers\Admin\ExtractionController::class, 'export'])->name('extraction.export');
 
     Route::middleware('role:Super Admin')->group(function () {
+        Route::get('email-campaigns', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'index'])->name('email-campaigns.index');
+        Route::post('email-campaigns/templates', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'storeTemplate'])->name('email-campaigns.templates.store');
+        Route::put('email-campaigns/templates/{template}', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'updateTemplate'])->name('email-campaigns.templates.update');
+        Route::post('email-campaigns/import', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'import'])->name('email-campaigns.import');
+        Route::get('email-campaigns/templates/{template}/preview', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'preview'])->name('email-campaigns.preview');
+        Route::post('email-campaigns', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'store'])->name('email-campaigns.store');
+        Route::post('email-campaigns/{campaign}/send', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'send'])->name('email-campaigns.send');
+        Route::post('email-campaigns/{campaign}/cancel', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'cancel'])->name('email-campaigns.cancel');
         Route::get('configuration', [\App\Http\Controllers\Admin\ConfigurationController::class, 'index'])->name('configuration');
         Route::get('activity-log', [\App\Http\Controllers\Admin\ActivityLogController::class, 'index'])->name('activity-log.index');
         Route::get('activity-log/entries', [\App\Http\Controllers\Admin\ActivityLogController::class, 'entries'])->name('activity-log.entries');
