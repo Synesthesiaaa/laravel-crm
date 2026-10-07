@@ -146,6 +146,42 @@ class DashboardLayoutService
         return $this->rememberCampaignLayout($campaignCode, $layout, $revision);
     }
 
+    /**
+     * Replace only the sales attribution settings for a campaign.
+     *
+     * Keeping this separate from the dashboard layout editor prevents a form
+     * attribution change from rebuilding section visibility, order, or amount
+     * settings from stale browser state.
+     *
+     * @param  array<string, mixed>|null  $salesConfig
+     * @return array{sections: array<string, array{visible: bool, order: int}>, amounts: array<string, bool>, sales?: array<string, mixed>}
+     */
+    public function saveSalesForCampaign(string $campaignCode, ?array $salesConfig): array
+    {
+        $record = DashboardLayout::query()
+            ->where('campaign_code', $campaignCode)
+            ->first();
+        $layout = $record && is_array($record->layout)
+            ? $record->layout
+            : $this->defaultLayout();
+
+        if ($salesConfig === null) {
+            unset($layout['sales']);
+        } else {
+            $layout['sales'] = $salesConfig;
+        }
+
+        DashboardLayout::query()->updateOrCreate(
+            ['campaign_code' => $campaignCode],
+            ['layout' => $layout],
+        );
+
+        $revision = (self::$campaignRevisions[$campaignCode] ?? 0) + 1;
+        self::$campaignRevisions[$campaignCode] = $revision;
+
+        return $this->getForCampaign($campaignCode);
+    }
+
     /** @param array<string, mixed> $layout */
     private function rememberCampaignLayout(string $campaignCode, array $layout, int $revision): array
     {

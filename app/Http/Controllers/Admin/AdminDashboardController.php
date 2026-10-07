@@ -8,7 +8,6 @@ use App\Http\Requests\Admin\DashboardLayoutUpdateRequest;
 use App\Services\AdminDashboardService;
 use App\Services\CampaignService;
 use App\Services\DashboardLayoutService;
-use App\Services\DashboardSalesRuleService;
 use App\Services\DashboardStatsService;
 use App\Services\TelephonyFeatureService;
 use Illuminate\Broadcasting\BroadcastException;
@@ -22,7 +21,6 @@ class AdminDashboardController extends Controller
         protected CampaignService $campaignService,
         protected AdminDashboardService $dashboardService,
         protected DashboardLayoutService $layoutService,
-        protected DashboardSalesRuleService $salesRuleService,
         protected DashboardStatsService $dashboardStats,
         protected TelephonyFeatureService $telephonyFeatureService,
     ) {}
@@ -51,8 +49,6 @@ class AdminDashboardController extends Controller
             $data += [
                 'dashboardLayout' => $dashboardLayout,
                 'dashboardSections' => DashboardLayoutService::sectionDefinitions(),
-                'salesConfiguration' => $this->salesRuleService->resolveForCampaign($campaign, $dashboardLayout['sales'] ?? null),
-                'salesEditorForms' => $this->salesRuleService->editorData($campaign),
             ];
         }
 
@@ -65,25 +61,13 @@ class AdminDashboardController extends Controller
         $campaigns = $this->campaignService->getCampaigns();
         $campaign = $this->resolveCampaignCode($request, $campaigns);
         $redirectWithCampaign = array_key_exists('campaign_code', $validated) || $request->query('campaign') !== null;
-        $salesConfig = null;
-        $replaceSalesConfig = false;
-
-        if (array_key_exists('sales_mode', $validated)) {
-            $replaceSalesConfig = true;
-            if ($validated['sales_mode'] === DashboardSalesRuleService::MODE_CUSTOM) {
-                $salesConfig = $this->salesRuleService->normalizeForPersistence([
-                    'mode' => DashboardSalesRuleService::MODE_CUSTOM,
-                    'forms' => $validated['sales_forms'] ?? [],
-                ]);
-            }
-        }
 
         $this->layoutService->saveForCampaign(
             $campaign,
             $validated['section_order'],
             $validated['visible_sections'] ?? [],
-            $salesConfig,
-            $replaceSalesConfig,
+            null,
+            false,
             $validated['amounts'] ?? null,
         );
         $this->dashboardStats->invalidate($campaign);

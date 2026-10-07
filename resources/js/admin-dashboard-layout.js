@@ -7,7 +7,7 @@ function normalizeSalesRules(rules) {
             conditions: Array.isArray(rule?.conditions)
                 ? rule.conditions.map((condition) => ({
                     field_name: String(condition?.field_name || ''),
-                    accepted_values: Array.isArray(condition?.accepted_values)
+                    accepted_values: Array.isArray(condition?.accepted_values) && condition.accepted_values.length > 0
                         ? [...condition.accepted_values]
                         : [''],
                 }))
@@ -21,11 +21,32 @@ window.adminDashboardLayoutEditor = function adminDashboardLayoutEditor(config =
         sections: Array.isArray(config.sections) ? [...config.sections] : [],
         visible: Array.isArray(config.visible) ? [...config.visible] : [],
         labels: config.labels || {},
-        salesMode: config.salesMode || 'legacy',
+
+        move(index, direction) {
+            const next = index + direction;
+            if (next < 0 || next >= this.sections.length) return;
+
+            [this.sections[index], this.sections[next]] = [this.sections[next], this.sections[index]];
+        },
+    };
+};
+
+window.adminSalesAttributionEditor = function adminSalesAttributionEditor(config = {}) {
+    return {
+        salesEnabled: Boolean(config.salesEnabled),
         salesRules: normalizeSalesRules(config.salesRules),
         formOptions: Array.isArray(config.formOptions) ? config.formOptions : [],
 
-        initialiseRules() {
+        initialiseRule() {
+            if (this.salesRules.length === 0 && this.formOptions.length > 0) {
+                this.salesRules = [{
+                    form_code: this.formOptions[0].code,
+                    amount_field: '',
+                    trigger: 'form',
+                    conditions: [],
+                }];
+            }
+
             this.salesRules = this.salesRules.map((rule) => {
                 const trigger = rule.trigger || (rule.conditions.length > 0
                     ? 'tag'
@@ -35,13 +56,6 @@ window.adminDashboardLayoutEditor = function adminDashboardLayoutEditor(config =
 
                 return { ...rule, trigger };
             });
-        },
-
-        move(index, direction) {
-            const next = index + direction;
-            if (next < 0 || next >= this.sections.length) return;
-
-            [this.sections[index], this.sections[next]] = [this.sections[next], this.sections[index]];
         },
 
         formByCode(code) {
@@ -80,22 +94,6 @@ window.adminDashboardLayoutEditor = function adminDashboardLayoutEditor(config =
             return this.ruleUsesMarkedAmount(rule)
                 ? this.markedAmountFields(rule.form_code)
                 : this.amountFields(rule.form_code);
-        },
-
-        addRule() {
-            const form = this.tagForms()[0];
-            if (!form) return;
-
-            this.salesRules.push({
-                form_code: form.code,
-                amount_field: '',
-                trigger: 'form',
-                conditions: [],
-            });
-        },
-
-        removeRule(index) {
-            this.salesRules.splice(index, 1);
         },
 
         addCondition(rule) {
