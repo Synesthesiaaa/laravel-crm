@@ -26,6 +26,19 @@ class EmailCampaignsController extends Controller
         ]);
     }
 
+    public function downloadRecipientTemplate(): StreamedResponse
+    {
+        return response()->streamDownload(static function (): void {
+            $output = fopen('php://output', 'wb');
+
+            fputcsv($output, ['email', 'name']);
+            fputcsv($output, ['jane.doe@example.com', 'Jane Doe']);
+            fputcsv($output, ['john.smith@example.com', 'John Smith']);
+
+            fclose($output);
+        }, 'email-recipients-template.csv', [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Cache-Control' => 'private, no-store',
         ]);
     }
 
