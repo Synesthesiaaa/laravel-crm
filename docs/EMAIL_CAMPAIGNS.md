@@ -9,12 +9,19 @@ recipient CSVs, and queued deliveries in batches.
 1. Install PHP dependencies using `composer install`, then run `php artisan migrate`.
    The PDF generator uses the Composer package `tecnickcom/tcpdf`; the PDFs
    are encrypted using AES-256 and require a user password.
-2. Configure a real email service in `.env`, e.g. `MAIL_MAILER=smtp` with
-   `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD` and
-   `MAIL_FROM_ADDRESS`. Set `APP_URL` to the externally reachable HTTPS URL
-   of this CRM so that recipient unsubscribe links work outside your local network.
-   The Laravel `log` or `array` mailers cannot deliver
-   real messages; the send action refuses these in normal usage.
+2. Open **Super Admin → Email Configuration** and enter your SMTP server host,
+   port, connection security (STARTTLS, SSL/TLS, or none), account username,
+   account password, and the sender's email/name. Save the form, then use
+   **Send test email** to confirm the connection. SMTP credentials are stored
+   encrypted in the database using `APP_KEY`; the password is never shown
+   again. Leaving the password blank while editing retains the saved value.
+   Do not share SMTP passwords through a message or in application logs.
+   **Enabled** makes this connection the mail transport for email campaigns.
+   When disabled or not configured, the app uses the Laravel mail transport
+   configured through `.env` as a fallback. Neither `log` nor `array` mailers
+   can deliver production messages.
+   Set `APP_URL` in `.env` to the externally reachable HTTPS URL of this CRM
+   so that recipient unsubscribe links work outside your local network.
 3. Use `QUEUE_CONNECTION=redis` (or `database`). For Redis set
    `REDIS_QUEUE_RETRY_AFTER=1200` so the queue visibility window exceeds the
    maximum 900-second job duration. For database queues set
@@ -37,7 +44,29 @@ recipient CSVs, and queued deliveries in batches.
    `OCR_PDFTOPPM_BINARY` to their executable paths in `.env`.
    Tesseract and Poppler are OS programs, **not** Composer packages.
 
-   Restart PHP and queue workers after changing environment settings.
+   Restart PHP and queue workers after changing `.env` settings. SMTP changes
+   made in the Super Admin screen are read from the database by new
+   batches, without editing `.env`.
+
+## SMTP configuration
+
+Typical SMTP connection settings:
+
+| Setting | Example | Notes |
+| --- | --- | --- |
+| SMTP host | `smtp.example.com` | The server supplied by your mail provider |
+| Port | `587` | Usually used with STARTTLS |
+| Security | `STARTTLS` | Requires encrypted connection; `SSL/TLS` commonly uses port `465` |
+| Username | `mailer@example.com` | Leave blank only if your SMTP server does not require authentication |
+| Password | *Provider app password or SMTP token* | Saved encrypted and never displayed |
+| From email | `mailer@example.com` | Must be an address the provider permits you to send from |
+| Sender name | `Your Company` | Name recipients see in their inbox |
+
+The **Send test email** action sends a real message only after you click it and
+specify the test recipient address. SMTP connection or login failures show a
+short error on the page; review server logs for diagnostics. Use the secure
+provider credentials supplied for SMTP rather than your normal personal login
+password where an app password is supported.
 
 ## Operating guide
 

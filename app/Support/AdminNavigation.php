@@ -39,6 +39,7 @@ final class AdminNavigation
             ['route' => 'admin.campaigns.index', 'label' => 'Campaigns', 'icon' => 'building-office', 'desc' => 'Configure CRM campaigns and VICIdial mappings'],
             ['route' => 'admin.forms.index', 'label' => 'Forms', 'icon' => 'document-text', 'desc' => 'Manage campaign form definitions'],
             ['route' => 'admin.email-campaigns.index', 'label' => 'Email Campaigns', 'icon' => 'envelope', 'desc' => 'Create email templates and manage recipient campaigns'],
+            ['route' => 'admin.email-configuration.index', 'label' => 'Email Configuration', 'icon' => 'cog-6-tooth', 'desc' => 'Configure SMTP delivery and sender identity'],
             ['route' => 'admin.lead-hopper.index', 'label' => 'Lead Hopper', 'icon' => 'list-bullet', 'desc' => 'Import and stage leads for dialing'],
             ['route' => 'admin.agent-screen.index', 'label' => 'Agent Screen Configuration', 'icon' => 'computer-desktop', 'desc' => 'Configure agent screen fields and webforms'],
             ['route' => 'admin.attendance-statuses.index', 'label' => 'Attendance Statuses', 'icon' => 'clock', 'desc' => 'Manage staff attendance status types'],

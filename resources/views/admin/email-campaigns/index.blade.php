@@ -13,6 +13,10 @@
 <x-page-header title="Email Campaigns"
     description="Create reusable messages, prepare recipient lists, and manage email delivery."
     :breadcrumbs="['Admin' => route('admin.dashboard'), 'Email Campaigns' => null]">
+    <a href="{{ route('admin.email-configuration.index') }}" class="btn-secondary text-sm">
+        <x-icon name="cog-6-tooth" class="h-4 w-4" />
+        Email configuration
+    </a>
     <a href="#campaign-history" class="btn-secondary text-sm">
         <x-icon name="clock" class="h-4 w-4" />
         View campaigns

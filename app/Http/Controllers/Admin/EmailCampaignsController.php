@@ -8,6 +8,7 @@ use App\Models\EmailCampaign;
 use App\Models\EmailOptOut;
 use App\Models\EmailTemplate;
 use App\Services\EmailCampaignDocumentService;
+use App\Services\EmailSmtpService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -141,13 +142,13 @@ class EmailCampaignsController extends Controller
         ));
     }
 
-    public function send(EmailCampaign $campaign): RedirectResponse
+    public function send(EmailCampaign $campaign, EmailSmtpService $smtp): RedirectResponse
     {
         if (! app()->runningUnitTests() && config('queue.default') === 'sync') {
             throw ValidationException::withMessages(['campaign' => 'Configure a database or Redis queue before sending a campaign.']);
         }
-        if (! app()->runningUnitTests() && in_array(config('mail.default'), ['log', 'array'], true)) {
-            throw ValidationException::withMessages(['campaign' => 'Configure an SMTP or email provider transport before sending a campaign.']);
+        if (! app()->runningUnitTests() && ! $smtp->isReady()) {
+            throw ValidationException::withMessages(['campaign' => 'Configure SMTP under Super Admin → Email Configuration before sending a campaign.']);
         }
 
         DB::transaction(function () use ($campaign): void {

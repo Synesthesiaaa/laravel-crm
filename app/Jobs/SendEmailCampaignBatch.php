@@ -6,13 +6,13 @@ use App\Models\EmailCampaign;
 use App\Models\EmailCampaignRecipient;
 use App\Models\EmailOptOut;
 use App\Services\EmailCampaignDocumentService;
+use App\Services\EmailSmtpService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Mail\Message;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Throwable;
 
@@ -30,13 +30,15 @@ class SendEmailCampaignBatch implements ShouldQueue
         public int $size,
     ) {}
 
-    public function handle(EmailCampaignDocumentService $documents): void
+    public function handle(EmailCampaignDocumentService $documents, EmailSmtpService $smtp): void
     {
         $campaign = EmailCampaign::with('template')->find($this->campaignId);
         if (! $campaign || ! in_array($campaign->status, ['queued', 'sending'], true)) {
             return;
         }
         $campaign->update(['status' => 'sending']);
+        $mailer = $smtp->mailer();
+        [$fromAddress, $fromName] = $smtp->sender();
 
         // The offset is applied to all campaign recipients, including previously sent rows.
         $recipients = $campaign->recipients()->orderBy('id')->offset($this->offset)->limit($this->size)->get();
@@ -66,8 +68,10 @@ class SendEmailCampaignBatch implements ShouldQueue
                     .'<a href="'.e($unsubscribeUrl).'">Unsubscribe</a></p>';
 
                 // Mail is sent individually; recipient addresses never appear in CC/BCC.
-                Mail::html($html, function (Message $message) use ($recipient, $template, $subject, $unsubscribeUrl, $documents): void {
-                    $message->to($recipient->email, $recipient->name ?: null)->subject($subject);
+                $mailer->html($html, function (Message $message) use ($recipient, $template, $subject, $unsubscribeUrl, $documents, $fromAddress, $fromName): void {
+                    $message->from($fromAddress, $fromName)
+                        ->to($recipient->email, $recipient->name ?: null)
+                        ->subject($subject);
                     $message->getSymfonyMessage()->getHeaders()->addTextHeader('List-Unsubscribe', '<'.$unsubscribeUrl.'>');
                     if ($template->pdf_enabled) {
                         $message->attachData(

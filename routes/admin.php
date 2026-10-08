@@ -35,6 +35,9 @@ Route::middleware('role:Team Leader,Admin,Super Admin')->prefix('admin')->name('
     Route::post('extraction', [\App\Http\Controllers\Admin\ExtractionController::class, 'export'])->name('extraction.export');
 
     Route::middleware('role:Super Admin')->group(function () {
+        Route::get('email-configuration', [\App\Http\Controllers\Admin\EmailConfigurationController::class, 'index'])->name('email-configuration.index');
+        Route::put('email-configuration', [\App\Http\Controllers\Admin\EmailConfigurationController::class, 'update'])->name('email-configuration.update');
+        Route::post('email-configuration/test', [\App\Http\Controllers\Admin\EmailConfigurationController::class, 'test'])->middleware('throttle:3,1')->name('email-configuration.test');
         Route::get('email-campaigns', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'index'])->name('email-campaigns.index');
         Route::post('email-campaigns/templates', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'storeTemplate'])->name('email-campaigns.templates.store');
         Route::put('email-campaigns/templates/{template}', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'updateTemplate'])->name('email-campaigns.templates.update');
