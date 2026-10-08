@@ -78,7 +78,11 @@ password where an app password is supported.
 3. Alternatively, upload a PDF, PNG, JPG or WEBP to **Import with OCR**.
    Extracted text becomes a new template. **Edit the imported template and
    proofread the recognition** before using it in a campaign.
-4. Upload a UTF-8 CSV with an `email` heading and optional `name` heading:
+4. Select **Download CSV template** beside **Recipients CSV** on the Email
+   Campaigns screen. The downloaded file includes `email,name` headers and
+   two example rows. Replace the example addresses and names with your
+   authorized recipients before uploading. Or create your own UTF-8 CSV with
+   an `email` heading and optional `name` heading:
 
    ```csv
    email,name

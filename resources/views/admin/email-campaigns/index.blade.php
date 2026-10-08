@@ -223,13 +223,21 @@
                 </div>
 
                 <div class="form-field">
-                    <label class="form-label" for="campaign-recipients">Recipients CSV <span aria-hidden="true">*</span></label>
+                    <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <label class="form-label mb-0" for="campaign-recipients">Recipients CSV <span aria-hidden="true">*</span></label>
+                        <a href="{{ route('admin.email-campaigns.recipients-template') }}"
+                           class="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--color-primary)] hover:underline">
+                            <x-icon name="arrow-down-tray" class="h-4 w-4" />
+                            Download CSV template
+                        </a>
+                    </div>
                     <input id="campaign-recipients" name="recipient_csv" type="file"
                            accept=".csv,text/csv" class="form-input w-full cursor-pointer" required
                            aria-describedby="campaign-recipients-help"
                            aria-invalid="{{ $errors->has('recipient_csv') ? 'true' : 'false' }}">
                     <p id="campaign-recipients-help" class="mt-1 text-xs leading-5 text-[var(--color-on-surface-dim)]">
                         Upload a CSV with column headers <span class="font-mono">email,name</span>. Include one person per row.
+                        Download the example, replace its sample addresses with actual recipients who agreed to receive emails, then upload it here.
                     </p>
                     @error('recipient_csv') <p class="form-error" role="alert">{{ $message }}</p> @enderror
                 </div>

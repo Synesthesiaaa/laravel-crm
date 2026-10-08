@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EmailCampaignsController extends Controller
 {
@@ -22,6 +23,9 @@ class EmailCampaignsController extends Controller
         return view('admin.email-campaigns.index', [
             'campaigns' => EmailCampaign::with('template')->latest()->paginate(15),
             'templates' => EmailTemplate::latest()->get(),
+        ]);
+    }
+
         ]);
     }
 

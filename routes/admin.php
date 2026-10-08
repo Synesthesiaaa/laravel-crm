@@ -39,6 +39,7 @@ Route::middleware('role:Team Leader,Admin,Super Admin')->prefix('admin')->name('
         Route::put('email-configuration', [\App\Http\Controllers\Admin\EmailConfigurationController::class, 'update'])->name('email-configuration.update');
         Route::post('email-configuration/test', [\App\Http\Controllers\Admin\EmailConfigurationController::class, 'test'])->middleware('throttle:3,1')->name('email-configuration.test');
         Route::get('email-campaigns', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'index'])->name('email-campaigns.index');
+        Route::get('email-campaigns/recipients-template', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'downloadRecipientTemplate'])->name('email-campaigns.recipients-template');
         Route::post('email-campaigns/templates', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'storeTemplate'])->name('email-campaigns.templates.store');
         Route::put('email-campaigns/templates/{template}', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'updateTemplate'])->name('email-campaigns.templates.update');
         Route::post('email-campaigns/import', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'import'])->name('email-campaigns.import');

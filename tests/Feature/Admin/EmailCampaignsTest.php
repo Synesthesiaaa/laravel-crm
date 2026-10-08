@@ -41,6 +41,32 @@ class EmailCampaignsTest extends TestCase
             ->assertOk()->assertSee('Email Campaigns');
     }
 
+    public function test_super_admin_can_download_a_recipient_csv_template_with_import_compatible_columns(): void
+    {
+        $downloadUrl = route('admin.email-campaigns.recipients-template');
+        $this->get($downloadUrl)->assertRedirect(route('login'));
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->actingAs($admin)->get($downloadUrl)->assertForbidden();
+
+        $this->actingAs($this->superAdmin)
+            ->get(route('admin.email-campaigns.index'))
+            ->assertOk()
+            ->assertSee('Download CSV template')
+            ->assertSee($downloadUrl);
+
+        $response = $this->actingAs($this->superAdmin)
+            ->get($downloadUrl)
+            ->assertOk()
+            ->assertDownload('email-recipients-template.csv')
+            ->assertHeader('content-type', 'text/csv; charset=UTF-8');
+
+        $rows = array_map('str_getcsv', explode("\n", trim($response->streamedContent())));
+        $this->assertSame(['email', 'name'], $rows[0]);
+        $this->assertSame(['jane.doe@example.com', 'Jane Doe'], $rows[1]);
+        $this->assertSame(['john.smith@example.com', 'John Smith'], $rows[2]);
+    }
+
     public function test_templates_require_pdf_password_and_store_it_encrypted(): void
     {
         $this->actingAs($this->superAdmin)->post(
