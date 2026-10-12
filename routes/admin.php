@@ -40,6 +40,15 @@ Route::middleware('role:Team Leader,Admin,Super Admin')->prefix('admin')->name('
         Route::post('email-configuration/test', [\App\Http\Controllers\Admin\EmailConfigurationController::class, 'test'])->middleware('throttle:3,1')->name('email-configuration.test');
         Route::get('email-campaigns', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'index'])->name('email-campaigns.index');
         Route::get('email-campaigns/recipients-template', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'downloadRecipientTemplate'])->name('email-campaigns.recipients-template');
+        Route::get('email-campaigns/personalized-template', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'downloadPersonalizedTemplate'])->name('email-campaigns.personalized-template');
+        Route::get('email-campaigns/{campaign}/review', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'review'])->name('email-campaigns.review');
+        Route::put('email-campaigns/{campaign}', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'updateDraft'])->name('email-campaigns.update');
+        Route::post('email-campaigns/{campaign}/test-self', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'testSelf'])->middleware('throttle:3,1')->name('email-campaigns.test-self');
+        Route::get('email-campaigns/{campaign}/documents/{document}', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'document'])->name('email-campaigns.document');
+        Route::post('email-campaigns/{campaign}/dry-run', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'dryRun'])->name('email-campaigns.dry-run');
+        Route::post('email-campaigns/{campaign}/retry', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'retry'])->name('email-campaigns.retry');
+        Route::post('email-campaigns/{campaign}/recipients/{recipient}/reconcile', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'reconcile'])->name('email-campaigns.reconcile');
+        Route::get('email-campaigns/{campaign}/report', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'report'])->name('email-campaigns.report');
         Route::post('email-campaigns/templates', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'storeTemplate'])->name('email-campaigns.templates.store');
         Route::put('email-campaigns/templates/{template}', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'updateTemplate'])->name('email-campaigns.templates.update');
         Route::post('email-campaigns/import', [\App\Http\Controllers\Admin\EmailCampaignsController::class, 'import'])->name('email-campaigns.import');

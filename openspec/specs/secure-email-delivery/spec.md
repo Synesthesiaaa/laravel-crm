@@ -1,0 +1,48 @@
+# Secure Email Delivery
+
+## Purpose
+
+Protect private recipient documents through explicit mapping, authorized review, immutable transport snapshots and fail-closed delivery.
+
+## Requirements
+
+### Requirement: Exact private document mapping
+The system SHALL store PDFs privately and encrypted, reject unsafe archives and invalid PDFs, and require a unique exact manifest mapping for every personal recipient. Invalid or extra mappings MUST block the import.
+
+#### Scenario: Two distinct documents
+- **WHEN** Alice and Bob import explicitly named PDFs
+- **THEN** each receives only their assigned PDF plus intentionally shared attachments
+
+#### Scenario: Unsafe import
+- **WHEN** traversal, symlinks, duplicate addresses/files, encrypted/corrupt PDFs or missing/extra documents occur
+- **THEN** no campaign is dispatched and temporary files are cleaned
+
+### Requirement: Authorized review and immutable delivery
+Only Super Admin SHALL access documents and campaign details. The system MUST verify document ownership/hash, validate variables, run dry-run and require explicit confirmation before confidential sends. Queued content and mappings MUST be frozen.
+
+#### Scenario: Tampering or unauthorized access
+- **WHEN** a file changes, a cross-campaign ID is requested or an unauthorized user requests a preview
+- **THEN** delivery or access is denied without exposing private content
+
+### Requirement: Purpose-specific composition
+Marketing SHALL retain opt-outs and unsubscribe. Transactional/payroll SHALL omit promotional disclosures and require configured organizational policy for payroll; mandated unavailable protections MUST block payroll.
+
+#### Scenario: Transactional opt-out
+- **WHEN** an opted-out marketing recipient receives an authorized transactional notice
+- **THEN** promotional footer and List-Unsubscribe are absent
+
+### Requirement: Truthful queue outcomes and lifecycle
+The system SHALL send one message with one address per claim, report provider acceptance separately from inbox delivery, retain uncertain outcomes without blind retry, diagnose worker readiness and purge expired documents with auditable metadata.
+
+#### Scenario: Interrupted transport
+- **WHEN** SMTP might have accepted a message before interruption
+- **THEN** the recipient becomes uncertain and automatic retry cannot send another copy
+
+#### Scenario: Expired document
+- **WHEN** retention expires for a draft, failed or cancelled campaign
+- **THEN** original and temporary document bytes are deleted and preview/send are blocked
+
+#### Scenario: Provider reconciliation
+- **WHEN** Super Admin explicitly confirms provider evidence with a non-personal case ID and verified outcome
+- **THEN** acceptance is recorded with its actual timestamp or verified no-submission becomes blocked for separate revalidation; reconciliation never sends mail
+

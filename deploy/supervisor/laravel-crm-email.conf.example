@@ -1,0 +1,16 @@
+; Example for Linux servers using Supervisor.
+; Update paths, PHP version, user and queue connection for your deployment.
+; The queue connection MUST match QUEUE_CONNECTION in Laravel's .env.
+; Use only one worker to preserve email batch pacing.
+[program:laravel-crm-email]
+directory=/var/www/laravel-crm
+command=/usr/bin/php /var/www/laravel-crm/artisan queue:work email-database --queue=email-campaigns --sleep=1 --tries=1 --timeout=60 --max-time=3600
+user=www-data
+numprocs=1
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+stopwaitsecs=90
+redirect_stderr=true
+stdout_logfile=/var/log/supervisor/laravel-crm-email.log

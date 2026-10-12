@@ -8,6 +8,7 @@ use App\Models\EmailOptOut;
 use App\Models\EmailTemplate;
 use App\Models\User;
 use App\Services\EmailCampaignDocumentService;
+use App\Services\EmailCampaignQueueStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
@@ -39,6 +40,50 @@ class EmailCampaignsTest extends TestCase
 
         $this->actingAs($this->superAdmin)->get(route('admin.email-campaigns.index'))
             ->assertOk()->assertSee('Email Campaigns');
+    }
+
+    public function test_campaign_screen_explains_an_unavailable_queue(): void
+    {
+        $this->mock(EmailCampaignQueueStatus::class)
+            ->shouldReceive('inspect')
+            ->once()
+            ->andReturn([
+                'connection' => 'redis',
+                'queue' => 'email-campaigns',
+                'pending' => null,
+                'problem' => 'The Redis queue is configured, but PHP does not have the Redis extension installed.',
+            ]);
+
+        $this->actingAs($this->superAdmin)->get(route('admin.email-campaigns.index'))
+            ->assertOk()
+            ->assertSee('Email delivery queue needs attention')
+            ->assertSee('Redis extension');
+    }
+
+    public function test_campaign_screen_flags_old_queued_campaigns_without_delivery_results(): void
+    {
+        $template = EmailTemplate::create($this->templatePayload());
+        $campaign = EmailCampaign::create([
+            'name' => 'Waiting for worker',
+            'email_template_id' => $template->id,
+            'status' => 'queued',
+            'recipient_count' => 2,
+        ]);
+        $campaign->forceFill(['started_at' => now()->subMinutes(5)])->save();
+        $this->mock(EmailCampaignQueueStatus::class)
+            ->shouldReceive('inspect')
+            ->once()
+            ->andReturn([
+                'connection' => 'database',
+                'queue' => 'email-campaigns',
+                'pending' => 1,
+                'problem' => null,
+            ]);
+
+        $this->actingAs($this->superAdmin)->get(route('admin.email-campaigns.index'))
+            ->assertOk()
+            ->assertSee('Email delivery has not started')
+            ->assertSee('1 job(s) currently remain in this queue');
     }
 
     public function test_super_admin_can_download_a_recipient_csv_template_with_import_compatible_columns(): void

@@ -31,6 +31,23 @@ return [
 
     'connections' => [
 
+        'email-database' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => 'email-campaigns',
+            'retry_after' => 120,
+            'after_commit' => true,
+        ],
+        'email-redis' => [
+            'driver' => 'redis',
+            'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
+            'queue' => 'email-campaigns',
+            'retry_after' => 120,
+            'block_for' => 5,
+            'after_commit' => true,
+        ],
+
         'sync' => [
             'driver' => 'sync',
         ],

@@ -88,3 +88,5 @@ if ((bool) config('vicidial.call_history_sync.schedule_enabled', true)) {
         ->runInBackground()
         ->appendOutputTo(storage_path('logs/scheduler.log'));
 }
+
+Schedule::command('email-campaigns:maintain')->everyFiveMinutes()->withoutOverlapping();

@@ -1,0 +1,21 @@
+# Validation evidence - 2026-10-13 Asia/Manila
+
+- Original email suites: baseline 18 tests / 129 assertions passed before changes.
+- Final relevant suites: `php artisan test tests/Feature/Admin/EmailCampaignsTest.php tests/Feature/Admin/EmailConfigurationTest.php tests/Feature/Admin/EmailDocumentDeliveryTest.php`: 39 tests / 319 assertions passed. Synthetic documents, fake disk/queue, array transport. One-address MIME attachment SHA checks, no CC/BCC, strict mappings, unsafe ZIP rejection, private roles, hash/identity changes, frozen message edits, shared/generated modes, dry-run/confirmation, cancellation, uncertain transport/interruption, explicit provider-evidence reconciliation, recovery and retention are covered.
+- Changed PHP files: targeted `php vendor/bin/pint --test ...` passed for 24 files; changed files formatted through Pint. `git diff --check` passed.
+- `npm run build`: passed; existing ApexCharts chunk exceeds 500 kB warning. No new frontend dependency.
+- Isolated SQLite migration/rollback/reapply preserved a historical campaign row. After confirming `php artisan env` returned local, the additive migration applied successfully to local MySQL. No production migration or destructive rollback executed.
+- `php artisan route:list --name=email-campaigns`: verified route group; document/review/export/start remain under Super Admin middleware with policy checks.
+- Playwright against isolated synthetic fixture server: uploaded CSV/two PDFs, created draft, inspected both mappings, ran internal dry-run, explicitly confirmed queueing, viewed completed status and authenticated no-store preview. Fixture-only inspector accepted known synthetic PDF hashes; this is not positive real Poppler inspection or a production authentication claim.
+- Playwright also exercised explicit synthetic provider-evidence reconciliation; accepted resolution returned the campaign to completed and removed retry controls, without dispatching mail. Mobile campaign upload form had no page overflow; review table tabindex was verified as 0.
+- Responsive review at 375/768/1024/1440 widths: document width did not exceed viewport after layout settled. Mobile table scrolls; its region is keyboard-focusable. Desktop/mobile screenshots retained under ignored storage/framework/testing/email-rehearsal/screenshots.
+- Real LOCAL NON-SENDING database queue worker: one two-recipient campaign and one single-recipient campaign processed; queue ended with zero email jobs, campaigns completed with 2 and 1 accepted respectively, zero failures. MIME evidence contains expected recipient filename/SHA pairs and zero CC/BCC. Heartbeat inspection returned email-database / email-campaigns / pending 0 / problem null immediately afterward. No shared live queue was consumed.
+- Browser shell still reported ws/wss 127.0.0.1:6001 Reverb connection refusal and /api/sip/credentials 422. Email endpoints succeeded; these unrelated environment errors remain, so no clean whole-application browser claim.
+
+## Outstanding rollout checks
+
+- Install/configure approved Poppler pdfinfo and exercise positive, corrupt and encrypted PDF cases on the intended host; approved scanner if required. The real inspector fails closed when unavailable. No unreviewed PDF tool downloaded.
+- Organization must approve payroll purpose, retention/backups and original PDF password requirements. Uploaded-PDF password protection is unavailable and policy-required payroll remains blocked. Live sending is disabled by default and in development.
+- Production process supervisor, shared cache heartbeat, scheduler, provider quotas and actual SMTP acceptance/inbox callbacks are unverified. No delivered/bounced provider callbacks or automatic uncertain resends are provided.
+- Multi-process MySQL contention was not exercised; transaction locks and idempotent repeat processing have source/unit evidence only.
+- Keep change unarchived until required rollout and browser checks are satisfied under the supplied AGENTS.md completion rules.

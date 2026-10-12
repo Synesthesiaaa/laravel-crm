@@ -40,6 +40,12 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        \Illuminate\Support\Facades\Queue::looping(function (\Illuminate\Queue\Events\Looping $event): void {
+            if ($event->connectionName === config('email_campaigns.connection')
+                && in_array(config('email_campaigns.queue'), explode(',', (string) $event->queue), true)) {
+                \Illuminate\Support\Facades\Cache::put('email-worker:'.$event->connectionName.':'.config('email_campaigns.queue'), now()->toIso8601String(), 90);
+            }
+        });
         Vite::useHotFile(storage_path('vite.hot'));
 
         Model::preventLazyLoading(! $this->app->isProduction());

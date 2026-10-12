@@ -30,6 +30,22 @@
 @if(session('error'))
     <x-alert type="error" class="mb-4">{{ session('error') }}</x-alert>
 @endif
+@if($queueStatus['problem'])
+    <x-alert type="error" title="Email delivery queue needs attention" class="mb-4">
+        {{ $queueStatus['problem'] }}
+        Email campaigns cannot be delivered until the server queue is available and a worker is running.
+        Ask your server administrator to check the <code class="font-mono">email-campaigns</code> worker.
+    </x-alert>
+@elseif($stalledCampaigns > 0)
+    <x-alert type="warning" title="Email delivery has not started" class="mb-4">
+        {{ $stalledCampaigns }} campaign(s) have been queued or sending for over two minutes without a delivery result.
+        The batch interval does not start the worker. On the server, check that the
+        <code class="font-mono">email-campaigns</code> queue worker is running and inspect its logs.
+        @if($queueStatus['pending'] !== null)
+            {{ number_format($queueStatus['pending']) }} job(s) currently remain in this queue.
+        @endif
+    </x-alert>
+@endif
 
 <div class="mb-6 grid gap-4 sm:grid-cols-2">
     <div class="md-card md-card--static flex items-center gap-4 p-5">
@@ -196,6 +212,7 @@
                   class="space-y-5" x-data="{ submitting: false }" @submit="submitting = true">
                 @csrf
                 <input type="hidden" name="_email_campaign_form" value="campaign">
+                @include('admin.email-campaigns.partials.delivery-options')
 
                 <div class="form-field">
                     <label class="form-label" for="campaign-name">Campaign name <span aria-hidden="true">*</span></label>
@@ -237,10 +254,11 @@
                            aria-invalid="{{ $errors->has('recipient_csv') ? 'true' : 'false' }}">
                     <p id="campaign-recipients-help" class="mt-1 text-xs leading-5 text-[var(--color-on-surface-dim)]">
                         Upload a CSV with column headers <span class="font-mono">email,name</span>. Include one person per row.
-                        Download the example, replace its sample addresses with actual recipients who agreed to receive emails, then upload it here.
+                        For personal PDFs use the personalized template below, including an exact <code>pdf_filename</code> for each authorized recipient.
                     </p>
                     @error('recipient_csv') <p class="form-error" role="alert">{{ $message }}</p> @enderror
                 </div>
+                @include('admin.email-campaigns.partials.document-uploads')
 
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div class="form-field">
@@ -270,7 +288,7 @@
                                @checked((bool) old('confirmed_permission', false))
                                aria-invalid="{{ $errors->has('confirmed_permission') ? 'true' : 'false' }}">
                         <span class="text-sm leading-5 text-[var(--color-on-surface)]">
-                            I confirm that every recipient has given permission to receive these emails.
+                            I confirm that this purpose and every recipient are authorized for these emails.
                             <span class="text-[var(--color-danger)]" aria-hidden="true">*</span>
                         </span>
                     </label>
@@ -477,7 +495,7 @@
                         <td>
                             <div class="min-w-[11rem] space-y-1.5">
                                 <p class="text-xs tabular-nums text-[var(--color-on-surface-muted)]">
-                                    <span class="font-medium text-[var(--color-on-surface)]">{{ number_format($sentCount) }}</span> sent
+                                    <span class="font-medium text-[var(--color-on-surface)]">{{ number_format($sentCount) }}</span> accepted by provider
                                     <span aria-hidden="true">·</span>
                                     <span class="{{ $failedCount > 0 ? 'text-[var(--color-danger)]' : '' }}">{{ number_format($failedCount) }} failed</span>
                                     <span aria-hidden="true">·</span>
@@ -493,7 +511,8 @@
                         </td>
                         <td>
                             <div class="flex justify-end gap-2">
-                                @if($status === 'draft')
+                                <a class="btn-secondary text-xs" href="{{ route('admin.email-campaigns.review', $campaign) }}">Review</a>
+                                @if($status === 'draft' && ! $campaign->needsReview())
                                     <form method="POST" action="{{ route('admin.email-campaigns.send', $campaign) }}"
                                           onsubmit="return confirm('Start sending this campaign to its recipients?');">
                                         @csrf
