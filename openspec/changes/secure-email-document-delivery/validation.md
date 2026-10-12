@@ -16,7 +16,15 @@
 
 The local SMTP-test failure was reproduced by three failing regression tests before editing. After correcting the guard and introducing a named syntheticTest error bag, all three relevant suites passed: 42 tests / 347 assertions. Pint passed for the changed PHP files; git diff --check passed. An isolated Playwright fixture verified a separate configuration alert with no blocked-mapping heading and an enabled internal dry-run, then a successful array-transport synthetic test to reviewer@example.com with zero attachments/CC/BCC and unchanged draft status. No real SMTP message was sent during verification. The browser retained existing unrelated Reverb/SIP/VICIdial configuration errors. This fix does not clear the rollout checks below or enable bulk sends.
 
-## Outstanding rollout checks (unchanged)
+## Local bulk sending follow-up
+
+- User explicitly authorized local bulk sending. Only EMAIL_CAMPAIGN_LIVE_ENABLED=true and EMAIL_CAMPAIGN_ALLOW_LOCAL=true were applied to the ignored local .env, followed by php artisan config:clear. A metadata-only runtime check confirmed environment local, both flags true, shared policy allowing live transport, and email-database/email-campaigns connection/queue. No SMTP credentials printed; no live worker started or actual recipients contacted.
+- The new local regression suite failed four intended readiness/transport/retry tests before implementation and passed all seven after the shared policy was added. The four relevant email suites passed 49 tests / 377 assertions, including existing recipient-document safety, local confirmation, missing SMTP/heartbeat, flag revocation and testing real-transport denial. Worker transport testing substituted an array transport behind a synthetic SMTP snapshot.
+- Playwright used an isolated APP_ENV=local fixture database with synthetic SMTP readiness and non-sending array transport. A real empty fixture queue worker supplied the shared-cache heartbeat. Internal dry-run and explicit confirmation queued the synthetic campaign without a blocked-environment error. This verifies local HTTP guards, not real SMTP delivery or actual authenticated production sessions.
+- The subsequent fixture array worker processed that queued recipient and emptied the fixture email queue; browser refresh showed completed with one accepted result. No main-application worker was started and no real email was sent.
+- No frontend styling changed. Existing unrelated Reverb/SIP console errors remain. Original rollout gates below are still pending.
+
+## Outstanding rollout checks retained
 
 - Install/configure approved Poppler pdfinfo and exercise positive, corrupt and encrypted PDF cases on the intended host; approved scanner if required. The real inspector fails closed when unavailable. No unreviewed PDF tool downloaded.
 - Organization must approve payroll purpose, retention/backups and original PDF password requirements. Uploaded-PDF password protection is unavailable and policy-required payroll remains blocked. Live sending is disabled by default and in development.

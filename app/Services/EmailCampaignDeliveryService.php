@@ -15,7 +15,7 @@ use Throwable;
 
 class EmailCampaignDeliveryService
 {
-    public function __construct(private EmailCampaignAttachmentService $attachments, private EmailCampaignPreflightService $preflight, private EmailCampaignDocumentService $generated, private EmailSmtpService $smtp) {}
+    public function __construct(private EmailCampaignAttachmentService $attachments, private EmailCampaignPreflightService $preflight, private EmailCampaignDocumentService $generated, private EmailSmtpService $smtp, private EmailCampaignSendingPolicy $sendingPolicy) {}
 
     public function send(int $campaignId, int $recipientId): void
     {
@@ -43,11 +43,11 @@ class EmailCampaignDeliveryService
         try {
             $campaign = EmailCampaign::with('template')->findOrFail($campaignId);
             $snapshot = $campaign->delivery_snapshot;
-            if (! $snapshot && ! app()->runningUnitTests() && (! config('email_campaigns.live_enabled') || app()->environment('local', 'testing'))) {
+            if (! $snapshot && ! app()->runningUnitTests() && ! $this->sendingPolicy->allowsLive()) {
                 throw ValidationException::withMessages(['campaign' => 'Live legacy transport is disabled in this environment.']);
             }
             if ($snapshot && ($snapshot['transport']['transport'] ?? null) !== 'array'
-                && (! config('email_campaigns.live_enabled') || app()->environment('local', 'testing'))) {
+                && ! $this->sendingPolicy->allowsLive()) {
                 throw ValidationException::withMessages(['campaign' => 'Live transport is disabled in this environment.']);
             }
             $purpose = $snapshot['purpose'] ?? $campaign->purpose;

@@ -65,7 +65,10 @@ Every message has exactly one recipient and no CC/BCC.
 8. Explicitly confirm the mapping, sender, purpose and live send. Preflight runs again
    and freezes encrypted message, sender/SMTP settings, recipient identities and
    intended document IDs/hashes. Live sending is disabled by default and always blocked
-   in local/testing HTTP environments outside synthetic test harnesses.
+   in testing HTTP environments outside synthetic test harnesses. Local bulk sending
+   requires both `EMAIL_CAMPAIGN_LIVE_ENABLED=true` and `EMAIL_CAMPAIGN_ALLOW_LOCAL=true`.
+   These opt-ins do not bypass SMTP, dedicated worker, payroll policy, document
+   integrity, dry-run or confirmation checks; the worker uses the same live policy.
 9. Refresh review for per-recipient outcomes. Accepted means provider/transport accepted,
    never confirmed inbox delivery. Delivered/bounced provider events are not implemented.
    The redacted CSV contains recipient IDs, allowlisted states and acceptance timestamps;
@@ -98,6 +101,7 @@ New email jobs use a dedicated connection, independent of telephony/default:
 EMAIL_CAMPAIGN_CONNECTION=email-database
 EMAIL_CAMPAIGN_QUEUE=email-campaigns
 EMAIL_CAMPAIGN_LIVE_ENABLED=false
+EMAIL_CAMPAIGN_ALLOW_LOCAL=false
 EMAIL_PAYROLL_ENABLED=false
 EMAIL_PAYROLL_PASSWORD_REQUIRED=true
 EMAIL_DOCUMENT_RETENTION_DAYS=7
@@ -125,7 +129,13 @@ connection first. Legacy queued batches are supported but should be drained befo
 new live rollout. Restart old workers before they can consume new campaign jobs.
 Set `APP_URL` to the public HTTPS CRM URL for signed marketing unsubscribe links.
 After synthetic rehearsal, approve configuration, set `EMAIL_CAMPAIGN_LIVE_ENABLED=true`
-in the production environment only, and supervise the initial live operation.
+in the intended environment, and supervise the initial live operation. For explicitly
+authorized local bulk delivery, additionally set `EMAIL_CAMPAIGN_ALLOW_LOCAL=true`.
+Keep APP_ENV=local; do not disguise development as production. Clear cached config
+with `php artisan config:clear`, then restart only the dedicated email worker to load
+the settings. Start/cancel/retry controls and one-recipient document safeguards still
+apply. Turning either required flag off and restarting the worker disables local
+live transport again. No worker start or campaign dispatch is implied by setting flags.
 
 ## Interruption, cancellation and reconciliation
 

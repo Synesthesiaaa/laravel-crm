@@ -57,3 +57,14 @@ An authorized Super Admin SHALL be able to explicitly send a synthetic text-only
 - **WHEN** SMTP is unconfigured or the synthetic transport fails
 - **THEN** a sanitized synthetic-test alert links to Email Configuration while valid document mappings and internal dry-run remain available
 
+### Requirement: Explicit local bulk delivery
+The system SHALL permit authorized bulk delivery in APP_ENV=local only when both EMAIL_CAMPAIGN_LIVE_ENABLED and EMAIL_CAMPAIGN_ALLOW_LOCAL are explicitly enabled. HTTP start, pre-send retries and live worker transports MUST apply the same policy. Testing SHALL remain blocked from real transport. Existing authorization, asynchronous queue, SMTP/worker readiness, mapping integrity, payroll policy and explicit confirmation MUST remain required.
+
+#### Scenario: Local opt-in
+- **WHEN** both live and local flags are enabled and campaign readiness/confirmation pass
+- **THEN** the operator can queue recipients for the dedicated worker without changing APP_ENV
+
+#### Scenario: Local opt-in revoked or testing
+- **WHEN** either required flag is disabled locally, or a real transport is attempted in testing
+- **THEN** HTTP live start/retry or the worker live attempt is blocked without a transport submission
+

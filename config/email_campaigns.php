@@ -18,4 +18,5 @@ return [
     'payroll_enabled' => (bool) env('EMAIL_PAYROLL_ENABLED', false),
     'payroll_password_required' => (bool) env('EMAIL_PAYROLL_PASSWORD_REQUIRED', true),
     'live_enabled' => (bool) env('EMAIL_CAMPAIGN_LIVE_ENABLED', false),
+    'allow_local' => (bool) env('EMAIL_CAMPAIGN_ALLOW_LOCAL', false),
 ];

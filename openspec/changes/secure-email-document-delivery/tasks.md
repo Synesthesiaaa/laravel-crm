@@ -29,3 +29,9 @@ Specs synchronized to main capability. See validation.md for exact evidence and 
 - [x] 5.1 Reproduce the local/live-enabled guard failure before changing behavior.
 - [x] 5.2 Allow configured synthetic self-tests independently of bulk sending and isolate SMTP/account errors from mapping errors.
 - [x] 5.3 Verify local/disabled-bulk behavior, fixed account-only addressing, sanitized errors and unchanged mapping in tests and isolated browser; synchronize requirements.
+
+## 6. Explicit local bulk sending
+
+- [x] 6.1 Replace unconditional local prohibition with a shared live/local opt-in policy used by HTTP start, retry and delivery.
+- [x] 6.2 Enable only the user-authorized local live/local flags, clear cached configuration and verify APP_ENV remains local without dispatching live campaigns.
+- [x] 6.3 Verify opt-in, revocation, SMTP/worker/confirmation guards and testing transport restrictions in regression tests and isolated local browser/array-worker rehearsal; synchronize specs and runbook.

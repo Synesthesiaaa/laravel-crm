@@ -32,6 +32,10 @@ Deploy additive migration before new code; preserve existing rows and defaults. 
 
 Organization must approve payroll purpose, retention period, scanner and original PDF password policy before live payroll enablement.
 
+## Authorized local bulk sending
+
+The operator explicitly requested live bulk sending while keeping APP_ENV=local. A shared EmailCampaignSendingPolicy now requires both live_enabled and allow_local for local HTTP start/retry and real worker transports; testing remains prohibited from real transport. Both flags default false in distributed configuration, and only the two corresponding flags were enabled in this operator's untracked local .env. SMTP, asynchronous connection, worker heartbeat, authorization, manifest integrity, dry-run, confirmation and payroll protection are retained. Enabling settings does not dispatch campaigns or start a live worker. In-memory array transports remain available for synthetic validation.
+
 ## Synthetic test correction
 
 The synthetic text-only self-test is an explicit operator request for one account-address SMTP message, independent of bulk rollout policy and local environment. It requires configured transport and a valid signed-in Super Admin account email; it never accepts a destination parameter or loads campaign documents. Missing SMTP/account/transport failures use the syntheticTest error bag, rendered separately from campaign preflight with configuration recovery guidance. Live bulk gates remain intact.

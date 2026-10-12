@@ -186,10 +186,10 @@ class EmailCampaignsController extends Controller
         ));
     }
 
-    public function send(Request $request, EmailCampaign $campaign, EmailSmtpService $smtp, EmailCampaignQueueStatus $queueStatus, EmailCampaignPreflightService $preflight): RedirectResponse
+    public function send(Request $request, EmailCampaign $campaign, EmailSmtpService $smtp, EmailCampaignQueueStatus $queueStatus, EmailCampaignPreflightService $preflight, \App\Services\EmailCampaignSendingPolicy $sendingPolicy): RedirectResponse
     {
-        if (! app()->runningUnitTests() && (! config('email_campaigns.live_enabled') || app()->environment('local', 'testing'))) {
-            throw ValidationException::withMessages(['campaign' => 'Live campaign sending is disabled in this environment. Use synthetic internal dry-runs.']);
+        if (! app()->runningUnitTests() && ! $sendingPolicy->allowsLive()) {
+            throw ValidationException::withMessages(['campaign' => 'Live campaign sending is disabled. Enable EMAIL_CAMPAIGN_LIVE_ENABLED and, on local, EMAIL_CAMPAIGN_ALLOW_LOCAL before queueing.']);
         }
         if (! app()->runningUnitTests() && config('queue.connections.'.config('email_campaigns.connection').'.driver') === 'sync') {
             throw ValidationException::withMessages(['campaign' => 'Configure a database or Redis queue before sending a campaign.']);
@@ -358,10 +358,10 @@ class EmailCampaignsController extends Controller
         }, 'email-status-'.$campaign->id.'.csv', ['Content-Type' => 'text/csv; charset=UTF-8', 'Cache-Control' => 'private, no-store']);
     }
 
-    public function retry(Request $request, EmailCampaign $campaign, EmailCampaignPreflightService $preflight): RedirectResponse
+    public function retry(Request $request, EmailCampaign $campaign, EmailCampaignPreflightService $preflight, \App\Services\EmailCampaignSendingPolicy $sendingPolicy): RedirectResponse
     {
         \Illuminate\Support\Facades\Gate::authorize('view', $campaign);
-        if (! app()->runningUnitTests() && (! config('email_campaigns.live_enabled') || app()->environment('local', 'testing') || app(EmailCampaignQueueStatus::class)->inspect()['problem'])) {
+        if (! app()->runningUnitTests() && (! $sendingPolicy->allowsLive() || app(EmailCampaignQueueStatus::class)->inspect()['problem'])) {
             throw ValidationException::withMessages(['campaign' => 'Live sending and a healthy dedicated worker are required before retry.']);
         }
         $request->validate(['confirmed_retry' => ['accepted']]);
