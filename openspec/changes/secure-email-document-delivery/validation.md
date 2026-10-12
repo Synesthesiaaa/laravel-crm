@@ -24,7 +24,13 @@ The local SMTP-test failure was reproduced by three failing regression tests bef
 - The subsequent fixture array worker processed that queued recipient and emptied the fixture email queue; browser refresh showed completed with one accepted result. No main-application worker was started and no real email was sent.
 - No frontend styling changed. Existing unrelated Reverb/SIP console errors remain. Original rollout gates below are still pending.
 
-## Outstanding rollout checks retained
+## Production consumer diagnosis from operator output
+
+The operator supplied terminal output from /var/www/laravel-crm on crm.cidglobal.ph. Supervisor reports only Horizon, Reverb and an AMI listener. Every listed Horizon worker consumes Redis queues default/imports/asterisk/telephony; none consumes email-campaigns. The deployed EmailCampaignQueueStatus reports connection email-database, queue email-campaigns, pending 0, missing heartbeat, and cache.default redis. This establishes the missing database consumer as the cause in that supplied snapshot. Two Horizon masters and a FATAL AMI listener are separate observed issues and were not modified.
+
+A scoped Supervisor installation/review runbook is prepared; the template connection comment correctly names EMAIL_CAMPAIGN_CONNECTION. Production PHP-FPM/service identity and file permissions remain unverified. No production consumer was started from this session: direct SSH authentication was rejected. The operator must confirm service RUNNING and inspect().problem null after applying the reviewed configuration. No PHP/UI behavior changed in this follow-up; validation is source/runbook review and git diff --check, not a production runtime claim.
+
+## Outstanding rollout checks still pending
 
 - Install/configure approved Poppler pdfinfo and exercise positive, corrupt and encrypted PDF cases on the intended host; approved scanner if required. The real inspector fails closed when unavailable. No unreviewed PDF tool downloaded.
 - Organization must approve payroll purpose, retention/backups and original PDF password requirements. Uploaded-PDF password protection is unavailable and policy-required payroll remains blocked. Live sending is disabled by default and in development.

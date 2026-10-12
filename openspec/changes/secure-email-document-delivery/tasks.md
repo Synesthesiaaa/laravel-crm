@@ -35,3 +35,9 @@ Specs synchronized to main capability. See validation.md for exact evidence and 
 - [x] 6.1 Replace unconditional local prohibition with a shared live/local opt-in policy used by HTTP start, retry and delivery.
 - [x] 6.2 Enable only the user-authorized local live/local flags, clear cached configuration and verify APP_ENV remains local without dispatching live campaigns.
 - [x] 6.3 Verify opt-in, revocation, SMTP/worker/confirmation guards and testing transport restrictions in regression tests and isolated local browser/array-worker rehearsal; synchronize specs and runbook.
+
+## 7. Production email consumer
+
+- [x] 7.1 Diagnose supplied production process/config output: email-database/email-campaigns has no matching consumer; existing Horizon workers use Redis.
+- [x] 7.2 Prepare a dedicated Supervisor consumer runbook with application/service identity review, scoped reload and heartbeat verification.
+- [ ] 7.3 Install/start the production consumer through authenticated server access and verify a fresh heartbeat. Direct SSH authentication from this session is unavailable; operator must apply reviewed commands or provide authenticated key access.

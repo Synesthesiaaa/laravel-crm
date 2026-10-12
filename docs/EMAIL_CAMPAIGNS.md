@@ -124,6 +124,44 @@ A recent consumer heartbeat is required by production preflight. Cache must be s
 between web and worker. A one-second delay neither starts a worker nor guarantees
 one-second arrival. Keep provider quotas in the campaign batch/delay settings.
 
+### Production uses Horizon but email heartbeat is missing
+
+Horizon consumes Redis queues. An application configured with
+`EMAIL_CAMPAIGN_CONNECTION=email-database` needs a separate database queue worker;
+adding `email-campaigns` to a Redis supervisor does not consume database jobs.
+Keep the configured backend when introducing its consumer.
+
+For an Ubuntu deployment at `/var/www/laravel-crm`, verify the PHP-FPM/application
+service user and review the supplied Supervisor example (`www-data` is an example,
+not a verified service identity). The selected user must read the application/.env
+and access Laravel storage, the database and the same Redis cache used by web requests.
+
+```bash
+cd /var/www/laravel-crm
+ps -eo user,args | grep '[p]hp-fpm: pool'
+cp -n deploy/supervisor/laravel-crm-email.conf.example /etc/supervisor/conf.d/laravel-crm-email.conf
+nano /etc/supervisor/conf.d/laravel-crm-email.conf
+```
+
+Review directory, PHP executable (`/usr/bin/php8.5` if that is the deployed CLI),
+`user`, `email-database`, and `email-campaigns`; retain one process and auto-restart.
+If the destination already exists, inspect it rather than overwriting it blindly.
+After reviewing queued campaigns, apply only this Supervisor group:
+
+```bash
+supervisorctl reread
+supervisorctl update laravel-crm-email
+supervisorctl status laravel-crm-email
+php artisan tinker --execute='dump(app(\App\Services\EmailCampaignQueueStatus::class)->inspect());'
+```
+
+Expect the service to be RUNNING and `problem` to be null, then refresh the email
+screen. A started worker can process already-approved pending campaigns. If it exits,
+inspect the dedicated worker log and its runtime-user permissions; do not fabricate
+a heartbeat. This does not require restarting unrelated Horizon/Reverb/telephony
+processes. Cache-store/prefix mismatch and old cached code/config are secondary
+checks if a confirmed running matching consumer still has no visible heartbeat.
+
 Do not switch queue backends while historical jobs remain: drain/reconcile the old
 connection first. Legacy queued batches are supported but should be drained before
 new live rollout. Restart old workers before they can consume new campaign jobs.
