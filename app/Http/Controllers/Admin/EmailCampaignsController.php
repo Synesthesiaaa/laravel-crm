@@ -283,18 +283,20 @@ class EmailCampaignsController extends Controller
     public function testSelf(Request $request, EmailCampaign $campaign, EmailSmtpService $smtp): RedirectResponse
     {
         \Illuminate\Support\Facades\Gate::authorize('view', $campaign);
-        if (! app()->runningUnitTests() && (! config('email_campaigns.live_enabled') || app()->environment('local', 'testing') || ! $smtp->isReady())) {
-            throw ValidationException::withMessages(['campaign' => 'Synthetic SMTP test requires enabled live transport outside development.']);
+        if (! $smtp->isReady()) {
+            return back()->withErrors(['smtp' => 'Configure and enable SMTP in Email Configuration before sending a synthetic test.'], 'syntheticTest');
         }
-        abort_unless(filter_var($request->user()->email, FILTER_VALIDATE_EMAIL), 422);
-        [$address, $name] = $smtp->sender();
+        if (! filter_var($request->user()->email, FILTER_VALIDATE_EMAIL)) {
+            return back()->withErrors(['smtp' => 'Your account needs a valid email address to receive the synthetic test.'], 'syntheticTest');
+        }
 
         try {
+            [$address, $name] = $smtp->sender();
             $smtp->mailer()->html('<p>Synthetic CRM email test. This contains no campaign recipients or personal documents.</p>', function (\Illuminate\Mail\Message $message) use ($request, $address, $name): void {
                 $message->from($address, $name)->to($request->user()->email)->subject('Synthetic CRM document delivery test');
             });
         } catch (\Throwable) {
-            throw ValidationException::withMessages(['campaign' => 'Synthetic SMTP test failed. Review provider connectivity.']);
+            return back()->withErrors(['smtp' => 'The synthetic test could not be confirmed. Check the SMTP host, port, security, credentials and provider connectivity in Email Configuration.'], 'syntheticTest');
         }
 
         return back()->with('success', 'Synthetic test accepted by the transport for your account address. No personal PDFs were attached.');

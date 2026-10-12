@@ -31,3 +31,7 @@ Deploy additive migration before new code; preserve existing rows and defaults. 
 ## Open Questions
 
 Organization must approve payroll purpose, retention period, scanner and original PDF password policy before live payroll enablement.
+
+## Synthetic test correction
+
+The synthetic text-only self-test is an explicit operator request for one account-address SMTP message, independent of bulk rollout policy and local environment. It requires configured transport and a valid signed-in Super Admin account email; it never accepts a destination parameter or loads campaign documents. Missing SMTP/account/transport failures use the syntheticTest error bag, rendered separately from campaign preflight with configuration recovery guidance. Live bulk gates remain intact.

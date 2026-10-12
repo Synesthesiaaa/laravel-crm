@@ -12,7 +12,11 @@
 - Real LOCAL NON-SENDING database queue worker: one two-recipient campaign and one single-recipient campaign processed; queue ended with zero email jobs, campaigns completed with 2 and 1 accepted respectively, zero failures. MIME evidence contains expected recipient filename/SHA pairs and zero CC/BCC. Heartbeat inspection returned email-database / email-campaigns / pending 0 / problem null immediately afterward. No shared live queue was consumed.
 - Browser shell still reported ws/wss 127.0.0.1:6001 Reverb connection refusal and /api/sip/credentials 422. Email endpoints succeeded; these unrelated environment errors remain, so no clean whole-application browser claim.
 
-## Outstanding rollout checks
+## Synthetic SMTP self-test regression follow-up
+
+The local SMTP-test failure was reproduced by three failing regression tests before editing. After correcting the guard and introducing a named syntheticTest error bag, all three relevant suites passed: 42 tests / 347 assertions. Pint passed for the changed PHP files; git diff --check passed. An isolated Playwright fixture verified a separate configuration alert with no blocked-mapping heading and an enabled internal dry-run, then a successful array-transport synthetic test to reviewer@example.com with zero attachments/CC/BCC and unchanged draft status. No real SMTP message was sent during verification. The browser retained existing unrelated Reverb/SIP/VICIdial configuration errors. This fix does not clear the rollout checks below or enable bulk sends.
+
+## Outstanding rollout checks (unchanged)
 
 - Install/configure approved Poppler pdfinfo and exercise positive, corrupt and encrypted PDF cases on the intended host; approved scanner if required. The real inspector fails closed when unavailable. No unreviewed PDF tool downloaded.
 - Organization must approve payroll purpose, retention/backups and original PDF password requirements. Uploaded-PDF password protection is unavailable and policy-required payroll remains blocked. Live sending is disabled by default and in development.

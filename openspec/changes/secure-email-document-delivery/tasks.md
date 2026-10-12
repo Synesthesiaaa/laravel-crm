@@ -23,3 +23,9 @@
 - [ ] 4.4 Validate real approved Poppler/scanner on deployment, supervised worker and required organization policies; archive only after remaining operational/browser checks pass.
 
 Specs synchronized to main capability. See validation.md for exact evidence and limits. Archive is intentionally deferred: positive real Poppler inspection is unavailable here; browser shell has existing Reverb/SIP configuration errors. Multi-process MySQL claim contention and real SMTP/provider outcomes were not exercised. No live messages were sent.
+
+## 5. Synthetic SMTP test regression
+
+- [x] 5.1 Reproduce the local/live-enabled guard failure before changing behavior.
+- [x] 5.2 Allow configured synthetic self-tests independently of bulk sending and isolate SMTP/account errors from mapping errors.
+- [x] 5.3 Verify local/disabled-bulk behavior, fixed account-only addressing, sanitized errors and unchanged mapping in tests and isolated browser; synchronize requirements.

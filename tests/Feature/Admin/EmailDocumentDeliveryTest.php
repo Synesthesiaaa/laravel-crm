@@ -313,11 +313,72 @@ class EmailDocumentDeliveryTest extends TestCase
     public function test_synthetic_self_test_contains_no_employee_attachments(): void
     {
         $campaign = $this->createPersonal();
+        $this->mock(\App\Services\EmailSmtpService::class, function ($mock): void {
+            $mock->shouldReceive('isReady')->andReturnTrue();
+            $mock->shouldReceive('sender')->andReturn(['sender@example.com', 'Synthetic Sender']);
+            $mock->shouldReceive('mailer')->andReturn(\Illuminate\Support\Facades\Mail::mailer('array'));
+        });
         $this->actingAs($this->admin)->post(route('admin.email-campaigns.test-self', $campaign))->assertSessionHasNoErrors();
         $this->assertCount(1, $this->messages);
         $this->assertSame($this->admin->email, $this->messages[0]->getTo()[0]->getAddress());
         $this->assertSame([], $this->messages[0]->getAttachments());
         $this->assertStringNotContainsString('Alice', $this->messages[0]->getHtmlBody());
+    }
+
+    public function test_synthetic_self_test_works_locally_with_bulk_sending_disabled(): void
+    {
+        $campaign = $this->createPersonal();
+        $this->app['env'] = 'local';
+        $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class);
+        config(['email_campaigns.live_enabled' => false]);
+        $this->mock(\App\Services\EmailSmtpService::class, function ($mock): void {
+            $mock->shouldReceive('isReady')->andReturnTrue();
+            $mock->shouldReceive('sender')->andReturn(['sender@example.com', 'Synthetic Sender']);
+            $mock->shouldReceive('mailer')->andReturn(\Illuminate\Support\Facades\Mail::mailer('array'));
+        });
+        $this->actingAs($this->admin)->post(route('admin.email-campaigns.test-self', $campaign), ['recipient' => 'someone-else@example.com'])->assertSessionHasNoErrors();
+        $this->assertCount(1, $this->messages);
+        $this->assertSame($this->admin->email, $this->messages[0]->getTo()[0]->getAddress());
+        $this->assertCount(1, $this->messages[0]->getTo());
+        $this->assertSame([], $this->messages[0]->getCc());
+        $this->assertSame([], $this->messages[0]->getBcc());
+        $this->assertSame([], $this->messages[0]->getAttachments());
+        $this->assertSame('draft', $campaign->fresh()->status);
+        $this->post(route('admin.email-campaigns.send', $campaign))->assertSessionHasErrors('campaign');
+        $this->assertCount(1, $this->messages);
+    }
+
+    public function test_missing_smtp_is_a_separate_test_error_without_invalidating_manifest(): void
+    {
+        $campaign = $this->createPersonal();
+        config(['mail.default' => 'array']);
+        $this->actingAs($this->admin)->from(route('admin.email-campaigns.review', $campaign))
+            ->post(route('admin.email-campaigns.test-self', $campaign))
+            ->assertSessionHasErrors(['smtp'], null, 'syntheticTest');
+        $this->get(route('admin.email-campaigns.review', $campaign))->assertOk()
+            ->assertSee('Synthetic test needs attention')
+            ->assertSee('Email Configuration')
+            ->assertDontSee('Correct the manifest or files and create a replacement draft.');
+        $this->assertSame('draft', $campaign->fresh()->status);
+        $this->assertCount(0, $this->messages);
+    }
+
+    public function test_synthetic_transport_failure_is_sanitized_and_separate_from_mapping_errors(): void
+    {
+        $campaign = $this->createPersonal();
+        $mailer = \Mockery::mock(\Illuminate\Mail\Mailer::class);
+        $mailer->shouldReceive('html')->once()->andThrow(new \RuntimeException('password-secret alice@example.com'));
+        $this->mock(\App\Services\EmailSmtpService::class, function ($mock) use ($mailer): void {
+            $mock->shouldReceive('isReady')->andReturnTrue();
+            $mock->shouldReceive('sender')->andReturn(['sender@example.com', 'Synthetic Sender']);
+            $mock->shouldReceive('mailer')->andReturn($mailer);
+        });
+        $this->actingAs($this->admin)->post(route('admin.email-campaigns.test-self', $campaign))
+            ->assertSessionHasErrors(['smtp'], null, 'syntheticTest');
+        $errors = session('errors')->getBag('syntheticTest')->all();
+        $this->assertStringNotContainsString('password-secret', implode(' ', $errors));
+        $this->assertStringNotContainsString('alice@example.com', implode(' ', $errors));
+        $this->assertCount(0, $this->messages);
     }
 
     public function test_transport_exception_is_uncertain_and_error_is_sanitized(): void

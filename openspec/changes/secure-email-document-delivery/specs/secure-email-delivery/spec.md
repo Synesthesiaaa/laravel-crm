@@ -39,3 +39,14 @@ The system SHALL send one message with one address per claim, report provider ac
 #### Scenario: Provider reconciliation
 - **WHEN** Super Admin explicitly confirms provider evidence with a non-personal case ID and verified outcome
 - **THEN** acceptance is recorded with its actual timestamp or verified no-submission becomes blocked for separate revalidation; reconciliation never sends mail
+
+### Requirement: Synthetic self-test is independent of campaign delivery
+An authorized Super Admin SHALL be able to explicitly send a synthetic text-only test to their own valid account email through configured SMTP, including locally with bulk sending disabled. The system MUST NOT attach campaign documents, accept an alternate recipient, queue campaign delivery or alter mapping approval. Synthetic-test errors SHALL use a separate error bag and explain SMTP/account recovery without requiring a replacement draft.
+
+#### Scenario: Local configured SMTP
+- **WHEN** the operator explicitly requests a synthetic test with SMTP configured and bulk sending disabled
+- **THEN** exactly one synthetic message targets the operator's account with no attachments or CC/BCC while the campaign remains a draft and bulk guards remain in force
+
+#### Scenario: SMTP test fails independently
+- **WHEN** SMTP is unconfigured or the synthetic transport fails
+- **THEN** a sanitized synthetic-test alert links to Email Configuration while valid document mappings and internal dry-run remain available

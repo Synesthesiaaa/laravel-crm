@@ -58,6 +58,10 @@ Every message has exactly one recipient and no CC/BCC.
 7. Run internal dry-run. This verifies mappings, content and hashes without SMTP.
    The separate Send synthetic test to myself action sends only synthetic text to the
    current operator's account address, with no personal documents or employee PDFs.
+   This is an explicitly requested real SMTP test and works locally with configured
+   SMTP even when live bulk sending is disabled. It does not need the email queue
+   worker. SMTP/account/transport errors appear in a separate synthetic-test alert
+   and do not invalidate the campaign's document mapping or require a replacement draft.
 8. Explicitly confirm the mapping, sender, purpose and live send. Preflight runs again
    and freezes encrypted message, sender/SMTP settings, recipient identities and
    intended document IDs/hashes. Live sending is disabled by default and always blocked

@@ -10,13 +10,23 @@
 @if(session('success'))
     <p role="status" class="mb-4 text-sm text-[var(--color-success-fg)]">{{ session('success') }}</p>
 @endif
+@if($errors->getBag('syntheticTest')->any())
+    <div role="alert" class="mb-6 rounded-lg border border-[var(--color-danger)] p-4">
+        <h2 class="font-semibold">Synthetic test needs attention</h2>
+        <ul class="mt-2 list-disc space-y-1 pl-5 text-sm">
+            @foreach($errors->getBag('syntheticTest')->all() as $error)<li>{{ $error }}</li>@endforeach
+        </ul>
+        <p class="mt-2 text-sm">Campaign details and PDF mappings are unchanged.</p>
+        <a href="{{ route('admin.email-configuration.index') }}" class="mt-2 inline-flex min-h-10 items-center text-sm text-[var(--color-primary)] hover:underline">Open Email Configuration</a>
+    </div>
+@endif
 @if($errors->any() || $preflight['errors'])
     <div role="alert" tabindex="-1" class="mb-6 rounded-lg border border-[var(--color-danger)] p-4">
         <h2 class="font-semibold">Sending is blocked</h2>
         <ul class="mt-2 list-disc space-y-1 pl-5 text-sm">
             @foreach(array_unique([...$errors->all(), ...$preflight['errors']]) as $error)<li>{{ $error }}</li>@endforeach
         </ul>
-        <p class="mt-2 text-sm">Correct the manifest or files and create a replacement draft. No email is sent during review.</p>
+        <p class="mt-2 text-sm">Resolve the listed issues before queueing the campaign. Re-import recipients and documents only when their mapping needs correction.</p>
     </div>
 @endif
 <dl class="mb-6 grid gap-4 rounded-lg border border-[var(--color-border)] p-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -100,7 +110,7 @@
         </form>
         <form method="POST" action="{{ route('admin.email-campaigns.test-self', $campaign) }}">@csrf
             <button class="btn-secondary">Send synthetic test to myself</button>
-            <p class="mt-2 text-sm text-[var(--color-on-surface-muted)]">Uses your account email with synthetic content and no personal PDF. Separate from the internal dry-run.</p>
+            <p class="mt-2 text-sm text-[var(--color-on-surface-muted)]">Sends a real SMTP test to your account email using synthetic content and no personal PDF. Requires enabled Email Configuration; works independently of bulk sending and the queue worker.</p>
         </form>
         @if($campaign->dry_run_hash && hash_equals($campaign->dry_run_hash, (string) $preflight['hash']))
             <form method="POST" action="{{ route('admin.email-campaigns.send', $campaign) }}" class="space-y-4" x-data="{ submitting: false }" @submit="submitting = true">
