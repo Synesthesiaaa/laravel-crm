@@ -8,6 +8,7 @@ use App\Repositories\FormFieldRepository;
 use App\Repositories\FormSubmissionRepository;
 use App\Support\OperationResult;
 use App\Support\PercentageValue;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -277,6 +278,63 @@ class FormSubmissionService
         }
 
         $this->alignNumericStorageColumns($tableName, $fields);
+        $this->alignStorageNullability($tableName, $fields);
+    }
+
+    /** Keep removed fields and optional edits from blocking new records. */
+    private function alignStorageNullability(string $tableName, Collection $fields): void
+    {
+        $activeFields = $fields->keyBy(fn ($field): string => $field->storage_field_name ?? $field->field_name);
+        $columns = array_filter(Schema::getColumns($tableName), function (array $column) use ($activeFields): bool {
+            $name = $column['name'];
+            if (in_array($name, self::SYSTEM_COLUMNS, true)
+                || $column['nullable']
+                || $column['auto_increment']
+                || $column['generation'] !== null) {
+                return false;
+            }
+
+            $field = $activeFields->get($name);
+
+            return $field !== null ? ! $field->is_required : $column['default'] === null;
+        });
+
+        if ($columns === []) {
+            return;
+        }
+
+        $connection = Schema::getConnection();
+        $driver = $connection->getDriverName();
+        $extras = in_array($driver, ['mysql', 'mariadb'], true)
+            ? collect($connection->select('SHOW FULL COLUMNS FROM '.$connection->getQueryGrammar()->wrapTable($tableName)))->keyBy('Field')
+            : collect();
+
+        Schema::table($tableName, function (Blueprint $table) use ($columns, $driver, $connection, $extras): void {
+            foreach ($columns as $column) {
+                $definition = $table->rawColumn($column['name'], $column['type'])->nullable()->change();
+                if ($column['collation'] !== null) {
+                    $definition->collation($column['collation']);
+                }
+                if ($column['comment'] !== null) {
+                    $definition->comment($column['comment']);
+                }
+
+                $extra = strtolower((string) ($extras->get($column['name'])->Extra ?? ''));
+                if ($column['default'] !== null) {
+                    $rawDefault = $driver === 'sqlite'
+                        || $driver === 'mariadb'
+                        || ($driver === 'mysql' && $connection->isMaria())
+                        || str_contains($extra, 'default_generated');
+                    $definition->default($rawDefault ? DB::raw($column['default']) : $column['default']);
+                }
+                if (str_contains($extra, 'on update current_timestamp')) {
+                    $definition->useCurrentOnUpdate();
+                }
+                if (str_contains($extra, 'invisible')) {
+                    $definition->invisible();
+                }
+            }
+        });
     }
 
     private function alignNumericStorageColumns(string $tableName, Collection $fields): void
