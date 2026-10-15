@@ -1,3 +1,5 @@
+> **Historical migration record:** this document describes an earlier migration and contains superseded role, route, and feature statements. Preserve it for context; use the [current installation guide](docs/getting-started/installation.md), [feature catalog](docs/features.md), [access matrix](docs/roles-and-permissions.md), and [maintenance procedure](docs/operations/maintenance.md) for current work. Do not apply its demo seeding instructions to an existing production database.
+
 # MBSales to Laravel CRM – Migration Notes
 
 This project is the Laravel 12 migration of the legacy procedural PHP CRM (mbsales).

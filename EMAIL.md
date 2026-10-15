@@ -1,3 +1,5 @@
+> **Historical implementation brief (preserved).** For current source-checked behavior and operator instructions, use [docs/EMAIL_CAMPAIGNS.md](docs/EMAIL_CAMPAIGNS.md). The requirements and repository snapshot below are historical design context, not a current feature or validation guarantee.
+
 # AGENTS.md — Laravel CRM Email Campaigns & Secure Document Delivery
 
 > Repository: `Synesthesiaaa/laravel-crm` (`main` inspected 2026-10-13).  

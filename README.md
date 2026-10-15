@@ -1,309 +1,85 @@
 # Laravel CRM
 
-Laravel CRM is a Laravel 12 customer relationship management platform built for call-center operations. It combines campaign-aware authentication, agent and admin workflows, VICIdial integration, Asterisk AMI support, a browser softphone powered by SIP.js and WebRTC, and real-time updates through Laravel Reverb.
+A campaign-aware customer relationship management platform for call-center teams, built with Laravel.
 
-## Table of Contents
+Keep customer information, campaign forms, call outcomes, and attendance together so agents can work consistently and managers can review the results. Telephony connects to separately configured VICIdial and Asterisk systems.
 
-- [Overview](#overview)
-- [Features](#features)
-- [Documentation Data Safety](#documentation-data-safety)
-- [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
-- [Installation Guide](#installation-guide)
-- [Environment Configuration](#environment-configuration)
-- [Running the App](#running-the-app)
-- [Telephony and Integrations](#telephony-and-integrations)
-- [Testing](#testing)
-- [Deeper Documentation Plan](#deeper-documentation-plan)
-- [License](#license)
+## At a glance
 
-## Overview
+A CRM helps a team remember who it contacted, what happened, and what should happen next. Laravel CRM organizes this work into campaigns: named work areas with their own forms and reporting context. Agents sign in, confirm their campaign, handle customer information, and record interaction outcomes. When telephony is enabled and provisioned, browser phone and lead tools support that work in the same workspace.
 
-This application is designed for teams that need a CRM with telephony-first workflows. It supports campaign-based login, role-based access, lead handling, disposition management, attendance tracking, reporting, and admin tools for maintaining the telephony stack.
+Team Leaders and administrators review attendance, records, agent activity, and reports. Super Admins set up accounts, campaigns, forms, integration servers, branding, and retention. A separate email workflow lets Super Admins prepare templates, import authorized recipients, review individual document assignments, and queue messages through a dedicated worker.
 
-The codebase follows the Laravel 12 application structure and uses Blade views, controllers, middleware, queued jobs, events, observers, and service classes to keep the CRM and telephony logic separated.
+The application distinguishes local CRM records from external phone and email-provider state. A saved form, queued job, or accepted email does not prove a completed call or confirmed inbox delivery. Read the feature and access guides before treating an integration as ready for live work.
 
-## Features
+## Key capabilities
 
-- Campaign-aware login and session handling
-- Role-based access control for Super Admin, Admin, Team Leader, and Agent users
-- Agent workspace with softphone, call controls, lead tools, and disposition capture
-- Admin screens for campaigns, forms, users, server settings, field logic, and lead hopper management
-- VICIdial agent and non-agent API integration
-- Asterisk AMI integration for outbound dialing and telephony event handling
-- Laravel Reverb and Echo for real-time UI updates
-- Attendance tracking and operational reporting
-- Predictive dialing support with local lead hopper workflows
-- Structured logging for audit, security, telephony, and rate-limit events
+| Area | What it helps you do |
+| --- | --- |
+| Campaigns and forms | Organize work, configure data capture, and collect consistent information. |
+| Agent workspace | Inspect leads, use enabled phone tools, save outcomes, and arrange callbacks. |
+| Records and extraction | Review form/capture/call records and export authorized data to CSV. |
+| Supervision and reports | Review staff activity, source-qualified call metrics, and configured CRM sales measures. |
+| Attendance and notifications | Track login/status history and read recent operational messages. |
+| Email and documents | Prepare recipient campaigns, validate PDF mappings, review drafts, and monitor sending. |
+| Administration | Maintain accounts, routing, fields, branding, retention, and activity logs. |
+| Integration services | Connect VICIdial APIs, AMI events, SIP/WebRTC media, queues, and Reverb updates. |
 
-## Documentation Data Safety
+See the [verified feature catalog](docs/features.md) for access, dependencies, and limitations.
 
-This README intentionally avoids application screenshots and operational records that could expose campaign, customer, agent, or form data.
+## How work flows
 
-Use placeholders in documentation examples. If screenshots are added later, capture them only from a dedicated test campaign with synthetic users, leads, form fields, phone numbers, dispositions, and report data.
+Sign in with a username/password and campaign choice → confirm campaign context → open the relevant lead/form tools → handle the interaction using configured phone services when needed → save the form or capture → record the disposition → review records and reporting.
 
-Do not use production records, real customer information, live campaign identifiers, credentials, internal endpoints, or other operational data in public documentation.
+These are distinct saves and external actions, not one transaction. Agent Screen access defaults off; CRM login does not establish a working phone session. Follow the [agent working-day guide](docs/user-guide/daily-workflow.md).
 
-## Prerequisites
+## Who uses it?
 
-- PHP 8.2 or newer
-- Composer 2
-- Node.js 20 or newer
-- MySQL 8 / MariaDB 10.6 or SQLite for local development
-- Redis if you plan to use Redis-backed cache, queue, or session drivers
-- Asterisk and VICIdial if you plan to use the telephony features
-- Supervisor for Horizon, Reverb, and long-running telephony workers in production
+- **Agent:** handles customer interactions, forms, outcomes, callbacks, and personal attendance.
+- **Team Leader:** monitors activity and attendance and uses permitted record/reporting tools.
+- **Admin:** uses management tools and additional field/disposition configuration writes.
+- **Super Admin:** manages restricted setup, user access, integrations, email, and system configuration.
 
-Recommended PHP extensions include:
+Some setup routes remain Super Admin-only even when an Admin has a similarly named seeded permission. QA and Operations Manager are organizational responsibilities, not formal account roles. See the [permission matrix](docs/roles-and-permissions.md).
 
-- `mbstring`
-- `bcmath`
-- `pdo`
-- `pdo_mysql` or SQLite support
-- `openssl`
-- `curl`
-- `json`
-- `xml`
-- `ctype`
-- `fileinfo`
-- `tokenizer`
+## Technology
 
-## Quick Start
+Laravel **12.53.0**, Blade, Alpine.js **3.15.8**, Tailwind CSS **4.2.0**, Vite **7.3.1**, SIP.js **0.21.2**, Horizon **5.45.0**, Reverb **1.8.0**, and Sanctum **4.3.1** are present in the lockfiles. SQLite is used by tests; MySQL connections support the inspected application and telephony integration.
 
-1. Install PHP dependencies:
+Although manifests declare PHP `^8.2` and Node `>=20.0.0`, the committed dependency graph requires **PHP 8.4+ within PHP 8.x** and **Node `^20.19.0 || >=22.12.0`**. Horizon needs Unix PCNTL/POSIX extensions. Read [requirements](docs/getting-started/requirements.md) before installation.
 
-   ```bash
-   composer install
-   ```
+## Quick start
 
-2. Create your environment file and app key:
+Use an empty local database with synthetic data and sending/calling disabled. Follow the copyable [quick start](docs/getting-started/quick-start.md) for dependency installation, environment setup, migrations, development seeders, assets, and first login. The [full installation guide](docs/getting-started/installation.md) covers Windows/Linux differences.
 
-   ```bash
-   cp .env.example .env
-   php artisan key:generate
-   ```
+Do not apply development seeders, database resets, or new application-key generation to an existing production installation. For an existing deployment, use [maintenance](docs/operations/maintenance.md).
 
-   On Windows PowerShell, use:
+## Find your guide
 
-   ```powershell
-   Copy-Item .env.example .env
-   ```
+| Reader | Start here |
+| --- | --- |
+| First-time visitor | [Overview](docs/overview.md), [features](docs/features.md), [use cases](docs/use-cases.md), [glossary](docs/glossary.md) |
+| New staff member | [First login](docs/getting-started/first-login.md), [user guide](docs/user-guide/README.md), [FAQ](docs/faq.md) |
+| Agent | [Daily workflow](docs/user-guide/daily-workflow.md), [calls and dispositions](docs/user-guide/calls-and-dispositions.md) |
+| Team Leader or supervisor | [Supervisor and operations](docs/admin/supervisor-and-operations.md), [reports](docs/user-guide/reports.md) |
+| Administrator | [Administration](docs/admin/README.md), [access rules](docs/roles-and-permissions.md) |
+| Developer | [Architecture](docs/developer/architecture.md), [developer guides](docs/developer/README.md), [API reference](docs/developer/api-reference.md) |
+| System operator | [Deployment](docs/operations/deployment.md), [workers](docs/operations/queues-and-workers.md), [security](docs/operations/security.md), [troubleshooting](docs/operations/troubleshooting.md) |
 
-3. Configure your database, app URL, and any telephony settings in `.env`.
+[Browse all documentation](docs/README.md), including preserved specialist guides and historical records.
 
-4. Run the database migrations and seeders:
+## Project status and limits
 
-   ```bash
-   php artisan migrate
-   php artisan db:seed
-   php artisan db:seed --class=RolesAndPermissionsSeeder
-   ```
+This documentation describes source reviewed on **2026-10-15**, not a completed live-integration or production certification. Campaign selection is not a general per-user membership boundary. Operations Insights and diagnostic endpoints have public routes. The current CSV import job saves form records rather than populating hopper leads. External call/media behavior, fresh installation, restore drills, and SMTP delivery were not exercised for this documentation update.
 
-5. Link storage and install frontend assets:
+Confidential email documents require correct recipient assignment and passing validation. Payroll remains blocked when required password protection cannot be satisfied. See [email controls](docs/EMAIL_CAMPAIGNS.md) and [known findings](docs/audit/documentation-modernization.md).
 
-   ```bash
-   php artisan storage:link
-   npm install
-   ```
+## Support and contribution
 
-6. Start the application:
+Use [troubleshooting](docs/operations/troubleshooting.md) first. When opening an issue in this repository's GitHub Issues, include a synthetic reproduction, release/runtime, expected result, actual result, and sanitized error. Never attach customer data, payroll documents, credentials, live phone numbers, or signed URLs.
 
-   ```bash
-   composer run dev
-   ```
-
-   On Windows, you can also use `start-dev.bat`.
-
-## Installation Guide
-
-### 1. Clone the repository
-
-Place the project in your web root or local development workspace and open the project directory.
-
-### 2. Install backend dependencies
-
-```bash
-composer install
-```
-
-### 3. Set up environment variables
-
-Copy `.env.example` to `.env`, generate the application key, and review the values for:
-
-- `APP_*`
-- `DB_*`
-- `CACHE_*`
-- `QUEUE_*`
-- `SESSION_*`
-- `REDIS_*`
-- `BROADCAST_*`
-- `REVERB_*`
-- `VICI_*`
-- `ASTERISK_*`
-- `VITE_ASTERISK_*`
-- `VITE_SIP_*`
-
-```bash
-php artisan key:generate
-```
-
-### 4. Configure the database
-
-Use MySQL, MariaDB, or SQLite depending on your environment, then run:
-
-```bash
-php artisan migrate
-php artisan db:seed
-php artisan db:seed --class=RolesAndPermissionsSeeder
-```
-
-The default seed data creates the core CRM records, sample campaigns, form structures, disposition codes, and roles required for the application to open correctly.
-
-### 5. Prepare storage
-
-```bash
-php artisan storage:link
-```
-
-### 6. Install frontend dependencies
-
-```bash
-npm install
-```
-
-For production builds:
-
-```bash
-npm run build
-```
-
-After deploying queue or job configuration changes, reload long-running workers so they pick up the new topology:
-
-```bash
-php artisan horizon:terminate
-```
-
-For deployments using `queue:work` instead of Horizon, use `php artisan queue:restart` and ensure the worker includes `--queue=telephony,default`.
-
-### 7. Start background services
-
-For local development, the easiest path is:
-
-```bash
-composer run dev
-```
-
-That starts the Laravel server, queue listener, log tailing, and Vite in one command.
-
-If you prefer separate processes, start them individually:
-
-```bash
-php artisan serve
-php artisan queue:work --queue=telephony,default
-php artisan reverb:start
-php artisan ami:listen
-```
-
-### 8. Configure telephony only if needed
-
-If you are enabling telephony, configure VICIdial and Asterisk settings in `.env`, then review the deeper documentation linked below before going live.
-
-## Environment Configuration
-
-The most important environment groups are:
-
-- `APP_*` for application identity and URL settings
-- `DB_*` for your primary database connection
-- `SESSION_*`, `CACHE_*`, `QUEUE_*`, and `REDIS_*` for runtime state
-- `BROADCAST_*`, `REVERB_*`, and `VITE_REVERB_*` for real-time UI updates
-- `VICI_*` for VICIdial integration
-- `ASTERISK_*` for Asterisk AMI and softphone settings
-- `VITE_ASTERISK_*` and `VITE_SIP_*` for frontend-exposed telephony settings
-
-After changing production environment values, clear and rebuild cached configuration:
-
-```bash
-php artisan config:cache
-```
-
-## Running the App
-
-Common commands used during development and operations:
-
-- `composer run dev` - local all-in-one developer workflow
-- `php artisan serve` - application server only
-- `php artisan queue:work --queue=telephony,default` - queue worker
-- `php artisan reverb:start` - realtime WebSocket server
-- `php artisan ami:listen` - telephony event listener
-- `php artisan horizon` - Horizon dashboard and queue worker manager
-- `php artisan telephony:preflight` - telephony environment check
-- `php artisan telephony:smoke-dial --user-id=ID --number=... --campaign=...` - dial path smoke test
-
-## Telephony and Integrations
-
-### VICIdial
-
-Laravel talks to VICIdial for campaign and agent workflows. The app includes:
-
-- Agent and non-agent API usage
-- Session verification and control endpoints
-- Campaign-level feature flags for telephony behavior
-- SSL verification controls for on-premise or self-signed environments
-
-### Asterisk AMI
-
-AMI is used for outbound origination and event processing. The app also includes a webhook listener for AMI events and supporting jobs for reconciliation, logging, and alerts.
-
-### Browser Softphone
-
-The frontend uses SIP.js and WebRTC for browser-based telephony. This is the main path for agent softphone usage.
-
-### Realtime Updates
-
-Laravel Reverb and Echo are used for call state, notifications, and other live UI updates.
-
-For more detail, see:
-
-- `INSTALLATION.md`
-- `MIGRATION.md`
-- `docs/asterisk/VICIDIAL_DIRECT_CRM_INTEGRATION_GUIDE.md`
-- `docs/asterisk/ASTERISK_WEBRTC_SETUP.md`
-- `docs/telephony/`
-
-## Testing
-
-Run the application test suite with:
-
-```bash
-php artisan test
-```
-
-If you only changed a small area, you can also run a targeted test file or filter:
-
-```bash
-php artisan test --compact tests/Feature/ExampleTest.php
-php artisan test --compact --filter=YourTestName
-```
-
-## Deeper Documentation Plan
-
-This README should stay as the entry point. The deeper documentation should be split into focused guides:
-
-1. `INSTALLATION.md` for production deployment, server prep, and long-running services
-2. `MIGRATION.md` for the legacy MBSales to Laravel CRM migration notes
-3. `docs/asterisk/VICIDIAL_DIRECT_CRM_INTEGRATION_GUIDE.md` for VICIdial and AMI wiring
-4. `docs/asterisk/ASTERISK_WEBRTC_SETUP.md` for browser softphone setup
-5. `docs/telephony/` for implementation phases, audits, and telephony behavior notes
-6. `docs/audit/` for baseline audits, UI rules, security notes, and test findings
-
-Suggested future docs, if you want this project documented like a mature GitHub repository:
-
-- `docs/getting-started.md` for a short first-run walkthrough
-- `docs/troubleshooting.md` for common install, login, telephony, and queue issues
-- `docs/admin-guide.md` for campaign, user, and system administration
-- `docs/agent-guide.md` for daily agent workflows
-- `docs/release-notes.md` for deployment and version history notes
+For code changes, follow the [development workflow](docs/developer/development-workflow.md), [testing guide](docs/developer/testing.md), and [documentation maintenance checklist](docs/documentation-maintenance.md). Historical plans and screenshots are preserved; screenshots are not republished without verified synthetic provenance.
 
 ## License
 
-This project follows the MIT spirit of the Laravel framework unless your organization applies a different license policy to the application code.
+`composer.json` declares MIT, but this checkout contains **no standalone LICENSE file**. That declaration does not establish a complete license notice for all application contributions or dependencies. The repository owner should confirm the intended terms and add the appropriate license text; do not infer application licensing from Laravel's license.

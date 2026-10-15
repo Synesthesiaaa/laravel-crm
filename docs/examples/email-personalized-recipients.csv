@@ -1,0 +1,3 @@
+email,name,employee_id,period,pdf_filename
+alice@example.com,Alice Example,EMP-1001,2026-09,EMP-1001-2026-09.pdf
+bob@example.com,Bob Example,EMP-1002,2026-09,EMP-1002-2026-09.pdf

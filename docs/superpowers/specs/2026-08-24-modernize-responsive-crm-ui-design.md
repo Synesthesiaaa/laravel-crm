@@ -8,4 +8,4 @@ The Activity Log will remain a terminal-style audit console. Its existing `activ
 
 Validation covers focused render/behavior tests, the Vite build, and Playwright checks at 375, 768, 1024, and 1440px in both themes. The primary regression risks are soft-navigation double initialization, theme contrast, and long audit values creating document-level overflow.
 
-Full proposal, requirements, design decisions, and implementation tasks are recorded in [the OpenSpec change](../../openspec/changes/modernize-responsive-crm-ui/).
+Full proposal, requirements, design decisions, and implementation tasks are recorded in [the OpenSpec change](../../../openspec/changes/archive/2026-08-27-modernize-responsive-crm-ui/).

@@ -1,5 +1,63 @@
 # Super Admin Email Campaigns and Private PDF Delivery
 
+> Current operator and deployment guide, checked against repository source on 2026-10-15.
+> [EMAIL.md](../EMAIL.md) preserves historical implementation requirements; this guide describes current behavior.
+> Commands below are instructions for an authorized operator, not actions performed during this documentation update.
+
+## Access and safe preparation
+
+Only **Super Admin** can use `/admin/email-campaigns`, `/admin/email-configuration`, templates, imports, review, private downloads, reports and send controls. Admin, Team Leader and Agent roles receive no access. There is no HR role exception. The public marketing unsubscribe page is a separate signed-link flow. See [admin routes](../routes/admin.php), [campaign policy](../app/Policies/EmailCampaignPolicy.php) and [public routes](../routes/web.php).
+
+Prepare an authorized recipient list, verified document ownership, an approved sender/provider and a supervised email consumer before live sending. Use synthetic documents and reserved `example.com` addresses for preparation examples; do not queue these examples to a live provider. The application verifies declared mappings and integrity; it cannot establish that PDF contents belong to the named employee or that organizational permission exists.
+
+## Configure and test SMTP
+
+Open **Super Admin → Email Configuration**. Save an enabled connection with provider-approved host, port, security, optional username/password, From name and From address. Database settings take precedence over the environment mailer while enabled. The page reports its active source and readiness; readiness is configuration detection, not a successful network/authentication check.
+
+| Field | Current server validation / behavior |
+| --- | --- |
+| Enabled | Required boolean. Disabling restores environment fallback; it is not a global emergency stop. |
+| Host | Required, at most 255 characters; letters, digits, dot, hyphen, brackets and colon only. No URL scheme, path or embedded credentials. |
+| Port | Integer 1–65,535; obtain the correct value from the provider. |
+| Security | `tls` requires STARTTLS; `ssl` uses implicit SMTPS; `none` disables automatic TLS. Use the provider's approved secure setting. |
+| Username | Optional, at most 255 characters. Clearing it also clears the saved password. |
+| Password | Optional, at most 2,048 characters. Blank preserves an existing password when username remains populated. Stored encrypted and hidden after saving. |
+| From name / address | Required; each at most 255 characters; address must pass RFC email validation. Provider sender/domain approval remains external. |
+
+The configuration screen's **test email** sends a real message immediately to the entered recipient (not necessarily yourself). Confirm that address before requesting it. It does not use the campaign worker or live-bulk opt-in flags. Campaign review's **Send synthetic test to myself** instead sends synthetic content only to the signed-in operator's account email, with no campaign data or attachments. Both test endpoints are throttled to three requests per minute. A successful test means transport acceptance, not delivery to an inbox.
+
+If no enabled database connection exists, [EmailSmtpService](../app/Services/EmailSmtpService.php) recognizes environment mailers `smtp`, `ses`, `ses-v2`, `postmark`, `resend` and `sendmail`; `log` (the repository default), `array`, `failover` and `roundrobin` are not considered ready. For environment SMTP, [mail configuration](../config/mail.php) reads `MAIL_MAILER`, `MAIL_SCHEME`, `MAIL_URL`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_EHLO_DOMAIN`, `MAIL_FROM_ADDRESS` and `MAIL_FROM_NAME`. Do not assume a legacy `MAIL_ENCRYPTION` value controls this configuration.
+
+Enabled database SMTP uses a 15-second transport timeout. Environment SMTP has a null timeout in the checked-in configuration; do not assume the database timeout applies to it. Already frozen campaigns keep their approved encrypted transport and sender snapshot, including the then-current credentials. Updating or disabling saved SMTP does not rewrite those campaigns; retry requires the approved manifest/settings to match again. Configuration tests use current settings. See [configuration controller](../app/Http/Controllers/Admin/EmailConfigurationController.php), [preflight](../app/Services/EmailCampaignPreflightService.php) and [delivery](../app/Services/EmailCampaignDeliveryService.php).
+
+## Templates, generated PDFs and OCR
+
+Create a reusable template with name (up to 150 characters), subject (up to 255) and message (up to 50,000). Despite the stored field name `html_body`, the message is escaped plain text with preserved line breaks; HTML markup is not rendered. Supported campaign variables are `{{name}}`, `{{email}}`, `{{employee_id}}` and `{{period}}`; missing non-name values or unknown variables block preflight. Blank names become `Recipient`.
+
+The optional generated PDF has separate plain-text PDF content (up to 50,000 characters) and a password of 8–128 characters. Its password is encrypted at rest. TCPDF generates an AES-256 protected A4 document; distribute the password separately through an approved channel. This is one template password, not an employee-specific password derivation feature. A blank password on editing retains the old password; disabling the generated PDF clears its content/password. Templates referenced by queued, sending or completed campaigns cannot be edited; create another template. Frozen snapshots protect already-approved campaigns even where other statuses permit template editing.
+
+Template PDF preview uses sample name/email only. It does not validate a complete recipient manifest or substitute employee/period data as the final campaign preflight does. Generated PDFs are additional attachments and do not encrypt uploaded originals.
+
+**Import document** extracts text into a new editable template; it does not attach the uploaded original. Accepted OCR inputs are PDF, PNG, JPG/JPEG and WebP up to 10 MiB. PDF extraction/OCR processes the first five pages; image OCR uses English data. Extraction is limited to 30,000 characters. Review names, amounts and wording manually before use; OCR can be inaccurate. OCR imports leave generated PDF disabled. Binaries are configured by `OCR_TESSERACT_BINARY`, `OCR_PDFTOTEXT_BINARY` and `OCR_PDFTOPPM_BINARY`. Attaching an original PDF uses the separate document-upload workflow and never requires OCR. See [template/import actions](../app/Http/Controllers/Admin/EmailCampaignsController.php) and [document service](../app/Services/EmailCampaignDocumentService.php).
+
+## CSV contract and upload limits
+
+Download templates from the campaign screen, or inspect the synthetic [generic example](examples/email-recipients.csv) and [personalized example](examples/email-personalized-recipients.csv). Personal examples name files only; no PDFs are bundled. They are not live-send lists.
+
+| Import path | Required columns | Other behavior |
+| --- | --- | --- |
+| Marketing with upload mode `none` or `shared` | `email`; optional `name` | Legacy generic importer lowercases full addresses and deduplicates them (last row wins). Up to 20,000 unique addresses; physical-line guard 50,000. Extra columns are not retained. |
+| Transactional without personal PDFs | `email` | Strict importer; only `email,name,employee_id,period,pdf_filename` headers allowed. Leave `pdf_filename` absent/blank. |
+| Any purpose with personal PDFs | `email,pdf_filename` | Strict importer; every row maps to exactly one personal PDF. |
+| Payroll | `email,pdf_filename,employee_id,period` | Strict importer, personal-PDF mode and payroll policy gates required. |
+
+CSV upload is limited to 5 MiB (`csv`/`txt`). Strict imports default to 10,000 recipients (`EMAIL_MAX_RECIPIENTS`) and a 50,000 physical-line guard. All header names are trimmed/case-insensitive and UTF-8 BOM is accepted. Strict headers must be unique; rows must have the same number of fields as the header. Strict values must be valid UTF-8, at most 255 bytes, contain no control characters and not begin with `=`, `+`, `@` or `-` after trimming. Blank lines are skipped. Strict imports reject duplicate addresses including case collisions and duplicate case-insensitive filenames. They preserve the email local part and lowercase the domain. Payroll identifiers/periods are required strings; the importer does not verify an HR roster or enforce a specific period format. Do not assume legacy marketing imports provide all strict validation protections.
+
+Choose an uploaded attachment mode explicitly: `none`, `shared`, `recipient_specific`, or `shared_and_recipient_specific`. Choose either a ZIP **or** multiple personal PDFs, not both. Shared PDFs must be separate uploads and require a shared mode. Uploaded filenames must match `pdf_filename` exactly including case; no directory paths, URLs, inferred names, ordered pairing, leading dots/formula characters, `..`, control characters or unsafe path characters. Filenames are at most 255 bytes with a `.pdf` suffix. Case-colliding names across shared and personal files are rejected. Extra and missing personal files block the entire draft creation; do not fix a mismatch by deleting an arbitrary row.
+
+Default original-document limits are 10 MiB per file, 100 MiB combined uncompressed content, and 500 documents including shared files. ZIP upload size is also bounded by the total limit. ZIP entries must be root-level regular PDFs, stored or deflated, unencrypted, nonempty, with expansion ratio at most 200:1. Server/PHP request limits can reject smaller uploads first. The configurable limits are in [email_campaigns.php](../config/email_campaigns.php); [request validation](../app/Http/Requests/StoreEmailCampaignRequest.php), [strict importer](../app/Services/EmailRecipientCsvImporter.php), [attachment ingestion](../app/Services/EmailCampaignAttachmentService.php) and [PDF inspector](../app/Services/EmailPdfInspector.php) are authoritative.
+
+
 The existing reusable templates, OCR imports, generated password-protected PDFs,
 SMTP settings and generic `email,name` CSV imports remain supported. Uploaded
 original PDFs are a separate workflow: OCR is never required for attaching them.
@@ -47,11 +105,11 @@ Every message has exactly one recipient and no CC/BCC.
    Missing and extra personal files block the entire import. For marketing personal
    PDFs, opted-out rows block import instead of silently altering the mapping.
 5. Add shared PDFs only when every listed recipient is authorized to receive them.
-   Initial uploads are PDF-only, and encrypted/password-protected uploads are rejected.
-   Defaults: 10 MB per PDF, 100 MB total, 500 files, 10,000 strict-manifest recipients.
+   Original attachment uploads are PDF-only, and encrypted/password-protected uploads are rejected.
+   Defaults: 10 MiB per PDF, 100 MiB total, 500 files, 10,000 strict-manifest recipients.
    ZIP traversal, symlinks, encryption, duplicate/case-colliding paths, unsupported
    compression, nested archives and excessive expansion are rejected before extraction.
-6. Create a draft. Review every recipient and PDF; authenticated previews are private
+6. Create a draft. Non-marketing purposes and any uploaded attachment mode require the dedicated review/dry-run/confirmation flow. Marketing with attachment mode `none` uses the simpler index Start sending path, even if its template generates a PDF. Review every recipient and PDF; authenticated previews are private
    no-store downloads. Sensitive identifiers are partially masked. Edit draft details
    before sending; changes invalidate the dry-run. Correct mapping/files through a
    replacement draft; queued mappings cannot be edited.
@@ -109,7 +167,7 @@ EMAIL_DOCUMENT_RETENTION_DAYS=7
 
 Production can use `email-redis` after configuring its Redis backend; both dedicated
 connections have a 120-second visibility timeout, above the 60-second recipient job
-limit. New batches only distribute recipient jobs; SMTP attempts use a 15-second timeout.
+limit. New batches only distribute recipient jobs; database-configured SMTP attempts use a 15-second timeout.
 Start ONE supervised worker on exactly the configured connection/queue:
 
 ```bash
@@ -244,3 +302,59 @@ mandated scanner/password policies must be validated on the intended deployment.
 No actual payroll documents, production mail blasts or SMTP delivery claims belong in
 these development tests. Operational dry-run validates content/integrity; it does not
 prove SMTP connectivity, inbox delivery, malware-free PDFs or organizational approval.
+
+
+## Progress and safe incident handling
+
+Refresh the review screen to update per-recipient counts (50 rows per page). Campaign history is paginated at 15 campaigns. The index warning flags queued/sending campaigns older than two minutes with no accepted, failed or skipped totals; it is a diagnostic cue, not proof of a stopped worker. Queue pending count measures jobs, not recipients: batch jobs can distribute recipient jobs. Batch size is 1–100 and delay is 1–3,600 seconds. Delays set job eligibility; SMTP latency, backlog and provider quotas still determine throughput. Keep one consumer for the documented pacing assumptions.
+
+| Recipient state | Meaning and permitted next action |
+| --- | --- |
+| `pending` | Not claimed; may wait for delay/worker or become cancelled. |
+| `sending` | Claimed; transport may be in progress. Do not resend. |
+| `accepted` | Frozen campaign transport returned success. Acceptance is not inbox delivery. |
+| `sent` | Historical acceptance label; also not proof of delivery. |
+| `skipped` | Marketing address opted out before dispatch. |
+| `blocked` | Verification failed before entering transport. Fix the cause; explicit verified retry may be available. |
+| `uncertain` | Transport boundary was entered or worker interrupted. Provider evidence is required before any resend decision. |
+| `cancelled` | Unclaimed recipient cancelled in a frozen campaign. |
+| `failed` | Historical/compatibility failure state; it is not selected by the new blocked-only retry action. |
+
+Campaigns move from `draft` to `queued`/`sending`, then `completed` when no pending/sending rows remain, or `needs_attention` if blocked/uncertain rows remain. Cancel is supported for draft/queued/sending campaigns. `completed` can include skipped recipients and is not a delivery certification. Totals labeled sent aggregate accepted + historical sent; failed aggregates failed + blocked + uncertain. See [delivery state transitions](../app/Services/EmailCampaignDeliveryService.php), [recipient job](../app/Jobs/SendEmailCampaignRecipient.php) and [batch job](../app/Jobs/SendEmailCampaignBatch.php).
+
+**Redacted status CSV** exports `recipient_id,status,provider_accepted_at`. It excludes addresses, filenames and identifiers; internal recipient IDs still deserve controlled handling. Historical `sent` timestamps appear in the same acceptance column. There is no delivered/opened/bounced tracker or provider webhook implementation.
+
+| Symptom | Check and safe response |
+| --- | --- |
+| No recent heartbeat | Verify exact connection **and** queue, running consumer, shared cache store/prefix and deployed code/config. The matching worker refreshes a cache heartbeat with 90-second lifetime. A reachable database/Redis queue alone is insufficient. |
+| Queued but no progress | Inspect dedicated worker log, eligibility delays, provider limits and pending/failed jobs. Starting a worker can process approved queued campaigns. Do not repeatedly click Start or indiscriminately retry queue payloads. |
+| Synthetic test fails | Verify current SMTP source, sender approval, account email for self-test, provider credentials/security, DNS/network access. It does not require replacing a valid manifest or rerunning document imports. |
+| Dry-run or queue confirmation rejected | Read preflight errors; check payroll policy, exact recipient/PDF mapping, required variables, retention and hashes. Editing draft details clears dry-run approval. Changes to current sender/transport/template can also make the manifest hash differ. Repeat verification before confirming. |
+| Blocked after queueing | Current live/payroll/scanner policy, expired/missing/modified documents or frozen ownership may block transport. Restore approved conditions, then use the blocked-only retry control if the campaign is `needs_attention`. |
+| Uncertain outcome | Obtain provider evidence; record accepted or verified no-submission through the review form. Do not infer no-submission from an empty inbox or a missing application timestamp. |
+| Expired/purged PDF | Preview/send fails closed. A replacement authorized draft and fresh originals may be needed. Recreating a campaign is not permission to resend a previous uncertain submission. |
+
+For reconciliation, provider case ID is required (up to 64 ASCII letters/digits/underscore/hyphen, no personal data). Accepted outcomes require a valid timestamp no later than now; the form labels the application timezone. A verified no-submission outcome becomes blocked and still needs separate preflight and explicit retry. Cancelled campaigns have no resume action. Retrying applies only to `needs_attention` campaigns with a snapshot and `blocked` recipients; accepted, sending, skipped, cancelled and uncertain rows are excluded. These controls and the export contract are implemented in the [campaign controller](../app/Http/Controllers/Admin/EmailCampaignsController.php).
+
+### Retention boundaries
+
+Expiry starts at upload, with a minimum of one day even if a smaller configured retention value is supplied. Maintenance considers expired originals across all campaign statuses, including completed campaigns; it defers a campaign's purge while any recipient is `sending`. Stale claims older than three minutes become uncertain. Orphan encrypted blobs and abandoned private UUID workspaces older than one hour are eligible for cleanup. `--recover` redispatches only pending recipients in queued/sending campaigns with a frozen manifest; it also performs the normal purge/reconciliation maintenance and is not a read-only command.
+
+Maintenance deletes original encrypted blobs and marks document metadata purged. It does **not** implement deletion of campaign history, recipient addresses/employee metadata, encrypted message/SMTP snapshots, template passwords, activity records, provider copies or backups. Set separate approved retention/access procedures for these records. See [maintenance command](../app/Console/Commands/MaintainEmailCampaigns.php), [scheduler](../routes/console.php), [private disk](../config/filesystems.php) and [secure-document schema](../database/migrations/2026_10_13_100000_add_secure_email_documents.php).
+
+## Source and verification map
+
+The [processing diagram](diagrams/email-campaign-processing.md) includes an equivalent text description. [Admin campaign entry](admin/email-campaigns.md), [configuration entry](admin/email-configuration.md) and [SMTP integration entry](integrations/smtp.md) point here to keep operating instructions in one place.
+
+Repository tests describe expected behavior; this documentation update did not execute them, contact SMTP, start consumers, run maintenance, migrate a database or inspect live data. Candidate checks for an approved isolated synthetic environment include the four focused suites below; review the test environment first because they use database-refresh fixtures.
+
+- [EmailCampaignsTest](../tests/Feature/Admin/EmailCampaignsTest.php): access, templates, OCR, generic import, queue dispatch, cancellation and signed unsubscribe.
+- [EmailConfigurationTest](../tests/Feature/Admin/EmailConfigurationTest.php): configuration validation, encryption/security selection, fallback and transport sender.
+- [EmailDocumentDeliveryTest](../tests/Feature/Admin/EmailDocumentDeliveryTest.php): private mapping, snapshots, archive rejection, integrity, retention, synthetic self-test and evidence reconciliation.
+- [EmailCampaignLocalSendingTest](../tests/Feature/Admin/EmailCampaignLocalSendingTest.php): local opt-ins, worker policy, readiness and retry.
+
+```bash
+php artisan test tests/Feature/Admin/EmailCampaignsTest.php tests/Feature/Admin/EmailConfigurationTest.php tests/Feature/Admin/EmailDocumentDeliveryTest.php tests/Feature/Admin/EmailCampaignLocalSendingTest.php
+```
+
+No positive production Poppler/scanner validation, real SMTP/inbox delivery, provider quota verification or browser workflow result is claimed by this guide. Neither a synthetic SMTP test nor an internal dry-run certifies malware freedom, confidential document ownership or HR authorization.
