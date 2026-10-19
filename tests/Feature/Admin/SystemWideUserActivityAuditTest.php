@@ -93,7 +93,7 @@ class SystemWideUserActivityAuditTest extends TestCase
 
         $this->actingAs($user)
             ->post(route('logout'))
-            ->assertRedirect(route('login'));
+            ->assertRedirect(route('home'));
 
         $this->assertDatabaseHas('activity_log', [
             'event' => 'request',

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="crm-interface">
 <head>
     @php
         $brandName = trim((string) data_get($branding, 'name', config('app.name', 'CRM'))) ?: 'CRM';
@@ -13,8 +13,8 @@
     <meta name="description" content="Campaign performance, sales activity, and call reporting in one streamlined operations view.">
     <script>
         (function () {
-            var theme = 'dark';
-            try { theme = localStorage.getItem('theme') || 'dark'; } catch (_) {}
+            var theme = 'light';
+            try { theme = localStorage.getItem('theme') === 'dark' ? 'dark' : 'light'; } catch (_) {}
             document.documentElement.setAttribute('data-theme', theme);
         })();
     </script>
@@ -24,23 +24,26 @@
     <style>
         [x-cloak] { display: none !important; }
         .operations-shell { width: min(1500px, calc(100% - 2rem)); margin-inline: auto; }
-        .operations-panel { border: 1px solid var(--color-border); background: var(--color-surface-1); border-radius: 1rem; box-shadow: 0 18px 48px rgb(0 0 0 / .08); }
-        .operations-metric { border: 1px solid var(--color-border); background: var(--color-surface); border-radius: .85rem; padding: 1rem; min-width: 0; }
-        .operations-label { color: var(--color-on-surface-dim); font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-        .operations-value { margin-top: .35rem; color: var(--color-on-surface); font-size: clamp(1.35rem, 2.5vw, 2rem); font-weight: 750; line-height: 1.05; }
-        .operations-table th { color: var(--color-on-surface-dim); font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+        .operations-panel { border: 1px solid var(--color-border); background: var(--color-surface-card); border-radius: 10px; }
+        .operations-metric { border: 0; background: transparent; border-radius: 0; padding: 1rem; min-width: 0; }
+        .operations-label { color: var(--color-on-surface-muted); font-size: .875rem; font-weight: 500; }
+        .operations-value { margin-top: .5rem; color: var(--color-on-surface); font-size: 1.75rem; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
+        .operations-table th { color: var(--color-on-surface-muted); font-size: .75rem; font-weight: 500; }
         .operations-table th, .operations-table td { padding: .75rem 1rem; border-bottom: 1px solid var(--color-border); text-align: left; white-space: nowrap; }
         .operations-table tbody tr:last-child td { border-bottom: 0; }
+        .operations-shell :is(button, input, select) { min-height: 44px; }
+        .operations-shell :is(button, a, input, select):focus-visible { outline: 2px solid var(--color-action); outline-offset: 3px; }
     </style>
 </head>
 <body class="min-h-screen bg-[var(--color-surface)] text-[var(--color-on-surface)] antialiased">
+    <a class="skip-link" href="#operations-content">Skip to main content</a>
     <div
         x-data="operationsInsightsDashboard({ selectedCampaign: @js($selectedCampaign) })"
         x-init="init()"
         @beforeunload.window="cleanup()"
         class="min-h-screen"
     >
-        <header class="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-surface)_92%,transparent)] backdrop-blur-xl">
+        <header class="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-surface-card)]">
             <div class="operations-shell flex min-h-16 flex-wrap items-center justify-between gap-3 py-3">
                 <div class="flex min-w-0 items-center gap-4">
                     <a href="{{ route('home') }}" class="shrink-0 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--color-primary)]" aria-label="{{ $brandName }} home">
@@ -66,12 +69,11 @@
             </div>
         </header>
 
-        <main class="operations-shell py-5 sm:py-7">
+        <main id="operations-content" tabindex="-1" class="operations-shell py-5 sm:py-7">
             <section class="operations-panel overflow-hidden">
                 <div class="border-b border-[var(--color-border)] p-4 sm:p-5">
                     <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                         <div class="min-w-0">
-                            <p class="text-xs font-semibold uppercase tracking-[.12em] text-[var(--color-primary)]">Performance overview</p>
                             <h1 class="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Operations Insights</h1>
                             <p class="mt-1 max-w-3xl text-sm text-[var(--color-on-surface-muted)]">See campaign performance, sales activity, and call results in one place.</p>
                         </div>
@@ -533,7 +535,7 @@
                         render('activity', document.getElementById('operations-activity-chart'), {
                             chart: { type: 'area', height: 280, toolbar: { show: false }, animations: { enabled: false } },
                             series: [{ name: 'Activity', data: trend.values || [] }],
-                            xaxis: { categories: trend.labels || [], labels: { style: { colors: textColor, fontSize: '10px' }, rotate: -35 } },
+                            xaxis: { categories: trend.labels || [], tickAmount: 6, labels: { style: { colors: textColor, fontSize: '12px' }, rotate: 0, hideOverlappingLabels: true } },
                             yaxis: { min: 0, forceNiceScale: true, labels: { style: { colors: textColor } } },
                             grid: { borderColor },
                             stroke: { curve: 'smooth', width: 2 },
@@ -550,7 +552,7 @@
                         render('call-volume', document.getElementById('operations-report-call-chart'), {
                             chart: { type: 'bar', height: 280, toolbar: { show: false }, animations: { enabled: false } },
                             series: [{ name: 'Calls', data: volume.values || [] }],
-                            xaxis: { categories: volume.labels || [], labels: { style: { colors: textColor, fontSize: '10px' }, rotate: -35 } },
+                            xaxis: { categories: volume.labels || [], tickAmount: 6, labels: { style: { colors: textColor, fontSize: '12px' }, rotate: 0, hideOverlappingLabels: true } },
                             yaxis: { min: 0, labels: { style: { colors: textColor } } },
                             grid: { borderColor }, colors: [primary], dataLabels: { enabled: false },
                         });

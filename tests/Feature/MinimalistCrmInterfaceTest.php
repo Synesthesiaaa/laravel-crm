@@ -44,15 +44,15 @@ final class MinimalistCrmInterfaceTest extends TestCase
             ->assertSee('MB Sales')
             ->assertSee('aria-current="page"', false)
             ->assertDontSee('Toggle Administration navigation')
-            ->assertDontSee('Toggle Super Admin navigation');
+            ->assertDontSee('Toggle Management navigation');
     }
 
     public function test_super_admin_retains_management_navigation_and_dashboard_actions(): void
     {
         $this->workspace(User::ROLE_SUPER_ADMIN)->assertOk()
             ->assertSee('Toggle Administration navigation')
-            ->assertSee('Toggle Super Admin navigation')
-            ->assertSee('Your workspace')
+            ->assertSee('Toggle Management navigation')
+            ->assertDontSee('Your workspace')
             ->assertSee('href="'.route('records.index').'"', false);
     }
 

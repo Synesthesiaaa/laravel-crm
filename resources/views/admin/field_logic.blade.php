@@ -51,11 +51,7 @@
         </div>
     </div>
 
-    <div class="md-card mb-6 md-card--static">
-        <div class="px-6 py-4 border-b border-[var(--color-border)]">
-            <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Add field</h3>
-        </div>
-        <div class="p-6">
+    <x-admin.create-panel title="Add field">
             @if(empty($forms))
                 <div class="table-empty py-8">
                     <x-icon name="cog-6-tooth" class="w-10 h-10 mx-auto mb-2" />
@@ -131,8 +127,8 @@
                 </div>
             </form>
             @endif
-        </div>
-    </div>
+
+</x-admin.create-panel>
 
     <x-table.index caption="Form fields">
         <x-table.head :columns="[

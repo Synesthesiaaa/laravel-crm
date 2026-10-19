@@ -13,7 +13,7 @@
 @php
     $hasError = $error ?? ($errors->has($name) ? $errors->first($name) : null);
     $errorMsg = $error ?? ($errors->has($name) ? $errors->first($name) : null);
-    $inputId  = 'field-' . str_replace(['.', '[', ']'], ['-', '-', ''], $name);
+    $inputId  = $attributes->get('id') ?: 'field-' . str_replace(['.', '[', ']'], ['-', '-', ''], $name);
     $describedBy = $errorMsg
         ? $inputId.'-error'
         : ($help ? $inputId.'-help' : null);
@@ -34,7 +34,7 @@
         @if($required)  required @endif
         @if($readonly)  readonly @endif
         @if($disabled)  disabled @endif
-        {{ $attributes->class(['form-input', 'error' => $hasError]) }}
+        {{ $attributes->except('id')->class(['form-input', 'error' => $hasError]) }}
         @if($hasError) aria-invalid="true" @endif
         @if($describedBy) aria-describedby="{{ $describedBy }}" @endif
     >

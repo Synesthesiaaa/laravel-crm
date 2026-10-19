@@ -15,10 +15,10 @@
             <p class="mt-1 text-xs text-[var(--color-on-surface-dim)]">Used when the CRM signs the staff member into VICIdial.</p>
         </div>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <x-form.input name="vici_user" label="VICIdial Username"
+            <x-form.input name="vici_user" :id="'telephony-'.$suffix.'-vici_user'" label="VICIdial Username"
                 :value="old('vici_user', $user?->vici_user)"
                 help="Must match the VICIdial agent username" />
-            <x-form.input name="vici_pass" type="password" label="VICIdial Password"
+            <x-form.input name="vici_pass" :id="'telephony-'.$suffix.'-vici_pass'" type="password" label="VICIdial Password"
                 autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
                 :help="$isEditing ? 'Leave blank to keep current' : 'Must match the VICIdial agent password'" />
         </div>
@@ -30,10 +30,10 @@
             <p class="mt-1 text-xs text-[var(--color-on-surface-dim)]">Optional browser-calling credentials that must match the configured SIP endpoint and server authentication.</p>
         </div>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <x-form.input name="extension" label="SIP Extension"
+            <x-form.input name="extension" :id="'telephony-'.$suffix.'-extension'" label="SIP Extension"
                 :value="old('extension', $user?->extension)"
                 help="e.g. 6001 — must match the configured SIP endpoint" />
-            <x-form.input name="sip_password" type="password" label="SIP Password"
+            <x-form.input name="sip_password" :id="'telephony-'.$suffix.'-sip_password'" type="password" label="SIP Password"
                 autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
                 :help="$isEditing ? 'Leave blank to keep current' : 'Minimum 4 characters — must match the server auth password'" />
         </div>
