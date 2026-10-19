@@ -43,7 +43,68 @@ The landing page SHALL remain easy to scan and operate on mobile, tablet, and de
 - **WHEN** the visitor tabs through navigation and calls to action
 - **THEN** focus follows a logical order and each interactive control has a visible focus indicator
 
-#### Scenario: Product workflow preview is shown
+#### Scenario: Visitor views the hero
 
-- **WHEN** the landing page presents the agent-workspace workflow preview
-- **THEN** the preview is clearly contextual, remains non-interactive, stays within its responsive container, and describes only product states and controls supported by the current CRM
+- **WHEN** the landing page renders its hero
+- **THEN** it presents the product heading, description, and existing sign-in actions in a responsive text-led composition without an illustrative Agent Screen
+
+### Requirement: Text-led product presentation
+
+The landing page SHALL present a concise product headline, ordered call workflow, and role-scoped capabilities without an illustrative Agent Screen workspace, simulated call controls, or fictional customer details.
+
+#### Scenario: Visitor opens the landing page
+
+- **WHEN** the public landing page renders
+- **THEN** the hero contains product copy and navigation actions without workspace illustration markup or fictional customer details
+
+### Requirement: Persistent accessible theme selection
+
+The public landing page SHALL retain light or dark theme selection in the existing browser theme preference and provide an accessible theme control.
+
+#### Scenario: Visitor changes theme
+
+- **WHEN** the visitor activates the theme control
+- **THEN** the complete page changes theme and the control's accessible label and pressed state reflect the selected theme
+- **AND** the preference persists after reload
+
+#### Scenario: Stored theme is unavailable or invalid
+
+- **WHEN** browser storage is unavailable or contains a value other than light or dark
+- **THEN** the landing page remains usable with the dark fallback
+
+#### Scenario: Visitor requests reduced motion
+
+- **WHEN** reduced motion is enabled
+- **THEN** the page disables smooth scrolling and decorative transitions while all content and navigation remain usable
+
+### Requirement: Consistent landing alignment
+
+The landing page SHALL use consistent content gutters and shared column alignment for its hero and role overview, with a centered desktop navigation and responsive stacked layouts.
+
+#### Scenario: Visitor views the desktop composition
+
+- **WHEN** the landing page is viewed at a desktop width
+- **THEN** the hero and role overview share the same left and right column starting positions
+- **AND** corresponding text blocks align to their top edges
+- **AND** header navigation is centered independently of the brand and action widths
+
+#### Scenario: Visitor views a narrow composition
+
+- **WHEN** the viewport cannot accommodate both columns
+- **THEN** content stacks in reading order with consistent gutters and no horizontal overflow
+
+### Requirement: Concise landing narrative
+
+The landing page SHALL present one ordered call workflow and one role overview, without repeating the workflow in capability strips, separate calling timelines or checklists, or a closing sign-in section.
+
+#### Scenario: Visitor scans product information
+
+- **WHEN** the public page is rendered
+- **THEN** the four-step workflow explains leads, browser calling, campaign forms, results, and follow-ups once
+- **AND** a compact integration note retains VICIdial/Asterisk context and campaign/permission constraints
+- **AND** the role overview retains operational reporting context without secondary marketing headings per role
+
+#### Scenario: Visitor follows navigation
+
+- **WHEN** the visitor chooses a navigation or sign-in link
+- **THEN** section links target existing content and sign-in remains available in the header and hero through the named login route
