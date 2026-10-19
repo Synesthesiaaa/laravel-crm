@@ -123,11 +123,7 @@
     </div>
 </div>
 
-<div class="md-card mb-6">
-    <div class="px-6 py-4 border-b border-[var(--color-border)]">
-        <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Add Capture Field</h3>
-    </div>
-    <div class="p-6">
+<x-admin.create-panel title="Add Capture Field">
         <form method="POST" action="{{ route('admin.agent-screen.store') }}"
               x-data="{ fieldType: '{{ old('field_type', 'text') }}', useCustomVici: @js((bool) $oldViciIsCustom), submitting: false }"
               @submit="submitting = true">
@@ -214,8 +210,7 @@
                 </button>
             </div>
         </form>
-    </div>
-</div>
+</x-admin.create-panel>
 
 <x-table.index caption="Agent screen capture field list">
     <x-table.head :columns="[

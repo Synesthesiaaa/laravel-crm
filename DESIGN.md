@@ -1,86 +1,77 @@
 ---
 name: Laravel CRM
-description: A focused telephony-first operations console for campaign-scoped call-center work.
+description: A framed working sheet for campaign-scoped call-center operations.
 colors:
   primary: "#e91e8c"
   primary-hover: "#f43f9e"
-  primary-muted: "rgba(233, 30, 140, 0.15)"
-  primary-foreground: "#ffffff"
-  success: "#22c55e"
+  primary-foreground: "#0a0a0a"
+  action: "#984064"
+  primary-muted: "#f5eaf0"
+  workspace-control: "#292927"
+  workspace-control-hover: "#41413e"
+  workspace-control-text: "#ffffff"
+  surface: "#fbfbfa"
+  surface-1: "#f5f5f3"
+  surface-2: "#f7f7f5"
+  surface-3: "#ededea"
+  surface-card: "#ffffff"
+  surface-elevated: "#ffffff"
+  on-surface: "#242422"
+  on-surface-muted: "#60605b"
+  on-surface-dim: "#6c6c66"
+  border: "#e7e7e2"
+  border-strong: "#cdcdc6"
+  success: "#34714b"
   success-muted: "rgba(34, 197, 94, 0.15)"
-  success-fg: "#86efac"
-  warning: "#f59e0b"
+  success-fg: "#166534"
+  warning: "#926519"
   warning-muted: "rgba(245, 158, 11, 0.15)"
-  warning-fg: "#fde68a"
-  danger: "#ef4444"
-  danger-hover: "#f87171"
+  warning-fg: "#92400e"
+  danger: "#b13d3d"
   danger-muted: "rgba(239, 68, 68, 0.15)"
-  danger-fg: "#fca5a5"
-  info: "#3b82f6"
+  danger-fg: "#991b1b"
+  info: "#386c8d"
   info-muted: "rgba(59, 130, 246, 0.15)"
-  info-fg: "#93c5fd"
-  surface: "#0a0a0a"
-  surface-1: "#111111"
-  surface-2: "#1a1a1a"
-  surface-3: "#242424"
-  surface-card: "#141414"
-  surface-elevated: "#1f1f1f"
-  on-surface: "#fafafa"
-  on-surface-muted: "#a1a1aa"
-  on-surface-dim: "#71717a"
-  border: "rgba(255,255,255,0.08)"
-  border-strong: "rgba(255,255,255,0.14)"
+  info-fg: "#1e40af"
 typography:
-  display:
-    fontFamily: "DM Sans, Instrument Sans, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1.75rem"
-    fontWeight: 700
-    lineHeight: 1
   headline:
-    fontFamily: "DM Sans, Instrument Sans, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1.25rem"
-    fontWeight: 700
-    lineHeight: 1.4
-  title:
-    fontFamily: "DM Sans, Instrument Sans, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1rem"
+    fontFamily: '"Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif'
+    fontSize: "24px"
     fontWeight: 600
-    lineHeight: 1.5
+    lineHeight: 1.3
+    letterSpacing: "-0.025em"
+  title:
+    fontFamily: '"Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif'
+    fontSize: "18px"
+    fontWeight: 600
+    letterSpacing: "-0.025em"
   body:
-    fontFamily: "DM Sans, Instrument Sans, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1rem"
+    fontFamily: '"Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif'
+    fontSize: "14px"
     fontWeight: 400
     lineHeight: 1.5
   field:
-    fontFamily: "DM Sans, Instrument Sans, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "0.9375rem"
+    fontFamily: '"Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif'
+    fontSize: "14px"
     fontWeight: 400
     lineHeight: 1.5
   action:
-    fontFamily: "DM Sans, Instrument Sans, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "0.875rem"
-    fontWeight: 600
+    fontFamily: '"Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif'
+    fontSize: "14px"
+    fontWeight: 500
     lineHeight: 1.5
   label:
-    fontFamily: "DM Sans, Instrument Sans, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "0.75rem"
-    fontWeight: 700
-    lineHeight: 1.2
-    letterSpacing: "0.05em"
-  status:
-    fontFamily: "DM Sans, Instrument Sans, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "0.7rem"
-    fontWeight: 600
-    lineHeight: 1.2
-    letterSpacing: "0.03em"
+    fontFamily: '"Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif'
+    fontSize: "14px"
+    fontWeight: 500
+    letterSpacing: "0"
 rounded:
-  xs: "4px"
-  sm: "8px"
-  control: "0.625rem"
-  card: "0.75rem"
-  hero: "16px"
-  auth: "26px"
-  pill: "9999px"
+  hint: "4px"
+  control: "7px"
+  search: "8px"
+  panel: "10px"
+  auth: "12px"
+  pill: "999px"
 spacing:
   space-1: "0.25rem"
   space-2: "0.5rem"
@@ -91,66 +82,62 @@ spacing:
   space-8: "2rem"
 components:
   button-primary:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.primary-foreground}"
+    backgroundColor: "{colors.workspace-control}"
+    textColor: "{colors.workspace-control-text}"
     typography: "{typography.action}"
-    rounded: "{rounded.sm}"
+    rounded: "{rounded.control}"
     padding: "0.5625rem 1.125rem"
-    height: "2.75rem"
+    height: "44px"
+  button-primary-hover:
+    backgroundColor: "{colors.workspace-control-hover}"
   button-secondary:
-    backgroundColor: "{colors.surface-2}"
+    backgroundColor: "{colors.surface-card}"
     textColor: "{colors.on-surface}"
     typography: "{typography.action}"
-    rounded: "{rounded.sm}"
+    rounded: "{rounded.control}"
     padding: "0.5rem 1rem"
-    height: "2.75rem"
+    height: "44px"
   button-ghost:
-    backgroundColor: "transparent"
+    backgroundColor: "{colors.surface-card}"
     textColor: "{colors.on-surface-muted}"
     typography: "{typography.action}"
-    rounded: "{rounded.sm}"
+    rounded: "{rounded.control}"
     padding: "0.5rem 1rem"
-    height: "2.75rem"
+    height: "44px"
   input-field:
-    backgroundColor: "{colors.surface-2}"
+    backgroundColor: "{colors.surface-card}"
     textColor: "{colors.on-surface}"
     typography: "{typography.field}"
-    rounded: "{rounded.sm}"
+    rounded: "{rounded.control}"
     padding: "0.5625rem 0.875rem"
-    height: "2.75rem"
+    height: "44px"
   card:
     backgroundColor: "{colors.surface-card}"
-    rounded: "{rounded.card}"
-    padding: "1.25rem 1.5rem"
+    rounded: "{rounded.panel}"
   badge-primary:
     backgroundColor: "{colors.primary-muted}"
-    textColor: "{colors.primary}"
-    typography: "{typography.status}"
+    textColor: "{colors.action}"
     rounded: "{rounded.pill}"
     padding: "0.1875rem 0.5rem"
   navigation:
     backgroundColor: "{colors.surface-1}"
     textColor: "{colors.on-surface-muted}"
-    rounded: "{rounded.sm}"
-    width: "17.5rem"
-  notification-dropdown:
-    backgroundColor: "{colors.surface-2}"
-    textColor: "{colors.on-surface}"
-    rounded: "{rounded.card}"
-    width: "20rem"
+    rounded: "{rounded.control}"
+    width: "248px"
+  workspace-tab:
+    textColor: "{colors.on-surface-muted}"
+    typography: "{typography.action}"
+    padding: "8px 0"
+    height: "48px"
   widget-launcher:
     backgroundColor: "{colors.surface-elevated}"
     textColor: "{colors.on-surface}"
     rounded: "{rounded.pill}"
-    size: "3rem"
-    height: "3rem"
-    width: "3rem"
+    size: "48px"
   auth-surface:
     backgroundColor: "{colors.surface-card}"
-    textColor: "{colors.on-surface}"
     rounded: "{rounded.auth}"
-    padding: "2.5rem"
-    width: "25rem"
+    padding: "32px"
 ---
 
 # Design System: Laravel CRM
@@ -159,175 +146,165 @@ components:
 
 **Creative North Star: "The Operational Signal Desk"**
 
-Laravel CRM is an instrument panel for agents, Team Leaders, and administrators who need to see the next actionable state without leaving the call workflow. The visual system is dark-first and telephony-aware: a quiet charcoal surface stack gives the magenta brand signal and semantic status colors room to communicate clearly during long operational sessions.
+The authenticated CRM now expresses the incumbent Operational Signal Desk as a **Framed sheet**: labelled neutral navigation and a quiet utility header frame a flat working surface. Campaign context, records, operational status and the next useful action carry the hierarchy. The neutral primary buttons and restrained magenta selection/focus signal support long sessions without turning each screen into a dashboard of decorative cards.
 
-The density is compact but not cramped. Fixed navigation, a sticky header, short labels, compact cards and tables, and persistent floating call/form controls keep the workspace scannable while preserving room for lead data and form completion. Surfaces are calm at rest and gain lift only when they become interactive or layered. The public login is intentionally more expressive, using a glass sheet as an entry moment without turning the operational workspace into a decorative canvas.
+This is a code-led Operate extension of the established dual-theme system. The default shell opens in light mode and restores an explicitly saved dark preference. Preserve the configured organization name, logo, favicon and accessible alternatives; Laravel CRM remains the default product name. This document describes the authenticated shell and matching sign-in materials. The existing public landing composition remains a separate scoped expression in `resources/css/landing.css`; do not flatten or restyle it through workspace rules.
 
 **Key Characteristics:**
 
-- Dark-first, dual-theme operations shell.
-- Magenta as a scarce action, focus, and active-state signal.
-- Semantic status colors for connection, outcome, attention, and error.
-- Compact, data-rich surfaces designed for repeated scanning.
-- Telephony widgets that remain available without obscuring the primary work.
-- Visible focus, generous touch targets, contained overflow, and reduced-motion support.
+- Flat working sheets framed by role-appropriate navigation.
+- Dual-theme neutrals with restrained magenta focus and selection.
+- Sentence-case labels, readable platform sans and tabular operational figures.
+- Records before setup, with native creation disclosures.
+- Persistent campaign and call/form context with safe scrolling space.
+- Visible keyboard focus, contained overflow and reduced-motion support.
 
 ## Colors
 
-The palette is a near-black instrument panel with a single vivid brand signal and restrained semantic accents. The frontmatter is the normative dark-theme token set. The light theme rebinds the same semantic variables to paper-white surfaces, black ink, darker status foregrounds, and low-opacity dark borders; components should not invent a separate light palette.
+The frontmatter records the actual light-mode workspace bindings. `resources/css/app.css` owns shared primitives; `resources/css/crm-minimal.css` supplies the more specific application and sign-in bindings. Use the live semantic properties rather than copying a mode's literal colors into a new component.
 
 ### Primary
 
-- **Signal Magenta** (`primary`): Reserve for primary actions, active navigation, focus rings, selected states, KPI emphasis, and the edge of floating telephony controls.
-- **Signal Magenta Hover** (`primary-hover`): A brighter response state for primary controls; it should not become a second decorative accent.
-- **Signal Wash** (`primary-muted`): A translucent selected/active surface behind navigation items, badges, comparison rows, and unread notifications.
-- **Signal Ink** (`primary-foreground`): The readable foreground for magenta actions.
+- **Signal Magenta** (`primary`, `primary-hover`, `primary-foreground`): Preserved brand identity and shared brand primitives. Standard workspace primary buttons use neutral control tokens.
+- **Quiet Magenta** (`action`): Active navigation icons, selected tab rules, keyboard focus, text accents and carets.
+- **Signal Wash** (`primary-muted`): Selected or unread context without filling a large surface with the brand accent.
+- **Control Ink** (`workspace-control`, `workspace-control-hover`, `workspace-control-text`): Strong neutral action hierarchy that reverses appropriately between modes.
 
-### Status
-
-- **Connection Green** (`success` and its muted/foreground variants): Ready, connected, successful, or available states.
-- **Queue Amber** (`warning` and its muted/foreground variants): Pending work, attention, reconnecting, or paused states.
-- **Alert Red** (`danger`, `danger-hover`, and its muted/foreground variants): Destructive actions, failed calls, wrap-up attention, and validation errors.
-- **Information Blue** (`info` and its muted/foreground variants): Informational states and neutral operational context.
-
-Status colors are not decoration. Pair them with a label, icon, or shape so that meaning never depends on hue alone.
-
-**The One Signal Rule.** Use the primary accent to answer “what is active or actionable?” Keep it rare enough that a magenta edge, label, or control is immediately legible.
+**The One Signal Rule.** Use magenta to identify selection, focus and meaningful operational emphasis; give ordinary actions a neutral hierarchy.
 
 ### Neutral
 
-- **Carbon Base** (`surface`): The page canvas and deepest shell background.
-- **Charcoal Layers** (`surface-1`, `surface-2`, `surface-3`): Sidebar/header, field and control surfaces, and hover or nested layers.
-- **Card Charcoal** (`surface-card`): Resting content surfaces such as cards, tables, and charts.
-- **Elevated Charcoal** (`surface-elevated`): Floating controls, widget headers, and surfaces that need to sit above cards.
-- **Primary Ink** (`on-surface`): Headings, values, and essential content.
-- **Muted Ink** (`on-surface-muted`): Supporting copy, navigation labels, and secondary data.
-- **Dim Ink** (`on-surface-dim`): Metadata, placeholders, timestamps, and low-priority labels.
-- **Hairline** (`border`): Quiet structural separation.
-- **Strong Hairline** (`border-strong`): Interactive boundaries, overlay edges, and stronger table or control separation.
+- **Working Paper** (`surface`, `surface-card`): Quiet canvas and the continuous working sheet.
+- **Frame Neutrals** (`surface-1`, `surface-2`, `surface-3`, `surface-elevated`): Navigation, hover regions, nested operational surfaces and overlays.
+- **Working Ink** (`on-surface`, `on-surface-muted`, `on-surface-dim`): Essential data, supporting text and secondary context.
+- **Hairlines** (`border`, `border-strong`): Group boundaries and readable control edges.
 
-**The Tonal Layer Rule.** Prefer a change in surface tone before adding a border or shadow. Every layer should explain what is above or below it.
+The dark mode rebinds these same properties:
+
+| Token | Dark binding |
+| --- | --- |
+| surface | `#191a19` |
+| surface-1 / surface-card | `#1e1f1e` |
+| surface-2 / surface-elevated | `#242524` |
+| surface-3 | `#2b2c2b` |
+| on-surface | `#eeeee9` |
+| on-surface-muted | `#b5b5ad` |
+| on-surface-dim | `#a5a59c` |
+| border | `#343631` |
+| border-strong | `#4c4e47` |
+| action | `#edacc7` |
+| primary-muted | `#3b2a32` |
+| workspace-control | `#ededeb` |
+| workspace-control-hover | `#d9d9d6` |
+| workspace-control-text | `#252523` |
+
+Semantic status families retain their incumbent meanings: Connection Green for success/availability, Queue Amber for attention/pending work, Alert Red for error/destruction, and Information Blue for context. Pair color with text, icon or structure. Dark status bases use the shared app tokens (`#22c55e`, `#f59e0b`, `#ef4444`, `#3b82f6`), with foregrounds `#86efac`, `#fde68a`, `#fca5a5`, `#93c5fd`; translucent status washes remain shared.
 
 ## Typography
 
-**Display Font:** DM Sans (with Instrument Sans, system UI, and system sans-serif fallbacks)
+**Body and interface font:** Segoe UI, with Apple platform sans, Helvetica Neue and sans-serif fallbacks. The interface uses a platform stack for dependable controls and data; this is not a display-font recommendation for public brand surfaces.
 
-**Body Font:** DM Sans (with Instrument Sans, system UI, and system sans-serif fallbacks)
-
-**Label/Mono Font:** UI monospace is used only for keyboard hints, technical identifiers, and raw API-style values.
-
-**Character:** DM Sans is compact, highly legible, and operational rather than ornamental. Weight and case do the hierarchy work: strong headings and values, quiet supporting copy, and small uppercase labels for metadata and status.
+**Label/Mono Font:** UI monospace appears only in technical identifiers and keyboard hints.
 
 ### Hierarchy
 
-- **Display** (`display`): KPI values and the strongest auth/workspace titles; use the compact line box for numbers and short labels.
-- **Headline** (`headline`): Page titles, welcome statements, and major section introductions.
-- **Title** (`title`): Card headings, modal titles, and component-level labels that need clear but quiet authority.
-- **Body** (`body`): Explanatory copy and default page text; keep dense descriptions short and break long operational detail into fields or rows.
-- **Field** (`field`): User-entered values and select contents; preserve the larger readable control size rather than shrinking inputs to fit.
-- **Action** (`action`): Buttons and explicit controls; use semibold weight and a clear verb.
-- **Label / Status** (`label`, `status`): Uppercase, tracked metadata and compact state chips. Never use this treatment for paragraphs.
+- **Headline:** Page titles use the frontmatter headline role. The dashboard title steps to 28px with the same semibold character.
+- **Title:** Section headings use the title role; form-section titles use 16px semibold.
+- **Body / Field:** Tables, fields and ordinary interface text use the readable body/field roles. Supporting page descriptions use 13px with 1.6 line-height and a maximum 65ch measure.
+- **Action / Label:** Medium-weight sentence-case labels establish hierarchy without decorative uppercase tracking.
+- **Operational figures:** Use tabular numerals. Lead dashboard values use 36px and supporting values scale from 18px to 24px; these are data treatments, not a display face.
 
-Use tabular numerals for counts, currency, durations, and report columns. Icons should clarify the action or state, not replace its accessible text.
-
-**The Case Is a Signal Rule.** Uppercase and letter spacing belong to labels, navigation groups, table headers, and status metadata; headings and body copy remain in sentence case.
+**The Sentence Case Rule.** Use plain task labels and descriptive headings. Do not turn leftover tiny metadata, kickers or tracked labels into a reusable typography role.
 
 ## Layout
 
-The application uses a fixed operational shell on desktop and a full-width, off-canvas shell on smaller screens. The sidebar is 280px wide when expanded and 72px when collapsed; the sticky header is 64px tall. At widths below 1024px the sidebar leaves the canvas and opens over a dimmed backdrop, while the main content keeps its width and avoids horizontal page overflow.
+A fixed sidebar (248px expanded, 72px collapsed) and utility header (64px) frame the content. At widths below 1024px the sidebar becomes an off-canvas panel with a dismissible backdrop and keyboard dismissal. Preserve actual role and feature gates when extending navigation.
 
-Content gutters step from 16px on narrow screens to 24px at 640px, 32px at 1024px, and 40px at 1440px. Page content uses a compact top inset and a larger bottom runway for scrolling. Keep page headers, filters, cards, and tables aligned to the same gutter rather than introducing local columns without a clear task reason.
+The working sheet has a maximum width of 1600px and desktop padding of 24px top, 32px sides and 160px bottom. Side padding becomes 24px below 1280px and 16px below 640px. The bottom runway keeps final rows and actions scrollable above persistent phone and form launchers; it is intentional, not spare space to remove.
 
-Use responsive grids instead of fixed desktop widths: form fields auto-fit from roughly 13rem, filter fields from roughly 12rem, and dashboard/stat layouts grow from one or two columns into wider groups. The Agent Screen becomes a lead-and-form column beside a 288–320px call-control rail at the large breakpoint. Wide reports preserve readable column widths through contained scrolling and, where needed, a sticky totals column rather than allowing the entire page to overflow.
+Use aligned edges and `minmax(0, 1fr)` tracks. Directory groups use two columns with 32px gaps, becoming one column below 768px. The Agent Screen uses a flexible capture column and a 304px call rail with a 24px gap; at 1100px and below, controls move above capture fields and stop being sticky. Tables retain their columns inside labelled, focusable horizontal scroll regions rather than widening the page.
 
-The floating call and quick-form controls are a persistent bottom-right stack with a 24px base inset, 48px launchers, and a 56px separation. At the 1024px breakpoint they can become a two-panel split workspace with 16px outer margins and gap; on smaller screens they return to corner launchers and anchored panels. The floating controls must remain reachable without covering the current lead or primary form action.
+Default corner launchers are 48px with 8px clear separation, a 24px right inset, and the phone anchored 24px above the bottom. Persisted custom widget positions and split layouts remain user state. At desktop widths the existing split workspace can arrange panels with 16px outer margins/gap; preserve the live session roots when navigating or minimizing.
+
+**The Shared Edge Rule.** Align headers, filters, rows and panels to the working-sheet gutter, and contain each wide region within that sheet.
 
 ## Elevation & Depth
 
-This is a layered system with purposeful lift. Tonal surfaces do most of the structural work; shadows identify cards, overlays, and floating tools. At rest, cards use a low ambient shadow, interactive cards may lift slightly on hover, and modals, dropdowns, slide-overs, and telephony panels use the highest shared elevation. The light theme reduces shadow opacity while preserving the same hierarchy.
+The workspace and sign-in are flat at rest. Resting cards, tables, charts and mastheads use borders, whitespace and tonal changes; no glow or default card shadow. Navigation's active state uses a fine inset boundary. The login panel is now opaque and flat rather than the previous glass threshold.
 
 ### Shadow Vocabulary
 
-- **Ambient low** (`shadow-1`: `0 1px 3px rgba(0,0,0,.4)` in dark mode): Resting cards, charts, and table shells.
-- **Interactive lift** (`shadow-2`: `0 4px 6px -1px rgba(0,0,0,.4), 0 2px 4px -2px rgba(0,0,0,.3)` in dark mode): Hovered cards, inline edit panels, and secondary floating layers.
-- **Overlay lift** (`shadow-3`: `0 10px 15px -3px rgba(0,0,0,.4), 0 4px 6px -4px rgba(0,0,0,.3)` in dark mode): Menus, notifications, modals, slide-overs, toasts, and expanded widgets.
-- **Signal glow** (`shadow-glow`: `0 0 20px rgba(233,30,140,.25)` in dark mode): Hover feedback for primary actions; use sparingly and never as the default card shadow.
+- **Tool lift:** `0 4px 16px rgb(20 20 20 / 4%)` for persistent launchers and secondary floating layers.
+- **Overlay lift:** `0 12px 40px rgb(20 20 20 / 10%)` for dropdowns and layered tools.
 
-The login sheet is the deliberate exception: its translucent surface, backdrop blur, inset highlights, and broad shadow create a sense of entry. Keep that treatment scoped to authentication and similarly intentional public-entry surfaces.
+These values are the scoped workspace bindings of the shared shadow tokens. Keep modal and menu depth subordinate to readable content. Standard state transitions remain brief (150ms fast, 220ms standard tokens); the shell suppresses decorative reveal/stagger animations and removes motion under reduced-motion preference.
 
-**The Layer-First Rule.** Add tonal separation before adding shadow. Shadows should describe a surface crossing a boundary, not decorate every component.
+**The Flat Working Sheet Rule.** Organize static work with edges and spacing; use lift only to explain a floating or overlapping tool.
 
 ## Shapes
 
-The form language is gently rounded and functional. Standard buttons use compact 8px corners, controls and interactive tabs use the 10px control radius, cards and tables use 12px, hero surfaces use 16px, and status badges/avatars use a full pill. The login sheet intentionally uses a larger 26px silhouette; it is a signature auth shape, not a default for the app shell.
+Panels, tables and report containers use restrained corners (10px). Standard actions, inputs, pagination and sidebar items use tighter control corners (7px). Search and brand marks use an 8px exception; the sign-in panel uses 12px. Badges, avatars and circular launchers retain their compact pill/circle silhouettes.
 
-Borders are one-pixel, low-contrast hairlines by default and become stronger only for focus, control boundaries, table structure, or overlay edges. Inputs use a tonal fill, not a white field, and focus is communicated by a magenta border plus a soft ring. Destructive/error states use the corresponding semantic ring. Keep clipping and overflow inside the component so long labels, tables, and notification details cannot widen the page.
-
-All interactive controls should retain at least a 44px touch target, including compact icon buttons and dismiss controls. Rounded geometry must support the content: do not add a pill to a large text container merely to make it feel friendly.
+Use one-pixel boundaries and preserve at least 44px interaction targets. Keyboard focus uses a 2px action-colored outline with a 3px offset; scroll regions use an inset outline. Do not sacrifice labels or field legibility to pack more controls into a row.
 
 ## Components
 
 ### Buttons
 
-Buttons are compact, verb-led controls with a clear primary/secondary hierarchy.
-
-- **Shape:** 8px corners, semibold action typography, inline-flex alignment, and a minimum 44px interaction height.
-- **Primary:** Signal Magenta fill with light foreground; use for the main save, connect, submit, or confirm action on a surface.
-- **Hover / Focus:** Brighten the primary fill and allow a restrained signal glow; every button gets a visible focus ring with a 3px offset.
-- **Secondary:** Charcoal-2 fill with a strong hairline and primary ink; use for adjacent alternatives and non-destructive secondary actions.
-- **Ghost / Link:** Transparent or minimally bordered, muted ink at rest, and a tonal hover surface; use for dismiss, retry, navigation, and low-emphasis actions.
-- **Danger:** Alert Red is reserved for destructive or hang-up actions and keeps the same sizing and focus behavior as primary actions.
+Neutral, verb-led actions use the control fill/foreground, medium weight and minimum 44px height. Hover changes fill without a glow. Secondary and ghost actions share the working-sheet surface and quiet boundary, changing to the secondary surface on hover. Disabled controls reduce opacity and show an unavailable cursor. Destructive controls use the semantic danger family and keep an explicit label; table destructive actions use a restrained outlined treatment.
 
 ### Chips and Status Badges
 
-Chips are compact state annotations, not miniature buttons. Use a pill shape, a short label, and a dot or icon when the state matters at a glance. Connection states, call states, notification types, and data statuses use the semantic palette consistently. A chip may pulse only for a live call state; static status should remain still.
+Short pill annotations combine a semantic wash and foreground, with text or an icon/dot to identify meaning. Preserve actual status language. The legacy compact badge typography is an existing exception, not the standard for new labels or paragraphs.
 
 ### Cards and Containers
 
-Cards provide quiet grouping for dashboards, forms, charts, activity, and telephony tools. Use Card Charcoal with a one-pixel hairline and the ambient low shadow. Internal padding comes from the shared spacing rhythm, commonly one to one-and-a-half spacing units for compact tools and larger padding for hero or empty states. Hover lift is reserved for cards that are actually actionable; static cards must not jump.
+Flat panels use the working-sheet surface, quiet border and panel radius. Prefer section rules and shared stat strips over nesting a card for every fragment. Interior padding follows the existing spacing rhythm (commonly 20px or 24px). A dashboard Snapshot labels observed data honestly; a visual status must not imply an unverified live connection.
 
 ### Inputs and Fields
 
-Fields stack an uppercase label, a tonal control surface, and optional help/error copy. Standard inputs/selects/textareas share the same fill, border, radius, readable field typography, and 44px minimum target. Focus uses the primary border and a soft primary ring; errors replace both with the danger treatment. Placeholder and helper text use dim ink and must remain readable in both themes.
-
-The login surface uses a separate floating-label field pattern with a leading icon and a 12px field radius. Preserve its label transition, visible focus, and autocomplete semantics when extending authentication.
+Sentence-case medium labels sit above sheet-colored controls with strong boundaries, readable field text and minimum 44px height. Focus retains the shared magenta border/wash and adds the shell's visible action outline. Error states use the danger border/wash plus text. Helper descriptions and validation stay near their field. Keep autocomplete, validation and accessible naming intact; labels remain visible rather than relying on placeholders.
 
 ### Navigation
 
-The sidebar is a fixed, scrollable navigation rail with a 64px brand header, 10px item corners, 44px minimum item targets, and compact uppercase section labels. Resting items use muted ink; hover uses the next surface tone; the active route uses the signal wash, signal text, and an inset magenta edge. In collapsed mode, labels and group contents disappear while icons remain centered and the active route receives an inset outline. Mobile navigation is an off-canvas panel with a dismissible backdrop, not a permanently compressed rail.
+Role/task groups use descriptive text, 44px minimum items and contained scrolling. Active items combine a sheet-colored fill, hairline inset boundary, stronger ink and a magenta icon. The collapsed rail preserves meaningful accessible names; mobile navigation traps focus while open. The utility header holds search and labelled account/notification/theme controls without competing with the page title.
 
-### Overlays and Notifications
+### Creation Disclosures
 
-Dropdowns, notification trays, modals, slide-overs, and toasts share the elevated surface and overlay shadow. Notification items remain large enough to scan and activate, unread items use the signal wash, and loading, empty, stale, and retry states are explicit. Modal content should scroll inside the dialog or panel; never force the page behind it to horizontally scroll.
+Native details/summary blocks keep records visible while optional creation forms recede. The summary has a 56px minimum row, title, short description and an SVG chevron; its body opens inline. Preserve entered DOM state and reopen relevant panels for validation errors. Do not replace a setup form with a modal solely to save vertical space.
+
+### Workspace Tabs and Directories
+
+Task workspaces use 48px tabs, sentence-case labels and a 2px action-colored active underline. Tabs scroll within their region on narrow screens. The email area separates preparation, templates and delivery history into linked workspaces; review stages and provider results remain explicit rather than implying successful delivery. Tool directories use divided rows with descriptive text and real route/role visibility.
 
 ### Signature Telephony Workspace
 
-The softphone and quick-form controls are first-class tools, not decorative floating action buttons. Launchers sit in a persistent corner stack, expose connection state through a dot and accessible label, and open into a resizable, bounded panel. The phone panel keeps VICIdial session state visible, preserves the iframe session while minimized, offers split view at desktop widths, and uses the same field, button, chip, and overlay language as the rest of the CRM. The quick-form panel follows the same shell but lets the agent select or open a campaign form without leaving the current lead workflow.
+The persistent softphone and quick-form launchers expose connection state and open bounded, resizable panels. Keep campaign context, VICIdial session state and the next call action visible; minimized tools must preserve session roots. Use the same field, action, status and overlay language as the surrounding application. Respect persisted positions and split layouts.
 
-### Login Glass Sheet
+### Sign-in Sheet
 
-Authentication is the system’s expressive threshold: a centered, max-width sheet over a soft radial/linear atmosphere, with translucent layering, broad lift, a 26px radius, floating labels, and a full-width magenta submit action. It supports both themes and reduced motion. Keep the atmosphere quiet enough that credentials, campaign selection, and error feedback remain the visual priority.
+A centered single-column layout has a maximum 440px width, configured brand/context and a flat credential panel. The panel uses 32px padding, reduced to 24px on narrow screens; its title is 24px semibold. Neutral primary actions, campaign selection, validation and theme support match the workspace materials. Preserve the existing floating-label behavior and credential semantics.
 
 ## Do's and Don'ts
 
 ### Do:
 
-- **Do** use the frontmatter tokens and existing CSS custom properties as the source of truth.
-- **Do** keep magenta for action, selection, focus, active navigation, and meaningful emphasis.
-- **Do** pair semantic colors with text, icons, or structure so state is never color-only.
-- **Do** preserve the 44px interaction target and visible focus treatment on every interactive control.
-- **Do** keep telephony state, campaign scope, and the next call action visible in the working context.
-- **Do** contain table and notification overflow inside their own scroll regions.
-- **Do** honor the dark/light theme switch and `prefers-reduced-motion: reduce` behavior.
-- **Do** use lift and motion to clarify state changes, not to make static data feel busy.
+- **Do** use live semantic CSS properties and verify both themes.
+- **Do** preserve configured branding, campaign context and established role terminology.
+- **Do** use neutral actions with restrained magenta focus and selection.
+- **Do** retain 44px targets, visible focus and readable sentence-case field labels.
+- **Do** align content to the working-sheet gutter and retain the 160px bottom runway.
+- **Do** contain wide tables and tabs within their own scroll regions.
+- **Do** distinguish observed snapshots, stale data, connection states and delivery results honestly.
+- **Do** preserve stateful call/form roots and persisted widget layouts.
 
 ### Don't:
 
-- **Don't** turn the operational shell into a glassmorphism or gradient-heavy composition; reserve that atmosphere for the login threshold and explicitly branded entry surfaces.
-- **Don't** add a second brand accent or use semantic colors as decoration.
-- **Don't** nest arbitrary rounded cards inside rounded cards without a real grouping need.
-- **Don't** make static cards translate on hover or hide important actions behind hover-only behavior.
-- **Don't** rely on color alone for call, connection, validation, or notification state.
-- **Don't** shrink labels, fields, or icon controls below the established touch and readability floor to fit a dense layout.
-- **Don't** allow a wide report, widget, or notification detail to create page-level horizontal overflow.
-- **Don't** add motion that continues, pulses, or shimmers when the user has requested reduced motion.
+- **Don't** restore glass, gradients, glow or decorative card lift to the operational sheet.
+- **Don't** introduce a separate visual language for individual admin pages.
+- **Don't** reuse tiny metadata, decorative kickers or tracked uppercase copy as a new typography standard.
+- **Don't** use status colors without an accompanying label, icon or structure.
+- **Don't** hide critical controls behind hover or create page-level horizontal overflow.
+- **Don't** replace configured organization identity with a hard-coded product name.
+- **Don't** apply these scoped workspace rules to overwrite the existing public landing composition.
+- **Don't** add animation that ignores reduced-motion preference.

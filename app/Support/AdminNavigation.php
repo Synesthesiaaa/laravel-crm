@@ -2,8 +2,45 @@
 
 namespace App\Support;
 
+use App\Models\User;
+
 final class AdminNavigation
 {
+    /**
+     * Task groups use the same destinations as the management directory.
+     * Route middleware remains the authority for access.
+     *
+     * @return list<array{key: string, label: string, icon: string, items: array}>
+     */
+    public static function workspaceGroups(User $user, bool $agentScreenVisible): array
+    {
+        if (! $user->isTeamLeader()) {
+            return [];
+        }
+
+        $items = self::adminItems();
+        if ($user->isSuperAdmin()) {
+            $items = array_merge($items, self::superAdminItems());
+        }
+        $groups = [
+            'overview' => ['Overview', 'chart-bar', ['admin.dashboard']],
+            'operations' => ['Operations', 'signal', ['admin.supervisor', 'admin.attendance.index', 'admin.records.index', 'admin.data-master.index', 'admin.capture-records.index', 'admin.disposition-records.index', 'admin.lead-hopper.index']],
+            'analytics' => ['Analytics', 'chart-pie', ['reports.index', 'admin.extraction.index']],
+            'management' => ['Management', 'users', ['admin.campaigns.index', 'admin.forms.index', 'admin.users.index', 'admin.field-logic.index', 'admin.disposition-codes.index', 'admin.email-campaigns.index']],
+            'administration' => ['Administration', 'cog-6-tooth', ['admin.vicidial-servers.index', 'admin.email-configuration.index', 'admin.agent-screen.index', 'admin.attendance-statuses.index', 'admin.configuration', 'admin.activity-log.index']],
+        ];
+        $result = [];
+        foreach ($groups as $key => [$label, $icon, $routes]) {
+            $destinations = array_values(array_filter($items, static fn (array $item): bool => in_array($item['route'], $routes, true)
+                && ($agentScreenVisible || $item['route'] !== 'admin.agent-screen.index')));
+            if ($destinations !== []) {
+                $result[] = ['key' => $key, 'label' => $label, 'icon' => $icon, 'items' => $destinations];
+            }
+        }
+
+        return $result;
+    }
+
     /**
      * Administration destinations shared by the sidebar and management dashboard.
      *

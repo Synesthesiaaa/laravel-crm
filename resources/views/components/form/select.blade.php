@@ -12,7 +12,7 @@
 @php
     $hasError = $error ?? ($errors->has($name) ? $errors->first($name) : null);
     $errorMsg = $error ?? ($errors->has($name) ? $errors->first($name) : null);
-    $inputId  = 'field-' . str_replace(['.', '[', ']'], ['-', '-', ''], $name);
+    $inputId  = $attributes->get('id') ?: 'field-' . str_replace(['.', '[', ']'], ['-', '-', ''], $name);
     $current  = old($name, $selected);
     $describedBy = $errorMsg
         ? $inputId.'-error'
@@ -30,7 +30,7 @@
         id="{{ $inputId }}"
         @if($required) required @endif
         @if($disabled) disabled @endif
-        {{ $attributes->class(['form-select', 'error' => $hasError]) }}
+        {{ $attributes->except('id')->class(['form-select', 'error' => $hasError]) }}
         @if($hasError) aria-invalid="true" @endif
         @if($describedBy) aria-describedby="{{ $describedBy }}" @endif
     >

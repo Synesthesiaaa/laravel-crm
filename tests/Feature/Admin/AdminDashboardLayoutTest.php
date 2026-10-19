@@ -129,7 +129,8 @@ class AdminDashboardLayoutTest extends TestCase
             ->get(route('admin.dashboard', ['campaign' => 'pjli']));
 
         $response->assertOk()
-            ->assertSee('Campaign: <span class="font-semibold text-[var(--color-action)]">PJLI</span>', false)
+            ->assertViewHas('campaignName', 'PJLI')
+            ->assertSee('PJLI')
             ->assertDontSee('Sales Attribution');
         $this->assertSame('mbsales', session('campaign'));
     }

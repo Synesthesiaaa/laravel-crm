@@ -35,7 +35,7 @@ final class CallHistorySyncReliabilityTest extends TestCase
         $this->assertStringContainsString('--queue=telephony,default', (string) $composer['scripts']['dev'][1]);
         $this->assertStringContainsString('--queue=telephony,default', (string) file_get_contents(base_path('start-dev.sh')));
         $this->assertStringContainsString('--queue=telephony,default', (string) file_get_contents(base_path('start-dev.bat')));
-        $this->assertStringContainsString('--queue=telephony,default', (string) file_get_contents(base_path('README.md')));
+        $this->assertStringContainsString('--queue=telephony,default', (string) file_get_contents(base_path('docs/operations/queues-and-workers.md')));
     }
 
     public function test_scheduler_registers_recent_call_history_dispatch(): void
