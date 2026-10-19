@@ -1,0 +1,166 @@
+- generic [active] [ref=f4e1]:
+  - link "Skip to main content" [ref=f4e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - complementary [ref=f4e3]:
+    - generic "Laravel-crm" [ref=f4e5]
+    - navigation "Primary destinations" [ref=f4e10]:
+      - paragraph [ref=f4e11]: Workspace
+      - link "Dashboard" [ref=f4e12] [cursor=pointer]:
+        - /url: http://127.0.0.1:8088/dashboard
+      - link "Call History" [ref=f4e16] [cursor=pointer]:
+        - /url: http://127.0.0.1:8088/records
+      - link "Attendance" [ref=f4e20] [cursor=pointer]:
+        - /url: http://127.0.0.1:8088/attendance
+      - button "Campaign Forms" [ref=f4e24] [cursor=pointer]
+      - button "SMS Management" [expanded] [ref=f4e28] [cursor=pointer]
+      - link "SMS Management" [ref=f4e33] [cursor=pointer]:
+        - /url: http://127.0.0.1:8088/admin/sms
+      - button "Overview" [ref=f4e37] [cursor=pointer]
+      - button "Operations" [ref=f4e41] [cursor=pointer]
+      - button "Analytics" [ref=f4e45] [cursor=pointer]
+      - button "Management" [ref=f4e49] [cursor=pointer]
+      - button "Administration" [ref=f4e53] [cursor=pointer]
+    - generic "MBSales" [ref=f4e57]:
+      - generic [ref=f4e61]:
+        - generic [ref=f4e62]: Current campaign
+        - generic [ref=f4e63]: MBSales
+  - generic [ref=f4e64]:
+    - banner "Application header" [ref=f4e65]:
+      - generic [ref=f4e66]:
+        - button "Toggle sidebar" [expanded] [ref=f4e67] [cursor=pointer]
+        - heading "SMS Management" [level=1] [ref=f4e70]
+      - generic [ref=f4e72]:
+        - button "Open global search" [ref=f4e73] [cursor=pointer]:
+          - generic [ref=f4e76]: Search workspace
+          - generic [ref=f4e77]: Ctrl K
+        - button "Notifications" [ref=f4e79] [cursor=pointer]
+        - button "Switch to dark mode" [pressed] [ref=f4e82] [cursor=pointer]
+        - button "Account menu for SMS Preview" [ref=f4e86]:
+          - generic [ref=f4e87]: S
+          - generic [ref=f4e88]: SMS Preview
+    - main "Main content" [ref=f4e91]:
+      - generic [ref=f4e92]:
+        - navigation "Breadcrumb" [ref=f4e93]:
+          - link "Home" [ref=f4e94] [cursor=pointer]:
+            - /url: http://127.0.0.1:8088/dashboard
+          - link "Admin" [ref=f4e99] [cursor=pointer]:
+            - /url: http://127.0.0.1:8088/admin
+          - generic [ref=f4e102]: SMS Management
+        - generic [ref=f4e103]:
+          - generic [ref=f4e104]:
+            - heading "SMS Management" [level=2] [ref=f4e105]
+            - paragraph [ref=f4e106]: Prepare consented audiences, manage GoIP channels, and track actual submission outcomes.
+          - link "Create campaign" [ref=f4e108] [cursor=pointer]:
+            - /url: http://127.0.0.1:8088/admin/sms?workspace=campaigns#create-campaign
+      - alert [ref=f4e109]:
+        - generic [ref=f4e112]: Live sending is disabled or the emergency stop is active. You can prepare drafts and review recipients.
+      - navigation "SMS workspaces" [ref=f4e114]:
+        - generic [ref=f4e115]:
+          - link "Overview" [ref=f4e116] [cursor=pointer]:
+            - /url: http://127.0.0.1:8088/admin/sms
+          - link "Campaigns" [ref=f4e117] [cursor=pointer]:
+            - /url: http://127.0.0.1:8088/admin/sms?workspace=campaigns
+          - link "Inbox & outbox" [ref=f4e118] [cursor=pointer]:
+            - /url: http://127.0.0.1:8088/admin/sms?workspace=history
+          - link "Templates" [ref=f4e119] [cursor=pointer]:
+            - /url: http://127.0.0.1:8088/admin/sms?workspace=templates
+          - link "Gateways & channels" [ref=f4e120] [cursor=pointer]:
+            - /url: http://127.0.0.1:8088/admin/sms?workspace=gateways
+          - link "Reports" [ref=f4e121] [cursor=pointer]:
+            - /url: http://127.0.0.1:8088/admin/sms?workspace=reports
+      - generic [ref=f4e122]:
+        - button "Emergency stop · disable all gateways and pause campaigns" [ref=f4e124] [cursor=pointer]
+        - generic [ref=f4e125]:
+          - heading "SMS campaigns" [level=2] [ref=f4e126]
+          - generic [ref=f4e127]:
+            - generic [ref=f4e128]:
+              - text: Campaign name
+              - textbox "Campaign name" [ref=f4e129]
+            - generic [ref=f4e130]:
+              - text: Status
+              - combobox "Status" [ref=f4e131]:
+                - option "All statuses" [selected]
+                - option "draft"
+                - option "scheduled"
+                - option "queued"
+                - option "running"
+                - option "paused"
+                - option "completed"
+                - option "canceled"
+                - option "failed"
+            - button "Filter campaigns" [ref=f4e132] [cursor=pointer]
+          - region "SMS campaigns" [ref=f4e133]:
+            - table [ref=f4e134]:
+              - rowgroup [ref=f4e135]:
+                - row [ref=f4e136]:
+                  - columnheader "Campaign" [ref=f4e137]
+                  - columnheader "State" [ref=f4e138]
+                  - columnheader "Recipient rows" [ref=f4e139]
+                  - columnheader "Scheduled · Manila" [ref=f4e140]
+                  - columnheader "Action" [ref=f4e141]
+              - rowgroup [ref=f4e142]:
+                - row [ref=f4e143]:
+                  - cell "No campaigns found. Create a draft and add recipients with documented consent." [ref=f4e144]
+        - group [ref=f4e146]:
+          - generic "Create an SMS campaign Create a draft, add an audience, then explicitly confirm eligible recipients." [ref=f4e147] [cursor=pointer]:
+            - generic [ref=f4e150]: Create an SMS campaign
+            - generic [ref=f4e151]: Create a draft, add an audience, then explicitly confirm eligible recipients.
+          - generic [ref=f4e155]:
+            - generic [ref=f4e156]:
+              - generic [ref=f4e157]:
+                - text: Campaign name
+                - textbox "Campaign name" [ref=f4e158]
+              - generic [ref=f4e159]:
+                - text: Purpose
+                - combobox "Purpose" [ref=f4e160]:
+                  - option "Operational · purpose-specific consent required" [selected]
+                  - option "Marketing · STOP instructions and verified inbound required"
+              - generic [ref=f4e161]:
+                - text: Sender gateway
+                - combobox "Sender gateway" [ref=f4e162]:
+                  - option "Select a configured gateway" [selected]
+                  - option "Acceptance gateway · unverified · Unverified"
+              - generic [ref=f4e163]:
+                - text: Schedule · Asia/Manila (optional)
+                - textbox "Schedule · Asia/Manila (optional)" [ref=f4e164]
+            - group "Eligible channels · select only channels on the chosen gateway" [ref=f4e165]:
+              - generic [ref=f4e168]:
+                - checkbox "Acceptance gateway · unverified · CH1 · Disabled" [ref=f4e169]
+                - text: Acceptance gateway · unverified · CH1 · Disabled
+            - generic [ref=f4e170]:
+              - text: Use a saved template (optional)
+              - combobox "Use a saved template (optional)" [ref=f4e171]:
+                - option "Choose template" [selected]
+                - option "Appointment reminder"
+            - generic [ref=f4e172]:
+              - text: Message body
+              - textbox "Message body" [ref=f4e173]
+              - paragraph [ref=f4e174]: GSM-7 · 0 units · 1 segment(s). The current profile permits one segment.
+              - paragraph [ref=f4e175]:
+                - text: "Supported variables:"
+                - code [ref=f4e176]: "{{recipient_name}}"
+                - text: and
+                - code [ref=f4e177]: "{{campaign_name}}"
+                - text: . Marketing must include instructions to reply STOP.
+            - generic [ref=f4e178]:
+              - generic [ref=f4e179]:
+                - text: Quiet hours start · Manila hour
+                - spinbutton "Quiet hours start · Manila hour" [ref=f4e180]: "20"
+              - generic [ref=f4e181]:
+                - text: Quiet hours end · Manila hour
+                - spinbutton "Quiet hours end · Manila hour" [ref=f4e182]: "8"
+            - generic [ref=f4e183]:
+              - text: Description and internal notes (optional)
+              - textbox "Description and internal notes (optional)" [ref=f4e184]
+            - button "Create draft and review recipients" [ref=f4e185] [cursor=pointer]
+        - group [ref=f4e186]:
+          - generic "Consent and suppression Record actual evidence or revoke consent. An inbound reply never grants consent automatically." [ref=f4e187] [cursor=pointer]:
+            - generic [ref=f4e190]: Consent and suppression
+            - generic [ref=f4e191]: Record actual evidence or revoke consent. An inbound reply never grants consent automatically.
+          - option "Operational" [selected]
+          - option "Marketing"
+  - generic [ref=f4e194]:
+    - button "Open Phone widget" [ref=f4e195]
+    - iframe [ref=f4e199]:
+      
+  - button "Open Quick Form widget" [ref=f4e200]
