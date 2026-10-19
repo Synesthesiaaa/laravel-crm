@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import './landing.css';
+@import './crm-minimal.css';
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
@@ -236,8 +237,10 @@ html[data-theme="light"] {
     white-space: nowrap;
     transition: opacity .2s, max-width .28s;
   }
-  .sidebar-collapsed .sidebar-brand-text,
-  html[data-sidebar-collapsed="true"] .sidebar-brand-text { opacity: 0; max-width: 0; }
+  @media (min-width: 1024px) {
+    .sidebar-collapsed .sidebar-brand-text,
+    html[data-sidebar-collapsed="true"] .sidebar-brand-text { opacity: 0; max-width: 0; }
+  }
 
   .sidebar-nav {
     flex: 1 1 0; min-height: 0;
@@ -271,10 +274,12 @@ html[data-theme="light"] {
 
   .sidebar-icon { width: 1.125rem; height: 1.125rem; flex-shrink: 0; }
   .sidebar-item-label { overflow: hidden; text-overflow: ellipsis; transition: opacity .2s, max-width .28s; }
-  .sidebar-collapsed .sidebar-item-label,
-  html[data-sidebar-collapsed="true"] .sidebar-item-label { opacity: 0; max-width: 0; pointer-events: none; }
-  .sidebar-collapsed .sidebar-item,
-  html[data-sidebar-collapsed="true"] .sidebar-item { justify-content: center; padding: .5625rem; }
+  @media (min-width: 1024px) {
+    .sidebar-collapsed .sidebar-item-label,
+    html[data-sidebar-collapsed="true"] .sidebar-item-label { opacity: 0; max-width: 0; pointer-events: none; }
+    .sidebar-collapsed .sidebar-item,
+    html[data-sidebar-collapsed="true"] .sidebar-item { justify-content: center; padding: .5625rem; }
+  }
 
   .sidebar-section-label {
     padding: .625rem .875rem .25rem;
@@ -288,8 +293,10 @@ html[data-theme="light"] {
     white-space: nowrap;
     transition: opacity .2s;
   }
-  .sidebar-collapsed .sidebar-section-label,
-  html[data-sidebar-collapsed="true"] .sidebar-section-label { opacity: 0; height: 0; padding: 0; margin: 0; }
+  @media (min-width: 1024px) {
+    .sidebar-collapsed .sidebar-section-label,
+    html[data-sidebar-collapsed="true"] .sidebar-section-label { opacity: 0; height: 0; padding: 0; margin: 0; }
+  }
 
   .sidebar-section-toggle {
     width: 100%;
@@ -346,6 +353,7 @@ html[data-theme="light"] {
   .sidebar-section-items {
     display: block;
   }
+  @media (min-width: 1024px) {
   .sidebar-collapsed .sidebar-section-toggle,
   html[data-sidebar-collapsed="true"] .sidebar-section-toggle {
     justify-content: center;
@@ -364,6 +372,7 @@ html[data-theme="light"] {
   .sidebar-collapsed .sidebar-section-toggle-icon,
   html[data-sidebar-collapsed="true"] .sidebar-section-toggle-icon {
     display: block;
+  }
   }
 
   /* ---- Header ---- */

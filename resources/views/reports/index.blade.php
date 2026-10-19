@@ -224,12 +224,10 @@
     <div x-show="mode === 'historical'" x-cloak class="reports-historical-stack">
 
     <section class="md-card overflow-hidden animate-stagger" aria-labelledby="report-performance-title">
-        <div class="h-1 bg-[var(--color-primary)]" aria-hidden="true"></div>
-
         <div class="px-5 py-5 sm:px-6 sm:py-6">
             <div class="flex flex-col gap-4 border-b border-[var(--color-border)] pb-5 lg:flex-row lg:items-end lg:justify-between">
                 <div class="min-w-0">
-                    <div class="flex items-center gap-2 text-[var(--color-primary)]">
+                    <div class="flex items-center gap-2 text-[var(--color-on-surface-muted)]">
                         <x-icon name="chart-bar" class="h-4 w-4 shrink-0" />
                         <p class="report-eyebrow">Performance Snapshot</p>
                     </div>
