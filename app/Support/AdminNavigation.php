@@ -7,7 +7,6 @@ final class AdminNavigation
     /**
 <<<<<<< HEAD
 <<<<<<< HEAD
-<<<<<<< HEAD
      * Task groups use the same destinations as the management directory.
      * Route middleware remains the authority for access.
      *
@@ -44,8 +43,6 @@ final class AdminNavigation
     }
 
     /**
-=======
->>>>>>> parent of 7fb41a9 (Reconstruct CRM operations workspace UI)
 =======
 >>>>>>> parent of 7fb41a9 (Reconstruct CRM operations workspace UI)
 =======
