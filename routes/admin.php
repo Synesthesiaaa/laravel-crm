@@ -35,6 +35,7 @@ Route::middleware('role:Team Leader,Admin,Super Admin')->prefix('admin')->name('
     Route::post('extraction', [\App\Http\Controllers\Admin\ExtractionController::class, 'export'])->name('extraction.export');
 
     Route::middleware('role:Super Admin')->group(function () {
+        require __DIR__.'/sms.php';
         Route::get('email-configuration', [\App\Http\Controllers\Admin\EmailConfigurationController::class, 'index'])->name('email-configuration.index');
         Route::put('email-configuration', [\App\Http\Controllers\Admin\EmailConfigurationController::class, 'update'])->name('email-configuration.update');
         Route::post('email-configuration/test', [\App\Http\Controllers\Admin\EmailConfigurationController::class, 'test'])->middleware('throttle:3,1')->name('email-configuration.test');

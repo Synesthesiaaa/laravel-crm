@@ -1,0 +1,32 @@
+- generic [ref=e2]:
+  - button "Switch to dark mode" [pressed] [ref=e3] [cursor=pointer]
+  - main [ref=e10]:
+    - generic [ref=e11]:
+      - generic "Laravel-crm" [ref=e13]
+      - region [ref=e18]:
+        - generic [ref=e19]:
+          - heading "Sign in to your CRM account" [level=1] [ref=e20]
+          - paragraph [ref=e21]: Use your CRM username and password.
+        - generic [ref=e22]:
+          - generic [ref=e23]:
+            - textbox "Username" [active] [ref=e24]:
+              - /placeholder: " "
+            - generic: Username
+          - generic [ref=e25]:
+            - textbox "Password" [ref=e26]:
+              - /placeholder: " "
+            - button "Show password" [ref=e27] [cursor=pointer]:
+              - generic [ref=e28]: Show
+            - generic: Password
+          - group "Starting campaign" [ref=e29]:
+            - generic [ref=e31]:
+              - combobox "Starting campaign" [ref=e33] [cursor=pointer]:
+                - option "MBSales" [selected]
+                - option "PJLI"
+              - paragraph [ref=e34]: You will start in this campaign after signing in.
+          - button "Sign in" [ref=e36] [cursor=pointer]
+        - link "Back to landing" [ref=e38] [cursor=pointer]:
+          - /url: http://127.0.0.1:8088
+        - generic [ref=e39]:
+          - strong [ref=e40]: Need access help?
+          - generic [ref=e41]: Contact your supervisor or help desk if your account is locked or you still can't sign in.
