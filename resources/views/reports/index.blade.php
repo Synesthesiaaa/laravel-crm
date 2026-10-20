@@ -15,7 +15,7 @@
         <div class="report-notice report-notice--danger" role="alert" aria-live="assertive">
             <div class="flex items-start justify-between gap-3">
                 <div>
-                    <p class="text-sm font-semibold text-[var(--color-danger)]" x-text="mode === 'historical' ? 'Historical report data could not be loaded' : 'Live report data could not be loaded'"></p>
+                    <p class="text-sm font-semibold text-[var(--color-danger-fg)]" x-text="mode === 'historical' ? 'Historical report data could not be loaded' : 'Live report data could not be loaded'"></p>
                     <p class="text-xs text-[var(--color-on-surface-muted)] mt-1" x-text="errorMessage"></p>
                 </div>
                 <button type="button" class="btn-secondary text-xs" @click="refreshAll()">Retry</button>
@@ -27,7 +27,7 @@
          class="report-notice report-notice--warning"
          role="status"
          aria-live="polite">
-        <p class="text-sm font-semibold text-[var(--color-warning)]"
+        <p class="text-sm font-semibold text-[var(--color-warning-fg)]"
            x-text="dashboard.availability.status === 'stale' ? 'Showing the last successful report snapshot' : (dashboard.availability.status === 'unavailable' ? (mode === 'historical' ? 'Historical reports unavailable' : 'Live report sources unavailable') : 'Report sources are partially available')"></p>
         <p class="text-xs text-[var(--color-on-surface-muted)] mt-1"
            x-text="dashboard.availability.message || 'Some report sections could not be loaded.'"></p>
@@ -196,7 +196,7 @@
                     <template x-for="source in realtime.sources" :key="source.key">
                         <li class="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] px-3 py-2">
                             <span class="text-[var(--color-on-surface)]" x-text="humanizeLabel(source.label)"></span>
-                            <span class="text-xs font-medium" :class="source.status === 'healthy' ? 'text-[var(--color-success)]' : 'text-[var(--color-warning)]'" x-text="humanizeLabel(source.status)"></span>
+                            <span class="text-xs font-medium" :class="source.status === 'healthy' ? 'text-[var(--color-success-fg)]' : 'text-[var(--color-warning-fg)]'" x-text="humanizeLabel(source.status)"></span>
                         </li>
                     </template>
                 </ul>
@@ -224,7 +224,6 @@
     <div x-show="mode === 'historical'" x-cloak class="reports-historical-stack">
 
     <section class="md-card overflow-hidden animate-stagger" aria-labelledby="report-performance-title">
-        <div class="h-1 bg-[var(--color-primary)]" aria-hidden="true"></div>
 
         <div class="px-5 py-5 sm:px-6 sm:py-6">
             <div class="flex flex-col gap-4 border-b border-[var(--color-border)] pb-5 lg:flex-row lg:items-end lg:justify-between">
@@ -250,10 +249,9 @@
             </div>
 
             <div class="grid grid-cols-1 gap-5 pt-5 xl:grid-cols-[minmax(16rem,0.9fr)_minmax(0,2.1fr)] xl:gap-6">
-                <div class="relative overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--color-primary)_35%,var(--color-border))] bg-[var(--color-primary-muted)] p-5 sm:p-6">
-                    <div class="absolute inset-y-0 left-0 w-1 bg-[var(--color-primary)]" aria-hidden="true"></div>
+                <div class="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-card)] p-5 sm:p-6">
                     <p class="report-eyebrow">Answer Rate</p>
-                    <p class="mt-3 text-4xl font-extrabold leading-none tracking-tight text-[var(--color-on-surface)] tabular-nums sm:text-5xl" x-text="formatPercent(dashboard.overview.answerRate)"></p>
+                    <p class="mt-3 text-3xl font-semibold leading-none tracking-tight text-[var(--color-on-surface)] tabular-nums" x-text="formatPercent(dashboard.overview.answerRate)"></p>
                     <p class="mt-3 text-sm leading-6 text-[var(--color-on-surface-muted)]">
                         <span class="font-semibold text-[var(--color-on-surface)] tabular-nums" x-text="formatNumber(dashboard.overview.answeredCalls)"></span>
                         answered from
@@ -269,7 +267,7 @@
                     </div>
                     <div class="min-w-0 border-b border-[var(--color-border)] p-4 sm:border-r sm:p-5">
                         <dt class="report-metric-label">Answered</dt>
-                        <dd class="mt-2 text-2xl font-bold text-[var(--color-success)] tabular-nums" x-text="formatNumber(dashboard.overview.answeredCalls)"></dd>
+                        <dd class="mt-2 text-2xl font-bold text-[var(--color-on-surface)] tabular-nums" x-text="formatNumber(dashboard.overview.answeredCalls)"></dd>
                     </div>
                     <div class="min-w-0 border-b border-r border-[var(--color-border)] p-4 sm:border-r-0 sm:p-5">
                         <dt class="report-metric-label">Contact Rate</dt>
@@ -608,12 +606,7 @@
                         Search recordings
                     </button>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <input class="form-input" type="text" placeholder="Agent user" x-model="recordingFilters.agent_user" />
-                    <input class="form-input" type="number" placeholder="Lead ID" x-model="recordingFilters.lead_id" />
-                    <input class="form-input" type="date" x-model="recordingFilters.date" />
-                    <button class="btn-secondary" @click="lookupRecordings(recordingFilters)">Search</button>
-                </div>
+                @include('reports.partials.recording-filters')
                 <pre class="text-xs whitespace-pre-wrap break-words bg-[var(--color-surface-2)] p-3 rounded border border-[var(--color-border)] max-h-72 overflow-auto"
                      x-text="payloads.recording?.data?.raw_response || payloads.recording?.message || 'No recording data yet.'"></pre>
             </div>
@@ -1122,7 +1115,7 @@ window.telephonyReports = function () {
                     label: labels[key] || key,
                     value: metric.current === null ? 'N/A' : (isRate ? this.formatPercent(metric.current) : this.formatNumber(metric.current)),
                     changeLabel,
-                    tone: change === null ? 'text-[var(--color-on-surface-dim)]' : (change >= 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'),
+                    tone: change === null ? 'text-[var(--color-on-surface-dim)]' : (change >= 0 ? 'text-[var(--color-success-fg)]' : 'text-[var(--color-danger-fg)]'),
                 };
             });
 

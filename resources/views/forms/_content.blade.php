@@ -81,11 +81,11 @@
                             x-bind:disabled="!isVisible({{ $visibilityRule }})" />
                     @elseif(($field['type'] ?? 'text') === 'select')
                         <div class="form-field">
-                            <label class="form-label">
+                            <label for="form-select-{{ $field['name'] }}" class="form-label">
                                 {{ $field['label'] }}
-                                @if($field['required'] ?? false)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif
+                                @if($field['required'] ?? false)<span class="text-[var(--color-danger-fg)] ml-0.5">*</span>@endif
                             </label>
-                            <select name="{{ $field['name'] }}" class="form-select" x-model="values['{{ $field['name'] }}']" x-bind:disabled="!isVisible({{ $visibilityRule }})" @if($field['required'] ?? false) required @endif>
+                            <select id="form-select-{{ $field['name'] }}" name="{{ $field['name'] }}" class="form-select" x-model="values['{{ $field['name'] }}']" x-bind:disabled="!isVisible({{ $visibilityRule }})" @if($field['required'] ?? false) required @endif>
                                 <option value="">-- Select --</option>
                                 @foreach(($field['options'] ?? []) as $opt)
                                     @php
@@ -108,7 +108,7 @@
                         <fieldset class="form-field min-w-0">
                             <legend class="form-label mb-2">
                                 {{ $field['label'] }}
-                                @if($field['required'] ?? false)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif
+                                @if($field['required'] ?? false)<span class="text-[var(--color-danger-fg)] ml-0.5">*</span>@endif
                             </legend>
                             <div class="flex flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
                                 @foreach(($field['options'] ?? []) as $opt)
@@ -129,12 +129,12 @@
                         </fieldset>
                     @elseif(($field['type'] ?? 'text') === 'percentage')
                         <div class="form-field">
-                            <label class="form-label">
+                            <label for="form-percentage-{{ $field['name'] }}" class="form-label">
                                 {{ $field['label'] }}
-                                @if($field['required'] ?? false)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif
+                                @if($field['required'] ?? false)<span class="text-[var(--color-danger-fg)] ml-0.5">*</span>@endif
                             </label>
                             <div class="relative">
-                                <input type="number"
+                                <input id="form-percentage-{{ $field['name'] }}" type="number"
                                        name="{{ $field['name'] }}"
                                        min="0"
                                        max="100"
@@ -178,11 +178,11 @@
                         x-bind:disabled="!isVisible({{ $visibilityRule }})" />
                 @elseif(($field['type'] ?? 'text') === 'select')
                     <div class="form-field">
-                        <label class="form-label">
+                        <label for="form-select-{{ $field['name'] }}" class="form-label">
                             {{ $field['label'] }}
-                            @if($field['required'] ?? false)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif
+                            @if($field['required'] ?? false)<span class="text-[var(--color-danger-fg)] ml-0.5">*</span>@endif
                         </label>
-                        <select name="{{ $field['name'] }}" class="form-select" x-model="values['{{ $field['name'] }}']" x-bind:disabled="!isVisible({{ $visibilityRule }})" @if($field['required'] ?? false) required @endif>
+                        <select id="form-select-{{ $field['name'] }}" name="{{ $field['name'] }}" class="form-select" x-model="values['{{ $field['name'] }}']" x-bind:disabled="!isVisible({{ $visibilityRule }})" @if($field['required'] ?? false) required @endif>
                             <option value="">-- Select --</option>
                             @foreach(($field['options'] ?? []) as $opt)
                                 @php
@@ -205,7 +205,7 @@
                     <fieldset class="form-field min-w-0">
                         <legend class="form-label mb-2">
                             {{ $field['label'] }}
-                            @if($field['required'] ?? false)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif
+                            @if($field['required'] ?? false)<span class="text-[var(--color-danger-fg)] ml-0.5">*</span>@endif
                         </legend>
                         <div class="flex flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
                             @foreach(($field['options'] ?? []) as $opt)
@@ -226,12 +226,12 @@
                     </fieldset>
                 @elseif(($field['type'] ?? 'text') === 'percentage')
                     <div class="form-field">
-                        <label class="form-label">
+                        <label for="form-percentage-{{ $field['name'] }}" class="form-label">
                             {{ $field['label'] }}
-                            @if($field['required'] ?? false)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif
+                            @if($field['required'] ?? false)<span class="text-[var(--color-danger-fg)] ml-0.5">*</span>@endif
                         </label>
                         <div class="relative">
-                            <input type="number"
+                            <input id="form-percentage-{{ $field['name'] }}" type="number"
                                    name="{{ $field['name'] }}"
                                    min="0"
                                    max="100"
@@ -271,7 +271,7 @@
              x-transition:leave="transition-opacity ease-in duration-150"
              x-transition:leave-start="opacity-100"
              x-transition:leave-end="opacity-0"
-             x-trap.noscroll="reviewOpen"
+             x-trap.inert.noscroll="reviewOpen"
              @keydown.escape.window="closeReview()"
              class="modal-backdrop"
              style="display: none;">

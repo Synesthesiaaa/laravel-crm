@@ -194,7 +194,7 @@
                                            class="form-input @error('form_code') error @enderror">
                                 </div>
                                 <div class="form-field">
-                                    <label class="form-label" for="edit-form-name-{{ $f->id }}">Name <span class="text-[var(--color-danger)] ml-0.5">*</span></label>
+                                    <label class="form-label" for="edit-form-name-{{ $f->id }}">Name <span class="text-[var(--color-danger-fg)] ml-0.5">*</span></label>
                                     <input id="edit-form-name-{{ $f->id }}" type="text" name="name"
                                            value="{{ $isEditing ? old('name', $f->name) : $f->name }}"
                                            required
@@ -208,7 +208,7 @@
                                     @endif
                                 </div>
                                 <div class="form-field">
-                                    <label class="form-label" for="edit-form-table-{{ $f->id }}">Table Name <span class="text-[var(--color-danger)] ml-0.5">*</span></label>
+                                    <label class="form-label" for="edit-form-table-{{ $f->id }}">Table Name <span class="text-[var(--color-danger-fg)] ml-0.5">*</span></label>
                                     <input id="edit-form-table-{{ $f->id }}" type="text" name="table_name"
                                            value="{{ $isEditing ? old('table_name', $f->table_name) : $f->table_name }}"
                                            required

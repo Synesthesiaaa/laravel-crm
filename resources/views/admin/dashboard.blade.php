@@ -29,7 +29,6 @@
                 </p>
             </div>
             <div class="flex gap-2">
-                <x-badge type="active">Live</x-badge>
                 @if($user->isSuperAdmin())
                     <x-badge type="error">Super Admin</x-badge>
                 @elseif($user->isAdmin())
@@ -166,8 +165,8 @@
                 chart: { type: 'area', height: 240, toolbar: { show: false }, background: 'transparent', fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
                 colors: ['#e91e8c'],
                 fill: { type: 'gradient', gradient: { opacityFrom: .35, opacityTo: .03 } },
-                stroke: { curve: 'smooth', width: 2 },
-                xaxis: { categories: @json($activityTrend['labels'] ?? []), labels: { style: { colors: textColor, fontSize: '11px' }, rotate: -30 }, axisBorder: { show: false }, axisTicks: { show: false } },
+                stroke: { curve: 'straight', width: 2 },
+                xaxis: { categories: @json($activityTrend['labels'] ?? []), labels: { style: { colors: textColor, fontSize: '11px' }, rotate: 0, hideOverlappingLabels: true }, axisBorder: { show: false }, axisTicks: { show: false } },
                 yaxis: { labels: { style: { colors: textColor, fontSize: '11px' } }, min: 0 },
                 grid: { borderColor: gridColor, strokeDashArray: 3 },
                 tooltip: { theme: isDark ? 'dark' : 'light' },

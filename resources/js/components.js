@@ -318,17 +318,37 @@ window.globalSearch = function() {
         results: [],
         loading: false,
         focused: -1,
+        error: null,
+        sequence: 0,
+        init() {
+            this.$watch('$store.search.open', (open) => {
+                if (open) this.$nextTick(() => this.$refs.searchInput.focus());
+                else {
+                    this.sequence++;
+                    this.query = '';
+                    this.results = [];
+                    this.error = null;
+                    this.loading = false;
+                }
+            });
+        },
         async search() {
             const q = this.query.trim();
-            if (q.length < 2) { this.results = []; return; }
+            const sequence = ++this.sequence;
+            this.focused = -1;
+            this.error = null;
+            if (q.length < 2) { this.results = []; this.loading = false; return; }
             this.loading = true;
             try {
                 const res = await window.axios.get('/api/search', { params: { q } });
+                if (sequence !== this.sequence) return;
                 this.results = res.data.groups ?? [];
             } catch {
+                if (sequence !== this.sequence) return;
                 this.results = [];
+                this.error = 'Search could not be completed. Try again.';
             } finally {
-                this.loading = false;
+                if (sequence === this.sequence) this.loading = false;
             }
         },
         useRecent(q) {
@@ -336,12 +356,16 @@ window.globalSearch = function() {
             this.search();
         },
         focusNext() {
-            const total = this.results.reduce((a, g) => a + g.items.length, 0);
-            this.focused = (this.focused + 1) % total;
+            this.focusResult(1);
         },
         focusPrev() {
-            const total = this.results.reduce((a, g) => a + g.items.length, 0);
-            this.focused = (this.focused - 1 + total) % total;
+            this.focusResult(-1);
+        },
+        focusResult(direction) {
+            const links = this.$root.querySelectorAll('a.search-result-item');
+            if (!links.length) return;
+            this.focused = (this.focused + direction + links.length) % links.length;
+            links[this.focused].focus();
         },
     };
 };

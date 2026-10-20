@@ -90,7 +90,7 @@
                 @if($s->api_user)
                     <span class="font-mono text-[var(--color-on-surface-dim)]">{{ $s->api_user }}</span>
                 @else
-                    <span class="text-xs text-[var(--color-danger)]">Not set</span>
+                    <span class="text-xs text-[var(--color-danger-fg)]">Not set</span>
                 @endif
             </td>
             <td>

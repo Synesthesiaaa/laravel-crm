@@ -61,7 +61,7 @@
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0"
          class="fixed inset-0 bg-black/60 z-[60] lg:hidden"
-         @click="$store.sidebar.closeMobile()"
+         @click="$store.sidebar.closeMobile(true)"
          aria-hidden="true"
          style="display: none;">
     </div>
@@ -183,8 +183,8 @@
                                         </div>
                                         <div class="flex-1 min-w-0">
                                             <div class="flex items-center justify-between gap-2">
-                                                <p class="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]" x-text="n.source || 'Notification'"></p>
-                                                <span class="text-[10px] font-semibold uppercase tracking-wide" :class="n.read ? 'text-[var(--color-on-surface-dim)]' : 'text-[var(--color-action)]'" x-text="n.read ? 'Read' : 'Unread'"></span>
+                                                <p class="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]" x-text="n.source || 'Notification'"></p>
+                                                <span class="text-[11px] font-semibold uppercase tracking-wide" :class="n.read ? 'text-[var(--color-on-surface-dim)]' : 'text-[var(--color-action)]'" x-text="n.read ? 'Read' : 'Unread'"></span>
                                             </div>
                                             <p class="text-sm font-medium text-[var(--color-on-surface)] leading-snug mt-0.5" x-text="n.title || 'Update'"></p>
                                             <p class="text-xs text-[var(--color-on-surface-muted)] leading-snug mt-0.5" x-text="n.message"></p>
@@ -384,8 +384,9 @@
          x-transition:enter-end="opacity-100"
          class="modal-backdrop"
          style="display: none;"
-         x-trap.noscroll="$store.confirm.visible">
-        <div class="modal-box max-w-sm"
+         x-trap.inert.noscroll="$store.confirm.visible"
+         @keydown.escape.stop.prevent="$store.confirm.decline()">
+        <div class="modal-box max-w-sm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-description"
              x-transition:enter="transition ease-out duration-200"
              x-transition:enter-start="opacity-0 scale-95"
              x-transition:enter-end="opacity-100 scale-100"
@@ -397,13 +398,13 @@
                         <x-icon name="exclamation-triangle" class="w-5 h-5" />
                     </div>
                     <div>
-                        <h3 class="font-semibold text-[var(--color-on-surface)]" x-text="$store.confirm.title"></h3>
-                        <p class="text-sm text-[var(--color-on-surface-muted)] mt-1" x-text="$store.confirm.message"></p>
+                        <h3 id="confirm-title" class="font-semibold text-[var(--color-on-surface)]" x-text="$store.confirm.title"></h3>
+                        <p id="confirm-description" class="text-sm text-[var(--color-on-surface-muted)] mt-1" x-text="$store.confirm.message"></p>
                     </div>
                 </div>
             </div>
             <div class="px-6 pb-6 flex gap-3 justify-end">
-                <button class="btn-ghost" @click="$store.confirm.decline()" x-text="$store.confirm.cancelText"></button>
+                <button type="button" class="btn-ghost" @click="$store.confirm.decline()" x-text="$store.confirm.cancelText"></button>
                 <button class="btn-danger"
                         :class="$store.confirm.variant !== 'danger' ? 'btn-primary' : ''"
                         @click="$store.confirm.accept()"
@@ -424,22 +425,20 @@
          class="modal-backdrop"
          @click="$store.search.close()"
          style="display: none;"
-         x-trap.noscroll="$store.search.open">
-        <div class="search-overlay-box"
+         x-trap.inert.noscroll="$store.search.open" @keydown.escape.stop.prevent="$store.search.close()">
+        <div class="search-overlay-box" role="dialog" aria-modal="true" aria-label="Search CRM"
              @click.stop
              x-transition:enter="transition ease-out duration-200"
              x-transition:enter-start="opacity-0 scale-95 -translate-y-4"
              x-transition:enter-end="opacity-100 scale-100 translate-y-0"
-             x-data="globalSearch()">
+             x-data="globalSearch()" @keydown.arrow-down.prevent="focusNext()" @keydown.arrow-up.prevent="focusPrev()">
             <div class="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border)]">
                 <x-icon name="magnifying-glass" class="w-5 h-5 text-[var(--color-on-surface-muted)] shrink-0" />
                 <input type="text"
-                       x-model.debounce.300ms="query"
-                       @input="search()"
+                       x-model="query"
+                       @input.debounce.300ms="search()"
                        @keydown.escape="$store.search.close()"
-                       @keydown.arrow-down.prevent="focusNext()"
-                       @keydown.arrow-up.prevent="focusPrev()"
-                       placeholder="Search records, leads, users..."
+                       placeholder="Search records, leads, users..." aria-label="Search records, leads and users"
                        class="flex-1 bg-transparent text-[var(--color-on-surface)] placeholder-[var(--color-on-surface-dim)] text-sm focus:outline-none"
                        x-ref="searchInput"
                        x-init="$nextTick(() => $el.focus())">
@@ -481,7 +480,13 @@
                         </template>
                     </div>
                 </template>
-                <template x-if="!loading && query.length >= 2 && results.length === 0">
+                <template x-if="!loading && error">
+                    <div role="alert" class="p-4 text-sm text-[var(--color-danger-fg)]">
+                        <p x-text="error"></p>
+                        <button type="button" class="btn-secondary mt-3" @click="search()">Retry search</button>
+                    </div>
+                </template>
+                <template x-if="!loading && !error && query.length >= 2 && results.length === 0">
                     <div class="py-8 text-center text-sm text-[var(--color-on-surface-dim)]">
                         No results for "<span x-text="query" class="text-[var(--color-on-surface)]"></span>"
                     </div>
@@ -507,17 +512,17 @@
          x-data="dispositionModal()"
          x-cloak
          x-trap.noscroll="$store.call.state === 'wrapup'">
-        <div class="modal-box max-w-md" @click.stop>
+        <div class="modal-box max-w-md" role="dialog" aria-modal="true" aria-labelledby="wrapup-title" @click.stop>
             <div class="modal-header">
-                <h3 class="modal-title">Call Wrap-up — Disposition Required</h3>
+                <h3 id="wrapup-title" class="modal-title">Call Wrap-up — Disposition Required</h3>
             </div>
             <div class="modal-body space-y-4">
                 <x-alert type="warning">
                     Select a disposition code before taking the next call.
                 </x-alert>
                 <div class="form-field">
-                    <label class="form-label">Disposition Code <span class="text-[var(--color-danger)]">*</span></label>
-                    <select x-model="selectedCode" class="form-select">
+                    <label for="wrapup-code" class="form-label">Disposition Code <span class="text-[var(--color-danger-fg)]">*</span></label>
+                    <select id="wrapup-code" x-model="selectedCode" class="form-select" required>
                         <option value="">-- Select --</option>
                         @foreach($dispositionCodes ?? [] as $dc)
                             <option value="{{ $dc->code }}">{{ $dc->label }}</option>
@@ -525,8 +530,8 @@
                     </select>
                 </div>
                 <div class="form-field">
-                    <label class="form-label">Notes</label>
-                    <textarea x-model="notes" class="form-textarea" rows="3" placeholder="Optional call notes..."></textarea>
+                    <label for="wrapup-notes" class="form-label">Notes</label>
+                    <textarea id="wrapup-notes" x-model="notes" class="form-textarea" rows="3" placeholder="Optional call notes..."></textarea>
                 </div>
             </div>
             <div class="modal-footer">

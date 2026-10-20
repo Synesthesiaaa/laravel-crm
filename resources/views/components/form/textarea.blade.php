@@ -21,7 +21,7 @@
     @if($label)
         <label for="{{ $inputId }}" class="form-label">
             {{ $label }}
-            @if($required) <span class="text-[var(--color-danger)] ml-0.5">*</span> @endif
+            @if($required) <span class="text-[var(--color-danger-fg)] ml-0.5">*</span> @endif
         </label>
     @endif
     <textarea

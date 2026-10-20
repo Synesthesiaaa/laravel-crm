@@ -64,12 +64,12 @@
            aria-live="polite"
            aria-atomic="true"
            class="text-xs mt-2"
-           :class="routing.reporting_status === 'degraded' ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'"
+           :class="routing.reporting_status === 'degraded' ? 'text-[var(--color-warning-fg)]' : 'text-[var(--color-danger-fg)]'"
            x-text="routing.message"></p>
         <p x-show="freshness.status === 'stale'"
            role="status"
            aria-live="polite"
-           class="text-xs mt-2 text-[var(--color-warning)]"
+           class="text-xs mt-2 text-[var(--color-warning-fg)]"
            x-text="freshness.last_success_at ? 'Live data is stale. Last successful update: ' + formatAge(freshness.last_success_at) : 'Live data is stale. No successful update is available.'"></p>
         @if(auth()->user()?->isAdmin())
             <details x-show="Object.keys(routing.diagnostics || {}).length" class="mt-3 rounded-lg border border-[var(--color-border)] p-3">
@@ -82,7 +82,7 @@
                                 <span class="text-[var(--color-on-surface-muted)]" x-text="source.status + ' · ' + source.classification"></span>
                             </div>
                             <p class="mt-1 text-[var(--color-on-surface-dim)]" x-text="'HTTP ' + (source.http_status ?? '—') + ' · ' + (source.duration_ms ?? '—') + ' ms · ' + (source.parsed_rows ?? 0) + ' rows'"></p>
-                            <p x-show="source.message" class="mt-1 text-[var(--color-warning)]" x-text="source.message"></p>
+                            <p x-show="source.message" class="mt-1 text-[var(--color-warning-fg)]" x-text="source.message"></p>
                         </div>
                     </template>
                 </div>
@@ -95,7 +95,7 @@
          class="rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/5 px-4 py-3">
         <div class="flex items-start justify-between gap-3">
             <div>
-                <p class="text-sm font-semibold text-[var(--color-danger)]">Live supervisor data unavailable</p>
+                <p class="text-sm font-semibold text-[var(--color-danger-fg)]">Live supervisor data unavailable</p>
                 <p class="text-xs text-[var(--color-on-surface-muted)] mt-1" x-text="errorMessage"></p>
             </div>
             <button type="button" class="btn-secondary text-xs" @click="refresh()">Retry</button>
@@ -278,7 +278,7 @@
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div class="md-card p-4">
                 <p class="text-xs text-[var(--color-on-surface-dim)]">Queue health</p>
-                <p class="mt-2 text-xl font-bold" :class="stats.queue?.health === 'CRITICAL' ? 'text-[var(--color-danger)]' : (stats.queue?.health === 'WARNING' ? 'text-[var(--color-warning)]' : (stats.queue?.health === 'HEALTHY' ? 'text-[var(--color-success)]' : 'text-[var(--color-on-surface-muted)]'))" x-text="stats.queue?.health_label || 'Unknown'"></p>
+                <p class="mt-2 text-xl font-bold" :class="stats.queue?.health === 'CRITICAL' ? 'text-[var(--color-danger-fg)]' : (stats.queue?.health === 'WARNING' ? 'text-[var(--color-warning-fg)]' : (stats.queue?.health === 'HEALTHY' ? 'text-[var(--color-success-fg)]' : 'text-[var(--color-on-surface-muted)]'))" x-text="stats.queue?.health_label || 'Unknown'"></p>
             </div>
             <div class="md-card p-4">
                 <p class="text-xs text-[var(--color-on-surface-dim)]">Calls waiting</p>

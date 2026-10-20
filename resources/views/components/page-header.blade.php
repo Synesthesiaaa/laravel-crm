@@ -4,14 +4,14 @@
         <x-breadcrumbs :items="$breadcrumbs" />
     @endif
     <div class="page-header">
-        <div>
+        <div class="min-w-0 flex-1">
             <h2 class="page-header-title">{{ $title }}</h2>
             @if($description)
                 <p class="page-header-desc">{{ $description }}</p>
             @endif
         </div>
         @if($slot->isNotEmpty())
-        <div class="flex items-center gap-2 shrink-0">
+        <div class="page-header-actions">
             {{ $slot }}
         </div>
         @endif

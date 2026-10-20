@@ -87,8 +87,7 @@
                 </p>
             </div>
             <div class="dashboard-masthead__status">
-                <span class="text-xs font-medium text-[var(--color-on-surface-dim)]">Live Operations</span>
-                <x-badge type="active">Online</x-badge>
+                <a href="{{ route('records.index') }}" class="btn-secondary">View call history</a>
             </div>
         </div>
     </div>
@@ -888,7 +887,7 @@
                 animations: { enabled: !reduceMotion, easing: 'easeinout', speed: 400 },
             },
             colors: ['#e91e8c', config.isDark ? '#a1a1aa' : '#52525b'],
-            stroke: { curve: 'smooth', width: [3, 2], dashArray: [0, 6] },
+            stroke: { curve: 'straight', width: [3, 2], dashArray: [0, 6] },
             markers: { size: 3, strokeWidth: 0, hover: { size: 5 } },
             xaxis: {
                 categories: summaryDaily.map((point) => point.label),
@@ -978,11 +977,11 @@
                 animations: { enabled: !reduceMotion, easing: 'easeinout', speed: 600 },
             },
             colors: ['#e91e8c'],
-            fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: .35, opacityTo: .03 } },
-            stroke: { curve: 'smooth', width: 2 },
+            fill: { type: 'solid', opacity: .12 },
+            stroke: { curve: 'straight', width: 2 },
             xaxis: {
                 categories,
-                labels: { style: { colors: config.textColor, fontSize: '11px' }, rotate: -30 },
+                labels: { style: { colors: config.textColor, fontSize: '11px' }, rotate: 0, hideOverlappingLabels: true },
                 axisBorder: { show: false },
                 axisTicks: { show: false },
             },

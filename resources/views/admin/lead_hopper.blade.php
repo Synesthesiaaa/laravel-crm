@@ -107,7 +107,7 @@
                                 <div class="font-medium text-[var(--color-on-surface)]">{{ $import->original_filename ?: basename($import->file_path) }}</div>
                                 <div class="text-xs text-[var(--color-on-surface-dim)]">{{ $import->form_type }}</div>
                                 @if($import->error_summary)
-                                    <div class="text-xs text-[var(--color-danger)] mt-1">{{ $import->error_summary }}</div>
+                                    <div class="text-xs text-[var(--color-danger-fg)] mt-1">{{ $import->error_summary }}</div>
                                 @endif
                             </td>
                             <td><x-badge :type="$import->status === 'completed' ? 'active' : ($import->status === 'failed' ? 'error' : 'pending')">{{ $import->status }}</x-badge></td>

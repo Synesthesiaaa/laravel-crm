@@ -211,7 +211,7 @@ final class CrmInterfaceOptimizationTest extends TestCase
         $this->assertGreaterThanOrEqual(4, substr_count($supervisor, 'text-[var(--color-action)]'));
         $this->assertGreaterThanOrEqual(2, substr_count($recordsList, 'text-[var(--color-action)]'));
         $this->assertStringContainsString('bg-[var(--color-primary-muted)] text-[var(--color-action)]', $dashboard);
-        $this->assertStringContainsString('bg-[var(--color-primary-muted)] text-[var(--color-action)]', $adminDashboard);
+        $this->assertStringContainsString('text-[var(--color-action)]', $adminDashboard);
         $this->assertStringContainsString('bg-[var(--color-primary)] text-[var(--color-primary-foreground)]', $clickToCall);
         $this->assertStringNotContainsString('bg-[var(--color-primary)] text-white', $clickToCall);
     }

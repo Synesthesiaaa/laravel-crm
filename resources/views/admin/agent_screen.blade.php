@@ -158,8 +158,8 @@
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div class="form-field" x-show="!useCustomVici" x-cloak>
-                            <label class="form-label">Vicidial Field</label>
-                            <select name="vici_field" class="form-select" x-bind:disabled="useCustomVici">
+                            <label for="agent-vici-field" class="form-label">Vicidial Field</label>
+                            <select id="agent-vici-field" name="vici_field" class="form-select" x-bind:disabled="useCustomVici">
                                 <option value="">-- Select field --</option>
                                 @if($writeableViciFields->isNotEmpty())
                                     <optgroup label="Writeable">

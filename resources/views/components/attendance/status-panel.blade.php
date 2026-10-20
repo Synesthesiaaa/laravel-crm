@@ -43,7 +43,7 @@
         >
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div class="flex min-w-0 items-start gap-2">
-                    <x-icon name="exclamation-circle" class="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-danger)]" />
+                    <x-icon name="exclamation-circle" class="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-danger-fg)]" />
                     <p class="text-sm text-[var(--color-on-surface)]" x-text="error"></p>
                 </div>
                 <button

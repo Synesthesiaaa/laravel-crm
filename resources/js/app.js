@@ -100,6 +100,25 @@ window.crmCharts = {
     },
 };
 
+// Update presentation without replacing series, filters, or chart lifecycle handlers.
+new MutationObserver(() => {
+    const isDark = document.documentElement.dataset.theme !== 'light';
+    const tokens = getComputedStyle(document.documentElement);
+    const text = tokens.getPropertyValue('--color-on-surface-muted').trim();
+    const border = tokens.getPropertyValue('--color-border').trim();
+    crmChartGroups.forEach((charts) => charts.forEach((chart) => {
+        Promise.resolve(chart.updateOptions({
+            chart: { foreColor: text },
+            theme: { mode: isDark ? 'dark' : 'light' },
+            tooltip: { theme: isDark ? 'dark' : 'light' },
+            grid: { borderColor: border },
+            xaxis: { labels: { style: { colors: text } } },
+            yaxis: { labels: { style: { colors: text } } },
+            legend: { labels: { colors: text } },
+        }, false, false)).catch((error) => reportClientWarning(error, 'Chart theme update'));
+    }));
+}).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
 /** ApexCharts need a resize after layout is stable (full page load, sidebar transition, soft-nav). */
 window.resizeCrmDashboardCharts = function resizeCrmDashboardCharts() {
     window.crmCharts?.resizeGroup?.('dashboard');
@@ -286,7 +305,10 @@ Alpine.store('sidebar', {
         localStorage.setItem('sidebar_collapsed', this.collapsed);
     },
     openMobile()  { this.mobileOpen = true; },
-    closeMobile() { this.mobileOpen = false; },
+    closeMobile(restoreFocus = false) {
+        this.mobileOpen = false;
+        if (restoreFocus) requestAnimationFrame(() => document.querySelector('[aria-label="Open navigation"]')?.focus());
+    },
 });
 
 // Global call status store (telephony)

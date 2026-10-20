@@ -5,7 +5,7 @@ colors:
   primary: "#e91e8c"
   primary-hover: "#f43f9e"
   primary-muted: "rgba(233, 30, 140, 0.15)"
-  primary-foreground: "#ffffff"
+  primary-foreground: "#0a0a0a"
   success: "#22c55e"
   success-muted: "rgba(34, 197, 94, 0.15)"
   success-fg: "#86efac"
@@ -32,43 +32,43 @@ colors:
   border-strong: "rgba(255,255,255,0.14)"
 typography:
   display:
-    fontFamily: "DM Sans, Instrument Sans, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
     fontSize: "1.75rem"
     fontWeight: 700
     lineHeight: 1
   headline:
-    fontFamily: "DM Sans, Instrument Sans, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
     fontSize: "1.25rem"
     fontWeight: 700
     lineHeight: 1.4
   title:
-    fontFamily: "DM Sans, Instrument Sans, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
     fontSize: "1rem"
     fontWeight: 600
     lineHeight: 1.5
   body:
-    fontFamily: "DM Sans, Instrument Sans, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
     fontSize: "1rem"
     fontWeight: 400
     lineHeight: 1.5
   field:
-    fontFamily: "DM Sans, Instrument Sans, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
     fontSize: "0.9375rem"
     fontWeight: 400
     lineHeight: 1.5
   action:
-    fontFamily: "DM Sans, Instrument Sans, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
     fontSize: "0.875rem"
     fontWeight: 600
     lineHeight: 1.5
   label:
-    fontFamily: "DM Sans, Instrument Sans, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
     fontSize: "0.75rem"
     fontWeight: 700
     lineHeight: 1.2
     letterSpacing: "0.05em"
   status:
-    fontFamily: "DM Sans, Instrument Sans, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
     fontSize: "0.7rem"
     fontWeight: 600
     lineHeight: 1.2
@@ -76,8 +76,8 @@ typography:
 rounded:
   xs: "4px"
   sm: "8px"
-  control: "0.625rem"
-  card: "0.75rem"
+  control: "0.375rem"
+  card: "0.5rem"
   hero: "16px"
   auth: "26px"
   pill: "9999px"
@@ -304,9 +304,9 @@ Dropdowns, notification trays, modals, slide-overs, and toasts share the elevate
 
 The softphone and quick-form controls are first-class tools, not decorative floating action buttons. Launchers sit in a persistent corner stack, expose connection state through a dot and accessible label, and open into a resizable, bounded panel. The phone panel keeps VICIdial session state visible, preserves the iframe session while minimized, offers split view at desktop widths, and uses the same field, button, chip, and overlay language as the rest of the CRM. The quick-form panel follows the same shell but lets the agent select or open a campaign form without leaving the current lead workflow.
 
-### Login Glass Sheet
+### Login
 
-Authentication is the system’s expressive threshold: a centered, max-width sheet over a soft radial/linear atmosphere, with translucent layering, broad lift, a 26px radius, floating labels, and a full-width magenta submit action. It supports both themes and reduced motion. Keep the atmosphere quiet enough that credentials, campaign selection, and error feedback remain the visual priority.
+Authentication uses a centered, opaque sheet with persistent field labels, a quiet border, tight shared radii and a full-width magenta submit action. Both themes use readable field outlines and the same error and progress language as the operational workspace.
 
 ## Do's and Don'ts
 
@@ -323,7 +323,7 @@ Authentication is the system’s expressive threshold: a centered, max-width she
 
 ### Don't:
 
-- **Don't** turn the operational shell into a glassmorphism or gradient-heavy composition; reserve that atmosphere for the login threshold and explicitly branded entry surfaces.
+- **Don't** turn the operational shell into a glassmorphism or gradient-heavy composition; use opaque surfaces and deliberate hierarchy.
 - **Don't** add a second brand accent or use semantic colors as decoration.
 - **Don't** nest arbitrary rounded cards inside rounded cards without a real grouping need.
 - **Don't** make static cards translate on hover or hide important actions behind hover-only behavior.
@@ -331,3 +331,7 @@ Authentication is the system’s expressive threshold: a centered, max-width she
 - **Don't** shrink labels, fields, or icon controls below the established touch and readability floor to fit a dense layout.
 - **Don't** allow a wide report, widget, or notification detail to create page-level horizontal overflow.
 - **Don't** add motion that continues, pulses, or shimmers when the user has requested reduced motion.
+
+## Enterprise interface update - 2026-10-20
+
+The current implementation follows the Taste app-screen direction in [the redesign record](docs/ui/enterprise-redesign.md). Use `resources/css/app.css` as the executable token source. Resting panels are flat, fields use `--color-control`, semantic text uses the `-fg` tokens, metrics use tabular figures, and forms/table headers use sentence case. The sidebar is 248px expanded and 72px collapsed. Compact phone and quick-form launchers share a bottom dock; desktop dragging and split view remain. The login uses persistent labels and an opaque sheet. These current rules supersede earlier glass, gradient, shadow and floating-label guidance in this document.

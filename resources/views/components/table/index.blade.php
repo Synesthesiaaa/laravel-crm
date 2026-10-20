@@ -1,6 +1,6 @@
 @props(['caption' => null])
 <div {{ $attributes->class('md-table-wrap') }}>
-    <div class="table-scroll-wrap">
+    <div class="table-scroll-wrap" tabindex="0" role="region" aria-label="{{ $caption ?: 'Scrollable table' }}">
         <table>
             @if($caption)
                 <caption class="sr-only">{{ $caption }}</caption>

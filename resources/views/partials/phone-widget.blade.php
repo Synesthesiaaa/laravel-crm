@@ -133,7 +133,7 @@
                 <form class="space-y-3" @submit.prevent="viciLogin()">
                     <div class="widget-phone-fields">
                     <div class="form-field">
-                        <label class="form-label" for="vici-vd-login">VD Login <span class="text-[var(--color-danger)]">*</span></label>
+                        <label class="form-label" for="vici-vd-login">VD Login <span class="text-[var(--color-danger-fg)]">*</span></label>
                         <input id="vici-vd-login" class="form-input" x-model="vici.vd_login" placeholder="VICIdial user login"
                                autocomplete="off" autocapitalize="none" spellcheck="false"
                                :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase)" />
@@ -146,7 +146,7 @@
                                :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase)" />
                     </div>
                     <div class="form-field">
-                        <label class="form-label" for="vici-phone-login">Phone Login <span class="text-[var(--color-danger)]">*</span></label>
+                        <label class="form-label" for="vici-phone-login">Phone Login <span class="text-[var(--color-danger-fg)]">*</span></label>
                         <input id="vici-phone-login" class="form-input" x-model="vici.phone_login" placeholder="Extension e.g. 6001"
                                autocomplete="off" autocapitalize="none" spellcheck="false"
                                :disabled="$store.vicidial.loggedIn || ['requesting','iframe_loading','syncing'].includes(vici.phase)" />

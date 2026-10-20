@@ -49,19 +49,13 @@
 
 <div class="mb-6 grid gap-4 sm:grid-cols-2">
     <div class="md-card md-card--static flex items-center gap-4 p-5">
-        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-2)] text-[var(--color-primary)]">
-            <x-icon name="document-text" class="h-6 w-6" />
-        </span>
-        <div>
+<div>
             <p class="text-xs font-medium text-[var(--color-on-surface-muted)]">Available templates</p>
             <p class="mt-1 text-2xl font-semibold tabular-nums text-[var(--color-on-surface)]">{{ number_format($templates->count()) }}</p>
         </div>
     </div>
     <div class="md-card md-card--static flex items-center gap-4 p-5">
-        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-2)] text-[var(--color-primary)]">
-            <x-icon name="envelope" class="h-6 w-6" />
-        </span>
-        <div>
+<div>
             <p class="text-xs font-medium text-[var(--color-on-surface-muted)]">Email campaigns</p>
             <p class="mt-1 text-2xl font-semibold tabular-nums text-[var(--color-on-surface)]">{{ number_format($campaigns->total()) }}</p>
         </div>
@@ -289,7 +283,7 @@
                                aria-invalid="{{ $errors->has('confirmed_permission') ? 'true' : 'false' }}">
                         <span class="text-sm leading-5 text-[var(--color-on-surface)]">
                             I confirm that this purpose and every recipient are authorized for these emails.
-                            <span class="text-[var(--color-danger)]" aria-hidden="true">*</span>
+                            <span class="text-[var(--color-danger-fg)]" aria-hidden="true">*</span>
                         </span>
                     </label>
                     @error('confirmed_permission') <p class="form-error mt-2" role="alert">{{ $message }}</p> @enderror
@@ -497,7 +491,7 @@
                                 <p class="text-xs tabular-nums text-[var(--color-on-surface-muted)]">
                                     <span class="font-medium text-[var(--color-on-surface)]">{{ number_format($sentCount) }}</span> accepted by provider
                                     <span aria-hidden="true">·</span>
-                                    <span class="{{ $failedCount > 0 ? 'text-[var(--color-danger)]' : '' }}">{{ number_format($failedCount) }} failed</span>
+                                    <span class="{{ $failedCount > 0 ? 'text-[var(--color-danger-fg)]' : '' }}">{{ number_format($failedCount) }} failed</span>
                                     <span aria-hidden="true">·</span>
                                     {{ number_format($skippedCount) }} skipped
                                 </p>

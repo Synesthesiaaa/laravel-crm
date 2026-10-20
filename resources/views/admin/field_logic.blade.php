@@ -68,16 +68,16 @@
                 <input type="hidden" name="form_type" value="{{ $formType }}">
                 <div class="filter-row">
                     <div class="form-field">
-                        <label class="form-label">Field name</label>
-                        <input type="text" name="field_name" value="{{ old('field_name') }}" required class="form-input" placeholder="column_name" pattern="[a-zA-Z0-9_]+" title="Letters, numbers, underscores only">
+                        <label for="new-field-name" class="form-label">Field name</label>
+                        <input type="text" id="new-field-name" name="field_name" value="{{ old('field_name') }}" required class="form-input" placeholder="column_name" pattern="[a-zA-Z0-9_]+" title="Letters, numbers, underscores only">
                     </div>
                     <div class="form-field">
-                        <label class="form-label">Label</label>
-                        <input type="text" name="field_label" value="{{ old('field_label') }}" required class="form-input" placeholder="Display Label">
+                        <label for="new-field-label" class="form-label">Label</label>
+                        <input type="text" id="new-field-label" name="field_label" value="{{ old('field_label') }}" required class="form-input" placeholder="Display Label">
                     </div>
                     <div class="form-field">
-                        <label class="form-label">Type</label>
-                        <select name="field_type" class="form-select" x-model="ft">
+                        <label for="new-field-type" class="form-label">Type</label>
+                        <select id="new-field-type" name="field_type" class="form-select" x-model="ft">
                             <option value="text">Text</option>
                             <option value="textarea">Textarea</option>
                             <option value="number">Number</option>
@@ -88,16 +88,16 @@
                         </select>
                     </div>
                     <div class="form-field">
-                        <label class="form-label">Width</label>
-                        <select name="field_width" class="form-select">
+                        <label for="new-field-width" class="form-label">Width</label>
+                        <select id="new-field-width" name="field_width" class="form-select">
                             <option value="full">Full</option>
                             <option value="half">Half</option>
                             <option value="third">Third</option>
                         </select>
                     </div>
                     <div class="form-field">
-                        <label class="form-label">Order</label>
-                        <input type="number" name="field_order" class="form-input w-24" value="{{ old('field_order') }}" placeholder="auto" min="0" step="1">
+                        <label for="new-field-order" class="form-label">Order</label>
+                        <input type="number" id="new-field-order" name="field_order" class="form-input w-24" value="{{ old('field_order') }}" placeholder="auto" min="0" step="1">
                     </div>
                     <div class="form-actions-bottom">
                         <label class="checkbox-row">

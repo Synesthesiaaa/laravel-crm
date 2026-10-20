@@ -22,7 +22,7 @@
 
                     <section class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-5">
                         <div class="form-field max-w-2xl">
-                            <label class="form-label" for="branding-company_name">Company name <span class="text-[var(--color-danger)]">*</span></label>
+                            <label class="form-label" for="branding-company_name">Company name <span class="text-[var(--color-danger-fg)]">*</span></label>
                             <input id="branding-company_name"
                                    name="company_name"
                                    type="text"

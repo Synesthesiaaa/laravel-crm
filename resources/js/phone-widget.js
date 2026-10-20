@@ -173,6 +173,9 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         },
 
         get rootStyle() {
+            if (this.isCompactViewport() && !this.open) {
+                return { right: '1rem', bottom: '1rem' };
+            }
             if (!this.isSplitActive()) {
                 return {};
             }

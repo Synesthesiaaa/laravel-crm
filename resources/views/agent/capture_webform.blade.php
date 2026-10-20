@@ -60,7 +60,7 @@
                              x-cloak>
                             <label class="form-label" for="capture_{{ $fieldKey }}">
                                 {{ $field->field_label }}
-                                @if($field->is_required)<span class="ml-0.5 text-[var(--color-danger)]">*</span>@endif
+                                @if($field->is_required)<span class="ml-0.5 text-[var(--color-danger-fg)]">*</span>@endif
                             </label>
                             @if($fieldType === 'textarea')
                                 <textarea id="capture_{{ $fieldKey }}" name="{{ $fieldKey }}" rows="3"

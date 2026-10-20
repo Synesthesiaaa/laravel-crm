@@ -24,11 +24,11 @@
     <style>
         [x-cloak] { display: none !important; }
         .operations-shell { width: min(1500px, calc(100% - 2rem)); margin-inline: auto; }
-        .operations-panel { border: 1px solid var(--color-border); background: var(--color-surface-1); border-radius: 1rem; box-shadow: 0 18px 48px rgb(0 0 0 / .08); }
-        .operations-metric { border: 1px solid var(--color-border); background: var(--color-surface); border-radius: .85rem; padding: 1rem; min-width: 0; }
-        .operations-label { color: var(--color-on-surface-dim); font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+        .operations-panel { border: 1px solid var(--color-border); background: var(--color-surface-1); border-radius: var(--radius-card); }
+        .operations-metric { border: 1px solid var(--color-border); background: var(--color-surface); border-radius: var(--radius-card); padding: 1rem; min-width: 0; }
+        .operations-label { color: var(--color-on-surface-dim); font-size: .8125rem; font-weight: 500; }
         .operations-value { margin-top: .35rem; color: var(--color-on-surface); font-size: clamp(1.35rem, 2.5vw, 2rem); font-weight: 750; line-height: 1.05; }
-        .operations-table th { color: var(--color-on-surface-dim); font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+        .operations-table th { color: var(--color-on-surface-dim); font-size: .75rem; font-weight: 500; }
         .operations-table th, .operations-table td { padding: .75rem 1rem; border-bottom: 1px solid var(--color-border); text-align: left; white-space: nowrap; }
         .operations-table tbody tr:last-child td { border-bottom: 0; }
     </style>
@@ -40,7 +40,7 @@
         @beforeunload.window="cleanup()"
         class="min-h-screen"
     >
-        <header class="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-surface)_92%,transparent)] backdrop-blur-xl">
+        <header class="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-surface-1)]">
             <div class="operations-shell flex min-h-16 flex-wrap items-center justify-between gap-3 py-3">
                 <div class="flex min-w-0 items-center gap-4">
                     <a href="{{ route('home') }}" class="shrink-0 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--color-primary)]" aria-label="{{ $brandName }} home">
@@ -109,7 +109,7 @@
                     </div>
                 </div>
 
-                <div x-show="error" x-cloak class="border-b border-[var(--color-danger)]/20 bg-[var(--color-danger)]/10 px-5 py-3 text-sm text-[var(--color-danger)]">
+                <div x-show="error" x-cloak class="border-b border-[var(--color-danger)]/20 bg-[var(--color-danger)]/10 px-5 py-3 text-sm text-[var(--color-danger-fg)]">
                     <span class="font-semibold">Unable to refresh this view.</span>
                     <span x-text="error"></span>
                 </div>
@@ -278,7 +278,7 @@
                             </div>
                         </div>
 
-                        <div x-show="recordsError" x-cloak class="rounded-xl border border-[var(--color-danger)]/20 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-danger)]" x-text="recordsError"></div>
+                        <div x-show="recordsError" x-cloak class="rounded-xl border border-[var(--color-danger)]/20 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-danger-fg)]" x-text="recordsError"></div>
 
                         <article class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
                             <div class="flex flex-wrap items-center justify-between gap-3">
@@ -536,8 +536,8 @@
                             xaxis: { categories: trend.labels || [], labels: { style: { colors: textColor, fontSize: '10px' }, rotate: -35 } },
                             yaxis: { min: 0, forceNiceScale: true, labels: { style: { colors: textColor } } },
                             grid: { borderColor },
-                            stroke: { curve: 'smooth', width: 2 },
-                            fill: { type: 'gradient', gradient: { opacityFrom: .28, opacityTo: .03 } },
+                            stroke: { curve: 'straight', width: 2 },
+                            fill: { type: 'solid', opacity: .12 },
                             colors: [primary],
                             dataLabels: { enabled: false },
                             tooltip: { theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light' },

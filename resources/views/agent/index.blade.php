@@ -6,7 +6,7 @@
 
 @section('content')
 <script type="application/json" id="agent-screen-telephony-features">@json($telephonyFeatures ?? [])</script>
-<div x-data="agentScreen()" x-init="init()" data-agent-screen data-campaign="{{ session('campaign', 'mbsales') }}" data-user-id="{{ auth()->id() }}" class="flex flex-col lg:flex-row gap-6 h-full">
+<div x-data="agentScreen()" x-init="init()" data-agent-screen data-campaign="{{ session('campaign', 'mbsales') }}" data-user-id="{{ auth()->id() }}" class="agent-workspace flex flex-col lg:flex-row gap-6 h-full">
 
     {{-- WebSocket health banner --}}
     <div x-show="$store.ws.isDisconnected && !$store.ws.dismissed"
@@ -80,7 +80,7 @@
                      x-show="shouldShow('{{ $field->field_name }}', @js($field->visibility ?? null))">
                     @if($field->field_type === 'textarea')
                         <div class="form-field">
-                            <label for="{{ $captureFieldId }}" class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
+                            <label for="{{ $captureFieldId }}" class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger-fg)] ml-0.5">*</span>@endif</label>
                             <textarea id="{{ $captureFieldId }}" class="form-textarea" name="{{ $field->field_name }}" rows="3"
                                       x-model="values['{{ $field->field_name }}']"
                                       @if(!empty($field->placeholder)) placeholder="{{ $field->placeholder }}" @endif
@@ -98,7 +98,7 @@
                         </div>
                     @elseif($field->field_type === 'percentage')
                         <div class="form-field">
-                            <label for="{{ $captureFieldId }}" class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
+                            <label for="{{ $captureFieldId }}" class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger-fg)] ml-0.5">*</span>@endif</label>
                             <div class="relative">
                                 <input type="number"
                                        id="{{ $captureFieldId }}"
@@ -116,7 +116,7 @@
                         </div>
                     @else
                         <div class="form-field">
-                            <label for="{{ $captureFieldId }}" class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger)] ml-0.5">*</span>@endif</label>
+                            <label for="{{ $captureFieldId }}" class="form-label">{{ $field->label }}@if($field->required)<span class="text-[var(--color-danger-fg)] ml-0.5">*</span>@endif</label>
                             <input id="{{ $captureFieldId }}" type="{{ ($field->field_type ?? 'text') === 'number' ? 'text' : ($field->field_type ?? 'text') }}" class="form-input"
                                    name="{{ $field->field_name }}"
                                    x-model="values['{{ $field->field_name }}']"
@@ -173,7 +173,7 @@
     </div>
 
     {{-- RIGHT: Call controls --}}
-    <div class="lg:w-72 xl:w-80 shrink-0 space-y-4">
+    <div class="agent-call-rail lg:w-72 xl:w-80 shrink-0 space-y-4">
 
         {{-- Call status --}}
         <div class="md-card md-card--static p-5">
@@ -181,7 +181,7 @@
 
             <div class="text-center py-4">
                 {{-- Status indicator --}}
-                <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold mb-4"
+                <div role="status" aria-live="polite" aria-atomic="true" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold mb-4"
                      :class="{
                          'call-connected': callState === 'connected',
                          'call-ringing':   callState === 'dialing' || callState === 'ringing',

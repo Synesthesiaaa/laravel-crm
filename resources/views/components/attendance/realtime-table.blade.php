@@ -61,11 +61,11 @@
             </div>
             <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2">
                 <p class="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]">Available</p>
-                <p class="mt-1 text-xl font-bold tabular-nums text-[var(--color-success)]" x-text="stats.available">0</p>
+                <p class="mt-1 text-xl font-bold tabular-nums text-[var(--color-success-fg)]" x-text="stats.available">0</p>
             </div>
             <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2">
                 <p class="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]">Away</p>
-                <p class="mt-1 text-xl font-bold tabular-nums text-[var(--color-warning)]" x-text="stats.away">0</p>
+                <p class="mt-1 text-xl font-bold tabular-nums text-[var(--color-warning-fg)]" x-text="stats.away">0</p>
             </div>
             <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2">
                 <p class="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-on-surface-dim)]">Longest session</p>
@@ -76,7 +76,7 @@
         <p
             x-show="error"
             x-cloak
-            class="mt-3 text-xs text-[var(--color-warning)]"
+            class="mt-3 text-xs text-[var(--color-warning-fg)]"
             role="status"
             aria-live="polite"
             x-text="error"

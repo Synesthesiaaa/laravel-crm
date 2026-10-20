@@ -137,7 +137,7 @@
                                         @endforeach
                                     </select>
                                     @if($campaignServers->isEmpty())
-                                        <p class="form-help text-[var(--color-danger)]">Configure an active VICIdial server for this CRM campaign first.</p>
+                                        <p class="form-help text-[var(--color-danger-fg)]">Configure an active VICIdial server for this CRM campaign first.</p>
                                     @else
                                         <p class="form-help">Only servers already assigned to this CRM campaign are available.</p>
                                     @endif
@@ -158,7 +158,7 @@
                                                    placeholder="Search campaigns" x-model="search" :disabled="!loaded || loading">
                                         </div>
                                         <p class="mt-2 text-xs text-[var(--color-on-surface-muted)]" x-show="loading" x-cloak role="status">Loading campaigns from VICIdial…</p>
-                                        <p class="mt-2 text-xs text-[var(--color-danger)]" x-show="error" x-text="error" x-cloak role="alert"></p>
+                                        <p class="mt-2 text-xs text-[var(--color-danger-fg)]" x-show="error" x-text="error" x-cloak role="alert"></p>
                                         <div class="mt-3 grid max-h-64 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3" role="group" aria-label="VICIdial campaign choices">
                                             <template x-for="campaign in filteredCampaigns" :key="campaign.code">
                                                 <label class="flex min-h-[44px] cursor-pointer items-start gap-2 rounded-md border border-transparent px-2 py-2 text-sm hover:border-[var(--color-border)] hover:bg-[var(--color-surface-raised)] focus-within:ring-2 focus-within:ring-[var(--color-primary)]">
@@ -167,8 +167,8 @@
                                                     <span class="min-w-0">
                                                         <span class="block truncate font-medium text-[var(--color-on-surface)]" x-text="campaign.code"></span>
                                                         <span class="block truncate text-xs text-[var(--color-on-surface-muted)]" x-text="campaign.name"></span>
-                                                        <span class="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-warning)]" x-show="campaign.unavailable" x-cloak>Unavailable on VICIdial</span>
-                                                        <span class="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-on-surface-muted)]" x-show="!campaign.unavailable && campaign.is_active === false" x-cloak>Inactive</span>
+                                                        <span class="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-warning-fg)]" x-show="campaign.unavailable" x-cloak>Unavailable on VICIdial</span>
+                                                        <span class="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-on-surface-muted)]" x-show="!campaign.unavailable && campaign.is_active === false" x-cloak>Inactive</span>
                                                     </span>
                                                 </label>
                                             </template>

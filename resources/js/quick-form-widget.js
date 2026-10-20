@@ -69,6 +69,9 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         currentFormType: boot.current_form_type || null,
 
         get widgetStyle() {
+            if (this.isCompactViewport() && !this.open) {
+                return { left: `${Math.max(8, this.viewportWidth - 128)}px`, top: `${this.viewportHeight - 64}px` };
+            }
             if (this.isSplitActive()) {
                 const geometry = splitWorkspaceGeometry(this.viewportWidth, this.viewportHeight).right;
 
@@ -399,6 +402,7 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         },
 
         onIconPointerDown(event) {
+            if (this.isCompactViewport() && !this.open) return;
             this.beginAnchorDrag(event);
         },
 

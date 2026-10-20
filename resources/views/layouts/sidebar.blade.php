@@ -56,7 +56,7 @@
        x-data
        x-init="$watch('$store.sidebar.collapsed', value => window.syncSidebarCollapsedState(value))"
        x-trap.inert.noscroll="$store.sidebar.mobileOpen"
-       @keydown.escape="$store.sidebar.closeMobile()"
+       @keydown.escape="$store.sidebar.closeMobile(true)"
        >
 
     <div class="sidebar-header">
@@ -64,7 +64,7 @@
         {{-- Mobile close button --}}
         <button type="button"
                 class="lg:hidden ml-auto btn-icon shrink-0"
-                @click="$store.sidebar.closeMobile()"
+                @click="$store.sidebar.closeMobile(true)"
                 aria-label="Close navigation"
                 aria-controls="sidebar">
             <x-icon name="x-mark" class="w-4 h-4" />
