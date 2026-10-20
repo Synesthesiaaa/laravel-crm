@@ -76,8 +76,6 @@ Confidential email documents require correct recipient assignment and passing va
 
 ## Support and contribution
 
-For Super Admin consent-based GoIP SMS campaigns, see [SMS Management and deployment](docs/SMS_MANAGEMENT.md). Live sending defaults off; model-specific hardware acceptance remains required.
-
 Use [troubleshooting](docs/operations/troubleshooting.md) first. When opening an issue in this repository's GitHub Issues, include a synthetic reproduction, release/runtime, expected result, actual result, and sanitized error. Never attach customer data, payroll documents, credentials, live phone numbers, or signed URLs.
 
 For code changes, follow the [development workflow](docs/developer/development-workflow.md), [testing guide](docs/developer/testing.md), and [documentation maintenance checklist](docs/documentation-maintenance.md). Historical plans and screenshots are preserved; screenshots are not republished without verified synthetic provenance.

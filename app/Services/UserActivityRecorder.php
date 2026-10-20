@@ -21,9 +21,7 @@ class UserActivityRecorder
 
         try {
             $route = $request->route();
-            $query = $this->sanitizer->sanitize($request->routeIs('admin.sms.*')
-                ? $request->only(['workspace', 'status', 'direction', 'campaign_page', 'message_page', 'template_page', 'campaign_id'])
-                : $request->query());
+            $query = $this->sanitizer->sanitize($request->query());
 
             activity('request')
                 ->causedBy($user)
