@@ -28,7 +28,11 @@
         @endforeach
     </div>
 
-    <x-admin.create-panel title="Import Leads">
+    <div class="md-card mb-6">
+        <div class="px-6 py-4 border-b border-[var(--color-border)]">
+            <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Import Leads</h3>
+        </div>
+        <div class="p-6">
             @if(empty($forms))
                 <x-alert type="warning">No forms are configured for the current campaign.</x-alert>
             @else
@@ -55,7 +59,8 @@
                     </div>
                 </form>
             @endif
-    </x-admin.create-panel>
+        </div>
+    </div>
 
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div>

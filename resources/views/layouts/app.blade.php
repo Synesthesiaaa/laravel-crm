@@ -387,13 +387,8 @@
          x-transition:enter-end="opacity-100"
          class="modal-backdrop"
          style="display: none;"
-         x-trap.noscroll="$store.confirm.visible"
-         @keydown.escape.stop.prevent="$store.confirm.decline()">
+         x-trap.noscroll="$store.confirm.visible">
         <div class="modal-box max-w-sm"
-             role="alertdialog"
-             aria-modal="true"
-             aria-labelledby="confirmation-title"
-             aria-describedby="confirmation-description"
              x-transition:enter="transition ease-out duration-200"
              x-transition:enter-start="opacity-0 scale-95"
              x-transition:enter-end="opacity-100 scale-100"
@@ -405,14 +400,14 @@
                         <x-icon name="exclamation-triangle" class="w-5 h-5" />
                     </div>
                     <div>
-                        <h3 id="confirmation-title" class="font-semibold text-[var(--color-on-surface)]" x-text="$store.confirm.title"></h3>
-                        <p id="confirmation-description" class="text-sm text-[var(--color-on-surface-muted)] mt-1" x-text="$store.confirm.message"></p>
+                        <h3 class="font-semibold text-[var(--color-on-surface)]" x-text="$store.confirm.title"></h3>
+                        <p class="text-sm text-[var(--color-on-surface-muted)] mt-1" x-text="$store.confirm.message"></p>
                     </div>
                 </div>
             </div>
             <div class="px-6 pb-6 flex gap-3 justify-end">
-                <button type="button" class="btn-ghost" @click="$store.confirm.decline()" x-text="$store.confirm.cancelText"></button>
-                <button type="button" class="btn-danger"
+                <button class="btn-ghost" @click="$store.confirm.decline()" x-text="$store.confirm.cancelText"></button>
+                <button class="btn-danger"
                         :class="$store.confirm.variant !== 'danger' ? 'btn-primary' : ''"
                         @click="$store.confirm.accept()"
                         x-text="$store.confirm.confirmText">

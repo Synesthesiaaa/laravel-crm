@@ -31,11 +31,20 @@
         ['route' => 'attendance.index','label' => 'Attendance',  'icon' => 'clock'],
         ['route' => 'agent.index',    'label' => 'Agent Screen', 'icon' => 'speaker-wave'],
     ];
-    $workspaceGroups = $user ? \App\Support\AdminNavigation::workspaceGroups($user, $agentScreenVisible) : [];
-    $expandedGroups = ['forms' => request()->routeIs('forms.show')];
-    foreach ($workspaceGroups as $group) {
-        $expandedGroups[$group['key']] = collect($group['items'])->contains(fn ($item) => $sidebarLinkActive($item['route']));
-    }
+    $adminItems = \App\Support\AdminNavigation::adminItems();
+    $superAdminItems = \App\Support\AdminNavigation::superAdminItems();
+    $sidebarSectionActive = static function (array $items) use ($sidebarLinkActive): bool {
+        foreach ($items as $item) {
+            if ($sidebarLinkActive($item['route'])) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+    $formsSectionActive = request()->routeIs('forms.show');
+    $adminSectionActive = $sidebarSectionActive($adminItems);
+    $superAdminSectionActive = $sidebarSectionActive($superAdminItems);
 @endphp
 
 <aside id="sidebar"
@@ -65,7 +74,11 @@
     <nav class="sidebar-nav"
          aria-label="Primary destinations"
          x-data="{
-             expandedSections: @js($expandedGroups),
+             expandedSections: @js([
+                 'forms' => $formsSectionActive,
+                 'admin' => $adminSectionActive,
+                 'super-admin' => $superAdminSectionActive,
+             ]),
              toggleSection(section) {
                  this.expandedSections[section] = ! this.expandedSections[section];
              },
@@ -111,30 +124,59 @@
         </div>
         @endif
 
-        @foreach($workspaceGroups as $group)
-        <button type="button" class="sidebar-section-toggle"
-                @click="$store.sidebar.collapsed && ! $store.sidebar.mobileOpen ? ($store.sidebar.toggle(), expandedSections['{{ $group['key'] }}'] = true) : toggleSection('{{ $group['key'] }}')"
-                :aria-expanded="expandedSections['{{ $group['key'] }}']"
-                aria-controls="sidebar-section-{{ $group['key'] }}"
-                title="Toggle {{ $group['label'] }} navigation">
-            <x-icon :name="$group['icon']" class="sidebar-section-toggle-icon" />
-            <span class="sidebar-section-toggle-label">{{ $group['label'] }}</span>
-            <x-icon name="chevron-down" class="sidebar-section-chevron" x-bind:class="expandedSections['{{ $group['key'] }}'] ? 'is-open' : ''" />
+        {{-- Admin section --}}
+        @if($user && $user->isTeamLeader())
+        <button type="button"
+                class="sidebar-section-toggle"
+                @click="$store.sidebar.collapsed && ! $store.sidebar.mobileOpen ? ($store.sidebar.toggle(), expandedSections.admin = true) : toggleSection('admin')"
+                :aria-expanded="expandedSections.admin"
+                aria-controls="sidebar-section-admin"
+                title="Toggle Administration navigation">
+            <x-icon name="shield-check" class="sidebar-section-toggle-icon" />
+            <span class="sidebar-section-toggle-label">Administration</span>
+            <x-icon name="chevron-down" class="sidebar-section-chevron" x-bind:class="expandedSections.admin ? 'is-open' : ''" />
         </button>
-        <div id="sidebar-section-{{ $group['key'] }}" class="sidebar-section-items"
-             x-show="expandedSections['{{ $group['key'] }}']" :aria-hidden="! expandedSections['{{ $group['key'] }}']">
-            @foreach($group['items'] as $item)
-            <a href="{{ route($item['route']) }}"
-               class="sidebar-item {{ $sidebarLinkActive($item['route']) ? 'active' : '' }}"
-               title="{{ $item['label'] }}"
-               @if($sidebarLinkActive($item['route'])) aria-current="page" @endif
-               @click="$store.sidebar.closeMobile()">
-                <x-icon :name="$item['icon']" class="sidebar-icon shrink-0" />
-                <span class="sidebar-item-label">{{ $item['label'] }}</span>
-            </a>
+        <div id="sidebar-section-admin" class="sidebar-section-items" x-show="expandedSections.admin" :aria-hidden="! expandedSections.admin">
+            @foreach($adminItems as $item)
+                <a href="{{ route($item['route']) }}"
+                   class="sidebar-item {{ $sidebarLinkActive($item['route']) ? 'active' : '' }}"
+                   title="{{ $item['label'] }}"
+                   @if($sidebarLinkActive($item['route'])) aria-current="page" @endif
+                   @click="$store.sidebar.closeMobile()">
+                    <x-icon :name="$item['icon']" class="sidebar-icon shrink-0" />
+                    <span class="sidebar-item-label">{{ $item['label'] }}</span>
+                </a>
             @endforeach
         </div>
-        @endforeach
+
+            {{-- Super Admin section --}}
+            @if($user->isSuperAdmin())
+            <button type="button"
+                    class="sidebar-section-toggle"
+                    @click="$store.sidebar.collapsed && ! $store.sidebar.mobileOpen ? ($store.sidebar.toggle(), expandedSections['super-admin'] = true) : toggleSection('super-admin')"
+                    :aria-expanded="expandedSections['super-admin']"
+                    aria-controls="sidebar-section-super-admin"
+                    title="Toggle Super Admin navigation">
+                <x-icon name="cog-6-tooth" class="sidebar-section-toggle-icon" />
+                <span class="sidebar-section-toggle-label">Super Admin</span>
+                <x-icon name="chevron-down" class="sidebar-section-chevron" x-bind:class="expandedSections['super-admin'] ? 'is-open' : ''" />
+            </button>
+            <div id="sidebar-section-super-admin" class="sidebar-section-items" x-show="expandedSections['super-admin']" :aria-hidden="! expandedSections['super-admin']">
+                @foreach($superAdminItems as $item)
+                    @if($item['route'] !== 'admin.agent-screen.index' || $agentScreenVisible)
+                    <a href="{{ route($item['route']) }}"
+                       class="sidebar-item {{ $sidebarLinkActive($item['route']) ? 'active' : '' }}"
+                       title="{{ $item['label'] }}"
+                       @if($sidebarLinkActive($item['route'])) aria-current="page" @endif
+                       @click="$store.sidebar.closeMobile()">
+                        <x-icon :name="$item['icon']" class="sidebar-icon shrink-0" />
+                        <span class="sidebar-item-label">{{ $item['label'] }}</span>
+                    </a>
+                    @endif
+                @endforeach
+            </div>
+            @endif
+        @endif
     </nav>
 
     <div class="sidebar-workspace" title="{{ session('campaign_name', $campaign) }}">

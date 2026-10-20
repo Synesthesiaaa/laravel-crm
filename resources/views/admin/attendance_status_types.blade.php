@@ -10,7 +10,12 @@
 
 <x-validation-errors />
 
-<x-admin.create-panel :title="__('Add status')" :description="__('Code: lowercase letters, numbers, underscores. Login/logout remain system-only.')">
+<div class="md-card mb-6">
+    <div class="px-6 py-4 border-b border-[var(--color-border)]">
+        <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">{{ __('Add status') }}</h3>
+        <p class="text-xs text-[var(--color-on-surface-muted)] mt-1">{{ __('Code: lowercase letters, numbers, underscores. Login/logout remain system-only.') }}</p>
+    </div>
+    <div class="p-6">
         <form method="POST" action="{{ route('admin.attendance-statuses.store') }}"
               x-data="{ submitting: false }" @submit="submitting = true">
             @csrf
@@ -26,8 +31,8 @@
                 </div>
             </div>
         </form>
-
-</x-admin.create-panel>
+    </div>
+</div>
 
 <x-table.index caption="{{ __('Attendance status types') }}">
     <x-table.head :columns="[

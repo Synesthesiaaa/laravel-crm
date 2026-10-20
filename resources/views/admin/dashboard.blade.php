@@ -23,19 +23,19 @@
     <div class="md-hero admin-masthead">
         <div class="flex items-start justify-between flex-wrap gap-4">
             <div>
-                <h2 class="text-xl font-bold text-[var(--color-on-surface)]">Management Dashboard</h2>
+                <h2 class="text-xl font-bold text-[var(--color-on-surface)]">Admin Control Center</h2>
                 <p class="text-[var(--color-on-surface-muted)] text-sm mt-1">
                     Campaign: <span class="inline-block rounded px-2 py-0.5 bg-[var(--color-primary-muted)] text-[var(--color-action)]">{{ $campaignName }}</span>
                 </p>
             </div>
             <div class="flex gap-2">
-                <span class="workspace-date">Snapshot · {{ now()->format('g:i A') }}</span>
+                <x-badge type="active">Live</x-badge>
                 @if($user->isSuperAdmin())
-                    <x-badge type="inactive">Super Admin</x-badge>
+                    <x-badge type="error">Super Admin</x-badge>
                 @elseif($user->isAdmin())
-                    <x-badge type="inactive">Admin</x-badge>
+                    <x-badge type="warning">Admin</x-badge>
                 @else
-                    <x-badge type="inactive">Team Leader</x-badge>
+                    <x-badge type="info">Team Leader</x-badge>
                 @endif
             </div>
         </div>
@@ -56,7 +56,7 @@
     @include('admin.partials.dashboard-layout-editor')
 
     {{-- KPI stat cards --}}
-    <div class="workspace-stat-strip">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 animate-stagger">
         @foreach($stats as $formCode => $stat)
             <x-stat-card
                 :label="$stat['name']"
@@ -109,13 +109,25 @@
             class="md-card" />
     @endif
 
-    <div class="workspace-directory-grid">
-        @foreach(\App\Support\AdminNavigation::workspaceGroups($user, $agentScreenVisible) as $group)
-            @if($group['key'] !== 'overview')
-                <x-admin.tool-grid :title="$group['label']" :items="$group['items']" />
-            @endif
-        @endforeach
-    </div>
+    {{-- Admin navigation grid --}}
+    @php
+        $adminLinks = array_values(array_filter(
+            \App\Support\AdminNavigation::adminItems(),
+            static fn (array $item): bool => $item['route'] !== 'admin.dashboard',
+        ));
+    @endphp
+    <x-admin.tool-grid title="Admin Tools" :items="$adminLinks" />
+
+    {{-- Super Admin section --}}
+    @if($user->isSuperAdmin())
+        @php
+            $superLinks = array_values(array_filter(
+                \App\Support\AdminNavigation::superAdminItems(),
+                static fn (array $item): bool => $item['route'] !== 'admin.agent-screen.index' || $agentScreenVisible,
+            ));
+        @endphp
+        <x-admin.tool-grid title="Super Admin" :items="$superLinks" tone="danger" />
+    @endif
 
 </div>
 @endsection

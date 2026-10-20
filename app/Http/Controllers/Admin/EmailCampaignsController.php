@@ -24,20 +24,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EmailCampaignsController extends Controller
 {
-    public function index(Request $request, EmailCampaignQueueStatus $queueStatus): View
+    public function index(EmailCampaignQueueStatus $queueStatus): View
     {
-        $workspace = match ($request->old('_email_campaign_form')) {
-            'template', 'edit_template', 'import' => 'templates',
-            'campaign' => 'prepare',
-            default => $request->query('workspace', 'prepare'),
-        };
-        if (! in_array($workspace, ['prepare', 'templates', 'delivery'], true)) {
-            $workspace = 'prepare';
-        }
-
         return view('admin.email-campaigns.index', [
-            'workspace' => $workspace,
-            'campaigns' => EmailCampaign::with('template')->latest()->paginate(15)->withQueryString(),
+            'campaigns' => EmailCampaign::with('template')->latest()->paginate(15),
             'templates' => EmailTemplate::latest()->get(),
             'queueStatus' => $queueStatus->inspect(),
             'stalledCampaigns' => EmailCampaign::query()

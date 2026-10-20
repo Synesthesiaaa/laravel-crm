@@ -13,13 +13,21 @@
             $savedDashboardSections = old('section_order', $storedDashboardSections);
             $visibleDashboardSections = old('visible_sections', $storedVisibleDashboardSections);
         @endphp
-        <x-admin.create-panel title="Customize user dashboard" description="Choose campaign dashboard sections and amounts." :open="$errors->any()">
-        <div x-data="adminDashboardLayoutEditor({
+        <div class="md-card" x-data="adminDashboardLayoutEditor({
             sections: @js($savedDashboardSections),
             visible: @js($visibleDashboardSections),
             labels: @js($dashboardSections),
         })">
-            <form method="POST" action="{{ route('admin.dashboard-layout.update') }}" class="space-y-6">
+            <div class="p-5 border-b border-[var(--color-border)]">
+                <div class="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                        <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Customize user dashboard</h3>
+                        <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">Choose visible sections and use the arrows to set their order for {{ $campaignName }}.</p>
+                    </div>
+                    <x-badge type="info">Admin controlled</x-badge>
+                </div>
+            </div>
+            <form method="POST" action="{{ route('admin.dashboard-layout.update') }}" class="p-5 space-y-6">
                 @csrf
                 <input type="hidden" name="campaign_code" value="{{ $campaign }}">
                 <fieldset class="space-y-2" x-data="{ amountsEnabled: @js((bool) old('amounts.enabled', data_get($dashboardLayout, 'amounts.enabled', true))) }">
@@ -67,6 +75,5 @@
                 </div>
             </form>
         </div>
-        </x-admin.create-panel>
     @endif
 

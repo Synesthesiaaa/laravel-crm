@@ -11,7 +11,7 @@
 <x-validation-errors />
 
 {{-- Add campaign form --}}
-<x-admin.create-panel title="Add Campaign" description="Create a CRM campaign and configure its predictive dialing defaults." class="mb-6">
+<x-admin.panel title="Add Campaign" description="Create a CRM campaign and configure its predictive dialing defaults." class="mb-6">
         <form method="POST" action="{{ route('admin.campaigns.store') }}"
               x-data="{ submitting: false }" @submit="submitting = true">
             @csrf
@@ -32,7 +32,7 @@
                 </button>
             </div>
         </form>
-</x-admin.create-panel>
+</x-admin.panel>
 
 {{-- Campaigns table --}}
 <x-table.index caption="Campaigns list">
@@ -86,12 +86,12 @@
                         @csrf
                         @method('PUT')
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <x-form.input name="code" :id="'edit-campaigns-'.$c->id.'-code'" label="Code" :value="old('code', $c->code)" required />
-                            <x-form.input name="name" :id="'edit-campaigns-'.$c->id.'-name'" label="Name" :value="old('name', $c->name)" required />
-                            <x-form.input name="description" :id="'edit-campaigns-'.$c->id.'-description'" label="Description" :value="old('description', $c->description)" />
-                            <x-form.input name="display_order" :id="'edit-campaigns-'.$c->id.'-display_order'" type="number" label="Display Order" :value="old('display_order', $c->display_order)" />
-                            <x-form.input name="predictive_delay_seconds" :id="'edit-campaigns-'.$c->id.'-predictive_delay_seconds'" type="number" min="1" max="300" label="Predictive Delay (seconds)" :value="old('predictive_delay_seconds', $c->predictive_delay_seconds ?? 3)" />
-                            <x-form.input name="predictive_max_attempts" :id="'edit-campaigns-'.$c->id.'-predictive_max_attempts'" type="number" min="1" max="20" label="Max Attempts Per Lead" :value="old('predictive_max_attempts', $c->predictive_max_attempts ?? 3)" />
+                            <x-form.input name="code" label="Code" :value="old('code', $c->code)" required />
+                            <x-form.input name="name" label="Name" :value="old('name', $c->name)" required />
+                            <x-form.input name="description" label="Description" :value="old('description', $c->description)" />
+                            <x-form.input name="display_order" type="number" label="Display Order" :value="old('display_order', $c->display_order)" />
+                            <x-form.input name="predictive_delay_seconds" type="number" min="1" max="300" label="Predictive Delay (seconds)" :value="old('predictive_delay_seconds', $c->predictive_delay_seconds ?? 3)" />
+                            <x-form.input name="predictive_max_attempts" type="number" min="1" max="20" label="Max Attempts Per Lead" :value="old('predictive_max_attempts', $c->predictive_max_attempts ?? 3)" />
                         </div>
                         <div class="mt-3 flex items-center gap-4">
                             <x-form.checkbox name="is_active" label="Active" :checked="$c->is_active" />
