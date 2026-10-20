@@ -16,7 +16,7 @@
         <input type="hidden" name="lead_id"      value="{{ $leadId ?? '' }}">
         <input type="hidden" name="phone_number" value="{{ $phoneNumber ?? '' }}">
 
-        <div class="md-hero mb-6">
+        <div class="md-hero form-masthead mb-6">
             <h1 class="text-xl font-bold text-[var(--color-on-surface)]">{{ $formName }}</h1>
             <p class="text-[var(--color-on-surface-muted)] text-sm mt-1">Fill out the details below for {{ $campaignName }}.</p>
         </div>

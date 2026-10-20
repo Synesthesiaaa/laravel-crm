@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="crm-interface">
 <head>
     @php
         $layoutBrandName = data_get($branding, 'name', config('app.name', 'CRM'));
@@ -14,10 +14,10 @@
     <script>
       (function() {
         var html = document.documentElement;
-        var t = 'dark';
+        var t = 'light';
         var sidebarCollapsed = false;
         try {
-          t = localStorage.getItem('theme') || 'dark';
+          t = localStorage.getItem('theme') === 'dark' ? 'dark' : 'light';
           sidebarCollapsed = localStorage.getItem('sidebar_collapsed') === 'true';
         } catch (e) {}
         html.setAttribute('data-theme', t);
@@ -105,11 +105,13 @@
 
                 {{-- Global search trigger --}}
                 <button type="button"
-                        class="btn-icon hidden sm:inline-flex"
+                        class="workspace-search"
                         @click="$store.search.toggle()"
                         title="Search (Ctrl+K)"
                         aria-label="Open global search">
                     <x-icon name="magnifying-glass" class="w-4 h-4" />
+                    <span class="workspace-search-label">Search workspace</span>
+                    <kbd class="workspace-search-key" aria-hidden="true">Ctrl K</kbd>
                 </button>
 
                 {{-- Notifications bell --}}
@@ -286,6 +288,7 @@
                 <div class="relative" x-data="{ open: false }">
                     <button type="button"
                             class="header-user-trigger flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-[var(--color-surface-3)] transition-colors text-sm"
+                            aria-label="Account menu for {{ $user->full_name ?? $user->username }}"
                             @click="open = !open"
                             aria-haspopup="true"
                             :aria-expanded="open"
@@ -426,6 +429,11 @@
          style="display: none;"
          x-trap.noscroll="$store.search.open">
         <div class="search-overlay-box"
+             role="dialog"
+             aria-modal="true"
+             aria-label="Search workspace"
+             @keydown.arrow-down.prevent="focusNext()"
+             @keydown.arrow-up.prevent="focusPrev()"
              @click.stop
              x-transition:enter="transition ease-out duration-200"
              x-transition:enter-start="opacity-0 scale-95 -translate-y-4"
@@ -434,18 +442,16 @@
             <div class="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border)]">
                 <x-icon name="magnifying-glass" class="w-5 h-5 text-[var(--color-on-surface-muted)] shrink-0" />
                 <input type="text"
+                       aria-label="Search records, leads, and users"
                        x-model.debounce.300ms="query"
-                       @input="search()"
                        @keydown.escape="$store.search.close()"
-                       @keydown.arrow-down.prevent="focusNext()"
-                       @keydown.arrow-up.prevent="focusPrev()"
                        placeholder="Search records, leads, users..."
                        class="flex-1 bg-transparent text-[var(--color-on-surface)] placeholder-[var(--color-on-surface-dim)] text-sm focus:outline-none"
                        x-ref="searchInput"
                        x-init="$nextTick(() => $el.focus())">
                 <kbd class="search-kbd">ESC</kbd>
             </div>
-            <div class="max-h-80 overflow-y-auto p-2">
+            <div class="max-h-80 overflow-y-auto p-2" x-ref="searchResults" aria-live="polite" :aria-busy="loading">
                 <template x-if="loading">
                     <div class="flex items-center justify-center py-8 gap-2 text-[var(--color-on-surface-dim)]">
                         <x-icon name="arrow-path" class="w-4 h-4 animate-spin" />
@@ -469,7 +475,7 @@
                             <div class="mb-2">
                                 <p class="text-xs font-semibold text-[var(--color-on-surface-dim)] uppercase tracking-wider px-3 py-1" x-text="group.label"></p>
                                 <template x-for="item in group.items" :key="item.url">
-                                    <a :href="item.url" class="search-result-item" @click="$store.search.addRecent(query)">
+                                    <a :href="item.url" class="search-result-item" @click="$store.search.addRecent(query); $store.search.close()">
                                         <x-icon name="document-text" class="w-4 h-4 text-[var(--color-on-surface-dim)]" />
                                         <div class="min-w-0">
                                             <p class="text-sm text-[var(--color-on-surface)] truncate" x-text="item.title"></p>
@@ -481,7 +487,15 @@
                         </template>
                     </div>
                 </template>
-                <template x-if="!loading && query.length >= 2 && results.length === 0">
+                <template x-if="!loading && query.length < 2 && $store.search.recent.length === 0">
+                    <p class="p-6 text-sm text-[var(--color-on-surface-muted)]">Type at least two characters to find records, leads, or users.</p>
+                </template>
+                <template x-if="!loading && error">
+                    <div class="p-6 text-sm text-[var(--color-on-surface-muted)]" role="alert">
+                        Search is unavailable. <button type="button" class="btn-link" @click="search()">Try again</button>
+                    </div>
+                </template>
+                <template x-if="!loading && !error && query.length >= 2 && results.length === 0">
                     <div class="py-8 text-center text-sm text-[var(--color-on-surface-dim)]">
                         No results for "<span x-text="query" class="text-[var(--color-on-surface)]"></span>"
                     </div>
