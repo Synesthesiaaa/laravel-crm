@@ -1,13 +1,15 @@
 @props(['title' => null, 'description' => null, 'cols' => 2])
 @php $colClass = match((int)$cols) { 1 => 'grid-cols-1', 3 => 'grid-cols-1 md:grid-cols-3', default => 'grid-cols-1 md:grid-cols-2' }; @endphp
-<fieldset {{ $attributes->class('form-section mb-6') }}>
+<div class="md-card p-6 mb-4">
     @if($title)
-        <legend class="form-section-title">{{ $title }}</legend>
-    @endif
+    <div class="mb-5">
+        <h3 class="text-sm font-semibold text-[var(--color-on-surface)] tracking-tight">{{ $title }}</h3>
         @if($description)
-            <p class="form-section-description">{{ $description }}</p>
+            <p class="text-xs text-[var(--color-on-surface-muted)] mt-1">{{ $description }}</p>
         @endif
+    </div>
+    @endif
     <div class="grid {{ $colClass }} gap-4">
         {{ $slot }}
     </div>
-</fieldset>
+</div>

@@ -7,7 +7,6 @@
     <a href="{{ route('admin.email-campaigns.index') }}" class="btn-secondary">Back to campaigns</a>
     <a href="{{ route('admin.email-campaigns.report', $campaign) }}" class="btn-secondary">Redacted status CSV</a>
 </x-page-header>
-<x-email-workflow :current="$campaign->status === 'draft' ? 'review' : 'delivery'" />
 @if(session('success'))
     <p role="status" class="mb-4 text-sm text-[var(--color-success-fg)]">{{ session('success') }}</p>
 @endif

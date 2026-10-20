@@ -17,7 +17,7 @@
         <x-icon name="cog-6-tooth" class="h-4 w-4" />
         Email configuration
     </a>
-    <a href="{{ route('admin.email-campaigns.index', ['workspace' => 'delivery']) }}" class="btn-secondary text-sm">
+    <a href="#campaign-history" class="btn-secondary text-sm">
         <x-icon name="clock" class="h-4 w-4" />
         View campaigns
     </a>
@@ -47,19 +47,38 @@
     </x-alert>
 @endif
 
-<x-admin.tabs label="Email campaign workspaces" :active="$workspace" :tabs="[
-    ['key' => 'prepare', 'label' => 'Prepare campaign', 'href' => route('admin.email-campaigns.index')],
-    ['key' => 'templates', 'label' => 'Message templates', 'href' => route('admin.email-campaigns.index', ['workspace' => 'templates'])],
-    ['key' => 'delivery', 'label' => 'Delivery history', 'href' => route('admin.email-campaigns.index', ['workspace' => 'delivery'])],
-]" />
-@if($workspace === 'prepare')
-<x-email-workflow current="prepare" />
-@endif
+<div class="mb-6 grid gap-4 sm:grid-cols-2">
+    <div class="md-card md-card--static flex items-center gap-4 p-5">
+        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-2)] text-[var(--color-primary)]">
+            <x-icon name="document-text" class="h-6 w-6" />
+        </span>
+        <div>
+            <p class="text-xs font-medium text-[var(--color-on-surface-muted)]">Available templates</p>
+            <p class="mt-1 text-2xl font-semibold tabular-nums text-[var(--color-on-surface)]">{{ number_format($templates->count()) }}</p>
+        </div>
+    </div>
+    <div class="md-card md-card--static flex items-center gap-4 p-5">
+        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-2)] text-[var(--color-primary)]">
+            <x-icon name="envelope" class="h-6 w-6" />
+        </span>
+        <div>
+            <p class="text-xs font-medium text-[var(--color-on-surface-muted)]">Email campaigns</p>
+            <p class="mt-1 text-2xl font-semibold tabular-nums text-[var(--color-on-surface)]">{{ number_format($campaigns->total()) }}</p>
+        </div>
+    </div>
+</div>
 
-<div class="email-workspace-content">
-    @if($workspace === 'templates')
-    <div class="space-y-6">
-        <x-admin.create-panel title="Create an email template" :open="!$hasTemplates || $oldForm === 'template'"
+<div class="mb-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-5 py-4">
+    <p class="text-sm font-semibold text-[var(--color-on-surface)]">Getting started</p>
+    <p class="mt-1 text-sm leading-6 text-[var(--color-on-surface-muted)]">
+        Create or import an email template, upload a CSV with <span class="font-mono">email</span> and
+        <span class="font-mono">name</span> columns, then create a campaign. Review the details before starting delivery.
+    </p>
+</div>
+
+<div class="grid items-start gap-6 xl:grid-cols-12">
+    <div class="space-y-6 xl:col-span-7">
+        <x-admin.panel title="1. Create an email template"
             description="Set up the message your recipients will receive. You can reuse the same template for future campaigns.">
             <form method="POST" action="{{ route('admin.email-campaigns.templates.store') }}" class="space-y-5"
                   x-data="{ pdfEnabled: @js($oldForm === 'template' ? (bool) old('pdf_enabled', false) : false), submitting: false }"
@@ -151,9 +170,9 @@
                     </button>
                 </div>
             </form>
-        </x-admin.create-panel>
+        </x-admin.panel>
 
-        <x-admin.create-panel title="Import a document" :open="$oldForm === 'import'"
+        <x-admin.panel title="Or import a document"
             description="Extract text from an existing PDF or image. Import creates a new template that you can review and edit below.">
             <form method="POST" action="{{ route('admin.email-campaigns.import') }}"
                   enctype="multipart/form-data" class="space-y-4"
@@ -178,17 +197,15 @@
                     </button>
                 </div>
             </form>
-        </x-admin.create-panel>
+        </x-admin.panel>
     </div>
 
-    @endif
-    @if($workspace === 'prepare')
-    <div class="space-y-6">
-        <x-admin.panel title="Prepare a campaign"
+    <div class="space-y-6 xl:col-span-5">
+        <x-admin.panel title="2. Prepare a campaign"
             description="Choose a template and upload recipients. The campaign is saved as a draft until you start sending.">
             @unless($hasTemplates)
                 <div class="mb-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3 text-sm text-[var(--color-on-surface-muted)]" role="status">
-                    <a class="link-primary" href="{{ route('admin.email-campaigns.index', ['workspace' => 'templates']) }}">Create or import a message template</a> before preparing an email campaign.
+                    Create or import a template first to prepare an email campaign.
                 </div>
             @endunless
             <form method="POST" action="{{ route('admin.email-campaigns.store') }}" enctype="multipart/form-data"
@@ -287,10 +304,8 @@
         </x-admin.panel>
 
     </div>
-    @endif
 </div>
 
-@if($workspace === 'templates')
 <x-admin.panel title="Saved templates" class="mt-6"
     description="Review extracted content, edit each message, and configure a password-protected PDF attachment before sending.">
     @if($hasTemplates)
@@ -430,8 +445,6 @@
     @endif
 </x-admin.panel>
 
-@endif
-@if($workspace === 'delivery')
 <section id="campaign-history" class="mt-6" aria-labelledby="campaign-history-title">
     <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -528,12 +541,11 @@
             </tbody>
         @else
             <x-table.empty :colspan="6" message="No email campaigns yet."
-                description="Prepare a draft campaign to review before starting delivery." />
+                description="Create your first draft above. It will appear here before sending." />
         @endif
         <x-slot:footer>
             <x-table.pagination :paginator="$campaigns" />
         </x-slot:footer>
     </x-table.index>
 </section>
-@endif
 @endsection

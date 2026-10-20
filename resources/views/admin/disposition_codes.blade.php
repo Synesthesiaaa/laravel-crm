@@ -29,7 +29,11 @@
 </div>
 
 {{-- Add code form --}}
-<x-admin.create-panel title="Add Disposition Code">
+<div class="md-card mb-6">
+    <div class="px-6 py-4 border-b border-[var(--color-border)]">
+        <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Add Disposition Code</h3>
+    </div>
+    <div class="p-6">
         <form method="POST" action="{{ route('admin.disposition-codes.store') }}"
               x-data="{ submitting: false }" @submit="submitting = true">
             @csrf
@@ -46,8 +50,8 @@
                 </div>
             </div>
         </form>
-
-</x-admin.create-panel>
+    </div>
+</div>
 
 {{-- Codes table --}}
 <x-table.index caption="Disposition codes">

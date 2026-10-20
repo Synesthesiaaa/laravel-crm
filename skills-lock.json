@@ -7,12 +7,6 @@
       "skillPath": "skills/brandkit/SKILL.md",
       "computedHash": "6ac5e0a47e54f62d2a52bb15e4fa299a8a552052cdc04d167c5695c8341e3914"
     },
-    "design-taste-frontend": {
-      "source": "Leonxlnx/taste-skill",
-      "sourceType": "github",
-      "skillPath": "skills/taste-skill/SKILL.md",
-      "computedHash": "048a9bff8064f1efa51c2733558428ac93a0d8398e33ad11e7b68500f8e0525f"
-    },
     "design-taste-frontend-v1": {
       "source": "Leonxlnx/taste-skill",
       "sourceType": "github",
@@ -54,12 +48,6 @@
       "sourceType": "github",
       "skillPath": "skills/imagegen-frontend-web/SKILL.md",
       "computedHash": "2a442351ec3352d9a1328697a912850cfc938854ad5973c935bb91da26270d1d"
-    },
-    "impeccable": {
-      "source": "pbakaus/impeccable",
-      "sourceType": "github",
-      "skillPath": ".agents/skills/impeccable/SKILL.md",
-      "computedHash": "aa4a5eef1405395b5a3282ee9a9be8695911c7f79dfe23330fb39b8e7ba83039"
     },
     "industrial-brutalist-ui": {
       "source": "Leonxlnx/taste-skill",

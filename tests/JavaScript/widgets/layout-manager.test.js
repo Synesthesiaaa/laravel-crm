@@ -13,13 +13,13 @@ test('places a new quick form launcher above the bottom widget stack on short sc
         innerHeight: 768,
     };
 
-    const position = defaultQuickFormPosition();
+    const position = defaultQuickFormPosition(520);
     const reservedBottom = FAB_STACK.baseBottomPx
-        + (2 * FAB_STACK.sizePx)
-        + FAB_STACK.launcherGapPx;
+        + (3 * FAB_STACK.sizePx)
+        + (2 * FAB_STACK.gapPx);
 
-    assert.equal(position.x, 1294);
-    assert.equal(position.y, 640);
+    assert.equal(position.x, 822);
+    assert.equal(position.y, 488);
     assert.equal(position.y, 768 - reservedBottom);
 });
 
@@ -52,7 +52,7 @@ test('uses the layout viewport when a vertical scrollbar reduces available width
         },
     };
 
-    assert.equal(defaultQuickFormPosition().x, 288);
+    assert.equal(defaultQuickFormPosition(296).x, 40);
 
     delete globalThis.document;
 });

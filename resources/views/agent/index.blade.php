@@ -6,7 +6,7 @@
 
 @section('content')
 <script type="application/json" id="agent-screen-telephony-features">@json($telephonyFeatures ?? [])</script>
-<div x-data="agentScreen()" x-init="init()" data-agent-screen data-campaign="{{ session('campaign', 'mbsales') }}" data-user-id="{{ auth()->id() }}" class="agent-workspace">
+<div x-data="agentScreen()" x-init="init()" data-agent-screen data-campaign="{{ session('campaign', 'mbsales') }}" data-user-id="{{ auth()->id() }}" class="flex flex-col lg:flex-row gap-6 h-full">
 
     {{-- WebSocket health banner --}}
     <div x-show="$store.ws.isDisconnected && !$store.ws.dismissed"
@@ -173,7 +173,7 @@
     </div>
 
     {{-- RIGHT: Call controls --}}
-    <div class="agent-call-rail space-y-4">
+    <div class="lg:w-72 xl:w-80 shrink-0 space-y-4">
 
         {{-- Call status --}}
         <div class="md-card md-card--static p-5">

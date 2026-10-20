@@ -1,7 +1,6 @@
 import {
     createLayoutPersistence,
     defaultQuickFormPosition,
-    FAB_STACK,
 } from './widgets/layout-manager';
 import {
     hasQuickFormOption,
@@ -43,7 +42,7 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         onHydrate: (layout) => widgetCtx?.applyLayout(layout),
     });
 
-    const defaultPosition = defaultQuickFormPosition();
+    const defaultPosition = defaultQuickFormPosition(defaultWidth);
 
     return {
         open: false,
@@ -187,7 +186,7 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
         minPanelWidth() {
             const margin = Math.max(8, this.bounds.maxWidthPadding || 16);
             const iconSize = 48;
-            const viewportWidth = Math.max(0, getViewportWidth() - iconSize - ICON_GAP_PX - margin - FAB_STACK.baseRightPx);
+            const viewportWidth = Math.max(0, getViewportWidth() - iconSize - ICON_GAP_PX - margin);
 
             return Math.min(this.bounds.minWidth, Math.max(220, viewportWidth));
         },

@@ -12,7 +12,7 @@
 @php
     $hasError = $error ?? ($errors->has($name) ? $errors->first($name) : null);
     $errorMsg = $error ?? ($errors->has($name) ? $errors->first($name) : null);
-    $inputId  = $attributes->get('id') ?: 'field-' . str_replace(['.', '[', ']'], ['-', '-', ''], $name);
+    $inputId  = 'field-' . str_replace(['.', '[', ']'], ['-', '-', ''], $name);
     $describedBy = $errorMsg
         ? $inputId.'-error'
         : ($help ? $inputId.'-help' : null);
@@ -31,7 +31,7 @@
         @if($placeholder) placeholder="{{ $placeholder }}" @endif
         @if($required) required @endif
         @if($disabled) disabled @endif
-        {{ $attributes->except('id')->class(['form-textarea', 'error' => $hasError]) }}
+        {{ $attributes->class(['form-textarea', 'error' => $hasError]) }}
         @if($hasError) aria-invalid="true" @endif
         @if($describedBy) aria-describedby="{{ $describedBy }}" @endif
     >{{ old($name, $value) }}</textarea>

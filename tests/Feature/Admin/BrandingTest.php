@@ -160,7 +160,7 @@ class BrandingTest extends TestCase
             ->get(route('dashboard'))
             ->assertOk()
             ->assertSee('<title>Dashboard - MB Sales | Acme Support</title>', false)
-            ->assertSee('Current campaign', false)
+            ->assertSee('Campaign Workspace', false)
             ->assertSee('Acme Support', false)
             ->assertSee('branding/customer-logo.png', false)
             ->assertSee('branding/customer-favicon.png', false)

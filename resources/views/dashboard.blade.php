@@ -79,6 +79,7 @@
     <div class="dashboard-masthead">
         <div class="dashboard-masthead__content">
             <div class="min-w-0">
+                <p class="dashboard-eyebrow">Your workspace</p>
                 <h2 class="dashboard-masthead__title">{{ $campaignName }}</h2>
                 <p class="dashboard-masthead__context">
                     {{ data_get($branding, 'name', 'CRM') }} <span aria-hidden="true">/</span>
