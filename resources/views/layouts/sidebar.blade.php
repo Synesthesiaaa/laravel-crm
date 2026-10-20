@@ -127,11 +127,7 @@
         @if($user && $user->isTeamLeader())
         <button type="button"
                 class="sidebar-section-toggle"
-<<<<<<< HEAD
                 @click="$store.sidebar.collapsed ? ($store.sidebar.toggle(), expandedSections.admin = true) : toggleSection('admin')"
-=======
-                @click="$store.sidebar.collapsed && ! $store.sidebar.mobileOpen ? ($store.sidebar.toggle(), expandedSections.admin = true) : toggleSection('admin')"
->>>>>>> parent of 7fb41a9 (Reconstruct CRM operations workspace UI)
                 :aria-expanded="expandedSections.admin"
                 aria-controls="sidebar-section-admin"
                 title="Toggle Administration navigation">
@@ -151,39 +147,6 @@
                 </a>
             @endforeach
         </div>
-<<<<<<< HEAD
-=======
-
-            {{-- Super Admin section --}}
-            @if($user->isSuperAdmin())
-            <button type="button"
-                    class="sidebar-section-toggle"
-                    @click="$store.sidebar.collapsed && ! $store.sidebar.mobileOpen ? ($store.sidebar.toggle(), expandedSections['super-admin'] = true) : toggleSection('super-admin')"
-                    :aria-expanded="expandedSections['super-admin']"
-                    aria-controls="sidebar-section-super-admin"
-                    title="Toggle Super Admin navigation">
-                <x-icon name="cog-6-tooth" class="sidebar-section-toggle-icon" />
-                <span class="sidebar-section-toggle-label">Super Admin</span>
-                <x-icon name="chevron-down" class="sidebar-section-chevron" x-bind:class="expandedSections['super-admin'] ? 'is-open' : ''" />
-            </button>
-            <div id="sidebar-section-super-admin" class="sidebar-section-items" x-show="expandedSections['super-admin']" :aria-hidden="! expandedSections['super-admin']">
-                @foreach($superAdminItems as $item)
-                    @if($item['route'] !== 'admin.agent-screen.index' || $agentScreenVisible)
-                    <a href="{{ route($item['route']) }}"
-                       class="sidebar-item {{ $sidebarLinkActive($item['route']) ? 'active' : '' }}"
-                       title="{{ $item['label'] }}"
-                       @if($sidebarLinkActive($item['route'])) aria-current="page" @endif
-                       @click="$store.sidebar.closeMobile()">
-                        <x-icon :name="$item['icon']" class="sidebar-icon shrink-0" />
-                        <span class="sidebar-item-label">{{ $item['label'] }}</span>
-                    </a>
-                    @endif
-                @endforeach
-            </div>
-            @endif
-        @endif
-    </nav>
->>>>>>> parent of 7fb41a9 (Reconstruct CRM operations workspace UI)
 
             {{-- Super Admin section --}}
             @if($user->isSuperAdmin())

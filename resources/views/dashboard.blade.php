@@ -79,11 +79,7 @@
     <div class="dashboard-masthead">
         <div class="dashboard-masthead__content">
             <div class="min-w-0">
-<<<<<<< HEAD
                 <p class="dashboard-eyebrow" style="text-transform: none">Campaign Workspace</p>
-=======
-                <p class="dashboard-eyebrow">Your workspace</p>
->>>>>>> parent of 7fb41a9 (Reconstruct CRM operations workspace UI)
                 <h2 class="dashboard-masthead__title">{{ $campaignName }}</h2>
                 <p class="dashboard-masthead__context">
                     {{ data_get($branding, 'name', 'CRM') }} <span aria-hidden="true">/</span>
