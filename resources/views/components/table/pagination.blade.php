@@ -7,7 +7,7 @@
         of <span class="font-semibold text-[var(--color-on-surface)]">{{ $paginator->total() }}</span> results
     </p>
     @if($paginator->hasPages())
-        {{ $paginator->withQueryString()->links() }}
+        {{ $paginator->withQueryString()->onEachSide(1)->links('components.table.pages') }}
     @endif
 </div>
 @endif

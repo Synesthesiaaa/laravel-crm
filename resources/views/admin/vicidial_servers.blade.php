@@ -10,7 +10,7 @@
 
 <x-validation-errors />
 
-<x-admin.panel title="Add Server" description="Assign a VICIdial connection to a CRM campaign. Non-Agent API credentials are used by reports, callbacks, and lead operations." class="mb-6">
+<x-admin.create-panel title="Add Server" description="Assign a VICIdial connection to a CRM campaign. Non-Agent API credentials are used by reports, callbacks, and lead operations." class="mb-6">
         <form method="POST" action="{{ route('admin.vicidial-servers.store') }}"
               x-data="{ submitting: false }" @submit="submitting = true">
             @csrf
@@ -65,7 +65,7 @@
                 </button>
             </div>
         </form>
-</x-admin.panel>
+</x-admin.create-panel>
 
 <x-table.index caption="ViciDial servers">
     <x-table.head :columns="[
@@ -140,37 +140,37 @@
                         <div>
                             <p class="text-xs font-semibold text-[var(--color-on-surface-muted)] mb-3 uppercase tracking-wider">Connection</p>
                             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                <x-form.select name="campaign_code" label="CRM Campaign" required
+                                <x-form.select name="campaign_code" :id="'edit-vicidial_servers-'.$s->id.'-campaign_code'" label="CRM Campaign" required
                                     :options="collect($campaigns)->mapWithKeys(fn($v,$k) => [$k => $v['name'] ?? $k])->all()"
                                     :selected="$s->campaign_code" :empty="false" />
-                                <x-form.input name="server_name" label="Server Name" :value="old('server_name', $s->server_name)" required />
-                                <x-form.input name="api_url" type="url" label="Agent API URL" :value="old('api_url', $s->api_url)" required />
-                                <x-form.input name="non_agent_api_url" type="url" label="Non-Agent API URL" :value="old('non_agent_api_url', $s->non_agent_api_url)" />
+                                <x-form.input name="server_name" :id="'edit-vicidial_servers-'.$s->id.'-server_name'" label="Server Name" :value="old('server_name', $s->server_name)" required />
+                                <x-form.input name="api_url" :id="'edit-vicidial_servers-'.$s->id.'-api_url'" type="url" label="Agent API URL" :value="old('api_url', $s->api_url)" required />
+                                <x-form.input name="non_agent_api_url" :id="'edit-vicidial_servers-'.$s->id.'-non_agent_api_url'" type="url" label="Non-Agent API URL" :value="old('non_agent_api_url', $s->non_agent_api_url)" />
                             </div>
                             <p class="form-help mt-2">Used for Supervisor reports. Leave blank only when VICIdial's standard Non-Agent endpoint can be derived from the Agent API URL.</p>
                         </div>
                         <div class="border-t border-[var(--color-border)] pt-4">
                             <p class="text-xs font-semibold text-[var(--color-on-surface-muted)] mb-3 uppercase tracking-wider">Database</p>
                             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                <x-form.input name="db_host" label="DB Host" :value="old('db_host', $s->db_host)" required />
-                                <x-form.input name="db_username" label="DB Username" :value="old('db_username', $s->db_username)" required />
-                                <x-form.input name="db_password" type="password" label="DB Password" help="Leave blank to keep current" />
-                                <x-form.input name="db_name" label="DB Name" :value="old('db_name', $s->db_name)" />
-                                <x-form.input name="db_port" type="number" label="DB Port" :value="old('db_port', $s->db_port)" />
+                                <x-form.input name="db_host" :id="'edit-vicidial_servers-'.$s->id.'-db_host'" label="DB Host" :value="old('db_host', $s->db_host)" required />
+                                <x-form.input name="db_username" :id="'edit-vicidial_servers-'.$s->id.'-db_username'" label="DB Username" :value="old('db_username', $s->db_username)" required />
+                                <x-form.input name="db_password" :id="'edit-vicidial_servers-'.$s->id.'-db_password'" type="password" label="DB Password" help="Leave blank to keep current" />
+                                <x-form.input name="db_name" :id="'edit-vicidial_servers-'.$s->id.'-db_name'" label="DB Name" :value="old('db_name', $s->db_name)" />
+                                <x-form.input name="db_port" :id="'edit-vicidial_servers-'.$s->id.'-db_port'" type="number" label="DB Port" :value="old('db_port', $s->db_port)" />
                             </div>
                         </div>
                         <div class="border-t border-[var(--color-border)] pt-4">
                             <p class="text-xs font-semibold text-[var(--color-on-surface-muted)] mb-3 uppercase tracking-wider">Non-Agent API Credentials</p>
                             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                <x-form.input name="api_user" label="API User" :value="old('api_user', $s->api_user)" />
-                                <x-form.input name="api_pass" type="password" label="API Password" help="Leave blank to keep current" />
-                                <x-form.input name="source" label="Source Tag" :value="old('source', $s->source)" />
+                                <x-form.input name="api_user" :id="'edit-vicidial_servers-'.$s->id.'-api_user'" label="API User" :value="old('api_user', $s->api_user)" />
+                                <x-form.input name="api_pass" :id="'edit-vicidial_servers-'.$s->id.'-api_pass'" type="password" label="API Password" help="Leave blank to keep current" />
+                                <x-form.input name="source" :id="'edit-vicidial_servers-'.$s->id.'-source'" label="Source Tag" :value="old('source', $s->source)" />
                             </div>
                         </div>
                         <div class="border-t border-[var(--color-border)] pt-4">
                             <p class="text-xs font-semibold text-[var(--color-on-surface-muted)] mb-3 uppercase tracking-wider">Status & Priority</p>
                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <x-form.input name="priority" type="number" label="Priority" :value="old('priority', $s->priority)" />
+                                <x-form.input name="priority" :id="'edit-vicidial_servers-'.$s->id.'-priority'" type="number" label="Priority" :value="old('priority', $s->priority)" />
                                 <div class="form-field">
                                     <label class="form-label">Flags</label>
                                     <div class="flex items-center gap-4 mt-2">

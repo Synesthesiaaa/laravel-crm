@@ -2,8 +2,8 @@
 <thead>
     <tr>
         @if($checkable)
-            <th class="w-10 px-3">
-                <input type="checkbox" class="form-checkbox w-4 h-4 accent-[var(--color-primary)]" @click="toggleAll && toggleAll(allIds)">
+            <th scope="col" class="w-10 px-3">
+                <input type="checkbox" aria-label="Select all rows" class="form-checkbox w-4 h-4 accent-[var(--color-primary)]" @click="toggleAll && toggleAll(allIds)">
             </th>
         @endif
         @foreach($columns as $col)
@@ -15,7 +15,7 @@
                 $active    = $key && $sortBy === $key;
                 $nextDir   = ($active && $sortDir === 'asc') ? 'desc' : 'asc';
             @endphp
-            <th @if($align !== 'left') style="text-align: {{ $align }}" @endif
+            <th scope="col" @if($active) aria-sort="{{ $sortDir === 'asc' ? 'ascending' : 'descending' }}" @endif @if($align !== 'left') style="text-align: {{ $align }}" @endif
                 @if($sortable && $key) class="sortable" @endif>
                 @if($sortable && $key)
                     <a href="{{ request()->fullUrlWithQuery(['sort' => $key, 'dir' => $nextDir]) }}"

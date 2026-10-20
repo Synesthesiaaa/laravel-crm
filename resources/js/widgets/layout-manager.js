@@ -17,15 +17,16 @@ export const FAB_STACK = {
     baseRightPx: 24,
     gapPx: 56,
     sizePx: 48,
+    launcherGapPx: 8,
 };
 
-export function defaultQuickFormPosition(width) {
+export function defaultQuickFormPosition() {
     const reservedBottom = FAB_STACK.baseBottomPx
-        + (3 * FAB_STACK.sizePx)
-        + (2 * FAB_STACK.gapPx);
+        + (2 * FAB_STACK.sizePx)
+        + FAB_STACK.launcherGapPx;
 
     return {
-        x: Math.max(0, getViewportWidth() - width - FAB_STACK.baseRightPx),
+        x: Math.max(0, getViewportWidth() - FAB_STACK.sizePx - FAB_STACK.baseRightPx),
         y: Math.max(0, window.innerHeight - reservedBottom),
     };
 }

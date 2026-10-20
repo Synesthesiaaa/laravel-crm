@@ -2,10 +2,11 @@
 
 namespace App\Support;
 
+use App\Models\User;
+
 final class AdminNavigation
 {
     /**
-<<<<<<< HEAD
      * Task groups use the same destinations as the management directory.
      * Route middleware remains the authority for access.
      *
@@ -42,8 +43,6 @@ final class AdminNavigation
     }
 
     /**
-=======
->>>>>>> parent of 7fb41a9 (Reconstruct CRM operations workspace UI)
      * Administration destinations shared by the sidebar and management dashboard.
      *
      * @return list<array{route: string, label: string, icon: string, desc: string}>

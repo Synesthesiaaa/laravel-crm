@@ -39,7 +39,7 @@
         </div>
     </div>
 
-    <x-admin.panel title="Add Form" description="Create a form for the selected campaign and bind it to its storage table." class="mb-6">
+    <x-admin.create-panel title="Add Form" description="Create a form for the selected campaign and bind it to its storage table." class="mb-6">
             <form method="POST" action="{{ route('admin.forms.store') }}"
                   x-data="{ submitting: false }" @submit="submitting = true">
                 @csrf
@@ -60,7 +60,7 @@
                     </button>
                 </div>
             </form>
-    </x-admin.panel>
+    </x-admin.create-panel>
 
     @if($salesConfiguration['warnings'] ?? [])
         <x-alert type="warning" class="mb-4">

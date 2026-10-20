@@ -11,7 +11,7 @@
 <x-validation-errors />
 
 {{-- Add user form --}}
-<x-admin.panel title="Add New User" description="Create a staff account and optionally configure its VICIdial and browser-calling defaults." class="mb-6">
+<x-admin.create-panel title="Add New User" description="Create a staff account and optionally configure its VICIdial and browser-calling defaults." class="mb-6">
         <form method="POST" action="{{ route('admin.users.store') }}"
               x-data="{ submitting: false }" @submit="submitting = true">
             @csrf
@@ -32,7 +32,7 @@
                 </button>
             </div>
         </form>
-</x-admin.panel>
+</x-admin.create-panel>
 
 {{-- Users table --}}
 <x-table.index caption="User accounts">
@@ -50,7 +50,7 @@
                 </td>
                 <td>{{ $usr->full_name ?? $usr->name }}</td>
                 <td>
-                    <x-badge :type="$usr->role === 'Super Admin' ? 'error' : ($usr->role === 'Admin' ? 'warning' : ($usr->role === 'Team Leader' ? 'info' : 'inactive'))">
+                    <x-badge type="inactive">
                         {{ $usr->role }}
                     </x-badge>
                 </td>
@@ -94,13 +94,13 @@
                         @csrf
                         @method('PUT')
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                            <x-form.input name="username" label="Username" :value="old('username', $usr->username)" required />
-                            <x-form.input name="full_name" label="Full Name" :value="old('full_name', $usr->full_name ?? $usr->name)" required />
-                            <x-form.select name="role" label="Role"
+                            <x-form.input name="username" :id="'edit-users-'.$usr->id.'-username'" label="Username" :value="old('username', $usr->username)" required />
+                            <x-form.input name="full_name" :id="'edit-users-'.$usr->id.'-full_name'" label="Full Name" :value="old('full_name', $usr->full_name ?? $usr->name)" required />
+                            <x-form.select name="role" :id="'edit-users-'.$usr->id.'-role'" label="Role"
                                 :options="\App\Models\User::roleOptions()"
                                 :selected="old('role', $usr->role)" :empty="false" />
-                            <x-form.input name="password" type="password" label="New Password" autocomplete="new-password" help="Leave blank to keep" />
-                            <x-form.input name="password_confirmation" type="password" label="Confirm" autocomplete="new-password" />
+                            <x-form.input name="password" :id="'edit-users-'.$usr->id.'-password'" type="password" label="New Password" autocomplete="new-password" help="Leave blank to keep" />
+                            <x-form.input name="password_confirmation" :id="'edit-users-'.$usr->id.'-password_confirmation'" type="password" label="Confirm" autocomplete="new-password" />
                         </div>
                         <x-admin.user-telephony-fields :user="$usr" :campaign-options="$campaignOptions ?? []" />
                         <div class="mt-4">
