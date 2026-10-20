@@ -80,7 +80,11 @@
         <div class="dashboard-masthead__content">
             <div class="min-w-0">
 <<<<<<< HEAD
+<<<<<<< HEAD
                 <p class="dashboard-eyebrow" style="text-transform: none">Campaign Workspace</p>
+=======
+                <p class="dashboard-eyebrow">Your workspace</p>
+>>>>>>> parent of 7fb41a9 (Reconstruct CRM operations workspace UI)
 =======
                 <p class="dashboard-eyebrow">Your workspace</p>
 >>>>>>> parent of 7fb41a9 (Reconstruct CRM operations workspace UI)
