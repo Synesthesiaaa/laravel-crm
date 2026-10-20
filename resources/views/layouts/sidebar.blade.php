@@ -84,7 +84,6 @@
              },
          }">
         {{-- Main --}}
-        <p class="sidebar-section-label">Workspace</p>
         @foreach($navItems as $item)
             @if($item['route'] !== 'agent.index' || $agentScreenVisible)
             <a href="{{ route($item['route']) }}"
@@ -102,7 +101,7 @@
         @if(!empty($forms))
         <button type="button"
                 class="sidebar-section-toggle"
-                @click="$store.sidebar.collapsed && ! $store.sidebar.mobileOpen ? ($store.sidebar.toggle(), expandedSections.forms = true) : toggleSection('forms')"
+                @click="$store.sidebar.collapsed ? ($store.sidebar.toggle(), expandedSections.forms = true) : toggleSection('forms')"
                 :aria-expanded="expandedSections.forms"
                 aria-controls="sidebar-section-forms"
                 title="Toggle Campaign Forms navigation">
@@ -128,7 +127,7 @@
         @if($user && $user->isTeamLeader())
         <button type="button"
                 class="sidebar-section-toggle"
-                @click="$store.sidebar.collapsed && ! $store.sidebar.mobileOpen ? ($store.sidebar.toggle(), expandedSections.admin = true) : toggleSection('admin')"
+                @click="$store.sidebar.collapsed ? ($store.sidebar.toggle(), expandedSections.admin = true) : toggleSection('admin')"
                 :aria-expanded="expandedSections.admin"
                 aria-controls="sidebar-section-admin"
                 title="Toggle Administration navigation">
@@ -153,7 +152,7 @@
             @if($user->isSuperAdmin())
             <button type="button"
                     class="sidebar-section-toggle"
-                    @click="$store.sidebar.collapsed && ! $store.sidebar.mobileOpen ? ($store.sidebar.toggle(), expandedSections['super-admin'] = true) : toggleSection('super-admin')"
+                    @click="$store.sidebar.collapsed ? ($store.sidebar.toggle(), expandedSections['super-admin'] = true) : toggleSection('super-admin')"
                     :aria-expanded="expandedSections['super-admin']"
                     aria-controls="sidebar-section-super-admin"
                     title="Toggle Super Admin navigation">
@@ -178,12 +177,4 @@
             @endif
         @endif
     </nav>
-
-    <div class="sidebar-workspace" title="{{ session('campaign_name', $campaign) }}">
-        <span class="sidebar-workspace-mark" aria-hidden="true"><x-icon name="building-office" class="w-4 h-4" /></span>
-        <div class="sidebar-workspace-copy">
-            <span class="sidebar-workspace-label">Current campaign</span>
-            <span class="sidebar-workspace-name">{{ session('campaign_name') ?: ($campaign ?: 'No campaign selected') }}</span>
-        </div>
-    </div>
 </aside>

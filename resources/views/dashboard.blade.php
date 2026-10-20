@@ -79,7 +79,7 @@
     <div class="dashboard-masthead">
         <div class="dashboard-masthead__content">
             <div class="min-w-0">
-                <p class="dashboard-eyebrow">Your workspace</p>
+                <p class="dashboard-eyebrow" style="text-transform: none">Campaign Workspace</p>
                 <h2 class="dashboard-masthead__title">{{ $campaignName }}</h2>
                 <p class="dashboard-masthead__context">
                     {{ data_get($branding, 'name', 'CRM') }} <span aria-hidden="true">/</span>
@@ -87,12 +87,8 @@
                 </p>
             </div>
             <div class="dashboard-masthead__status">
-                <span class="workspace-date">{{ now()->format('l, F j') }}</span>
-                <a href="{{ route('records.index') }}" class="btn-secondary">
-                    <x-icon name="clipboard-document-list" class="w-4 h-4" />
-                    Call History
-                    <x-icon name="chevron-right" class="w-4 h-4" />
-                </a>
+                <span class="text-xs font-medium text-[var(--color-on-surface-dim)]">Live Operations</span>
+                <x-badge type="active">Online</x-badge>
             </div>
         </div>
     </div>

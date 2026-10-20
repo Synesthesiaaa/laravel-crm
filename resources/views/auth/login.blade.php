@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="crm-interface">
+<html lang="en">
 <head>
     @php
         $guestBrandName = data_get($branding, 'name', config('app.name', 'CRM'));
@@ -18,8 +18,8 @@
     <meta name="description" content="Private CRM sign-in for authorized campaign and operations users.">
     <script>
       (function() {
-        var t = 'light';
-        try { t = localStorage.getItem('theme') === 'dark' ? 'dark' : 'light'; } catch (e) {}
+        var t = 'dark';
+        try { t = localStorage.getItem('theme') || 'dark'; } catch (e) {}
         document.documentElement.setAttribute('data-theme', t);
       })();
     </script>
@@ -28,7 +28,7 @@
     <link rel="shortcut icon" href="{{ $guestFaviconUrl }}">
     @vite(['resources/css/app.css'])
 </head>
-<body class="crm-login-shell">
+<body>
     <div class="login-root">
         <button type="button" id="theme-toggle" class="theme-toggle login-theme-toggle" aria-label="Switch to light mode" title="Switch to light mode" aria-pressed="false">
             <svg class="theme-icon-dark" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>

@@ -20,12 +20,12 @@
 @endphp
 <div class="space-y-8">
 
-    <div class="md-hero admin-masthead">
+    <div class="md-hero">
         <div class="flex items-start justify-between flex-wrap gap-4">
             <div>
                 <h2 class="text-xl font-bold text-[var(--color-on-surface)]">Admin Control Center</h2>
                 <p class="text-[var(--color-on-surface-muted)] text-sm mt-1">
-                    Campaign: <span class="inline-block rounded px-2 py-0.5 bg-[var(--color-primary-muted)] text-[var(--color-action)]">{{ $campaignName }}</span>
+                    Campaign: <span class="font-semibold text-[var(--color-action)]">{{ $campaignName }}</span>
                 </p>
             </div>
             <div class="flex gap-2">
