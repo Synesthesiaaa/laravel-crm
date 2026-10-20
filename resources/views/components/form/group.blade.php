@@ -5,7 +5,11 @@
     <div class="mb-5">
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
         <h3 class="text-sm font-bold text-[var(--color-on-surface)] uppercase tracking-wider">{{ $title }}</h3>
+=======
+        <h3 class="text-sm font-semibold text-[var(--color-on-surface)] tracking-tight">{{ $title }}</h3>
+>>>>>>> parent of 7fb41a9 (Reconstruct CRM operations workspace UI)
 =======
         <h3 class="text-sm font-semibold text-[var(--color-on-surface)] tracking-tight">{{ $title }}</h3>
 >>>>>>> parent of 7fb41a9 (Reconstruct CRM operations workspace UI)
