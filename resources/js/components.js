@@ -318,49 +318,30 @@ window.globalSearch = function() {
         results: [],
         loading: false,
         focused: -1,
-        error: false,
-        requestId: 0,
-        init() {
-            this.$watch('query', () => this.search());
-            this.$watch('$store.search.open', (open) => {
-                if (open) this.$nextTick(() => this.$refs.searchInput.focus());
-            });
-        },
         async search() {
-            const requestId = ++this.requestId;
             const q = this.query.trim();
-            this.focused = -1;
-            this.error = false;
-            if (q.length < 2) { this.results = []; this.loading = false; return; }
+            if (q.length < 2) { this.results = []; return; }
             this.loading = true;
             try {
                 const res = await window.axios.get('/api/search', { params: { q } });
-                if (requestId !== this.requestId) return;
                 this.results = res.data.groups ?? [];
             } catch {
-                if (requestId !== this.requestId) return;
                 this.results = [];
-                this.error = true;
             } finally {
-                if (requestId === this.requestId) this.loading = false;
+                this.loading = false;
             }
         },
         useRecent(q) {
             this.query = q;
+            this.search();
         },
         focusNext() {
-            this.focusResult(1);
+            const total = this.results.reduce((a, g) => a + g.items.length, 0);
+            this.focused = (this.focused + 1) % total;
         },
         focusPrev() {
-            this.focusResult(-1);
-        },
-        focusResult(direction) {
-            const links = this.$refs.searchResults.querySelectorAll('a.search-result-item');
-            if (!links.length) return;
-            this.focused = this.focused < 0
-                ? (direction > 0 ? 0 : links.length - 1)
-                : (this.focused + direction + links.length) % links.length;
-            links[this.focused].focus();
+            const total = this.results.reduce((a, g) => a + g.items.length, 0);
+            this.focused = (this.focused - 1 + total) % total;
         },
     };
 };

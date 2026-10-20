@@ -38,14 +38,11 @@ $trendIcon = match ($trendState) {
     default => 'minus',
 };
 @endphp
-@if($href)
-<a href="{{ $href }}" {{ $attributes->merge(['class' => $statCardClass.' no-underline']) }}>
-@else
-<div {{ $attributes->merge(['class' => $statCardClass]) }}>
-@endif
+<div {{ $attributes->merge(['class' => $statCardClass]) }}
+     @if($href) onclick="window.location='{{ $href }}'" @endif>
     <div class="flex items-start justify-between">
         <span class="stat-card-label">{{ $label }}</span>
-        <div class="stat-card-icon w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style="background: {{ $c['bg'] }}; color: {{ $c['text'] }}">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style="background: {{ $c['bg'] }}; color: {{ $c['text'] }}">
             <x-icon :name="$icon" class="w-4 h-4" />
         </div>
     </div>
@@ -70,8 +67,4 @@ $trendIcon = match ($trendState) {
             <span class="font-normal text-[var(--color-on-surface-dim)]">{{ $trendLabel }}</span>
         </div>
     @endif
-@if($href)
-</a>
-@else
 </div>
-@endif

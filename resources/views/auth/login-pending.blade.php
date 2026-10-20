@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="crm-interface">
+<html lang="en">
 <head>
     @php
         $guestBrandName = data_get($branding, 'name', config('app.name', 'CRM'));
@@ -11,11 +11,7 @@
     <meta name="robots" content="noindex,nofollow,noarchive">
     <meta name="description" content="Private CRM active-session confirmation for authorized users.">
     <script>
-      (function() {
-        var t = 'light';
-        try { t = localStorage.getItem('theme') === 'dark' ? 'dark' : 'light'; } catch (e) {}
-        document.documentElement.setAttribute('data-theme', t);
-      })();
+      (function() { var t = localStorage.getItem('theme') || 'dark'; document.documentElement.setAttribute('data-theme', t); })();
     </script>
     <title>Active session | {{ $guestBrandName }}</title>
     <link rel="icon" href="{{ $guestFaviconUrl }}">
