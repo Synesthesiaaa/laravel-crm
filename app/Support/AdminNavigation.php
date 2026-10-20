@@ -24,7 +24,6 @@ final class AdminNavigation
             $items = array_merge($items, self::superAdminItems());
         }
         $groups = [
-            'sms' => ['SMS Management', 'chat-bubble-left-right', ['admin.sms.index']],
             'overview' => ['Overview', 'chart-bar', ['admin.dashboard']],
             'operations' => ['Operations', 'signal', ['admin.supervisor', 'admin.attendance.index', 'admin.records.index', 'admin.data-master.index', 'admin.capture-records.index', 'admin.disposition-records.index', 'admin.lead-hopper.index']],
             'analytics' => ['Analytics', 'chart-pie', ['reports.index', 'admin.extraction.index']],
@@ -79,7 +78,6 @@ final class AdminNavigation
     public static function superAdminItems(): array
     {
         return [
-            ['route' => 'admin.sms.index', 'label' => 'SMS Management', 'icon' => 'chat-bubble-left-right', 'desc' => 'Manage consent-based SMS campaigns, history and GoIP gateways'],
             ['route' => 'admin.users.index', 'label' => 'User Access', 'icon' => 'users', 'desc' => 'Manage staff accounts, roles, and telephony credentials'],
             ['route' => 'admin.vicidial-servers.index', 'label' => 'VICIdial Servers', 'icon' => 'server', 'desc' => 'Manage API and database connections'],
             ['route' => 'admin.campaigns.index', 'label' => 'Campaigns', 'icon' => 'building-office', 'desc' => 'Configure CRM campaigns and VICIdial mappings'],
