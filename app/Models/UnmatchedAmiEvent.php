@@ -16,6 +16,9 @@ class UnmatchedAmiEvent extends Model
         'payload',
         'processed',
         'received_at',
+        'attempt_count',
+        'last_attempted_at',
+        'last_error_code',
     ];
 
     protected function casts(): array
@@ -24,6 +27,8 @@ class UnmatchedAmiEvent extends Model
             'payload' => 'array',
             'processed' => 'boolean',
             'received_at' => 'datetime',
+            'last_attempted_at' => 'datetime',
+            'attempt_count' => 'integer',
         ];
     }
 

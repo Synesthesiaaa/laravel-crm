@@ -7,7 +7,8 @@
     },
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "test:js": "node --test tests/JavaScript/agent-capture-webform.test.js tests/JavaScript/form-visibility.test.js tests/JavaScript/preferences-storage.test.js tests/JavaScript/echo-config.test.js"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",

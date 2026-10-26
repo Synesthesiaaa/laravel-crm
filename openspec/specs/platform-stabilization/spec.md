@@ -111,12 +111,20 @@ The system SHALL avoid N+1 query patterns in admin diagnostics and other high-fr
 - **THEN** the check SHALL complete with a bounded query set and SHALL NOT perform one database lookup per campaign
 
 ### Requirement: Safe logout and webhook hardening
-The system SHALL complete logout cleanup without double-submit behavior and SHALL reject misconfigured public webhook traffic in production.
+The system SHALL complete logout cleanup without double-submit behavior and SHALL reject public webhook traffic whenever its required shared secret is missing or invalid in any runtime environment.
 
 #### Scenario: Logout during active telephony use
 - **WHEN** a signed-in user logs out while a telephony session is active
 - **THEN** the client SHALL hang up or destroy the telephony runtime once, clear any embedded session frame, and submit the logout form once
 
-#### Scenario: Missing or invalid webhook secret in production
-- **WHEN** production receives a webhook request with a missing or invalid shared secret
-- **THEN** the request SHALL be rejected instead of being accepted silently
+#### Scenario: Missing webhook secret
+- **WHEN** either public telephony event POST webhook receives a request while its shared secret is not configured
+- **THEN** the request SHALL return service unavailable and SHALL NOT process or acknowledge the event as processed
+
+#### Scenario: Invalid webhook secret
+- **WHEN** either public telephony event POST webhook receives a missing or incorrect `X-Webhook-Secret` header while a secret is configured
+- **THEN** the request SHALL return unauthorized and SHALL NOT process the event
+
+#### Scenario: Valid webhook secret
+- **WHEN** either public telephony event POST webhook receives the configured shared secret
+- **THEN** the event SHALL follow its existing validation and processing behavior

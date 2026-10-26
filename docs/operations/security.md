@@ -12,9 +12,9 @@ Campaign resolution selects context from the session or a fallback; it does not 
 
 ## Public and incoming surfaces
 
-- `/operations-insights`, `/api/operations-insights`, and `/api/operations-insights/records` are outside login middleware. Their JSON endpoints have request throttling, which does not supply authentication.
+- Operations Insights and its JSON endpoints require an authenticated Team Leader, Admin, or Super Admin session. Their JSON endpoints also have request throttling.
 - `/api/telephony/health` and `/api/websocket/health` are public diagnostic surfaces. Health can expose operational/configuration information and contact an external server.
-- The two POST AMI/VICIdial event webhooks bypass CSRF. When their secret is absent they fail with 503 in production, while non-production permits the missing-secret path. Configured secrets require `X-Webhook-Secret`; invalid headers return 401.
+- The two POST AMI/VICIdial event webhooks bypass CSRF and require a configured shared secret plus a matching `X-Webhook-Secret` in every environment. Missing configuration returns 503; a missing or incorrect header returns 401.
 - VICIdial GET Call URL callbacks require the configured `sig` shared value. It is not a per-message HMAC or timestamped replay guarantee. Protect URLs from access-log disclosure and replay at the network/integration layer.
 - Email unsubscribe uses signed URLs and a confirmation POST. A valid signed URL is an authorization capability; do not publish it in examples or logs.
 

@@ -10,6 +10,7 @@ use App\Models\TelephonyAlert;
 use App\Services\Telephony\TelephonyAlertService;
 use App\Services\Telephony\TelephonyHealthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -48,6 +49,33 @@ class QueueStabilizationTest extends TestCase
             ->assertExitCode(0);
     }
 
+    public function test_startup_profiles_use_default_queue_connection_except_for_durable_outbox(): void
+    {
+        $windows = file_get_contents(base_path('start-dev.bat'));
+        $unix = file_get_contents(base_path('start-dev.sh'));
+
+        $this->assertIsString($windows);
+        $this->assertIsString($unix);
+        foreach ([$windows, $unix] as $profile) {
+            $migration = strpos($profile, 'php artisan migrate --force');
+            $serve = strpos($profile, 'php artisan serve');
+
+            $this->assertNotFalse($migration);
+            $this->assertNotFalse($serve);
+            $this->assertLessThan($serve, $migration);
+            $this->assertStringContainsString('queue:work --queue=telephony,default', $profile);
+            $this->assertStringContainsString('queue:work --queue=imports', $profile);
+            $this->assertStringContainsString('queue:work --queue=asterisk', $profile);
+            $this->assertStringContainsString('queue:work database --queue=telephony-sync', $profile);
+            $this->assertStringContainsString('START_EMAIL_WORKER', $profile);
+        }
+    }
+
+    public function test_database_retry_after_exceeds_longest_startup_worker_timeout(): void
+    {
+        $this->assertGreaterThan(800, config('queue.connections.database.retry_after'));
+    }
+
     public function test_call_no_answer_timeout_job_does_not_define_constructor_delay(): void
     {
         $job = new CallNoAnswerTimeoutJob(123);
@@ -61,6 +89,16 @@ class QueueStabilizationTest extends TestCase
         $middleware = (new ReconcileCallStateJob)->middleware();
 
         $this->assertNotEmpty($middleware);
+    }
+
+    public function test_ami_listeners_have_distinct_command_signatures(): void
+    {
+        $commands = Artisan::all();
+
+        $this->assertArrayHasKey('ami:listen', $commands);
+        $this->assertArrayHasKey('ami:events:listen', $commands);
+        $this->assertFalse($commands['ami:listen']->getDefinition()->hasOption('reconnect-delay'));
+        $this->assertTrue($commands['ami:events:listen']->getDefinition()->hasOption('reconnect-delay'));
     }
 
     public function test_dead_letter_processing_alerts_once_for_application_failed_jobs(): void

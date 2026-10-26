@@ -29,7 +29,7 @@ class LeadHydrationApiTest extends TestCase
                 Mockery::on(fn ($authUser) => (int) $authUser->id === (int) $user->id),
                 'mbsales',
                 123,
-                null
+                null,
             )
             ->andReturn([
                 'lead_id' => '123',

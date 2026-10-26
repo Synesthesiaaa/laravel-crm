@@ -1,0 +1,5 @@
+schema: spec-driven
+created: 2026-10-26
+goal: Ensure development and CI run the intended workers and gates,
+  authorization follows one supported role source, and failures remain visible
+  without sensitive data.

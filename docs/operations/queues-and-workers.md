@@ -11,9 +11,11 @@ A queue stores work; a worker consumes it. A Laravel queue **connection** choose
 | `imports` consumer | `ImportLeadsCsvJob` | Current job imports form rows, not LeadHopper records |
 | `asterisk` consumer | `AsteriskOriginateJob` | Separate direct AMI job; do not assume ordinary browser dial uses it |
 | `telephony` consumer | History sync and telephony work | Required for timely local history |
+| `telephony-sync` consumer | Durable VICIdial disposition and lead-field outbox | Must use the `database` connection; Horizon's Redis supervisors do not consume it |
 | Horizon | Redis queue management | Configured lanes: default, imports, asterisk, telephony; Linux PCNTL/POSIX required |
 | Dedicated email consumer | Campaign batch and recipient delivery | Separate connection and queue, **one worker**, not covered by Horizon defaults |
-| `ami:listen` | Persistent AMI event stream | A listener, not a queue worker; two source classes share this command name |
+| `ami:listen` | Persistent in-process AMI event stream | A listener, not a queue worker |
+| `ami:events:listen` | AMI event stream forwarded to the webhook | Alternate listener; run only when its webhook forwarding path is intentionally configured |
 | `reverb:start` | WebSocket server | Needs public proxy/TLS and matching app/frontend settings |
 | OS scheduler | Runs Laravel schedule once a minute | Includes permanent retention deletion and email maintenance |
 
@@ -34,9 +36,17 @@ For asynchronous development with `QUEUE_CONNECTION=database`, an operator can s
 php artisan queue:work database --queue=telephony,default,imports,asterisk --tries=1 --timeout=800
 ```
 
+The durable remote-write outbox has a dedicated database lane:
+
+```bash
+php artisan queue:work database --queue=telephony-sync --tries=1 --timeout=60
+```
+
+The `start-dev.bat` and `start-dev.sh` profiles omit a connection for general application lanes so Laravel uses `QUEUE_CONNECTION` (Redis by default in `.env.example`). They pin only `telephony-sync` to the database connection. If `QUEUE_CONNECTION=database`, set `DB_QUEUE_RETRY_AFTER=900` so long imports are not reserved again before their 800-second worker timeout.
+
 This explicit long timeout accommodates import jobs (600 seconds; Horizon imports supervisor timeout is 750 seconds); it is not a recommended single production worker design. Set database `retry_after` above the longest worker/job timeout before starting it (for example `DB_QUEUE_RETRY_AFTER=900` for this configuration) so reservations are not redelivered while still running. Timeouts and signals have limitations on native Windows; use WSL/Linux for production-equivalent validation. Separate production lanes prevent long imports blocking call work.
 
-`composer run dev` starts web, `queue:listen --queue=telephony,default --tries=1 --timeout=0`, Pail, Vite, and Reverb. It does **not** start imports, the asterisk lane, AMI, the scheduler, or email. The general listener has timeouts disabled; use supervised production consumers with bounded timeouts.
+`composer run dev` starts web, the `telephony,default` listener, Pail, Vite, Reverb, and a database worker for `telephony-sync`. It does **not** start imports, the asterisk lane, AMI, the scheduler, or email. The general listener has timeouts disabled; use supervised production consumers with bounded timeouts.
 
 ## Horizon in production
 
@@ -56,11 +66,11 @@ php artisan queue:work email-database --queue=email-campaigns --sleep=1 --tries=
 
 The [Supervisor email example](../../deploy/supervisor/laravel-crm-email.conf.example) needs local path/PHP/user review. The email and AMI examples use different service users; choose a consistent approved runtime account and verify shared storage permissions. Read [email safety and recovery](../EMAIL_CAMPAIGNS.md) before retries: uncertain sends require reconciliation rather than blind queue retry.
 
-## AMI command ambiguity
+## AMI listeners
 
-Both [AmiEventListenerCommand](../../app/Console/Commands/AmiEventListenerCommand.php) and [AmiListenerCommand](../../app/Console/Commands/AmiListenerCommand.php) declare `ami:listen`. Read-only `php artisan help ami:listen` in the inspected checkout resolves to the persistent in-process listener and has **no `--reconnect-delay` option**. Therefore the checked-in [Supervisor AMI example](../../deploy/supervisor/laravel-ami-listener.conf.example) must not be installed verbatim: it passes an unsupported option.
+The persistent in-process listener is `ami:listen`. The alternate webhook-forwarding listener is `ami:events:listen` and accepts `--reconnect-delay` and `--webhook-url`.
 
-Use `php artisan help ami:listen` on the exact release before approving its service definition. For the inspected runtime the command is simply `php artisan ami:listen`; reconnect delays come from `AMI_LISTENER_RECONNECT_DELAY` and `AMI_LISTENER_MAX_RECONNECT_DELAY`. The competing class's webhook-forwarding architecture is not the active runtime verified here. This documentation records the defect; it does not change either class or deployment file.
+Use the [Supervisor AMI example](../../deploy/supervisor/laravel-ami-listener.conf.example) for the persistent listener. Reconnect delays come from `AMI_LISTENER_RECONNECT_DELAY` and `AMI_LISTENER_MAX_RECONNECT_DELAY`. Select the webhook-forwarding command only when that architecture is explicitly configured.
 
 ## Scheduler
 

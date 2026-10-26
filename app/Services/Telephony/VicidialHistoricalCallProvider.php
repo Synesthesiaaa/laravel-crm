@@ -203,6 +203,142 @@ class VicidialHistoricalCallProvider
         }
     }
 
+    /**
+     * Fetch a history window with keyset pagination and pass each bounded page to its consumer.
+     *
+     * @param  array<int, string>  $campaignCodes
+     * @param  callable(array<int, HistoricalCallRecord>): void  $consume
+     */
+    public function streamRange(
+        VicidialServer $server,
+        Campaign $campaign,
+        array $campaignCodes,
+        Carbon $from,
+        Carbon $to,
+        callable $consume,
+        ?int $pageSize = null,
+    ): HistoricalCallProviderResult {
+        $campaignCodes = array_values(array_filter(array_map(
+            static fn (mixed $code): string => trim((string) $code),
+            $campaignCodes,
+        )));
+        if ($campaignCodes === []) {
+            return HistoricalCallProviderResult::success([], 0, meta: [
+                'source' => 'vicidial_database',
+                'server_id' => $server->getKey(),
+                'window_start' => $from->toIso8601String(),
+                'window_end' => $to->toIso8601String(),
+            ]);
+        }
+        if ($from->greaterThan($to)) {
+            return HistoricalCallProviderResult::failure('The synchronization window is invalid.', [
+                'classification' => 'INVALID_WINDOW',
+                'retryable' => false,
+            ]);
+        }
+
+        $startedAt = microtime(true);
+        $connection = null;
+        $total = 0;
+        $pageSize = max(1, $pageSize ?? (int) config('vicidial.call_history_sync.chunk_size', 500));
+
+        try {
+            $connection = $this->makeConnection($server);
+            $query = $this->combinedQuery($connection, $campaignCodes, $this->normalizeFilters([]), false)
+                ->whereBetween('call_date', [$from->toDateTimeString(), $to->toDateTimeString()]);
+            $cursor = null;
+
+            do {
+                $page = (clone $query)
+                    ->orderBy('call_date')
+                    ->orderBy('source_table')
+                    ->orderBy('cursor_lead_id')
+                    ->orderBy('cursor_phone_number')
+                    ->orderBy('cursor_unique_id')
+                    ->cursorPaginate($pageSize, ['*'], 'sync_cursor', $cursor);
+                $rows = $page->getCollection();
+                if ($rows->isEmpty()) {
+                    break;
+                }
+
+                $records = $rows->map(
+                    fn (object $row): HistoricalCallRecord => $this->normalizeRow($row, $campaign),
+                )->values()->all();
+
+                try {
+                    $consume($records);
+                } catch (Throwable $exception) {
+                    $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
+                    $this->logger()->error('vicidial.call_history.sync_page', 'Local call-history page persistence failed.', [
+                        'server_id' => $server->getKey(),
+                        'crm_campaign' => (string) $campaign->code,
+                        'error_class' => $exception::class,
+                        'rows_in_page' => count($records),
+                        'duration_ms' => $durationMs,
+                    ]);
+
+                    return HistoricalCallProviderResult::failure('Local call history storage failed. Please try again.', [
+                        'classification' => 'LOCAL_DATABASE_ERROR',
+                        'retryable' => true,
+                        'source' => 'vicidial_database',
+                        'server_id' => $server->getKey(),
+                        'duration_ms' => $durationMs,
+                    ]);
+                }
+
+                $total += count($records);
+                $cursor = $page->nextCursor();
+                unset($rows, $records, $page);
+            } while ($cursor !== null);
+
+            $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
+            $this->logger()->info('vicidial.call_history.sync_fetch', 'Bounded VICIdial call history window streamed.', [
+                'server_id' => $server->getKey(),
+                'crm_campaign' => (string) $campaign->code,
+                'mapped_campaign_count' => count($campaignCodes),
+                'rows_received' => $total,
+                'page_size' => $pageSize,
+                'duration_ms' => $durationMs,
+                'window_start' => $from->toIso8601String(),
+                'window_end' => $to->toIso8601String(),
+            ]);
+
+            return HistoricalCallProviderResult::success([], $total, meta: [
+                'source' => 'vicidial_database',
+                'server_id' => $server->getKey(),
+                'rows_received' => $total,
+                'page_size' => $pageSize,
+                'duration_ms' => $durationMs,
+                'window_start' => $from->toIso8601String(),
+                'window_end' => $to->toIso8601String(),
+            ]);
+        } catch (Throwable $exception) {
+            $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
+            $this->logger()->error('vicidial.call_history.sync_fetch', 'Bounded VICIdial call history window is unavailable.', [
+                'server_id' => $server->getKey(),
+                'crm_campaign' => (string) $campaign->code,
+                'mapped_campaign_count' => count($campaignCodes),
+                'error_class' => $exception::class,
+                'duration_ms' => $durationMs,
+                'window_start' => $from->toIso8601String(),
+                'window_end' => $to->toIso8601String(),
+            ]);
+
+            return HistoricalCallProviderResult::failure(
+                'VICIdial call history is currently unavailable. Please try again.',
+                array_merge($this->failureMeta($exception), [
+                    'source' => 'vicidial_database',
+                    'server_id' => $server->getKey(),
+                    'duration_ms' => $durationMs,
+                ]),
+            );
+        } finally {
+            if ($connection !== null) {
+                $this->disconnect($connection);
+            }
+        }
+    }
+
     public function normalizeRow(object $row, Campaign $campaign): HistoricalCallRecord
     {
         $sourceTable = (string) ($row->source_table ?? self::OUTBOUND_TABLE);
@@ -281,7 +417,7 @@ class VicidialHistoricalCallProvider
             ? 'uniqueid as unique_call_id, campaign_id as vicidial_campaign_id, list_id as vicidial_list_id, lead_id, user as vicidial_user, phone_number, call_date, start_epoch, end_epoch, length_in_sec as duration_seconds, status as raw_status, queue_seconds as wait_seconds, term_reason as raw_end_reason'
             : 'uniqueid as unique_call_id, campaign_id as vicidial_campaign_id, list_id as vicidial_list_id, lead_id, user as vicidial_user, phone_number, call_date, start_epoch, end_epoch, length_in_sec as duration_seconds, status as raw_status, NULL as wait_seconds, term_reason as raw_end_reason';
         $query = $connection->table($table)
-            ->selectRaw($columns.", '".$table."' as source_table")
+            ->selectRaw($columns.", '".$table."' as source_table, COALESCE(lead_id, 0) as cursor_lead_id, COALESCE(phone_number, '') as cursor_phone_number, COALESCE(uniqueid, '') as cursor_unique_id")
             ->whereIn('campaign_id', $campaignCodes);
         if ($filters['start_date'] !== null) {
             $query->where('call_date', '>=', $filters['start_date'].' 00:00:00');

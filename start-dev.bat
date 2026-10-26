@@ -7,20 +7,39 @@ cd /d "%PROJECT_DIR%"
 echo Starting Laravel CRM services in one window...
 echo.
 
+echo Applying pending database migrations before starting services...
+php artisan migrate --force
+if errorlevel 1 (
+    echo Migration failed. Services were not started.
+    exit /b 1
+)
+echo.
+
 start /b php artisan serve --host=localhost --port=8000
 timeout /t 1 /nobreak >nul
 
 start /b php artisan reverb:start
 timeout /t 1 /nobreak >nul
 
-start /b php artisan queue:work --queue=telephony,default
+start /b php artisan queue:work --queue=telephony,default --tries=1 --timeout=800
+timeout /t 1 /nobreak >nul
+
+start /b php artisan queue:work --queue=imports --tries=1 --timeout=800
+timeout /t 1 /nobreak >nul
+
+start /b php artisan queue:work --queue=asterisk --tries=1 --timeout=120
+timeout /t 1 /nobreak >nul
+
+start /b php artisan queue:work database --queue=telephony-sync --tries=1 --timeout=60
 timeout /t 1 /nobreak >nul
 
 start /b php artisan ami:listen
 
-start /b php artisan migrate --force
+if "%START_EMAIL_WORKER%"=="1" (
+    start /b php artisan queue:work email-database --queue=email-campaigns --tries=1 --timeout=60
+)
 
 echo.
-echo All services running (serve, reverb, queue, ami, migrate). Close this window to stop all.
+echo Services running (serve, reverb, queue lanes, telephony sync, AMI). Set START_EMAIL_WORKER=1 to consume email campaigns.
 echo.
 pause

@@ -9,6 +9,10 @@ use Illuminate\Support\Facades\Http;
 
 class VicidialProxyService
 {
+    private const RESERVED_TRANSPORT_PARAMETERS = [
+        'function', 'source', 'user', 'pass', 'agent_user',
+    ];
+
     public function __construct(
         protected VicidialServerRepository $serverRepository,
         protected TelephonyLogger $telephonyLogger,
@@ -17,10 +21,19 @@ class VicidialProxyService
     /**
      * Execute a VICIdial Agent API action.
      *
-     * @return array{success: bool, raw_response: string, message: ?string, failure_code: ?string}
+     * @return array{success: bool, raw_response: string, message: ?string, failure_code: ?string, outcome_unknown?: bool}
      */
     public function execute(User $user, string $campaign, string $action, array $params = []): array
     {
+        if ($this->hasReservedTransportParameters($params)) {
+            return [
+                'success' => false,
+                'raw_response' => '',
+                'message' => CallErrors::MESSAGES[CallErrors::INVALID_VICIDIAL_PARAMETERS],
+                'failure_code' => CallErrors::INVALID_VICIDIAL_PARAMETERS,
+            ];
+        }
+
         $server = $this->serverRepository->getForCampaign($campaign);
         if (! $server) {
             $this->telephonyLogger->warning('VicidialProxyService', 'No server for campaign', ['campaign' => $campaign]);
@@ -58,8 +71,23 @@ class VicidialProxyService
         ];
 
         $extraQuery = $params['query'] ?? [];
+        $targetAgentUser = $params['target_agent_user'] ?? null;
+        if ($targetAgentUser !== null) {
+            if (! is_string($targetAgentUser) || trim($targetAgentUser) === '' || strlen($targetAgentUser) > 20) {
+                return [
+                    'success' => false,
+                    'raw_response' => '',
+                    'message' => CallErrors::MESSAGES[CallErrors::INVALID_VICIDIAL_PARAMETERS],
+                    'failure_code' => CallErrors::INVALID_VICIDIAL_PARAMETERS,
+                ];
+            }
+
+            // Only trusted server-side callers may set the controlled supervisor target.
+            // Request-supplied query.agent_user remains rejected by the reserved-key guard.
+            $extraQuery['agent_user'] = trim($targetAgentUser);
+        }
         foreach ($params as $k => $v) {
-            if (in_array($k, ['value', 'phone_code', 'phone_number', 'query', 'credentials'], true)) {
+            if (in_array($k, ['value', 'phone_code', 'phone_number', 'query', 'credentials', 'target_agent_user'], true)) {
                 continue;
             }
             if (! array_key_exists($k, $extraQuery)) {
@@ -92,7 +120,8 @@ class VicidialProxyService
         $connectTimeout = max(1, (int) config('vicidial.agent_connect_timeout', 2));
         $retryTimes = max(1, (int) config('vicidial.retry_times', 2));
         $retrySleepMs = config('vicidial.retry_sleep_ms', 500);
-        $attempts = $this->isRetrySafeAction($action, $params) ? $retryTimes : 1;
+        $retrySafe = $this->isRetrySafeAction($action, $params);
+        $attempts = $retrySafe ? $retryTimes : 1;
 
         try {
             $response = Http::when(! config('vicidial.verify_ssl', true), fn ($h) => $h->withoutVerifying())
@@ -102,7 +131,7 @@ class VicidialProxyService
                     $this->telephonyLogger->warning('VicidialProxyService', 'Retrying after failure', [
                         'action' => $action,
                         'campaign' => $campaign,
-                        'error' => $e->getMessage(),
+                        'exception_class' => $e::class,
                     ]);
 
                     return true;
@@ -112,24 +141,40 @@ class VicidialProxyService
             $this->telephonyLogger->warning('VicidialProxyService', 'Agent API transport failure', [
                 'action' => $action,
                 'campaign' => $campaign,
-                'error' => $e->getMessage(),
+                'exception_class' => $e::class,
+                'outcome_unknown' => ! $retrySafe,
             ]);
 
             return [
                 'success' => false,
                 'raw_response' => '',
-                'message' => 'VICIdial is temporarily unavailable. Please try again.',
-                'failure_code' => CallErrors::VICIDIAL_UNAVAILABLE,
+                'message' => ! $retrySafe
+                    ? CallErrors::MESSAGES[CallErrors::VICIDIAL_OUTCOME_UNKNOWN]
+                    : 'VICIdial is temporarily unavailable. Please try again.',
+                'failure_code' => ! $retrySafe
+                    ? CallErrors::VICIDIAL_OUTCOME_UNKNOWN
+                    : CallErrors::VICIDIAL_UNAVAILABLE,
+                'outcome_unknown' => ! $retrySafe,
             ];
         }
 
         $body = $response->body();
         $normalized = strtolower(trim($body));
-        $success = ! str_starts_with($normalized, 'error:');
+        $definitiveApiError = str_starts_with($normalized, 'error:');
+        $outcomeUnknown = ! $retrySafe
+            && ! $definitiveApiError
+            && (! $response->successful() || $normalized === '');
+        $success = ! $definitiveApiError && ! $outcomeUnknown && $response->successful();
         $message = null;
         $failureCode = null;
+        if ($outcomeUnknown) {
+            $message = CallErrors::MESSAGES[CallErrors::VICIDIAL_OUTCOME_UNKNOWN];
+            $failureCode = CallErrors::VICIDIAL_OUTCOME_UNKNOWN;
+        }
         if (! $success) {
-            if (stripos($body, 'INVALID USERNAME/PASSWORD') !== false || stripos($body, '|BAD|') !== false) {
+            if ($outcomeUnknown) {
+                // Keep the uncertain result distinct from a definitive rejection.
+            } elseif (stripos($body, 'INVALID USERNAME/PASSWORD') !== false || stripos($body, '|BAD|') !== false) {
                 $message = 'VICIdial credentials were rejected.';
                 $failureCode = CallErrors::AUTH_FAILURE;
                 $this->telephonyLogger->warning('VicidialProxyService', 'Credentials rejected', ['campaign' => $campaign, 'user_id' => $user->id]);
@@ -147,7 +192,7 @@ class VicidialProxyService
                 $this->telephonyLogger->warning('VicidialProxyService', 'Request failed', [
                     'action' => $action,
                     'campaign' => $campaign,
-                    'response' => strlen($body) > 200 ? substr($body, 0, 200).'...' : $body,
+                    'response_bytes' => strlen($body),
                 ]);
             }
         }
@@ -157,6 +202,7 @@ class VicidialProxyService
             'raw_response' => $body,
             'message' => $message,
             'failure_code' => $success ? null : $failureCode,
+            'outcome_unknown' => $outcomeUnknown,
         ];
     }
 
@@ -168,6 +214,25 @@ class VicidialProxyService
     {
         return $action === 'calls_in_queue_count'
             || ($action === 'recording' && strtoupper((string) ($params['value'] ?? '')) === 'STATUS');
+    }
+
+    private function hasReservedTransportParameters(array $params): bool
+    {
+        foreach ($params as $key => $value) {
+            if (in_array(strtolower((string) $key), self::RESERVED_TRANSPORT_PARAMETERS, true)) {
+                return true;
+            }
+
+            if ($key === 'query' && is_array($value)) {
+                foreach ($value as $queryKey => $_queryValue) {
+                    if (in_array(strtolower((string) $queryKey), self::RESERVED_TRANSPORT_PARAMETERS, true)) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

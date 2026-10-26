@@ -4,11 +4,15 @@ namespace App\Http\Requests;
 
 use App\Models\User;
 use App\Repositories\FormFieldRepository;
+use App\Support\FormFieldValidationRules;
+use App\Support\FormFieldVisibility;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class FormSubmissionRequest extends FormRequest
 {
+    /** @var list<string> */
+    private array $hiddenFormFields = [];
+
     public function authorize(): bool
     {
         return $this->user() !== null;
@@ -33,57 +37,7 @@ class FormSubmissionRequest extends FormRequest
                 if (in_array($name, ['date', 'request_id', 'agent', 'id', 'created_at', 'updated_at'], true)) {
                     continue;
                 }
-                if ($field->field_type === 'multiselect') {
-                    if ($field->is_required) {
-                        $rules[$name] = ['required', 'array', 'min:1'];
-                    } else {
-                        $rules[$name] = ['nullable', 'array'];
-                    }
-                    $allowed = $field->optionValues();
-                    if ($allowed !== []) {
-                        $rules[$name.'.*'] = ['string', 'max:255', Rule::in($allowed)];
-                    } else {
-                        $rules[$name.'.*'] = ['string', 'max:255'];
-                    }
-
-                    continue;
-                }
-                $fieldRules = [];
-                if ($field->is_required) {
-                    $fieldRules[] = 'required';
-                } else {
-                    $fieldRules[] = 'nullable';
-                }
-                switch ($field->field_type) {
-                    case 'number':
-                        $fieldRules[] = 'numeric';
-
-                        break;
-                    case 'date':
-                        $fieldRules[] = 'date';
-
-                        break;
-                    case 'textarea':
-                        $fieldRules[] = 'string';
-                        $fieldRules[] = 'max:65535';
-
-                        break;
-                    case 'select':
-                        $fieldRules[] = 'string';
-                        $fieldRules[] = 'max:255';
-                        $allowed = $field->optionValues();
-                        if ($allowed !== []) {
-                            $fieldRules[] = Rule::in($allowed);
-                        }
-
-                        break;
-                    default:
-                        $fieldRules[] = 'string';
-                        $fieldRules[] = 'max:255';
-
-                        break;
-                }
-                $rules[$name] = $fieldRules;
+                $rules += FormFieldValidationRules::for($field, in_array($name, $this->hiddenFormFields, true));
             }
         }
 
@@ -111,7 +65,17 @@ class FormSubmissionRequest extends FormRequest
 
         if ($campaign !== '' && $formType !== '') {
             $repo = app(FormFieldRepository::class);
-            foreach ($repo->getFieldsForForm($campaign, $formType) as $field) {
+            $fields = $repo->getFieldsForForm($campaign, $formType);
+            foreach ($fields as $field) {
+                if (! FormFieldVisibility::isVisible($field->visibility, $merged)) {
+                    $this->hiddenFormFields[] = $field->field_name;
+                }
+            }
+
+            foreach ($fields as $field) {
+                if (in_array($field->field_name, $this->hiddenFormFields, true)) {
+                    continue;
+                }
                 if ($field->field_type === 'multiselect' && ! array_key_exists($field->field_name, $merged)) {
                     $merged[$field->field_name] = [];
                 }

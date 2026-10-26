@@ -1,6 +1,7 @@
 @props([
     'name',
     'label'    => null,
+    'id'       => null,
     'options'  => [],
     'selected' => null,
     'required' => false,
@@ -12,7 +13,7 @@
 @php
     $hasError = $error ?? ($errors->has($name) ? $errors->first($name) : null);
     $errorMsg = $error ?? ($errors->has($name) ? $errors->first($name) : null);
-    $inputId  = 'field-' . str_replace(['.', '[', ']'], ['-', '-', ''], $name);
+    $inputId  = $id ?: 'field-' . str_replace(['.', '[', ']'], ['-', '-', ''], $name);
     $current  = old($name, $selected);
     $describedBy = $errorMsg
         ? $inputId.'-error'

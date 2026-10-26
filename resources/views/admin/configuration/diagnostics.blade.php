@@ -1,4 +1,4 @@
-            <div x-data="telephonyDiagnostics()" x-init="init()">
+            <div x-data="telephonyDiagnostics()">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-sm font-semibold text-[var(--color-on-surface)]">Telephony Readiness Check</h3>
                     <button type="button" class="btn-primary text-sm" @click="run()" {!! 'x-bind:disabled="loading"' !!}>

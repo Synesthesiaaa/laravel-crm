@@ -108,6 +108,46 @@ class SupervisorAgentsApiTest extends TestCase
             ->assertJsonPath('agents.0.dispositions', 1);
     }
 
+    public function test_supervisor_keeps_the_newest_vicidial_session_for_an_agent_across_mapped_campaigns(): void
+    {
+        $campaign = Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+        $server = VicidialServer::factory()->create([
+            'campaign_code' => 'campaign-a',
+            'api_url' => 'https://campaign-a.example/agc/api.php',
+            'api_user' => 'report-user',
+            'api_pass' => 'report-pass',
+        ]);
+        $this->mapCampaign($campaign, $server, 'campaign-a', 'campaign-b');
+        $this->app->make(CampaignService::class)->clearCampaignsCache();
+
+        $supervisor = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+        $agent = User::factory()->create([
+            'role' => User::ROLE_AGENT,
+            'default_campaign' => 'campaign-a',
+        ]);
+        VicidialAgentSession::factory()->create([
+            'user_id' => $agent->id,
+            'campaign_code' => 'campaign-a',
+            'session_status' => 'ready',
+            'last_synced_at' => now()->subMinutes(5),
+        ]);
+        VicidialAgentSession::factory()->create([
+            'user_id' => $agent->id,
+            'campaign_code' => 'campaign-b',
+            'session_status' => 'paused',
+            'last_synced_at' => now(),
+        ]);
+        Http::fake(['*' => Http::response('', 200)]);
+
+        $this->actingAs($supervisor)
+            ->withSession(['campaign' => 'campaign-a', 'campaign_name' => 'Campaign A'])
+            ->getJson(route('api.supervisor.agents'))
+            ->assertOk()
+            ->assertJsonPath('agents.0.state', 'PAUSED')
+            ->assertJsonPath('agents.0.vicidial_campaign', 'campaign-b')
+            ->assertJsonPath('agents.0.vici_status', 'paused');
+    }
+
     public function test_custom_attendance_status_does_not_make_a_logged_in_agent_appear_offline(): void
     {
         $campaign = Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);

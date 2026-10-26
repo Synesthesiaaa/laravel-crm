@@ -12,7 +12,7 @@
 @endsection
 
 @section('content')
-<div x-data="supervisorDashboard(@js($supervisorCampaign ?? session('campaign', '')))" x-init="init()" class="space-y-6">
+<div x-data="supervisorDashboard(@js($supervisorCampaign ?? session('campaign', '')))" class="space-y-6">
 
     <x-page-header title="Supervisor Dashboard" description="Real-time agent monitoring."
         :breadcrumbs="['Admin' => route('admin.dashboard'), 'Supervisor' => null]" />

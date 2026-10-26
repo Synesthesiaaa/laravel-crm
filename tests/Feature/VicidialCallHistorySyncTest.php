@@ -101,6 +101,35 @@ final class VicidialCallHistorySyncTest extends TestCase
         $this->assertSame('REMOTE_DATABASE_TIMEOUT', $state->last_error_classification);
     }
 
+    public function test_streamed_sync_keeps_checkpoint_unmoved_after_a_later_page_failure_and_replays_safely(): void
+    {
+        [$campaign] = $this->mappedScope('sync-streamed');
+        config(['vicidial.call_history_sync.chunk_size' => 1]);
+        $provider = new FakeSyncProvider(HistoricalCallProviderResult::success([
+            $this->record($campaign, 'stream-call-1', '2026-05-18 09:01:00'),
+            $this->record($campaign, 'stream-call-2', '2026-05-18 09:02:00'),
+        ], 2));
+        $provider->streamFailureAfterPage = 2;
+        $service = $this->service($provider);
+
+        $failed = $service->sync($campaign, Carbon::parse('2026-05-18 09:00:00'), Carbon::parse('2026-05-18 09:15:00'));
+        $state = VicidialCallHistorySyncState::query()->where('crm_campaign_id', $campaign->id)->firstOrFail();
+
+        $this->assertTrue($provider->streamCalled);
+        $this->assertFalse($failed->success);
+        $this->assertDatabaseHas('telephony_call_histories', ['source_unique_id' => 'stream-call-1']);
+        $this->assertDatabaseMissing('telephony_call_histories', ['source_unique_id' => 'stream-call-2']);
+        $this->assertNull($state->last_call_at);
+
+        $provider->streamFailureAfterPage = null;
+        $retried = $service->sync($campaign, Carbon::parse('2026-05-18 09:00:00'), Carbon::parse('2026-05-18 09:15:00'));
+
+        $this->assertTrue($retried->success);
+        $this->assertSame(1, $retried->rowsInserted);
+        $this->assertSame(1, $retried->rowsUpdated);
+        $this->assertSame(2, TelephonyCallHistory::query()->where('crm_campaign_id', $campaign->id)->count());
+    }
+
     public function test_sync_command_dispatches_recent_and_chunked_backfill_jobs(): void
     {
         Queue::fake();
@@ -184,6 +213,10 @@ final class VicidialCallHistorySyncTest extends TestCase
 
 final class FakeSyncProvider extends VicidialHistoricalCallProvider
 {
+    public bool $streamCalled = false;
+
+    public ?int $streamFailureAfterPage = null;
+
     public function __construct(public HistoricalCallProviderResult $result) {}
 
     public function fetchRange(
@@ -194,5 +227,33 @@ final class FakeSyncProvider extends VicidialHistoricalCallProvider
         Carbon $to,
     ): HistoricalCallProviderResult {
         return $this->result;
+    }
+
+    public function streamRange(
+        VicidialServer $server,
+        Campaign $campaign,
+        array $campaignCodes,
+        Carbon $from,
+        Carbon $to,
+        callable $consume,
+        ?int $pageSize = null,
+    ): HistoricalCallProviderResult {
+        $this->streamCalled = true;
+        if (! $this->result->success) {
+            return $this->result;
+        }
+
+        $records = $this->result->records;
+        foreach (array_chunk($records, max(1, $pageSize ?? 500)) as $index => $page) {
+            if ($this->streamFailureAfterPage === $index + 1) {
+                return HistoricalCallProviderResult::failure('later page failed', [
+                    'classification' => 'REMOTE_DATABASE_TIMEOUT',
+                    'retryable' => true,
+                ]);
+            }
+            $consume($page);
+        }
+
+        return HistoricalCallProviderResult::success([], count($records), meta: $this->result->meta);
     }
 }

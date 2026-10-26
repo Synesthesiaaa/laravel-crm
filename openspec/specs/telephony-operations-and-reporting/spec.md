@@ -1,9 +1,7 @@
 ## Purpose
 
 Keep live Supervisor operations separate from historical Telephony Reports while sharing campaign/server resolution and VICIdial transport safely.
-
 ## Requirements
-
 ### Requirement: Separate operational and historical aggregation responsibilities
 The system SHALL expose Supervisor operational snapshots through a Supervisor-specific aggregation service and SHALL expose historical Telephony Reports through a reporting-specific aggregation service. Shared VICIdial transport and campaign/server resolution MAY be reused, but one controller SHALL NOT own both aggregation concerns.
 
@@ -243,6 +241,18 @@ Historical Telephony Reports SHALL resolve the selected CRM campaign through the
 - **AND** the CRM report total is 4762 calls
 - **AND** rows for `winback` are excluded before aggregation
 
+### Requirement: Local realtime report aggregation is bounded
+
+Local Today totals SHALL use database aggregates, and local rolling totals SHALL process a stable bounded number of call sessions at a time. The implementation SHALL preserve the existing campaign scope, event-window predicate, answered/abandoned counts, disposition ordering, and non-negative wait and talk duration rules.
+
+#### Scenario: Local Today report covers a large day
+- **WHEN** the authenticated VICIdial daily report is unavailable and CRM call sessions provide the Today fallback
+- **THEN** SQL aggregates return the same totals without hydrating every call session into one application collection
+
+#### Scenario: Rolling window covers multiple pages
+- **WHEN** the rolling interval matches more rows than the configured processing chunk
+- **THEN** the report processes stable primary-key chunks and returns the same aggregate values
+
 #### Scenario: VICIdial receives all mapped campaign codes
 - **WHEN** CRM campaign `mbsales` maps `mbsales`, `mbsales2`, `cro1`, and `cro2`
 - **THEN** the historical Non-Agent API request uses `mbsales-mbsales2-cro1-cro2` as its campaign scope
@@ -301,3 +311,48 @@ Reports SHALL return a not-configured/incomplete state for a missing server or e
 - **WHEN** the selected CRM campaign has no mapped VICIdial server
 - **THEN** the report reports VICIdial routing as not configured
 - **AND** it does not query a server assigned to another CRM campaign
+
+### Requirement: VICIdial transport operations and credentials are server-controlled
+Agent and Non-Agent API transports SHALL derive operation names, source identifiers, credentials, and agent identity from trusted server-side arguments. Caller parameters SHALL NOT override these transport-owned values. Requests containing reserved transport keys SHALL fail before an HTTP request is sent.
+
+#### Scenario: Lead request attempts to change the Non-Agent operation or credentials
+- **WHEN** an authenticated lead-tool request includes a reserved operation, source, user, or password parameter
+- **THEN** the request is rejected and no VICIdial request is sent
+
+#### Scenario: Agent API fields attempt to change transport identity
+- **WHEN** an Agent API operation receives reserved transport keys in its query or extra parameters
+- **THEN** the operation fails safely before contacting VICIdial
+
+#### Scenario: Non-Agent batch contains a reserved parameter
+- **WHEN** one batch entry contains a reserved transport key alongside valid entries
+- **THEN** the invalid entry fails without a remote request while valid independent entries retain their existing result behavior
+
+#### Scenario: Supervisor target stays separate from transport authentication
+- **WHEN** an authorized supervisor requests an action for a CRM user selected by the application
+- **THEN** the authenticated supervisor's VICIdial credentials authenticate the request and the selected user's identity is used only as the action target
+- **AND** caller-supplied reserved `agent_user` keys remain rejected before the remote request
+
+### Requirement: Agent API failure telemetry excludes credentials
+Telephony logging SHALL redact credential values from nested context, messages, and credential-bearing URLs before writing to telephony log channels.
+
+#### Scenario: Agent API connection exception contains credentials in its URL
+- **WHEN** the Agent API transport reports a connection exception whose URL contains user or password query parameters
+- **THEN** telephony logs contain redacted values and do not contain the supplied credential strings
+
+### Requirement: Current call durations are non-negative
+The system SHALL report elapsed call duration as a non-negative number of seconds from the call's answered timestamp through the current time.
+
+#### Scenario: Answered call is in the past
+- **WHEN** a call has an `answered_at` timestamp earlier than now
+- **THEN** the reported elapsed duration is non-negative and reflects elapsed time
+
+#### Scenario: Answer timestamp is in the future
+- **WHEN** a timestamp is ahead of the current clock due to skew
+- **THEN** the reported elapsed duration is zero rather than negative
+
+### Requirement: Supervisor state uses the newest session per agent
+The system SHALL select the newest eligible VICIdial session for each agent when building an operational snapshot.
+
+#### Scenario: Duplicate sessions exist for an agent
+- **WHEN** multiple eligible sessions are returned for one agent
+- **THEN** the snapshot uses the session with the newest synchronization time and stable tie-break ordering

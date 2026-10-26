@@ -41,6 +41,10 @@ class CallController extends Controller
             if (is_array($result->data) && isset($result->data['error_code'])) {
                 $payload['error'] = $result->data;
             }
+            if (($result->meta['outcome_unknown'] ?? false) && is_array($result->data) && isset($result->data['session_id'])) {
+                $payload['outcome_unknown'] = true;
+                $payload['session_id'] = (int) $result->data['session_id'];
+            }
 
             return response()->json($payload, 422);
         }
@@ -84,7 +88,7 @@ class CallController extends Controller
 
         if ($session) {
             $duration = $session->answered_at
-                ? (int) now()->diffInSeconds($session->answered_at)
+                ? max(0, (int) $session->answered_at->diffInSeconds(now(), false))
                 : 0;
 
             return response()->json([
@@ -95,6 +99,8 @@ class CallController extends Controller
                     'session_id' => $session->id,
                     'phone_number' => $session->phone_number,
                     'status' => $session->status,
+                    'remote_dial_outcome' => $session->remote_dial_outcome,
+                    'outcome_unknown' => $session->remote_dial_outcome === 'unknown',
                     'lead_id' => $session->lead_id,
                     'duration_seconds' => $duration,
                 ],

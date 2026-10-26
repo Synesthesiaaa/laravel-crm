@@ -1,5 +1,5 @@
-@props(['name', 'label', 'value' => '1', 'checked' => false, 'disabled' => false])
-@php $inputId = 'field-' . str_replace(['.','[',']'],['-','-',''], $name); @endphp
+@props(['name', 'label', 'id' => null, 'value' => '1', 'checked' => false, 'disabled' => false])
+@php $inputId = $id ?: 'field-' . str_replace(['.','[',']'],['-','-',''], $name); @endphp
 <label class="flex items-center gap-2 cursor-pointer" for="{{ $inputId }}">
     <input type="hidden" name="{{ $name }}" value="0">
     <input

@@ -32,6 +32,7 @@ class FormFieldRepository implements FormFieldRepositoryInterface
                 'vici_params' => $field->vici_params,
                 'field_width' => $field->field_width ?? 'full',
                 'visibility' => is_array($field->visibility) ? $field->visibility : null,
+                'draft_safe' => (bool) $field->draft_safe,
             ];
             if (! empty($field->vici_params)) {
                 $vici[] = $arr;

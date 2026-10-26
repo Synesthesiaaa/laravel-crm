@@ -87,7 +87,10 @@ class LeadService
         ]);
 
         if (! $result['success']) {
-            return OperationResult::failure($result['message'] ?: 'Unable to update lead fields.');
+            return OperationResult::failure($result['message'] ?: 'Unable to update lead fields.', null, [
+                'failure_code' => $result['failure_code'] ?? 'REMOTE_OPERATION_FAILED',
+                'outcome_unknown' => (bool) ($result['outcome_unknown'] ?? false),
+            ]);
         }
 
         return OperationResult::success(['raw_response' => $result['raw_response']]);

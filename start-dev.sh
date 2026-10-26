@@ -41,6 +41,10 @@ echo "  HTTP: http://${HOST}:${PORT}"
 echo "  Reverb: port ${REVERB_PORT}"
 echo ""
 
+# Do not start listeners against a stale schema or hide migration failures.
+echo "Applying pending database migrations..."
+php artisan migrate --force
+
 # 1. Laravel web server
 php artisan serve --host="$HOST" --port="$PORT" &
 echo $! >> "$PID_FILE"
@@ -52,7 +56,21 @@ echo $! >> "$PID_FILE"
 sleep 1
 
 # 3. Queue worker
-php artisan queue:work --queue=telephony,default &
+php artisan queue:work --queue=telephony,default --tries=1 --timeout=800 &
+echo $! >> "$PID_FILE"
+sleep 1
+
+# Separate lanes keep long imports away from call and general application work.
+php artisan queue:work --queue=imports --tries=1 --timeout=800 &
+echo $! >> "$PID_FILE"
+sleep 1
+
+php artisan queue:work --queue=asterisk --tries=1 --timeout=120 &
+echo $! >> "$PID_FILE"
+sleep 1
+
+# The outbox job uses the durable database connection and its own queue lane.
+php artisan queue:work database --queue=telephony-sync --tries=1 --timeout=60 &
 echo $! >> "$PID_FILE"
 sleep 1
 
@@ -61,11 +79,17 @@ php artisan ami:listen &
 echo $! >> "$PID_FILE"
 sleep 1
 
-# 5. Run migrations once (non-blocking)
-php artisan migrate --force 2>/dev/null || true
+# Email sends stay opt-in for local development. Set START_EMAIL_WORKER=1 only
+# when the selected email queue is intentionally being consumed.
+if [[ "${START_EMAIL_WORKER:-0}" == "1" ]]; then
+  php artisan queue:work "${EMAIL_CAMPAIGN_CONNECTION:-email-database}" \
+    --queue="${EMAIL_CAMPAIGN_QUEUE:-email-campaigns}" --tries=1 --timeout=60 &
+  echo $! >> "$PID_FILE"
+fi
 
 echo ""
-echo "All services running: serve, reverb, queue, ami:listen."
+echo "Services running: serve, reverb, general/import/Asterisk/telephony-sync queues, ami:listen."
+echo "Email queue is idle unless START_EMAIL_WORKER=1 is set."
 echo "Press Ctrl+C to stop all."
 echo ""
 

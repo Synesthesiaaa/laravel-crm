@@ -72,6 +72,7 @@ class FieldLogicAdminTest extends TestCase
                 'field_type' => 'number',
                 'field_width' => 'full',
                 'is_sale_amount' => '1',
+                'draft_safe' => '1',
             ])
             ->assertRedirect(route('admin.field-logic.index', ['form' => 'lead_capture']))
             ->assertSessionHasNoErrors();
@@ -83,6 +84,7 @@ class FieldLogicAdminTest extends TestCase
             ->firstOrFail();
 
         $this->assertTrue($field->is_sale_amount);
+        $this->assertTrue($field->draft_safe);
     }
 
     public function test_non_numeric_field_cannot_be_marked_as_sale_amount(): void
@@ -157,6 +159,7 @@ class FieldLogicAdminTest extends TestCase
             ->assertOk()
             ->assertSee('Edit field', false)
             ->assertSee('Update field', false)
+            ->assertSee('Allow local draft saving for up to eight hours', false)
             ->assertSee('customer_tier', false);
 
         $this->actingAs($this->superAdmin)

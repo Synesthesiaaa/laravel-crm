@@ -152,9 +152,9 @@ Never paste `.env`, real recipient lists, PDF contents, API/SIP credentials, sig
 
 **Problem:** unknown option, connection failure, 401/503 webhook response.
 
-**Possible causes:** the shipped Supervisor example's unsupported `--reconnect-delay`; missing AMI secret/network permission; webhook missing or wrong shared secret. Two classes declare `ami:listen`.
+**Possible causes:** missing AMI secret/network permission; webhook missing or wrong shared secret; selecting a listener process that does not match the configured AMI event path.
 
-**How to check:** `php artisan help ami:listen` is a safe command-shape check. Inspect intended AMI/webhook configuration names. A telephony preflight contacts AMI; run only with authorized infrastructure.
+**How to check:** `php artisan help ami:listen` and `php artisan help ami:events:listen` are safe command-shape checks. Inspect intended AMI/webhook configuration names. A telephony preflight contacts AMI; run only with authorized infrastructure.
 
 **Resolution:** use the current release's actual command signature; configure approved network access/secret/header. Production POST webhooks fail closed when the configured secret is empty. Never make webhooks public by removing verification.
 

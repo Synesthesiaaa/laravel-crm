@@ -31,7 +31,7 @@ class CallNoAnswerTimeoutJob implements ShouldQueue
     public function handle(CallStateService $callStateService): void
     {
         $session = CallSession::find($this->callSessionId);
-        if (! $session || $session->isTerminal()) {
+        if (! $session || $session->isTerminal() || $session->remote_dial_outcome === 'unknown') {
             return;
         }
 

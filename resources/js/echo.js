@@ -7,6 +7,7 @@
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 import TelephonyLogger from './telephony-logger';
+import { resolveEchoConfiguration } from './echo-config';
 
 /** Tear down the last subscribeAgentChannel() so layout + agent screen do not stack duplicate listeners. */
 let _teardownAgentChannel = null;
@@ -18,10 +19,9 @@ let _teardownDashboardChannel = null;
 let _dashboardChannelSig = null;
 let _teardownActivityLogChannel = null;
 
-const key = import.meta.env.VITE_REVERB_APP_KEY || import.meta.env.VITE_PUSHER_APP_KEY;
-const broadcaster = import.meta.env.VITE_BROADCAST_DRIVER || 'reverb';
+const broadcastSettings = resolveEchoConfiguration(import.meta.env);
 
-export const isBroadcastEnabled = () => !!key;
+export const isBroadcastEnabled = () => broadcastSettings.enabled;
 
 function resolveBroadcastAuthEndpoint() {
     const baseUrl = document.querySelector('meta[name="crm-base-url"]')?.getAttribute('content')?.trim();
@@ -48,8 +48,11 @@ export function isEchoConnected() {
 }
 
 export function initEcho() {
-    if (!key) {
-        TelephonyLogger.warn('TelephonyEcho', 'Broadcast key missing; Echo disabled');
+    if (!broadcastSettings.enabled) {
+        TelephonyLogger.warn('TelephonyEcho', 'Broadcast configuration unavailable; Echo disabled', {
+            driver: broadcastSettings.driver,
+            reason: broadcastSettings.reason,
+        });
         return null;
     }
 
@@ -57,28 +60,11 @@ export function initEcho() {
 
     window.Pusher = Pusher;
 
-    const useReverb = broadcaster === 'reverb' || !!key;
     const baseConfig = {
-        key,
+        ...broadcastSettings.config,
         authEndpoint: resolveBroadcastAuthEndpoint(),
     };
-
-    const config = useReverb
-        ? {
-            ...baseConfig,
-            broadcaster: 'reverb',
-            wsHost: import.meta.env.VITE_REVERB_HOST || '127.0.0.1',
-            wsPort: parseInt(import.meta.env.VITE_REVERB_PORT || '6001', 10),
-            wssPort: parseInt(import.meta.env.VITE_REVERB_PORT || '6001', 10),
-            forceTLS: (import.meta.env.VITE_REVERB_SCHEME || 'http') === 'https',
-            enabledTransports: ['ws', 'wss'],
-        }
-        : {
-            ...baseConfig,
-            broadcaster: 'pusher',
-            cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER || 'mt1',
-            forceTLS: true,
-        };
+    const config = baseConfig;
 
     window.Echo = new Echo(config);
     TelephonyLogger.info('TelephonyEcho', 'Echo initialized', {

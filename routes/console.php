@@ -90,3 +90,11 @@ if ((bool) config('vicidial.call_history_sync.schedule_enabled', true)) {
 }
 
 Schedule::command('email-campaigns:maintain')->everyFiveMinutes()->withoutOverlapping();
+
+// Dispatch durable remote telephony writes and quarantine claims whose worker
+// disappeared after dispatch, since replaying them could duplicate remote work.
+Schedule::call(function (): void {
+    $outbox = app(\App\Services\Telephony\TelephonySyncOutboxService::class);
+    $outbox->expireStaleClaims();
+    $outbox->dispatchPending();
+})->everyMinute()->name('dispatch-telephony-sync-outbox')->withoutOverlapping(5);

@@ -16,7 +16,6 @@
      :class="isSplitActive() ? 'widget-root--split widget-root--split-right' : ''"
      x-data="quickFormWidget(@js($quickFormBoot))"
      :style="widgetStyle"
-     x-init="init()"
      @click.stop>
     <button type="button"
             class="widget-launcher absolute left-0 top-0 z-20 flex h-12 w-12 shrink-0 cursor-move items-center justify-center rounded-full bg-[var(--color-surface-elevated)] text-[var(--color-on-surface)] transition hover:bg-[var(--color-surface-2)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"

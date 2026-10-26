@@ -131,6 +131,7 @@ class SupervisorOperationalService
             ->orderByDesc('last_synced_at')
             ->orderByDesc('id')
             ->get()
+            ->unique('user_id')
             ->keyBy('user_id');
 
         $agents = $users->map(function (User $user) use (
@@ -186,7 +187,7 @@ class SupervisorOperationalService
                     : null
             );
             $currentCallDuration = $currentCall?->answered_at
-                ? (int) now()->diffInSeconds($currentCall->answered_at)
+                ? max(0, (int) $currentCall->answered_at->diffInSeconds(now(), false))
                 : null;
             $stateDuration = $remote['state_duration_seconds'] ?? null;
             $currentCallData = $currentCall ? [

@@ -71,14 +71,14 @@ class LeadController extends Controller
     {
         $validated = $request->validated();
 
-        return $this->respond($service->add($request->user(), $this->campaign($request, $validated), $request->all()));
+        return $this->respond($service->add($request->user(), $this->campaign($request, $validated), $validated));
     }
 
     public function update(LeadApiRequest $request, LeadService $service): JsonResponse
     {
         $validated = $request->validated();
 
-        return $this->respond($service->update($request->user(), $this->campaign($request, $validated), $request->all()));
+        return $this->respond($service->update($request->user(), $this->campaign($request, $validated), $validated));
     }
 
     public function switch(LeadApiRequest $request, LeadService $service): JsonResponse

@@ -45,6 +45,8 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
     const defaultPosition = defaultQuickFormPosition(defaultWidth);
 
     return {
+        _eventHandlers: null,
+        _destroyed: false,
         open: false,
         x: defaultPosition.x,
         y: defaultPosition.y,
@@ -528,14 +530,23 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
             this.loading = false;
         },
 
+        destroy() {
+            this._destroyed = true;
+            this._eventHandlers?.window?.forEach(([name, handler]) => window.removeEventListener(name, handler));
+            this._eventHandlers?.document?.forEach(([name, handler, options]) => document.removeEventListener(name, handler, options));
+            this._eventHandlers = null;
+            if (widgetCtx === this) widgetCtx = null;
+        },
+
         async init() {
+            if (this._eventHandlers) return;
+
+            this._destroyed = false;
             widgetCtx = this;
-            window.addEventListener('crm-widget-workspace', this._onWorkspaceChange.bind(this));
-            window.addEventListener('crm-widget-panel-open', this._onWidgetPanelOpen.bind(this));
-            window.addEventListener('resize', this.onWindowResize.bind(this));
-            this.splitScreen = window.crmWidgetWorkspace?.isSplitScreen?.() === true;
-            this.open = this.isSplitActive() ? true : this.open;
-            window.addEventListener('soft-navigate', (event) => {
+            const workspaceHandler = this._onWorkspaceChange.bind(this);
+            const panelOpenHandler = this._onWidgetPanelOpen.bind(this);
+            const resizeHandler = this.onWindowResize.bind(this);
+            const softNavigateHandler = (event) => {
                 const previousCampaign = this.currentCampaign;
                 const switched = this.syncFromUrl(event?.detail?.url || window.location.href);
 
@@ -546,15 +557,28 @@ window.quickFormWidget = function quickFormWidget(boot = {}) {
                 if (!switched && !this.frameSrc) {
                     void this.resolveDefaultSource();
                 }
-            });
-            document.addEventListener('click', (event) => {
+            };
+            const documentClickHandler = (event) => {
                 const anchor = event.target?.closest?.('a[href]');
-                if (!anchor) return;
-                if (!FORM_ROUTE_PATTERN.test(anchor.pathname || '')) return;
+                if (!anchor || !FORM_ROUTE_PATTERN.test(anchor.pathname || '')) return;
                 this.syncFromUrl(anchor.href);
-            }, true);
+            };
+            this._eventHandlers = {
+                window: [
+                    ['crm-widget-workspace', workspaceHandler],
+                    ['crm-widget-panel-open', panelOpenHandler],
+                    ['resize', resizeHandler],
+                    ['soft-navigate', softNavigateHandler],
+                ],
+                document: [['click', documentClickHandler, true]],
+            };
+            this._eventHandlers.window.forEach(([name, handler]) => window.addEventListener(name, handler));
+            this._eventHandlers.document.forEach(([name, handler, options]) => document.addEventListener(name, handler, options));
+            this.splitScreen = window.crmWidgetWorkspace?.isSplitScreen?.() === true;
+            this.open = this.isSplitActive() ? true : this.open;
             this.onWindowResize();
             await persistence.load();
+            if (this._destroyed) return;
             this.syncFromUrl(window.location.href);
             await this.resolveDefaultSource();
         },

@@ -33,18 +33,17 @@ class VicidialEventsWebhookController extends Controller
 
     public function __invoke(Request $request): JsonResponse
     {
-        $secret = config('vicidial.events_webhook_secret', '');
+        $secret = (string) config('vicidial.events_webhook_secret', '');
         if ($secret === '') {
-            if (app()->environment('production')) {
-                $this->logger->warning('VicidialEventsWebhookController', 'ViciDial webhook rejected: secret missing in production');
+            $this->logger->warning('VicidialEventsWebhookController', 'ViciDial webhook rejected: secret is not configured');
 
-                return response()->json([
-                    'received' => false,
-                    'processed' => false,
-                    'error' => 'Webhook secret is not configured',
-                ], 503);
-            }
-        } elseif ($request->header('X-Webhook-Secret') !== $secret) {
+            return response()->json([
+                'received' => false,
+                'processed' => false,
+                'error' => 'Webhook secret is not configured',
+            ], 503);
+        }
+        if (! hash_equals($secret, (string) $request->header('X-Webhook-Secret', ''))) {
             $this->logger->warning('VicidialEventsWebhookController', 'ViciDial webhook rejected: invalid or missing secret');
 
             return response()->json(['error' => 'Unauthorized'], 401);
@@ -52,9 +51,9 @@ class VicidialEventsWebhookController extends Controller
 
         $viciUser = $request->input('user', '');
         $event = $request->input('event', '');
-        $message = $request->input('message', '');
+        $message = is_scalar($request->input('message')) ? trim((string) $request->input('message')) : '';
         $leadId = $request->input('lead_id');
-        $counter = $request->input('counter');
+        $campaign = $this->stringInput($request->input('campaign'));
 
         if ($event === '' || $viciUser === '') {
             return response()->json(['received' => true, 'processed' => false, 'reason' => 'missing event or user']);
@@ -68,10 +67,17 @@ class VicidialEventsWebhookController extends Controller
 
         $user = User::where('vici_user', $viciUser)->first();
         $userId = $user?->id;
+        $callId = $this->eventCallId($user, $request->input('call_id'), $message);
 
         $processed = match ($event) {
-            'call_answered' => $this->handleCallAnswered($user, $leadId, $message),
-            'call_dead', 'agent_hangup' => $this->handleCallEnded($user, $event),
+            'call_answered' => $this->handleCallAnswered(
+                $user,
+                $leadId,
+                $callId,
+                $campaign,
+                $this->stringInput($request->input('phone_number')),
+            ),
+            'call_dead', 'agent_hangup' => $this->handleCallEnded($user, $event, $leadId, $callId, $campaign),
             'call_dialed' => $this->handleCallDialed($user, $message),
             'state_ready' => $this->handleStateChange($userId, $viciUser, 'ready', $message),
             'state_paused' => $this->handleStateChange($userId, $viciUser, 'paused', $message),
@@ -88,19 +94,27 @@ class VicidialEventsWebhookController extends Controller
         ]);
     }
 
-    private function handleCallAnswered(?User $user, mixed $leadId, string $message): bool
-    {
+    private function handleCallAnswered(
+        ?User $user,
+        mixed $leadId,
+        ?string $callId,
+        ?string $campaign,
+        ?string $phoneNumber,
+    ): bool {
         if (! $user) {
             return false;
         }
 
-        $session = CallSession::where('user_id', $user->id)->active()->orderByDesc('dialed_at')->first();
-        if ($session && ! $session->isTerminal()) {
-            $this->callStateService->transition($session, CallSession::STATUS_IN_CALL);
+        $session = $this->findCorrelatedCallSession($user, $leadId, $callId, $campaign);
+        if ($session) {
+            $result = $this->callStateService->markConnected($session);
+            if (! $result->success) {
+                return false;
+            }
         }
 
-        $campaignCode = (string) ($session?->campaign_code ?: config('vicidial.default_campaign', 'mbsales'));
-        $phoneNumber = $message ?: ($session?->phone_number ?? '');
+        $campaignCode = (string) ($session?->campaign_code ?: $campaign ?: config('vicidial.default_campaign', 'mbsales'));
+        $phoneNumber = $session?->phone_number ?: $phoneNumber ?: '';
         $hydrated = null;
         if ($leadId || $phoneNumber) {
             $hydrated = $this->leadHydrationService->hydrate(
@@ -122,28 +136,88 @@ class VicidialEventsWebhookController extends Controller
             ));
         }
 
-        return true;
+        return $session !== null || (bool) ($leadId || $phoneNumber);
     }
 
-    private function handleCallEnded(?User $user, string $event): bool
-    {
-        if (! $user) {
+    private function handleCallEnded(
+        ?User $user,
+        string $event,
+        mixed $leadId,
+        ?string $callId,
+        ?string $campaign,
+    ): bool {
+        if (! $user || ! $callId) {
             return false;
         }
 
-        $session = CallSession::where('user_id', $user->id)->active()->orderByDesc('dialed_at')->first();
-        if ($session && ! $session->isTerminal()) {
-            $endReason = $event === 'call_dead' ? 'customer_hangup' : 'agent_hangup_vici';
-            // VICIdial push events can arrive out of order, so a hangup event
-            // should still close the call as connected even if call_answered
-            // has not been processed yet.
-            $this->callStateService->transition($session, CallSession::STATUS_COMPLETED, [
-                'end_reason' => $endReason,
-                'assume_connected' => true,
-            ]);
+        $session = $this->findCorrelatedCallSession($user, $leadId, $callId, $campaign);
+        if (! $session) {
+            return false;
         }
 
-        return true;
+        $endReason = $event === 'call_dead' ? 'customer_hangup' : 'agent_hangup_vici';
+
+        // An exact call ID protects a newer session while preserving out-of-order
+        // completion when VICIdial has not delivered its answer event yet.
+        return $this->callStateService->transition($session, CallSession::STATUS_COMPLETED, [
+            'end_reason' => $endReason,
+            'assume_connected' => true,
+            'remote_outcome_resolved' => true,
+        ])->success;
+    }
+
+    private function findCorrelatedCallSession(?User $user, mixed $leadId, ?string $callId, ?string $campaign): ?CallSession
+    {
+        if (! $user || ! $callId) {
+            return null;
+        }
+
+        $query = CallSession::query()
+            ->where('user_id', $user->id)
+            ->where('vicidial_call_id', $callId);
+
+        if ($campaign !== null) {
+            $query->where('campaign_code', $campaign);
+        }
+
+        if (is_numeric($leadId) && (int) $leadId > 0) {
+            $query->where(function ($builder) use ($leadId): void {
+                $builder->where('lead_id', (int) $leadId)
+                    ->orWhere('vicidial_lead_id', (string) (int) $leadId);
+            });
+        }
+
+        return $query->first();
+    }
+
+    private function eventCallId(?User $user, mixed $requestCallId, string $message): ?string
+    {
+        $callId = $this->stringInput($requestCallId);
+        if ($callId !== null) {
+            return $callId;
+        }
+
+        if (! $user || $message === '') {
+            return null;
+        }
+
+        return CallSession::query()
+            ->where('user_id', $user->id)
+            ->where('vicidial_call_id', $message)
+            ->exists()
+                ? $message
+                : null;
+    }
+
+    private function stringInput(mixed $value): ?string
+    {
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value !== '' && strlen($value) <= 255 ? $value : null;
     }
 
     private function handleCallDialed(?User $user, string $message): bool

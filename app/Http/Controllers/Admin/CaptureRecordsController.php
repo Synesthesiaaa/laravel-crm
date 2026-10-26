@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\AgentCaptureRecord;
 use App\Models\AgentScreenField;
 use App\Services\CampaignService;
+use App\Support\CsvCellEncoder;
+use App\Support\FormFieldNumber;
 use App\Support\PercentageValue;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -125,13 +127,19 @@ class CaptureRecordsController extends Controller
             ->pluck('field_key')
             ->values()
             ->all();
+        $numericFieldKeys = $fields
+            ->whereIn('field_type', ['number', 'percentage'])
+            ->filter(fn (AgentScreenField $field): bool => ! FormFieldNumber::isIdentifierLike((string) $field->field_key))
+            ->pluck('field_key')
+            ->values()
+            ->all();
         $filename = 'capture-records-'.$campaign.'-'.date('Y-m-d_His').'.csv';
         $query = $this->buildFilteredQuery($campaign, $request);
 
-        return response()->streamDownload(function () use ($query, $fieldKeys, $percentageFieldKeys) {
+        return response()->streamDownload(function () use ($query, $fieldKeys, $percentageFieldKeys, $numericFieldKeys) {
             $out = fopen('php://output', 'w');
             $header = ['id', 'campaign', 'created_at', 'agent', 'lead_id', 'phone_number', ...$fieldKeys];
-            fputcsv($out, $header);
+            fputcsv($out, array_map(CsvCellEncoder::encode(...), $header));
 
             foreach ($query->cursor() as $record) {
                 $captureData = is_array($record->capture_data) ? $record->capture_data : [];
@@ -151,7 +159,15 @@ class CaptureRecordsController extends Controller
                         : (string) $value;
                 }
 
-                fputcsv($out, $row);
+                $encoded = array_map(
+                    static fn (mixed $value, int $index): string => CsvCellEncoder::encode(
+                        $value,
+                        $index >= 6 && in_array($fieldKeys[$index - 6] ?? '', $numericFieldKeys, true),
+                    ),
+                    $row,
+                    array_keys($row),
+                );
+                fputcsv($out, $encoded);
             }
 
             fclose($out);

@@ -6,7 +6,7 @@
     "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
-        "php": "^8.2",
+        "php": "^8.4",
         "laravel/framework": "^12.0",
         "laravel/horizon": "^5.45",
         "laravel/reverb": "^1.8",
@@ -55,7 +55,7 @@
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74,#86efac\" \"php artisan serve\" \"php artisan queue:listen --queue=telephony,default --tries=1 --timeout=0\" \"php artisan pail --timeout=0\" \"npm run dev\" \"php artisan reverb:start\" --names=server,queue,logs,vite,reverb --kill-others"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74,#86efac,#fca5a5\" \"php artisan serve\" \"php artisan queue:listen --queue=telephony,default --tries=1 --timeout=0\" \"php artisan pail --timeout=0\" \"npm run dev\" \"php artisan reverb:start\" \"php artisan queue:work database --queue=telephony-sync --tries=1 --timeout=60\" --names=server,queue,logs,vite,reverb,telephony-sync --kill-others"
         ],
         "dev:email": "@php artisan queue:work email-database --queue=email-campaigns --sleep=1 --tries=1 --timeout=60 --max-time=3600",
         "test": [
@@ -82,6 +82,7 @@
         ]
     },
     "extra": {
+        "composer-exit-on-patch-failure": true,
         "laravel": {
             "dont-discover": []
         },
@@ -93,7 +94,10 @@
     },
     "config": {
         "optimize-autoloader": true,
-        "preferred-install": "dist",
+        "preferred-install": {
+            "marcelog/pami": "source",
+            "*": "dist"
+        },
         "sort-packages": true,
         "allow-plugins": {
             "cweagans/composer-patches": true,

@@ -3,7 +3,6 @@
 
     <form action="{{ route('forms.store') }}" method="POST"
           x-data="formVisibility({ submitting: false, autosave: true })"
-          x-init="init(@js($prefill ?? []))"
           @submit.prevent="openReview()"
           data-user-id="{{ auth()->id() }}"
           data-campaign="{{ $campaign }}"
@@ -72,6 +71,7 @@
                     $visibilityRule = \Illuminate\Support\Js::from($field['visibility'] ?? null);
                 @endphp
                 <div @if(($field['field_width'] ?? '') === 'full') class="md:col-span-2" @endif
+                     @if(!empty($field['draft_safe'])) data-draft-safe-field="{{ $field['name'] }}" @endif
                      x-show="shouldShow('{{ $field['name'] }}', {{ $visibilityRule }})">
                     @if(($field['type'] ?? 'text') === 'textarea')
                         <x-form.textarea :name="$field['name']" :label="$field['label']"
@@ -169,6 +169,7 @@
                 $visibilityRule = \Illuminate\Support\Js::from($field['visibility'] ?? null);
             @endphp
             <div @if(($field['field_width'] ?? '') === 'full') class="md:col-span-2" @endif
+                 @if(!empty($field['draft_safe'])) data-draft-safe-field="{{ $field['name'] }}" @endif
                  x-show="shouldShow('{{ $field['name'] }}', {{ $visibilityRule }})">
                 @if(($field['type'] ?? 'text') === 'textarea')
                     <x-form.textarea :name="$field['name']" :label="$field['label']"

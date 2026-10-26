@@ -72,4 +72,17 @@ class CallStateRaceConditionTest extends TestCase
         $session->refresh();
         $this->assertEquals(CallSession::STATUS_COMPLETED, $session->status);
     }
+
+    public function test_stale_transition_does_not_emit_an_event_or_overwrite_terminal_state(): void
+    {
+        $stale = CallSession::factory()->ringing()->create();
+        $current = $stale->fresh();
+        $this->service->transition($current, CallSession::STATUS_COMPLETED);
+
+        $result = $this->service->transition($stale, CallSession::STATUS_RINGING);
+
+        $this->assertTrue($result->success);
+        $this->assertSame(CallSession::STATUS_COMPLETED, $stale->fresh()->status);
+        Event::assertDispatchedTimes(\App\Events\CallStateChanged::class, 1);
+    }
 }

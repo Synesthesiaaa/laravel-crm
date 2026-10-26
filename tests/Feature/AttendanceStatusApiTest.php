@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AttendanceStatusType;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -111,6 +112,33 @@ class AttendanceStatusApiTest extends TestCase
             ->assertJson(['open' => null]);
         $this->actingAs($this->user)->postJson(route('api.attendance.start'), ['code' => 'break'])
             ->assertOk();
+    }
+
+    public function test_open_status_remains_visible_and_can_be_ended_after_midnight(): void
+    {
+        try {
+            CarbonImmutable::setTestNow('2026-10-25 23:55:00');
+            $this->actingAs($this->user)
+                ->postJson(route('api.attendance.start'), ['code' => 'lunch'])
+                ->assertOk();
+
+            CarbonImmutable::setTestNow('2026-10-26 00:05:00');
+            $this->actingAs($this->user)
+                ->getJson(route('api.attendance.current'))
+                ->assertOk()
+                ->assertJson(['open' => ['code' => 'lunch', 'label' => 'Lunch']]);
+
+            $this->actingAs($this->user)
+                ->postJson(route('api.attendance.end'))
+                ->assertOk()
+                ->assertJsonPath('log.event_type', 'lunch_end');
+
+            $this->actingAs($this->user)
+                ->getJson(route('api.attendance.current'))
+                ->assertJson(['open' => null]);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
     }
 
     public function test_start_rejects_unknown_code(): void

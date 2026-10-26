@@ -5,9 +5,9 @@ namespace Tests\Unit\Services\Telephony;
 use App\Models\CallSession;
 use App\Models\User;
 use App\Models\VicidialAgentSession;
-use App\Repositories\VicidialServerRepository;
 use App\Services\Telephony\TelephonyLogger;
 use App\Services\Telephony\VicidialDispositionSyncService;
+use App\Services\Telephony\VicidialNonAgentApiService;
 use App\Services\Telephony\VicidialProxyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
@@ -38,8 +38,6 @@ class VicidialDispositionSyncServiceTest extends TestCase
             'session_status' => 'paused',
         ]);
 
-        $repository = Mockery::mock(VicidialServerRepository::class);
-        $repository->shouldNotReceive('getForCampaign');
         $proxy = Mockery::mock(VicidialProxyService::class);
         $proxy->shouldReceive('execute')
             ->once()
@@ -49,11 +47,15 @@ class VicidialDispositionSyncServiceTest extends TestCase
             ->once()
             ->with(Mockery::on(fn (User $candidate) => $candidate->is($user)), 'mbsales', 'external_pause', ['value' => 'RESUME'])
             ->andReturn(['success' => true, 'raw_response' => 'SUCCESS', 'message' => null]);
-        $logger = Mockery::mock(TelephonyLogger::class);
+        $logger = Mockery::mock(TelephonyLogger::class)->shouldIgnoreMissing();
 
-        (new VicidialDispositionSyncService($repository, $proxy, $logger))
+        $nonAgentApi = Mockery::mock(VicidialNonAgentApiService::class);
+        $nonAgentApi->shouldNotReceive('execute');
+
+        $result = (new VicidialDispositionSyncService($proxy, $logger, $nonAgentApi))
             ->syncDispositionToVicidial($session);
 
+        $this->assertTrue($result->success);
         $this->assertDatabaseHas('vicidial_agent_sessions', [
             'user_id' => $user->id,
             'campaign_code' => 'mbsales',
@@ -76,19 +78,21 @@ class VicidialDispositionSyncServiceTest extends TestCase
             'session_status' => 'paused',
         ]);
 
-        $repository = Mockery::mock(VicidialServerRepository::class);
-        $repository->shouldNotReceive('getForCampaign');
         $proxy = Mockery::mock(VicidialProxyService::class);
         $proxy->shouldReceive('execute')
             ->once()
             ->with(Mockery::type(User::class), 'mbsales', 'external_status', ['value' => 'SALE'])
             ->andReturn(['success' => true, 'raw_response' => 'SUCCESS', 'message' => null]);
         $proxy->shouldNotReceive('execute')->with(Mockery::any(), Mockery::any(), 'external_pause', Mockery::any());
-        $logger = Mockery::mock(TelephonyLogger::class);
+        $logger = Mockery::mock(TelephonyLogger::class)->shouldIgnoreMissing();
 
-        (new VicidialDispositionSyncService($repository, $proxy, $logger))
+        $nonAgentApi = Mockery::mock(VicidialNonAgentApiService::class);
+        $nonAgentApi->shouldNotReceive('execute');
+
+        $result = (new VicidialDispositionSyncService($proxy, $logger, $nonAgentApi))
             ->syncDispositionToVicidial($session);
 
+        $this->assertTrue($result->success);
         $this->assertDatabaseHas('vicidial_agent_sessions', [
             'user_id' => $user->id,
             'campaign_code' => 'mbsales',

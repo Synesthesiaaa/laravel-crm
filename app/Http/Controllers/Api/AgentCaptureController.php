@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Jobs\SyncVicidialLeadFieldsJob;
 use App\Models\AgentCaptureRecord;
 use App\Models\AgentScreenField;
+use App\Services\Telephony\TelephonySyncOutboxService;
+use App\Support\FormFieldVisibility;
 use App\Support\PercentageValue;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -36,31 +39,63 @@ class AgentCaptureController extends Controller
         $campaign = $request->input('campaign_code');
         $fields = AgentScreenField::query()
             ->forCampaign($campaign)
-            ->get(['field_key', 'vici_field', 'field_type', 'direction', 'is_required']);
+            ->get(['field_key', 'vici_field', 'field_type', 'direction', 'is_required', 'visibility']);
         $fieldsByKey = $fields->keyBy('field_key');
         $allowedKeys = $fieldsByKey->keys()->toArray();
+        $submittedValues = $request->input('capture_data', []);
+        $visibleKeys = $fields
+            ->filter(fn (AgentScreenField $field): bool => FormFieldVisibility::isVisible($field->visibility, $submittedValues))
+            ->pluck('field_key')
+            ->map(fn (mixed $fieldKey): string => (string) $fieldKey)
+            ->all();
 
         $captureData = [];
-        foreach ($request->input('capture_data', []) as $key => $value) {
-            if (in_array($key, $allowedKeys, true)) {
+        foreach ($submittedValues as $key => $value) {
+            if (in_array($key, $allowedKeys, true) && in_array($key, $visibleKeys, true)) {
                 $field = $fieldsByKey->get($key);
                 $captureData[$key] = $this->normalizeCaptureValue($value, (string) ($field->field_type ?? 'text'));
             }
         }
 
-        $this->validateRequiredCaptureData($request, $fields, $captureData);
+        $this->validateRequiredCaptureData($fields, $visibleKeys, $captureData);
 
-        $record = AgentCaptureRecord::create([
-            'campaign_code' => $campaign,
-            'call_session_id' => $request->input('call_session_id'),
-            'lead_id' => $request->input('lead_id'),
-            'phone_number' => $request->input('phone_number'),
-            'agent' => $user->username ?? $user->full_name ?? (string) $user->id,
-            'user_id' => $user->id,
-            'capture_data' => $captureData,
-        ]);
+        $leadFields = $this->postFieldsForVicidial($fields, $captureData, trim((string) $request->input('lead_id', '')));
+        $record = DB::transaction(function () use ($request, $user, $campaign, $captureData, $leadFields): AgentCaptureRecord {
+            $record = AgentCaptureRecord::create([
+                'campaign_code' => $campaign,
+                'call_session_id' => $request->input('call_session_id'),
+                'lead_id' => $request->input('lead_id'),
+                'phone_number' => $request->input('phone_number'),
+                'agent' => $user->username ?? $user->full_name ?? (string) $user->id,
+                'user_id' => $user->id,
+                'capture_data' => $captureData,
+            ]);
 
-        $this->deferPostFieldsToVicidial($request, $fields, $captureData, (string) $campaign);
+            if ($leadFields !== []) {
+                app(TelephonySyncOutboxService::class)->record(
+                    TelephonySyncOutboxService::OPERATION_LEAD_FIELDS,
+                    'agent-capture:'.$record->id.':lead-fields',
+                    [
+                        'user_id' => $user->id,
+                        'campaign' => (string) $campaign,
+                        'fields' => $leadFields,
+                    ],
+                );
+            }
+
+            return $record;
+        });
+
+        if ($leadFields !== []) {
+            try {
+                app(TelephonySyncOutboxService::class)->dispatchPending();
+            } catch (\Throwable $dispatchException) {
+                Log::channel('telephony')->warning('Agent capture VICIdial sync remains pending for dispatcher', [
+                    'capture_id' => $record->id,
+                    'exception_class' => $dispatchException::class,
+                ]);
+            }
+        }
 
         return response()->json([
             'success' => true,
@@ -71,12 +106,8 @@ class AgentCaptureController extends Controller
     /**
      * @param  array<string, string>  $captureData
      */
-    private function validateRequiredCaptureData(Request $request, Collection $fields, array $captureData): void
+    private function validateRequiredCaptureData(Collection $fields, array $visibleKeys, array $captureData): void
     {
-        $visibleFields = collect($request->input('visible_fields', []))
-            ->filter(fn ($field) => is_string($field) && $field !== '')
-            ->values();
-        $hasVisibleFieldList = $request->has('visible_fields');
         $errors = [];
 
         foreach ($fields as $field) {
@@ -85,7 +116,7 @@ class AgentCaptureController extends Controller
             }
 
             $fieldKey = (string) $field->field_key;
-            if ($hasVisibleFieldList && ! $visibleFields->contains($fieldKey)) {
+            if (! in_array($fieldKey, $visibleKeys, true)) {
                 continue;
             }
 
@@ -102,11 +133,10 @@ class AgentCaptureController extends Controller
     /**
      * Push mapped capture fields back to Vicidial for directions post/both.
      */
-    private function deferPostFieldsToVicidial(Request $request, Collection $fields, array $captureData, string $campaign): void
+    private function postFieldsForVicidial(Collection $fields, array $captureData, string $leadId): array
     {
-        $leadId = trim((string) $request->input('lead_id', ''));
         if ($leadId === '') {
-            return;
+            return [];
         }
 
         $catalog = (array) config('vicidial_fields.fields', []);
@@ -133,10 +163,10 @@ class AgentCaptureController extends Controller
         }
 
         if (count($updateFields) <= 1) {
-            return;
+            return [];
         }
 
-        SyncVicidialLeadFieldsJob::dispatch((int) $request->user()->id, $campaign, $updateFields);
+        return $updateFields;
     }
 
     private function normalizeCaptureValue(mixed $value, string $fieldType): string

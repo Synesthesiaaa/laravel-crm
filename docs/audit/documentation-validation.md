@@ -13,7 +13,7 @@ Reviewed 2026-10-15. This records documentation checks, not an application accep
 | Local runtime versions | CLI PHP 8.5.6 and Node v24.19.0 observed; these observations do not certify other environments |
 | `composer check-platform-reqs --no-dev` | **Failed platform readiness:** actual PCNTL and POSIX extensions missing on native Windows; other reported non-dev requirements succeeded, with Ctype/Mbstring supplied by polyfills |
 | Read-only Artisan route registry | `php artisan route:list --json --except-vendor`; 201 registrations reconciled with 201 documented method/path rows (GET represents GET/HEAD), no differences |
-| AMI command help | `php artisan help ami:listen --no-ansi` resolves to persistent listener; unsupported example reconnect option recorded |
+| AMI command help | `ami:listen` and `ami:events:listen` have distinct signatures; the Supervisor example uses the persistent listener |
 | Local Markdown targets/anchors | Temporary dependency-free checker resolves paths, GitHub-style heading anchors and source line anchors; final counts recorded below |
 | Markdown structure | New guide headings and balanced code fences checked; OpenSpec's existing H2 artifact convention retained |
 | CSV fixtures | Parsed headers match importer/download templates; only synthetic example-domain recipients present |

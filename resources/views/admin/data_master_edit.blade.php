@@ -28,8 +28,13 @@
                 @foreach($columns as $col)
                     @if(!in_array($col, ['id', 'created_at', 'updated_at'], true))
                         <div class="form-field">
-                            <label class="form-label">{{ $headers[$col] ?? $col }}</label>
-                            <input type="text" name="{{ $col }}" value="{{ $dataMasterService->formatValue($col, is_object($record) ? ($record->$col ?? '') : ($record[$col] ?? ''), $percentageColumns ?? []) }}" class="form-input">
+                            <span class="form-label">{{ $headers[$col] ?? $col }}</span>
+                            @if(in_array($col, $editableColumns, true))
+                                <label class="sr-only" for="data-master-{{ $col }}">{{ $headers[$col] ?? $col }}</label>
+                                <input id="data-master-{{ $col }}" type="text" name="{{ $col }}" value="{{ $dataMasterService->formatValue($col, is_object($record) ? ($record->$col ?? '') : ($record[$col] ?? ''), $percentageColumns ?? []) }}" class="form-input">
+                            @else
+                                <p class="form-input bg-[var(--color-surface-1)] text-[var(--color-on-surface-muted)]" aria-readonly="true">{{ $dataMasterService->formatValue($col, is_object($record) ? ($record->$col ?? '') : ($record[$col] ?? ''), $percentageColumns ?? []) ?: '—' }}</p>
+                            @endif
                         </div>
                     @endif
                 @endforeach

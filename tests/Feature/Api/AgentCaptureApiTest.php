@@ -2,13 +2,15 @@
 
 namespace Tests\Feature\Api;
 
-use App\Jobs\SyncVicidialLeadFieldsJob;
+use App\Jobs\ProcessTelephonySyncOutboxJob;
 use App\Models\AgentCaptureRecord;
 use App\Models\AgentScreenField;
 use App\Models\CallSession;
 use App\Models\SystemSetting;
+use App\Models\TelephonySyncOutbox;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -90,15 +92,17 @@ class AgentCaptureApiTest extends TestCase
             'lead_id' => '123',
             'phone_number' => '15551234567',
         ]);
-        Queue::assertPushed(SyncVicidialLeadFieldsJob::class, function (SyncVicidialLeadFieldsJob $job) use ($user): bool {
-            return $job->userId === $user->id
-                && $job->campaign === 'mbsales'
-                && ($job->fields['lead_id'] ?? null) === '123'
-                && ($job->fields['email'] ?? null) === 'agent@example.test'
-                && ($job->fields['comments'] ?? null) === 'Follow up tomorrow'
-                && ! array_key_exists('first_name', $job->fields)
-                && ! array_key_exists('status', $job->fields);
-        });
+        $outbox = TelephonySyncOutbox::query()->where('operation_type', 'vicidial_lead_fields')->firstOrFail();
+        $payload = json_decode(Crypt::decryptString($outbox->payload_encrypted), true);
+        $this->assertSame($user->id, $payload['user_id']);
+        $this->assertSame('mbsales', $payload['campaign']);
+        $this->assertSame('123', $payload['fields']['lead_id']);
+        $this->assertSame('agent@example.test', $payload['fields']['email']);
+        $this->assertSame('Follow up tomorrow', $payload['fields']['comments']);
+        $this->assertArrayNotHasKey('first_name', $payload['fields']);
+        $this->assertArrayNotHasKey('status', $payload['fields']);
+        $this->assertStringNotContainsString('agent@example.test', $outbox->payload_encrypted);
+        Queue::assertPushed(ProcessTelephonySyncOutboxJob::class, fn (ProcessTelephonySyncOutboxJob $job): bool => $job->outboxId === $outbox->id);
     }
 
     public function test_capture_store_normalizes_percentage_fields_for_storage_and_vicidial_push(): void
@@ -132,7 +136,10 @@ class AgentCaptureApiTest extends TestCase
 
         $record = AgentCaptureRecord::query()->where('campaign_code', 'mbsales')->firstOrFail();
         $this->assertSame(['discount_rate' => '12.5%'], $record->capture_data);
-        Queue::assertPushed(SyncVicidialLeadFieldsJob::class, fn (SyncVicidialLeadFieldsJob $job): bool => ($job->fields['comments'] ?? null) === '12.5%');
+        $outbox = TelephonySyncOutbox::query()->where('operation_type', 'vicidial_lead_fields')->firstOrFail();
+        $payload = json_decode(Crypt::decryptString($outbox->payload_encrypted), true);
+        $this->assertSame('12.5%', $payload['fields']['comments']);
+        Queue::assertPushed(ProcessTelephonySyncOutboxJob::class, fn (ProcessTelephonySyncOutboxJob $job): bool => $job->outboxId === $outbox->id);
     }
 
     public function test_capture_rejects_call_session_owned_by_another_agent(): void
@@ -198,10 +205,18 @@ class AgentCaptureApiTest extends TestCase
 
         AgentScreenField::create([
             'campaign_code' => 'mbsales',
+            'field_key' => 'show_email',
+            'field_label' => 'Show email field',
+            'field_order' => 1,
+            'field_width' => 'full',
+        ]);
+        AgentScreenField::create([
+            'campaign_code' => 'mbsales',
             'field_key' => 'email_capture',
             'field_label' => 'Email',
             'is_required' => true,
-            'field_order' => 1,
+            'visibility' => ['field' => 'show_email', 'operator' => 'equals', 'values' => ['Yes']],
+            'field_order' => 2,
             'field_width' => 'full',
         ]);
 
@@ -210,11 +225,16 @@ class AgentCaptureApiTest extends TestCase
             ->postJson('/api/agent/capture', [
                 'campaign_code' => 'mbsales',
                 'capture_data' => [
-                    'email_capture' => '',
+                    'show_email' => 'No',
+                    'email_capture' => 'forged-hidden-value@example.test',
                 ],
-                'visible_fields' => [],
+                // The server must ignore this client claim and recalculate visibility.
+                'visible_fields' => ['email_capture'],
             ])
             ->assertOk()
             ->assertJsonPath('success', true);
+
+        $record = AgentCaptureRecord::query()->firstOrFail();
+        $this->assertSame(['show_email' => 'No'], $record->capture_data);
     }
 }

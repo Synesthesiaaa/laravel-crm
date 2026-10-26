@@ -7,6 +7,7 @@ use App\Repositories\FormFieldRepository;
 use App\Repositories\FormSubmissionRepository;
 use App\Services\CallHistoryService;
 use App\Services\CampaignService;
+use App\Services\FormStorageSchemaService;
 use App\Services\FormSubmissionService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -57,7 +58,7 @@ class FormSubmissionServiceTest extends TestCase
         $this->assertEquals('1000.50', $result['amount']); // numeric field: keeps digits and dots
     }
 
-    public function test_prepare_form_row_strips_numeric_non_digits(): void
+    public function test_prepare_form_row_preserves_identifier_format_even_when_legacy_type_is_number(): void
     {
         $fields = collect([
             (object) ['field_name' => 'phone', 'field_type' => 'number', 'is_required' => false],
@@ -69,7 +70,82 @@ class FormSubmissionServiceTest extends TestCase
             'phone' => '+63 (912) 345-6789',
         ], 'agent1');
 
-        $this->assertEquals('639123456789', $result['phone']);
+        $this->assertSame('+63 (912) 345-6789', $result['phone']);
+    }
+
+    public function test_prepare_form_row_preserves_signed_decimal_values(): void
+    {
+        $result = $this->service->prepareFormRow(collect([
+            (object) ['field_name' => 'amount', 'field_type' => 'number', 'is_required' => true],
+        ]), [
+            'date' => '2026-01-15',
+            'request_id' => '260115002',
+            'amount' => '-123.45',
+        ], 'agent1');
+
+        $this->assertSame('-123.45', $result['amount']);
+    }
+
+    public function test_prepare_form_row_rejects_exponents_for_decimal_fields(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Field 'amount' must be a valid decimal value.");
+
+        $this->service->prepareFormRow(collect([
+            (object) ['field_name' => 'amount', 'field_type' => 'number', 'is_required' => true],
+        ]), [
+            'date' => '2026-01-15',
+            'request_id' => '260115003',
+            'amount' => '1e3',
+        ], 'agent1');
+    }
+
+    public function test_prepare_form_row_rejects_more_than_two_fractional_digits(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        $this->service->prepareFormRow(collect([
+            (object) ['field_name' => 'amount', 'field_type' => 'number', 'is_required' => true],
+        ]), [
+            'date' => '2026-01-15',
+            'request_id' => '260115004',
+            'amount' => '12.345',
+        ], 'agent1');
+    }
+
+    public function test_prepare_form_row_normalizes_percentage_without_optional_table_context(): void
+    {
+        $result = $this->service->prepareFormRow(collect([
+            (object) ['field_name' => 'discount_rate', 'field_type' => 'percentage', 'is_required' => true],
+        ]), [
+            'date' => '2026-01-15',
+            'request_id' => '260115006',
+            'discount_rate' => '12.5',
+        ], 'agent1');
+
+        $this->assertSame('12.5%', $result['discount_rate']);
+    }
+
+    public function test_prepare_form_row_skips_hidden_required_fields_and_values(): void
+    {
+        $fields = collect([
+            (object) ['field_name' => 'account_type', 'field_type' => 'text', 'is_required' => false],
+            (object) [
+                'field_name' => 'account_number',
+                'field_type' => 'text',
+                'is_required' => true,
+                'visibility' => ['field' => 'account_type', 'operator' => 'equals', 'values' => ['Checking']],
+            ],
+        ]);
+
+        $result = $this->service->prepareFormRow($fields, [
+            'date' => '2026-01-15',
+            'request_id' => '260115005',
+            'account_type' => 'Savings',
+            'account_number' => 'forged-hidden-value',
+        ], 'agent1');
+
+        $this->assertArrayNotHasKey('account_number', $result);
     }
 
     public function test_prepare_form_row_normalizes_percentage_suffix_once(): void
@@ -183,7 +259,7 @@ class FormSubmissionServiceTest extends TestCase
      */
     private function requestIdTestService(array $suffixes): FormSubmissionService
     {
-        return new class($this->app->make(CampaignService::class), $this->app->make(FormFieldRepository::class), $this->app->make(FormSubmissionRepository::class), $this->app->make(CallHistoryService::class), $suffixes) extends FormSubmissionService
+        return new class($this->app->make(CampaignService::class), $this->app->make(FormFieldRepository::class), $this->app->make(FormSubmissionRepository::class), $this->app->make(CallHistoryService::class), $this->app->make(FormStorageSchemaService::class), $suffixes) extends FormSubmissionService
         {
             /** @var list<string> */
             private array $suffixes;
@@ -196,6 +272,7 @@ class FormSubmissionServiceTest extends TestCase
                 FormFieldRepository $formFieldRepository,
                 FormSubmissionRepository $formSubmissionRepository,
                 CallHistoryService $callHistoryService,
+                FormStorageSchemaService $formStorageSchema,
                 array $suffixes,
             ) {
                 parent::__construct(
@@ -203,6 +280,7 @@ class FormSubmissionServiceTest extends TestCase
                     $formFieldRepository,
                     $formSubmissionRepository,
                     $callHistoryService,
+                    $formStorageSchema,
                 );
                 $this->suffixes = $suffixes;
             }

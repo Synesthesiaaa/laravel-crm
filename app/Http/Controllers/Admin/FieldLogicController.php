@@ -5,19 +5,25 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreFieldLogicRequest;
 use App\Http\Requests\Admin\UpdateFieldLogicRequest;
+use App\Models\Form;
 use App\Models\FormField;
 use App\Services\CampaignService;
 use App\Services\DashboardStatsService;
+use App\Services\FormStorageSchemaService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Throwable;
 
 class FieldLogicController extends Controller
 {
     public function __construct(
         protected CampaignService $campaignService,
         protected DashboardStatsService $dashboardStats,
+        protected FormStorageSchemaService $formStorageSchema,
     ) {}
 
     public function index(Request $request): View
@@ -117,6 +123,7 @@ class FieldLogicController extends Controller
                 'field_type' => $validated['field_type'],
                 'is_required' => $request->boolean('is_required'),
                 'is_sale_amount' => $isSaleAmount,
+                'draft_safe' => $request->boolean('draft_safe'),
                 'field_order' => $validated['field_order'] ?? ($maxOrder ?? 0) + 1,
                 'field_width' => $validated['field_width'] ?? 'full',
                 'options' => $options,
@@ -125,9 +132,12 @@ class FieldLogicController extends Controller
         });
         $this->campaignService->clearCampaignsCache();
         $this->dashboardStats->invalidate($validated['campaign_code']);
+        $storageFailure = $this->provisionRegisteredForm($validated['campaign_code'], $validated['form_type']);
 
-        return redirect()->route('admin.field-logic.index', ['form' => $validated['form_type']])
+        $redirect = redirect()->route('admin.field-logic.index', ['form' => $validated['form_type']])
             ->with('success', 'Field added.');
+
+        return $storageFailure === null ? $redirect : $redirect->with('error', $storageFailure);
     }
 
     public function update(UpdateFieldLogicRequest $request, int $id): RedirectResponse
@@ -152,6 +162,7 @@ class FieldLogicController extends Controller
             'field_type' => $newType,
             'is_required' => $request->boolean('is_required'),
             'is_sale_amount' => $isSaleAmount,
+            'draft_safe' => $request->boolean('draft_safe'),
             'field_order' => $validated['field_order'] ?? $field->field_order,
             'field_width' => $validated['field_width'] ?? $field->field_width,
             'options' => $options,
@@ -159,9 +170,12 @@ class FieldLogicController extends Controller
         ]);
         $this->campaignService->clearCampaignsCache();
         $this->dashboardStats->invalidate($field->campaign_code);
+        $storageFailure = $this->provisionRegisteredForm($field->campaign_code, $field->form_type);
 
-        return redirect()->route('admin.field-logic.index', ['form' => $field->form_type])
+        $redirect = redirect()->route('admin.field-logic.index', ['form' => $field->form_type])
             ->with('success', 'Field updated.');
+
+        return $storageFailure === null ? $redirect : $redirect->with('error', $storageFailure);
     }
 
     /** @return non-falsy-string|null JSON array of option strings */
@@ -234,8 +248,41 @@ class FieldLogicController extends Controller
         $field->delete();
         $this->campaignService->clearCampaignsCache();
         $this->dashboardStats->invalidate($campaignCode);
+        $storageFailure = $this->provisionRegisteredForm($campaignCode, $formType);
 
-        return redirect()->route('admin.field-logic.index', ['form' => $formType])
+        $redirect = redirect()->route('admin.field-logic.index', ['form' => $formType])
             ->with('success', 'Field deleted.');
+
+        return $storageFailure === null ? $redirect : $redirect->with('error', $storageFailure);
+    }
+
+    private function provisionRegisteredForm(string $campaignCode, string $formType): ?string
+    {
+        $form = Form::query()
+            ->where('campaign_code', $campaignCode)
+            ->where('form_code', $formType)
+            ->first();
+        if ($form === null) {
+            return null;
+        }
+
+        try {
+            $fields = FormField::query()
+                ->where('campaign_code', $campaignCode)
+                ->where('form_type', $formType)
+                ->get();
+            $this->formStorageSchema->provision((string) $form->table_name, $fields);
+
+            return null;
+        } catch (Throwable $exception) {
+            $reference = (string) Str::uuid();
+            Log::error('Form field storage provisioning failed after metadata change.', [
+                'reference' => $reference,
+                'form_id' => $form->id,
+                'exception_class' => $exception::class,
+            ]);
+
+            return 'Field metadata was saved, but storage provisioning needs attention. Run forms:provision-storage. Reference: '.$reference;
+        }
     }
 }

@@ -42,6 +42,8 @@ class CallSession extends Model
         'lead_id',
         'phone_number',
         'status',
+        'remote_dial_outcome',
+        'remote_dial_outcome_at',
         'linkedid',
         'channel',
         'vicidial_lead_id',
@@ -66,6 +68,7 @@ class CallSession extends Model
             'ringing_at' => 'datetime',
             'answered_at' => 'datetime',
             'ended_at' => 'datetime',
+            'remote_dial_outcome_at' => 'datetime',
             'disposition_at' => 'datetime',
             'metadata' => 'array',
         ];

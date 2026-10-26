@@ -14,7 +14,87 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.2', '8.3']
+        php: ['8.4', '8.5']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, bcmath, pdo, pdo_mysql, pdo_sqlite, sqlite3, gd, zip, redis, pcntl, posix
+          coverage: xdebug
+
+      - name: Copy .env.testing
+        run: cp .env.testing .env 2>/dev/null || cp .env.example .env
+
+      - name: Install Composer dependencies
+        uses: ramsey/composer-install@v3
+        with:
+          composer-options: '--no-interaction --optimize-autoloader'
+
+      - name: Verify lockfile requirements against the actual PHP runtime
+        run: composer check-platform-reqs --lock
+
+      - name: Generate application key
+        run: php artisan key:generate
+
+      - name: Run database migrations (SQLite in-memory)
+        run: php artisan migrate --env=testing --force
+
+      - name: Run PHPUnit tests with coverage
+        run: |
+          mkdir -p coverage
+          php artisan test --coverage --min=50
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+
+      - name: Upload coverage artifact
+        if: matrix.php == '8.4'
+        uses: actions/upload-artifact@v4
+        with:
+          name: php-coverage-report
+          path: coverage/clover.xml
+          if-no-files-found: error
+
+      - name: Upload coverage to Codecov
+        if: matrix.php == '8.4'
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage/clover.xml
+          fail_ci_if_error: false
+
+  frontend:
+    name: JavaScript Tests and Production Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install locked frontend dependencies
+        run: npm ci
+
+      - name: Run JavaScript tests
+        run: npm run test:js
+
+      - name: Build production assets
+        run: npm run build
+
+  mysql-concurrency:
+    name: MySQL Call Reservation Contention
+    runs-on: ubuntu-latest
 
     services:
       mysql:
@@ -36,41 +116,66 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up PHP ${{ matrix.php }}
+      - name: Set up PHP 8.4
         uses: shivammathur/setup-php@v2
         with:
-          php-version: ${{ matrix.php }}
-          extensions: mbstring, bcmath, pdo, pdo_mysql, pdo_sqlite, sqlite3, gd, zip, redis
-          coverage: xdebug
+          php-version: '8.4'
+          extensions: mbstring, bcmath, pdo, pdo_mysql, pdo_sqlite, sqlite3, gd, zip, pcntl, posix
 
-      - name: Copy .env.testing
-        run: cp .env.testing .env 2>/dev/null || cp .env.example .env
+      - name: Copy testing environment
+        run: cp .env.testing .env
 
       - name: Install Composer dependencies
         uses: ramsey/composer-install@v3
         with:
-          composer-options: '--no-interaction --prefer-dist --optimize-autoloader'
+          composer-options: '--no-interaction --optimize-autoloader'
 
       - name: Generate application key
         run: php artisan key:generate
 
-      - name: Run database migrations (SQLite in-memory)
-        run: php artisan migrate --env=testing --force
-
-      - name: Run PHPUnit tests with coverage
-        run: |
-          php artisan test --coverage --min=50 2>&1 || php artisan test
+      - name: Migrate the isolated CI MySQL database
+        run: php artisan migrate --force
         env:
           APP_ENV: testing
-          DB_CONNECTION: sqlite
-          DB_DATABASE: ':memory:'
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: laravel_crm_test
+          DB_USERNAME: crm_user
+          DB_PASSWORD: secret
 
-      - name: Upload coverage report
-        if: matrix.php == '8.2'
-        uses: codecov/codecov-action@v4
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+      - name: Verify concurrent call reservation on MySQL
+        run: php artisan test --no-coverage tests/Integration/CallReservationMySqlConcurrencyTest.php
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: laravel_crm_test
+          DB_USERNAME: crm_user
+          DB_PASSWORD: secret
+
+      - name: Verify concurrent attendance segments on MySQL
+        run: php artisan test --no-coverage tests/Integration/AttendanceStatusMySqlConcurrencyTest.php
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: laravel_crm_test
+          DB_USERNAME: crm_user
+          DB_PASSWORD: secret
+
+      - name: Verify concurrent email campaign counters on MySQL
+        run: php artisan test --no-coverage tests/Integration/EmailCampaignTransitionMySqlConcurrencyTest.php
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: laravel_crm_test
+          DB_USERNAME: crm_user
+          DB_PASSWORD: secret
 
   lint:
     name: Static Analysis (Pint)
@@ -79,16 +184,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up PHP 8.2
+      - name: Set up PHP 8.4
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: '8.4'
           extensions: mbstring, pdo, pdo_sqlite, sqlite3
 
       - name: Install Composer dependencies
         uses: ramsey/composer-install@v3
         with:
-          composer-options: '--no-interaction --prefer-dist'
+          composer-options: '--no-interaction'
 
       - name: Run Laravel Pint (code style)
         run: vendor/bin/pint --test
@@ -100,10 +205,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up PHP 8.2
+      - name: Set up PHP 8.4
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: '8.4'
 
       - name: Check for known vulnerabilities
         run: composer audit --no-interaction
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check JavaScript dependencies for known vulnerabilities
+        run: npm audit --audit-level=low

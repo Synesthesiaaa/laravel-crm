@@ -82,6 +82,27 @@ class ExtractionExportTest extends TestCase
         $this->assertStringContainsString('12.5%', $content);
     }
 
+    public function test_extraction_csv_escapes_formula_text_and_preserves_numeric_cells(): void
+    {
+        $this->preparePercentageFormRecord('12.5', '=HYPERLINK("https://example.test","open")');
+
+        $response = $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->post(route('admin.extraction.export'), [
+                'start_date' => '2026-01-01',
+                'end_date' => '2026-01-31',
+                'data_type' => 'ezycash',
+            ]);
+
+        $rows = $this->csvRows($response->streamedContent());
+        $cardholderIndex = array_search('cardholder_name', $rows[0], true);
+        $amountIndex = array_search('ezycash_amount', $rows[0], true);
+        $this->assertIsInt($cardholderIndex);
+        $this->assertIsInt($amountIndex);
+        $this->assertSame("'=HYPERLINK(\"https://example.test\",\"open\")", $rows[1][$cardholderIndex]);
+        $this->assertSame('100', $rows[1][$amountIndex]);
+    }
+
     public function test_extraction_exports_metadata_then_fields_in_field_logic_order_then_legacy_fields(): void
     {
         $this->preparePercentageFormRecord('12.5');
@@ -350,6 +371,53 @@ class ExtractionExportTest extends TestCase
         });
     }
 
+    public function test_data_master_rejects_provenance_and_unregistered_columns(): void
+    {
+        $this->preparePercentageFormRecord('7');
+        $record = DB::table('ezycash')->first();
+
+        $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->from(route('admin.data-master.edit', ['id' => $record->id, 'type' => 'ezycash']))
+            ->post(route('admin.data-master.update'), [
+                '_table' => 'ezycash',
+                '_id' => $record->id,
+                '_type' => 'ezycash',
+                'discount_rate' => '8',
+                'agent' => 'forged-agent',
+                'unregistered_column' => 'forged-value',
+            ])
+            ->assertSessionHasErrors('edit');
+
+        $this->assertDatabaseHas('ezycash', [
+            'id' => $record->id,
+            'agent' => 'agent_export',
+            'discount_rate' => '7',
+        ]);
+    }
+
+    public function test_data_master_rejects_invalid_percentage_values_without_writing(): void
+    {
+        $this->preparePercentageFormRecord('7');
+        $record = DB::table('ezycash')->first();
+
+        $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->from(route('admin.data-master.edit', ['id' => $record->id, 'type' => 'ezycash']))
+            ->post(route('admin.data-master.update'), [
+                '_table' => 'ezycash',
+                '_id' => $record->id,
+                '_type' => 'ezycash',
+                'discount_rate' => '101%',
+            ])
+            ->assertSessionHasErrors('discount_rate');
+
+        $this->assertDatabaseHas('ezycash', [
+            'id' => $record->id,
+            'discount_rate' => '7',
+        ]);
+    }
+
     public function test_export_requires_end_date_after_or_equal_to_start_date(): void
     {
         $response = $this->actingAs($this->admin)
@@ -400,7 +468,7 @@ class ExtractionExportTest extends TestCase
         return ['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'];
     }
 
-    private function preparePercentageFormRecord(string $value): void
+    private function preparePercentageFormRecord(string $value, string $cardholderName = 'Test Cardholder'): void
     {
         FormField::create([
             'campaign_code' => 'mbsales',
@@ -430,7 +498,7 @@ class ExtractionExportTest extends TestCase
         DB::table('ezycash')->insert([
             'date' => '2026-01-15',
             'request_id' => '260115001',
-            'cardholder_name' => 'Test Cardholder',
+            'cardholder_name' => $cardholderName,
             'mpi_credit_card_no' => '4111111111111111',
             'bank' => 'Test Bank',
             'account_type' => 'Savings',

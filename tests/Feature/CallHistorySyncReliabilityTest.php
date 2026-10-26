@@ -120,12 +120,14 @@ final class RecordingSyncProvider extends VicidialHistoricalCallProvider
 
     public ?Carbon $to = null;
 
-    public function fetchRange(
+    public function streamRange(
         VicidialServer $server,
         Campaign $campaign,
         array $campaignCodes,
         Carbon $from,
         Carbon $to,
+        callable $consume,
+        ?int $pageSize = null,
     ): HistoricalCallProviderResult {
         $this->from = $from;
         $this->to = $to;

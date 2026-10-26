@@ -16,7 +16,7 @@ composer check-platform-reqs
 npm ci
 ```
 
-Do not resolve the PHP 8.2 declaration mismatch by ignoring platform requirements. The current lockfile needs PHP 8.4+. Windows may report PCNTL/POSIX requirements missing because Composer's manifest platform overrides only simulate them. A dependency install can succeed while Horizon cannot run.
+The supported PHP runtime is 8.4 or newer within PHP 8.x. Do not ignore platform requirements. Windows may report PCNTL/POSIX requirements missing because Composer's manifest platform overrides only simulate them. A dependency install can succeed while Horizon cannot run.
 
 ## 3. Configure a new environment
 

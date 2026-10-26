@@ -36,6 +36,13 @@ class VicidialCallUrlService
         $agentUser = $this->resolveAgentUser($payload);
         $hydrationUser = $agentUser ?? new User;
 
+        if ($callId !== null) {
+            $existingCall = CallSession::query()->where('vicidial_call_id', $callId)->first();
+            if ($existingCall && ! $this->matchesCallbackContext($existingCall, $campaign, $agentUser, $leadId, $phoneNumber)) {
+                return OperationResult::failure('The call ID is already linked to a different call context.');
+            }
+        }
+
         $hydrated = $this->leadHydrationService->hydrate(
             $hydrationUser,
             $campaign,
@@ -118,7 +125,13 @@ class VicidialCallUrlService
             return OperationResult::failure('Disposition code is required.');
         }
 
-        $session = $this->findDispositionSession($campaign, $leadId, $phoneNumber, $callId);
+        $session = $this->findDispositionSession(
+            $campaign,
+            $leadId,
+            $phoneNumber,
+            $callId,
+            $this->resolveAgentUser($payload),
+        );
 
         if ($session === null) {
             return OperationResult::failure('Unable to resolve a call session for disposition.');
@@ -212,7 +225,13 @@ class VicidialCallUrlService
         $callId = $this->stringValue($payload, 'call_id');
         $leadId = $this->intValue($payload, 'lead_id');
         $phoneNumber = $this->stringValue($payload, 'phone_number');
-        $session = $this->findAnySession($campaign, $leadId, $phoneNumber, $callId);
+        $session = $this->findAnySession(
+            $campaign,
+            $leadId,
+            $phoneNumber,
+            $callId,
+            $this->resolveAgentUser($payload),
+        );
 
         if ($session === null) {
             $alert = $this->alertService->log(
@@ -253,6 +272,7 @@ class VicidialCallUrlService
                     'payload' => Arr::except($payload, ['sig']),
                 ],
             ],
+            'remote_outcome_resolved' => true,
         ]);
 
         if (! $result->success) {
@@ -361,31 +381,28 @@ class VicidialCallUrlService
             $session = CallSession::query()
                 ->where('vicidial_call_id', $callId)
                 ->first();
-            if ($session) {
-                return $session;
-            }
+
+            return $session && $this->matchesCallbackContext($session, $campaign, $user, $leadId, $phoneNumber)
+                ? $session
+                : null;
+        }
+
+        if (! $user || $leadId === null || $phoneNumber === null) {
+            return null;
         }
 
         $query = CallSession::query()
             ->where('campaign_code', $campaign)
-            ->active();
-
-        if ($user) {
-            $query->where('user_id', $user->id);
-        }
-
-        if ($leadId !== null) {
-            $query->where(function ($builder) use ($leadId): void {
+            ->where('user_id', $user->id)
+            ->active()
+            ->where(function ($builder) use ($leadId): void {
                 $builder->where('lead_id', $leadId)
                     ->orWhere('vicidial_lead_id', (string) $leadId);
-            });
-        }
+            })
+            ->where('phone_number', $phoneNumber);
+        $candidates = $query->limit(2)->get();
 
-        if ($phoneNumber !== null) {
-            $query->where('phone_number', $phoneNumber);
-        }
-
-        return $query->orderByDesc('id')->first();
+        return $candidates->count() === 1 ? $candidates->first() : null;
     }
 
     /**
@@ -393,44 +410,85 @@ class VicidialCallUrlService
      *
      * @param  array<string, mixed>  $payload
      */
-    protected function findAnySession(string $campaign, ?int $leadId, ?string $phoneNumber, ?string $callId): ?CallSession
-    {
+    protected function findAnySession(
+        string $campaign,
+        ?int $leadId,
+        ?string $phoneNumber,
+        ?string $callId,
+        ?User $user,
+    ): ?CallSession {
         if ($callId !== null) {
             $session = CallSession::query()
                 ->where('vicidial_call_id', $callId)
                 ->first();
-            if ($session) {
-                return $session;
-            }
+
+            return $session && $this->matchesCallbackContext($session, $campaign, $user, $leadId, $phoneNumber)
+                ? $session
+                : null;
         }
 
-        $query = CallSession::query()->where('campaign_code', $campaign);
+        if (! $user || $leadId === null || $phoneNumber === null) {
+            return null;
+        }
 
-        if ($leadId !== null) {
-            $query->where(function ($builder) use ($leadId): void {
+        $candidates = CallSession::query()
+            ->where('campaign_code', $campaign)
+            ->where('user_id', $user->id)
+            ->where(function ($builder) use ($leadId): void {
                 $builder->where('lead_id', $leadId)
                     ->orWhere('vicidial_lead_id', (string) $leadId);
-            });
-        }
+            })
+            ->where('phone_number', $phoneNumber)
+            ->limit(2)
+            ->get();
 
-        if ($phoneNumber !== null) {
-            $query->where('phone_number', $phoneNumber);
-        }
-
-        return $query->orderByDesc('id')->first();
+        return $candidates->count() === 1 ? $candidates->first() : null;
     }
 
     /**
      * Find a call session that should receive a disposition save.
      */
-    protected function findDispositionSession(string $campaign, ?int $leadId, ?string $phoneNumber, ?string $callId): ?CallSession
-    {
-        $session = $this->findAnySession($campaign, $leadId, $phoneNumber, $callId);
+    protected function findDispositionSession(
+        string $campaign,
+        ?int $leadId,
+        ?string $phoneNumber,
+        ?string $callId,
+        ?User $user,
+    ): ?CallSession {
+        $session = $this->findAnySession($campaign, $leadId, $phoneNumber, $callId, $user);
         if ($session) {
             return $session;
         }
 
         return null;
+    }
+
+    private function matchesCallbackContext(
+        CallSession $session,
+        string $campaign,
+        ?User $user,
+        ?int $leadId,
+        ?string $phoneNumber,
+    ): bool {
+        if ($session->campaign_code !== $campaign) {
+            return false;
+        }
+
+        if ($user && (int) $session->user_id !== (int) $user->id) {
+            return false;
+        }
+
+        if ($leadId !== null
+            && (int) $session->lead_id !== $leadId
+            && (string) $session->vicidial_lead_id !== (string) $leadId) {
+            return false;
+        }
+
+        if ($phoneNumber !== null && (string) $session->phone_number !== $phoneNumber) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

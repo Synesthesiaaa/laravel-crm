@@ -10,6 +10,6 @@
 
 `composer setup` is an executable installation workflow that copies environment configuration, generates a key, migrates, installs frontend packages, and builds. It is not a read-only health check. `composer dev` starts an HTTP server, queue listener for telephony/default, logs, Vite and Reverb. `composer dev:email` starts a separate email worker. Starting workers can immediately perform queued remote calls or email sends.
 
-The root dependency constraints say PHP `^8.2`, but the current lockfile includes Symfony 8 dependencies requiring PHP 8.4. Use the [installation guide](../getting-started/installation.md) for the effective platform requirement. Vite's locked engine requirements also narrow the generic Node >=20 declaration; use Node ^20.19 or >=22.12 for this lockfile. Composer's platform declarations for pcntl/posix are dependency-resolution settings, not proof those extensions exist on Windows.
+The Composer constraint and lockfile require PHP `^8.4`. Vite's locked engine requirements narrow the generic Node >=20 declaration; use Node ^20.19 or >=22.12 for this lockfile. Composer's platform declarations for pcntl/posix are dependency-resolution settings, not proof those extensions exist on Windows.
 
 Use configuration files and the example environment file to discover variable names. Never copy real environment values into docs or commit keys, remote passwords, SIP credentials, signed recipient URLs, or customer data. [Operations](../operations/README.md) covers process/deployment boundaries.

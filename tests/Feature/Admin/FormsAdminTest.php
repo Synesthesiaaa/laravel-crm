@@ -12,6 +12,7 @@ use App\Services\CampaignService;
 use App\Services\DashboardLayoutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class FormsAdminTest extends TestCase
@@ -80,6 +81,74 @@ class FormsAdminTest extends TestCase
             ->assertSee('name="_editing"', false)
             ->assertSee('value="'.$form->id.'"', false)
             ->assertDontSee('inline-edit-row', false);
+    }
+
+    public function test_used_form_identifiers_cannot_be_changed_after_field_metadata_exists(): void
+    {
+        $form = $this->createCampaignForm();
+        $this->createField('customer_name', 'text');
+        Campaign::factory()->create(['code' => 'other_campaign', 'name' => 'Other Campaign']);
+
+        $this->actingAs($this->superAdmin)
+            ->from(route('admin.forms.index', ['campaign' => 'mbsales']))
+            ->put(route('admin.forms.update', $form), [
+                'campaign_code' => 'other_campaign',
+                'form_code' => 'new_code',
+                'name' => 'Renamed',
+                'table_name' => 'new_table',
+            ])
+            ->assertSessionHasErrors(['campaign_code', 'form_code', 'table_name']);
+
+        $this->assertDatabaseHas('forms', [
+            'id' => $form->id,
+            'campaign_code' => 'mbsales',
+            'form_code' => 'ezycash',
+            'table_name' => 'ezycash',
+        ]);
+        $this->assertDatabaseHas('form_fields', [
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'customer_name',
+        ]);
+    }
+
+    public function test_unused_form_identifiers_can_be_corrected(): void
+    {
+        $form = $this->createCampaignForm();
+
+        $this->actingAs($this->superAdmin)
+            ->put(route('admin.forms.update', $form), [
+                'campaign_code' => 'mbsales',
+                'form_code' => 'new_code',
+                'name' => 'Corrected form',
+                'table_name' => 'new_table',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('forms', [
+            'id' => $form->id,
+            'form_code' => 'new_code',
+            'table_name' => 'new_table',
+            'name' => 'Corrected form',
+        ]);
+    }
+
+    public function test_form_creation_provisions_base_storage_outside_submission(): void
+    {
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.forms.store'), [
+                'campaign_code' => 'mbsales',
+                'form_code' => 'provisioned_form',
+                'name' => 'Provisioned Form',
+                'table_name' => 'provisioned_form_records',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertTrue(Schema::hasTable('provisioned_form_records'));
+        foreach (['id', 'date', 'request_id', 'agent', 'created_at', 'updated_at'] as $column) {
+            $this->assertTrue(Schema::hasColumn('provisioned_form_records', $column));
+        }
     }
 
     public function test_super_admin_can_save_custom_tag_sales_attribution_from_form_edit(): void

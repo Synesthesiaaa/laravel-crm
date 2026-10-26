@@ -24,6 +24,7 @@ class DashboardStatsService
         protected DashboardLayoutService $dashboardLayoutService,
         protected DashboardSalesRuleService $dashboardSalesRuleService,
         protected DashboardPeriodService $dashboardPeriodService,
+        protected DashboardCustomSalesAggregationService $dashboardCustomSalesAggregationService,
     ) {}
 
     /**
@@ -189,13 +190,13 @@ class DashboardStatsService
             ], 'daily' => $this->emptyDashboardSummaryDaily($periods)];
 
             if ($resolvedSalesRules['mode'] === DashboardSalesRuleService::MODE_CUSTOM) {
-                $sources = $this->dashboardSummaryCustomSources($resolvedSalesRules['forms']);
+                $sources = $this->dashboardCustomSalesAggregationService->summarySources($resolvedSalesRules['forms']);
                 $aggregate = $this->aggregateDashboardSummary(
                     $periods,
                     $sources,
                     function (object $row, array $source): ?float {
                         $rule = $source['rule'];
-                        if (! $this->matchesCustomConditions(
+                        if (! $this->dashboardCustomSalesAggregationService->matchesConditions(
                             $row,
                             $rule['conditions'],
                             $rule['amount_field'],
@@ -204,7 +205,7 @@ class DashboardStatsService
                             return null;
                         }
 
-                        return $this->customSaleAmount($row, $rule['amount_field']);
+                        return $this->dashboardCustomSalesAggregationService->amount($row, $rule['amount_field']);
                     },
                 );
             } else {
@@ -283,7 +284,7 @@ class DashboardStatsService
             $resolvedSalesRules = $this->dashboardSalesRuleService->resolveForCampaign($campaignCode, $salesConfig);
 
             if ($resolvedSalesRules['mode'] === DashboardSalesRuleService::MODE_CUSTOM) {
-                $fieldDrivenSales = $this->getCustomSalesByAgentInDateRange(
+                $fieldDrivenSales = $this->dashboardCustomSalesAggregationService->salesByAgentInDateRange(
                     $resolvedSalesRules['forms'],
                     $monthStart,
                     $today,
@@ -404,7 +405,7 @@ class DashboardStatsService
             $resolvedSalesRules = $this->dashboardSalesRuleService->resolveForCampaign($campaignCode, $salesConfig);
 
             if ($resolvedSalesRules['mode'] === DashboardSalesRuleService::MODE_CUSTOM) {
-                $fieldDrivenSales = $this->getCustomSalesByAgentSince($resolvedSalesRules['forms'], $salesSince);
+                $fieldDrivenSales = $this->dashboardCustomSalesAggregationService->salesByAgentSince($resolvedSalesRules['forms'], $salesSince);
                 $sales = $fieldDrivenSales['count'];
                 $salesAmount = $fieldDrivenSales['amount'];
 
@@ -534,7 +535,7 @@ class DashboardStatsService
         return Cache::remember($cacheKey, $ttl, function () use ($campaignCode, $from, $until, $resolvedSalesRules, $empty): array {
 
             if ($resolvedSalesRules['mode'] === DashboardSalesRuleService::MODE_CUSTOM) {
-                $fieldDrivenSales = $this->getCustomSalesByAgentInRange(
+                $fieldDrivenSales = $this->dashboardCustomSalesAggregationService->salesByAgentInRange(
                     $resolvedSalesRules['forms'],
                     $from,
                     $until,
@@ -590,7 +591,7 @@ class DashboardStatsService
         return Cache::remember($cacheKey, 60, function () use ($campaignCode, $businessDate, $date): array {
             $resolvedSalesRules = $this->resolveSalesContext($campaignCode)['rules'];
             if ($resolvedSalesRules['mode'] === DashboardSalesRuleService::MODE_CUSTOM) {
-                return $this->buildCustomDailyCampaignReport($resolvedSalesRules['forms'], $businessDate, $date);
+                return $this->dashboardCustomSalesAggregationService->dailyCampaignReport($resolvedSalesRules['forms'], $businessDate, $date);
             }
 
             $forms = $this->resolveReportForms($campaignCode);
@@ -674,103 +675,6 @@ class DashboardStatsService
                 ],
             ];
         });
-    }
-
-    /**
-     * @param  list<array{form_code: string, form_name: string, table: string, amount_field: string|null, trigger: string, conditions: list<array{field_name: string, accepted_values: list<string>}>}>  $forms
-     * @return array{date: string, forms: list<array{code: string, name: string}>, daily: list<array<string, mixed>>, month_to_date: list<array<string, mixed>>, totals: array<string, mixed>}
-     */
-    private function buildCustomDailyCampaignReport(array $forms, Carbon $businessDate, string $date): array
-    {
-        $formColumns = array_map(static fn (array $form): array => [
-            'code' => $form['form_code'],
-            'name' => $form['form_name'],
-        ], $forms);
-        $emptyTotals = $this->emptyCampaignReportTotals($formColumns);
-
-        if ($forms === []) {
-            return [
-                'date' => $date,
-                'forms' => $formColumns,
-                'daily' => [],
-                'month_to_date' => [],
-                'totals' => ['daily' => $emptyTotals, 'month_to_date' => $emptyTotals],
-            ];
-        }
-
-        $monthStart = $businessDate->copy()->startOfMonth()->toDateString();
-        $dailyRows = [];
-        $monthToDateRows = [];
-        $dailyTotals = $this->emptyCampaignReportTotals($formColumns);
-        $monthToDateTotals = $this->emptyCampaignReportTotals($formColumns);
-
-        foreach ($forms as $form) {
-            if (! Schema::hasColumn($form['table'], 'date') || ! Schema::hasColumn($form['table'], 'agent')) {
-                continue;
-            }
-
-            $conditionFields = array_column($form['conditions'], 'field_name');
-            $select = array_values(array_unique(array_merge(
-                ['id', 'date', 'agent'],
-                $conditionFields,
-                $form['amount_field'] === null ? [] : [$form['amount_field']],
-            )));
-            DB::table($form['table'])
-                ->whereBetween('date', [$monthStart, $date])
-                ->select($select)
-                ->orderBy('id')
-                ->chunk(1000, function ($rows) use (
-                    &$dailyRows,
-                    &$monthToDateRows,
-                    &$dailyTotals,
-                    &$monthToDateTotals,
-                    $form,
-                    $formColumns,
-                    $date,
-                ): void {
-                    foreach ($rows as $row) {
-                        if (! $this->matchesCustomConditions($row, $form['conditions'], $form['amount_field'], $form['trigger'])) {
-                            continue;
-                        }
-
-                        $agent = trim((string) ($row->agent ?? ''));
-                        if ($agent === '') {
-                            continue;
-                        }
-
-                        $amount = $this->customSaleAmount($row, $form['amount_field']);
-                        $this->recordCampaignReportEntry(
-                            $monthToDateRows,
-                            $monthToDateTotals,
-                            $formColumns,
-                            $form['form_code'],
-                            $agent,
-                            $amount,
-                        );
-                        if ((string) $row->date === $date) {
-                            $this->recordCampaignReportEntry(
-                                $dailyRows,
-                                $dailyTotals,
-                                $formColumns,
-                                $form['form_code'],
-                                $agent,
-                                $amount,
-                            );
-                        }
-                    }
-                });
-        }
-
-        return [
-            'date' => $date,
-            'forms' => $formColumns,
-            'daily' => $this->normalizeCampaignReportRows($dailyRows),
-            'month_to_date' => $this->normalizeCampaignReportRows($monthToDateRows),
-            'totals' => [
-                'daily' => $this->normalizeCampaignReportTotals($dailyTotals),
-                'month_to_date' => $this->normalizeCampaignReportTotals($monthToDateTotals),
-            ],
-        ];
     }
 
     public function getTopAgents(string $campaignCode, int $limit = 10): array
@@ -1381,262 +1285,6 @@ class DashboardStatsService
         ];
     }
 
-    /**
-     * @param  list<array{form_code: string, form_name: string, table: string, amount_field: string|null, trigger: string, conditions: list<array{field_name: string, accepted_values: list<string>}>}>  $forms
-     * @return array{count: int, amount: float, counts: array<string, int>, amounts: array<string, float>, sales_by_form: list<array{form_code: string, form_name: string, sales: int, sales_amount: float}>}
-     */
-    private function getCustomSalesByAgentInRange(array $forms, Carbon $from, Carbon $until): array
-    {
-        $sales = 0;
-        $amount = 0.0;
-        $counts = [];
-        $amounts = [];
-        $salesByForm = [];
-
-        foreach ($forms as $form) {
-            $tableName = $form['table'];
-            $salesByForm[$tableName] = [
-                'form_code' => $form['form_code'],
-                'form_name' => $form['form_name'],
-                'sales' => 0,
-                'sales_amount' => 0.0,
-            ];
-
-            if (! Schema::hasColumn($tableName, 'created_at')) {
-                continue;
-            }
-
-            $conditionFields = array_column(
-                array_map(static fn (array $condition): array => [
-                    'field_name' => $condition['field_name'],
-                ], $form['conditions']),
-                'field_name',
-            );
-            $select = array_values(array_unique(array_merge(
-                ['id'],
-                $conditionFields,
-                $form['amount_field'] === null ? [] : [$form['amount_field']],
-                Schema::hasColumn($tableName, 'agent') ? ['agent'] : [],
-            )));
-
-            DB::table($tableName)
-                ->where('created_at', '>=', $from)
-                ->where('created_at', '<', $until)
-                ->select($select)
-                ->orderBy('id')
-                ->chunk(1000, function ($rows) use (&$sales, &$amount, &$counts, &$amounts, &$salesByForm, $tableName, $form): void {
-                    foreach ($rows as $row) {
-                        if (! $this->matchesCustomConditions($row, $form['conditions'], $form['amount_field'], $form['trigger'])) {
-                            continue;
-                        }
-
-                        $saleAmount = $this->customSaleAmount($row, $form['amount_field']);
-                        $sales++;
-                        $amount += $saleAmount;
-                        $salesByForm[$tableName]['sales']++;
-                        $salesByForm[$tableName]['sales_amount'] += $saleAmount;
-
-                        $agent = trim((string) ($row->agent ?? ''));
-                        if ($agent === '') {
-                            continue;
-                        }
-
-                        $counts[$agent] = ($counts[$agent] ?? 0) + 1;
-                        $amounts[$agent] = ($amounts[$agent] ?? 0.0) + $saleAmount;
-                    }
-                });
-        }
-
-        foreach ($salesByForm as &$form) {
-            $form['sales_amount'] = round($form['sales_amount'], 2);
-        }
-        unset($form);
-
-        return [
-            'count' => $sales,
-            'amount' => $amount,
-            'counts' => $counts,
-            'amounts' => $amounts,
-            'sales_by_form' => array_values($salesByForm),
-        ];
-    }
-
-    /**
-     * @param  list<array{form_code: string, form_name: string, table: string, amount_field: string|null, trigger: string, conditions: list<array{field_name: string, accepted_values: list<string>}>}>  $forms
-     * @return array{count: int, amount: float, counts: array<string, int>, amounts: array<string, float>}
-     */
-    private function getCustomSalesByAgentSince(array $forms, Carbon $since): array
-    {
-        $sales = 0;
-        $amount = 0.0;
-        $counts = [];
-        $amounts = [];
-
-        foreach ($forms as $form) {
-            if (! Schema::hasColumn($form['table'], 'created_at')) {
-                continue;
-            }
-
-            $conditionFields = array_column($form['conditions'], 'field_name');
-            $select = array_values(array_unique(array_merge(
-                ['id', ...$conditionFields],
-                $form['amount_field'] === null ? [] : [$form['amount_field']],
-                Schema::hasColumn($form['table'], 'agent') ? ['agent'] : [],
-            )));
-            DB::table($form['table'])
-                ->where('created_at', '>=', $since)
-                ->where('created_at', '<=', now())
-                ->select($select)
-                ->orderBy('id')
-                ->chunk(1000, function ($rows) use (&$sales, &$amount, &$counts, &$amounts, $form): void {
-                    foreach ($rows as $row) {
-                        if (! $this->matchesCustomConditions($row, $form['conditions'], $form['amount_field'], $form['trigger'])) {
-                            continue;
-                        }
-
-                        $saleAmount = $this->customSaleAmount($row, $form['amount_field']);
-                        $sales++;
-                        $amount += $saleAmount;
-                        $agent = trim((string) ($row->agent ?? ''));
-                        if ($agent === '') {
-                            continue;
-                        }
-
-                        $counts[$agent] = ($counts[$agent] ?? 0) + 1;
-                        $amounts[$agent] = ($amounts[$agent] ?? 0.0) + $saleAmount;
-                    }
-                });
-        }
-
-        return [
-            'count' => $sales,
-            'amount' => $amount,
-            'counts' => $counts,
-            'amounts' => $amounts,
-        ];
-    }
-
-    /**
-     * @param  list<array{form_code: string, form_name: string, table: string, amount_field: string|null, trigger: string, conditions: list<array{field_name: string, accepted_values: list<string>}>}>  $forms
-     * @return array{count: int, amount: float, counts: array<string, int>, amounts: array<string, float>}
-     */
-    private function getCustomSalesByAgentInDateRange(array $forms, string $fromYmd, string $toYmd): array
-    {
-        $sales = 0;
-        $amount = 0.0;
-        $counts = [];
-        $amounts = [];
-
-        foreach ($forms as $form) {
-            if (! Schema::hasColumn($form['table'], 'date')) {
-                continue;
-            }
-
-            $conditionFields = array_column($form['conditions'], 'field_name');
-            $select = array_values(array_unique(array_merge(
-                ['id', ...$conditionFields],
-                $form['amount_field'] === null ? [] : [$form['amount_field']],
-                Schema::hasColumn($form['table'], 'agent') ? ['agent'] : [],
-            )));
-            DB::table($form['table'])
-                ->whereBetween('date', [$fromYmd, $toYmd])
-                ->select($select)
-                ->orderBy('id')
-                ->chunk(1000, function ($rows) use (&$sales, &$amount, &$counts, &$amounts, $form): void {
-                    foreach ($rows as $row) {
-                        if (! $this->matchesCustomConditions($row, $form['conditions'], $form['amount_field'], $form['trigger'])) {
-                            continue;
-                        }
-
-                        $saleAmount = $this->customSaleAmount($row, $form['amount_field']);
-                        $sales++;
-                        $amount += $saleAmount;
-                        $agent = trim((string) ($row->agent ?? ''));
-                        if ($agent === '') {
-                            continue;
-                        }
-
-                        $counts[$agent] = ($counts[$agent] ?? 0) + 1;
-                        $amounts[$agent] = ($amounts[$agent] ?? 0.0) + $saleAmount;
-                    }
-                });
-        }
-
-        return [
-            'count' => $sales,
-            'amount' => $amount,
-            'counts' => $counts,
-            'amounts' => $amounts,
-        ];
-    }
-
-    /**
-     * @param  list<array{field_name: string, accepted_values: list<string>}>  $conditions
-     */
-    private function matchesCustomConditions(
-        object $row,
-        array $conditions,
-        ?string $markerField = null,
-        string $trigger = DashboardSalesRuleService::TRIGGER_TAG,
-    ): bool {
-        if ($trigger === DashboardSalesRuleService::TRIGGER_FORM) {
-            return true;
-        }
-
-        if ($trigger === DashboardSalesRuleService::TRIGGER_MARKED_AMOUNT) {
-            return $markerField !== null && $this->hasNumericValue($row->{$markerField} ?? null);
-        }
-
-        foreach ($conditions as $condition) {
-            $value = $row->{$condition['field_name']} ?? null;
-            if ($value === null) {
-                continue;
-            }
-
-            $normalized = $this->normalizeSalesTagValue((string) $value);
-            if (in_array($normalized, $condition['accepted_values'], true)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function customSaleAmount(object $row, ?string $amountField): float
-    {
-        if ($amountField === null) {
-            return 0.0;
-        }
-
-        $value = $row->{$amountField} ?? null;
-        if ($value === null || (is_string($value) && trim($value) === '') || ! is_numeric($value)) {
-            return 0.0;
-        }
-
-        return (float) $value;
-    }
-
-    private function hasNumericValue(mixed $value): bool
-    {
-        return $value !== null
-            && (! is_string($value) || trim($value) !== '')
-            && is_numeric($value);
-    }
-
-    private function normalizeSalesTagValue(string $value): string
-    {
-        $value = trim($value);
-
-        return function_exists('mb_strtolower')
-            ? mb_strtolower($value, 'UTF-8')
-            : strtolower($value);
-    }
-
-    /**
-     * @param  array<string, int>  $counts
-     * @param  array<string, float>  $amounts
-     * @return list<array{agent: string, sales_count: int, sales_amount: float}>
-     */
     private function buildSalesLeaderboard(array $counts, array $amounts): array
     {
         $agents = array_unique(array_merge(array_keys($counts), array_keys($amounts)));
@@ -1744,37 +1392,6 @@ class DashboardStatsService
         return $sources;
     }
 
-    /**
-     * @param  list<array{form_code: string, form_name: string, table: string, amount_field: string|null, trigger: string, conditions: list<array{field_name: string, accepted_values: list<string>}>}>  $forms
-     * @return list<array{table: string, rule: array<string, mixed>, select: list<string>}>
-     */
-    private function dashboardSummaryCustomSources(array $forms): array
-    {
-        $sources = [];
-
-        foreach ($forms as $form) {
-            $conditionFields = array_column($form['conditions'], 'field_name');
-            $fields = array_merge(
-                $conditionFields,
-                $form['amount_field'] === null ? [] : [$form['amount_field']],
-            );
-
-            $sources[] = [
-                'table' => $form['table'],
-                'rule' => $form,
-                'select' => array_values(array_unique(['id', 'created_at', ...$fields])),
-            ];
-        }
-
-        return $sources;
-    }
-
-    /**
-     * Read the combined comparison window once per source and classify qualifying rows.
-     *
-     * @param  list<array<string, mixed>>  $sources
-     * @return array{totals: array{current: array{count: int, amount: float}, previous: array{count: int, amount: float}}, daily: list<array<string, mixed>>}
-     */
     private function aggregateDashboardSummary(
         array $periods,
         array $sources,

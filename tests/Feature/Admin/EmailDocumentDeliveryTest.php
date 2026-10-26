@@ -218,10 +218,41 @@ class EmailDocumentDeliveryTest extends TestCase
         $this->artisan('email-campaigns:maintain')->assertSuccessful();
         $this->assertSame(2, $campaign->recipients()->where('status', 'uncertain')->count());
         $this->assertSame('needs_attention', $campaign->fresh()->status);
+        $this->assertSame(2, $campaign->fresh()->failed_count);
+        $this->assertSame(2, $campaign->fresh()->attention_count);
+        $this->assertSame(0, $campaign->fresh()->open_count);
         $this->actingAs($this->admin)->post(route('admin.email-campaigns.retry', $campaign), ['confirmed_retry' => 1])->assertSessionHasErrors('campaign');
         foreach ($campaign->recipients()->get() as $recipient) {
             app(EmailCampaignDeliveryService::class)->send($campaign->id, $recipient->id);
         }
+        $this->assertCount(0, $this->messages);
+    }
+
+    public function test_periodic_campaign_reconciliation_repairs_drift_without_sending(): void
+    {
+        Queue::fake();
+        $campaign = $this->createPersonal();
+        $this->start($campaign);
+        $recipients = $campaign->recipients()->orderBy('id')->get();
+        $recipients[0]->forceFill(['status' => 'accepted', 'sent_at' => now()])->save();
+        $campaign->forceFill([
+            'status' => 'sending',
+            'sent_count' => 99,
+            'failed_count' => 88,
+            'skipped_count' => 77,
+            'open_count' => 66,
+            'attention_count' => 55,
+        ])->save();
+        \Illuminate\Support\Facades\Mail::shouldReceive('build')->never();
+
+        $this->artisan('email-campaigns:maintain')->assertSuccessful();
+
+        $this->assertSame(1, $campaign->fresh()->sent_count);
+        $this->assertSame(0, $campaign->fresh()->failed_count);
+        $this->assertSame(0, $campaign->fresh()->skipped_count);
+        $this->assertSame(1, $campaign->fresh()->open_count);
+        $this->assertSame(0, $campaign->fresh()->attention_count);
+        $this->assertSame('sending', $campaign->fresh()->status);
         $this->assertCount(0, $this->messages);
     }
 
@@ -307,6 +338,8 @@ class EmailDocumentDeliveryTest extends TestCase
             app(EmailCampaignDeliveryService::class)->send($campaign->id, $recipient->id);
         }
         $this->assertSame(1, $campaign->recipients()->where('status', 'cancelled')->count());
+        $this->assertSame(0, $campaign->fresh()->open_count);
+        $this->assertSame(1, $campaign->fresh()->attention_count);
         $this->assertCount(0, $this->messages);
     }
 
@@ -430,6 +463,9 @@ class EmailDocumentDeliveryTest extends TestCase
         $this->post($url, ['outcome' => 'accepted', 'provider_case' => 'CASE-123', 'accepted_at' => now()->subMinute()->toIso8601String(), 'confirmed_evidence' => 1])->assertSessionHasNoErrors();
         $this->assertSame('accepted', $recipient->fresh()->status);
         $this->assertSame('completed', $campaign->fresh()->status);
+        $this->assertSame(2, $campaign->fresh()->sent_count);
+        $this->assertSame(0, $campaign->fresh()->failed_count);
+        $this->assertSame(0, $campaign->fresh()->attention_count);
         $this->assertDatabaseHas('activity_log', ['event' => 'reconciliation']);
         $this->assertCount(0, $this->messages);
         $this->post($url, ['outcome' => 'not_submitted', 'provider_case' => 'CASE-123', 'confirmed_evidence' => 1])->assertSessionHasErrors('campaign');

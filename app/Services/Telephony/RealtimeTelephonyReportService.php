@@ -6,6 +6,7 @@ use App\Models\CallSession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class RealtimeTelephonyReportService
 {
@@ -85,7 +86,19 @@ class RealtimeTelephonyReportService
             return $this->emptyRolling($windowMinutes, false);
         }
 
-        $calls = CallSession::query()
+        $metrics = [
+            'attempted' => 0,
+            'answered' => 0,
+            'abandoned' => 0,
+            'wait_total' => 0,
+            'wait_count' => 0,
+            'talk_total' => 0,
+            'talk_count' => 0,
+            'dispositions' => [],
+        ];
+        $chunkSize = max(1, (int) config('vicidial.supervisor.rolling_chunk_size', 500));
+
+        CallSession::query()
             ->whereIn('campaign_code', $vicidialCampaigns)
             ->where(function ($query) use ($from, $until): void {
                 $query->whereBetween('dialed_at', [$from, $until])
@@ -93,7 +106,8 @@ class RealtimeTelephonyReportService
                     ->orWhereBetween('ended_at', [$from, $until])
                     ->orWhereBetween('disposition_at', [$from, $until]);
             })
-            ->get([
+            ->select([
+                'id',
                 'status',
                 'dialed_at',
                 'answered_at',
@@ -101,9 +115,52 @@ class RealtimeTelephonyReportService
                 'call_duration_seconds',
                 'disposition_code',
                 'disposition_at',
-            ]);
+            ])
+            ->orderBy('id')
+            ->chunkById($chunkSize, function (Collection $calls) use ($from, $until, &$metrics): void {
+                foreach ($calls as $call) {
+                    if (! $this->callHasEventInWindow($call, $from, $until)) {
+                        continue;
+                    }
 
-        return $this->metricsForCalls($calls, $from, $until, $windowMinutes);
+                    $metrics['attempted']++;
+                    if ($call->answered_at !== null) {
+                        $metrics['answered']++;
+                        if ($call->dialed_at !== null) {
+                            $metrics['wait_total'] += max(0, (int) $call->dialed_at->diffInSeconds($call->answered_at, false));
+                            $metrics['wait_count']++;
+                        }
+                        if ($call->call_duration_seconds !== null) {
+                            $metrics['talk_total'] += max(0, (int) $call->call_duration_seconds);
+                            $metrics['talk_count']++;
+                        }
+                    }
+                    if ($call->status === CallSession::STATUS_ABANDONED) {
+                        $metrics['abandoned']++;
+                    }
+                    $code = trim((string) $call->disposition_code);
+                    if ($code !== '') {
+                        $metrics['dispositions'][$code] = ($metrics['dispositions'][$code] ?? 0) + 1;
+                    }
+                }
+            }, 'id');
+
+        $dispositions = collect($metrics['dispositions'])->sortDesc()->all();
+        $attempted = $metrics['attempted'];
+
+        return [
+            'window_minutes' => $windowMinutes,
+            'label' => 'Last '.$windowMinutes.' minutes',
+            'source' => 'crm',
+            'available' => true,
+            'calls_initiated' => $attempted,
+            'answered' => $metrics['answered'],
+            'abandoned' => $metrics['abandoned'],
+            'answer_rate' => $attempted > 0 ? round(($metrics['answered'] / $attempted) * 100, 2) : 0,
+            'average_wait_seconds' => $metrics['wait_count'] > 0 ? round($metrics['wait_total'] / $metrics['wait_count'], 1) : null,
+            'average_talk_seconds' => $metrics['talk_count'] > 0 ? round($metrics['talk_total'] / $metrics['talk_count'], 1) : null,
+            'dispositions' => $dispositions,
+        ];
     }
 
     /**
@@ -153,26 +210,26 @@ class RealtimeTelephonyReportService
             ];
         }
 
-        $calls = CallSession::query()
+        $baseQuery = DB::table('call_sessions')
             ->whereIn('campaign_code', $vicidialCampaigns)
-            ->whereBetween('dialed_at', [$now->copy()->startOfDay(), $now])
-            ->get([
-                'status',
-                'dialed_at',
-                'answered_at',
-                'ended_at',
-                'call_duration_seconds',
-                'disposition_code',
-                'disposition_at',
-            ]);
-        $attempted = $calls->count();
-        $answered = $calls->filter(fn (CallSession $call): bool => $call->answered_at !== null)->count();
-        $dispositions = $calls
-            ->filter(fn (CallSession $call): bool => trim((string) $call->disposition_code) !== '')
-            ->groupBy(fn (CallSession $call): string => (string) $call->disposition_code)
-            ->map(fn (Collection $items): int => $items->count())
-            ->sortDesc()
-            ->all();
+            ->whereBetween('dialed_at', [$now->copy()->startOfDay(), $now]);
+        $aggregate = (clone $baseQuery)
+            ->selectRaw('COUNT(*) as attempted, SUM(CASE WHEN answered_at IS NOT NULL THEN 1 ELSE 0 END) as answered')
+            ->first();
+        $dispositionQuery = (clone $baseQuery)->whereNotNull('disposition_code')->where('disposition_code', '<>', '');
+        if (DB::connection()->getDriverName() === 'mysql') {
+            $dispositionQuery->selectRaw('BINARY disposition_code as disposition_code, COUNT(*) as total')
+                ->groupByRaw('BINARY disposition_code');
+        } else {
+            $dispositionQuery->selectRaw('disposition_code, COUNT(*) as total')->groupBy('disposition_code');
+        }
+        $dispositions = [];
+        foreach ($dispositionQuery->get() as $row) {
+            $dispositions[(string) $row->disposition_code] = (int) $row->total;
+        }
+        $dispositions = collect($dispositions)->sortDesc()->all();
+        $attempted = (int) ($aggregate->attempted ?? 0);
+        $answered = (int) ($aggregate->answered ?? 0);
 
         return [
             'label' => 'Midnight → now',
@@ -188,51 +245,17 @@ class RealtimeTelephonyReportService
         ];
     }
 
-    /**
-     * @param  Collection<int, CallSession>  $calls
-     * @return array<string, mixed>
-     */
-    protected function metricsForCalls(Collection $calls, Carbon $from, Carbon $until, int $windowMinutes): array
+    protected function callHasEventInWindow(CallSession $call, Carbon $from, Carbon $until): bool
     {
-        $inWindow = $calls->filter(function (CallSession $call) use ($from, $until): bool {
-            $eventTimes = [$call->dialed_at, $call->answered_at, $call->ended_at, $call->disposition_at];
+        $eventTimes = [$call->dialed_at, $call->answered_at, $call->ended_at, $call->disposition_at];
 
-            foreach ($eventTimes as $eventTime) {
-                if ($eventTime !== null && $eventTime->betweenIncluded($from, $until)) {
-                    return true;
-                }
+        foreach ($eventTimes as $eventTime) {
+            if ($eventTime !== null && $eventTime->betweenIncluded($from, $until)) {
+                return true;
             }
+        }
 
-            return false;
-        });
-        $answered = $inWindow->filter(fn (CallSession $call): bool => $call->answered_at !== null);
-        $waitSamples = $answered
-            ->filter(fn (CallSession $call): bool => $call->dialed_at !== null)
-            ->map(fn (CallSession $call): int => max(0, (int) $call->dialed_at->diffInSeconds($call->answered_at, false)));
-        $talkSamples = $inWindow
-            ->filter(fn (CallSession $call): bool => $call->answered_at !== null && $call->call_duration_seconds !== null)
-            ->map(fn (CallSession $call): int => max(0, (int) $call->call_duration_seconds));
-        $dispositions = $inWindow
-            ->filter(fn (CallSession $call): bool => trim((string) $call->disposition_code) !== '')
-            ->groupBy(fn (CallSession $call): string => (string) $call->disposition_code)
-            ->map(fn (Collection $items): int => $items->count())
-            ->sortDesc()
-            ->all();
-        $attempted = $inWindow->count();
-
-        return [
-            'window_minutes' => $windowMinutes,
-            'label' => 'Last '.$windowMinutes.' minutes',
-            'source' => 'crm',
-            'available' => true,
-            'calls_initiated' => $attempted,
-            'answered' => $answered->count(),
-            'abandoned' => $inWindow->where('status', CallSession::STATUS_ABANDONED)->count(),
-            'answer_rate' => $attempted > 0 ? round(($answered->count() / $attempted) * 100, 2) : 0,
-            'average_wait_seconds' => $waitSamples->isNotEmpty() ? round($waitSamples->avg(), 1) : null,
-            'average_talk_seconds' => $talkSamples->isNotEmpty() ? round($talkSamples->avg(), 1) : null,
-            'dispositions' => $dispositions,
-        ];
+        return false;
     }
 
     /**
@@ -243,7 +266,7 @@ class RealtimeTelephonyReportService
         return [
             'window_minutes' => $windowMinutes,
             'label' => 'Last '.$windowMinutes.' minutes',
-            'source' => 'unavailable',
+            'source' => $available ? 'crm' : 'unavailable',
             'available' => $available,
             'calls_initiated' => null,
             'answered' => null,

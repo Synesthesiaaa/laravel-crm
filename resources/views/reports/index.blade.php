@@ -5,7 +5,7 @@
 @section('header-title', 'Telephony Reports')
 
 @section('content')
-<div x-data="telephonyReports()" x-init="init()" class="reports-page space-y-6">
+<div x-data="telephonyReports()" class="reports-page space-y-6">
     <x-page-header
         title="Telephony Reports"
         description="Historical performance, trends, and management reporting."

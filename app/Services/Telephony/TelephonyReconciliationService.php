@@ -56,6 +56,10 @@ class TelephonyReconciliationService
         $staleAt = now()->subMinutes(CallStateService::STALE_CALL_MINUTES);
         $stale = CallSession::active()
             ->where('dialed_at', '<', $staleAt)
+            ->where(function ($query): void {
+                $query->whereNull('remote_dial_outcome')
+                    ->orWhere('remote_dial_outcome', '!=', 'unknown');
+            })
             ->get();
 
         $corrected = 0;
@@ -79,6 +83,11 @@ class TelephonyReconciliationService
         $events = UnmatchedAmiEvent::unprocessed()
             ->whereIn('event', ['Hangup', 'HangupRequest', 'SoftHangupRequest'])
             ->where('received_at', '>=', now()->subHours(2))
+            ->where(function ($query): void {
+                $query->whereNull('last_attempted_at')
+                    ->orWhere('last_attempted_at', '<=', now()->subMinutes(5));
+            })
+            ->orderBy('received_at')
             ->limit(100)
             ->get();
 
@@ -90,18 +99,47 @@ class TelephonyReconciliationService
                 $ev->payload ?? [],
             );
 
-            if ($session) {
-                DB::transaction(function () use ($ev, $session) {
-                    $this->mapping->attachAsteriskIdentifiers($session, $ev->linkedid, $ev->channel);
-                    $this->callStateService->recordHangup($session, [
-                        'end_reason' => 'reconciliation',
-                        'linkedid' => $ev->linkedid,
-                        'channel' => $ev->channel,
-                    ]);
-                    $ev->update(['processed' => true]);
-                });
+            $sessionId = DB::transaction(function () use ($ev, $session): ?int {
+                $event = UnmatchedAmiEvent::query()->whereKey($ev->id)->lockForUpdate()->first();
+                if (! $event || $event->processed) {
+                    return null;
+                }
+
+                $event->attempt_count = (int) $event->attempt_count + 1;
+                $event->last_attempted_at = now();
+
+                if (! $session) {
+                    $event->last_error_code = 'NO_CORRELATED_SESSION';
+                    $event->save();
+
+                    return null;
+                }
+
+                $this->mapping->attachAsteriskIdentifiers($session, $event->linkedid, $event->channel);
+                $result = $this->callStateService->recordHangup($session, [
+                    'end_reason' => 'reconciliation',
+                    'linkedid' => $event->linkedid,
+                    'channel' => $event->channel,
+                    'remote_outcome_resolved' => true,
+                ]);
+
+                if (! $result->success) {
+                    $event->last_error_code = 'CALL_TRANSITION_REJECTED';
+                    $event->save();
+
+                    return null;
+                }
+
+                $event->processed = true;
+                $event->last_error_code = null;
+                $event->save();
+
+                return (int) $session->id;
+            });
+
+            if ($sessionId !== null) {
                 $matched++;
-                $this->alerts->unmatchedAmiProcessed($ev->id, $session->id);
+                $this->alerts->unmatchedAmiProcessed($ev->id, $sessionId);
             }
         }
 

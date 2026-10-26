@@ -2,9 +2,10 @@
 
 namespace Tests\Unit\Services;
 
-use App\Jobs\SyncVicidialDispositionJob;
+use App\Jobs\ProcessTelephonySyncOutboxJob;
 use App\Models\CallSession;
 use App\Models\DispositionCode;
+use App\Models\TelephonySyncOutbox;
 use App\Models\User;
 use App\Services\DispositionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -84,6 +85,8 @@ class DispositionServiceTest extends TestCase
         );
 
         $this->assertTrue($result->success);
-        Queue::assertPushed(SyncVicidialDispositionJob::class, fn (SyncVicidialDispositionJob $job): bool => $job->callSessionId === $session->id);
+        $outbox = TelephonySyncOutbox::query()->where('idempotency_key', 'disposition:call-session:'.$session->id)->firstOrFail();
+        $this->assertSame(TelephonySyncOutbox::STATUS_PENDING, $outbox->status);
+        Queue::assertPushed(ProcessTelephonySyncOutboxJob::class, fn (ProcessTelephonySyncOutboxJob $job): bool => $job->outboxId === $outbox->id);
     }
 }

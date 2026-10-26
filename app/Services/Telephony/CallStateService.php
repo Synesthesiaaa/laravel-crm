@@ -23,12 +23,14 @@ class CallStateService
         CallSession::STATUS_DIALING => [
             CallSession::STATUS_RINGING,
             CallSession::STATUS_ANSWERED,
+            CallSession::STATUS_IN_CALL,
             CallSession::STATUS_FAILED,
             CallSession::STATUS_ABANDONED,
             CallSession::STATUS_COMPLETED,
         ],
         CallSession::STATUS_RINGING => [
             CallSession::STATUS_ANSWERED,
+            CallSession::STATUS_IN_CALL,
             CallSession::STATUS_FAILED,
             CallSession::STATUS_ABANDONED,
             CallSession::STATUS_COMPLETED,
@@ -77,74 +79,122 @@ class CallStateService
     /**
      * Transition a call session to a new state. Idempotent when to-state matches current.
      *
-     * @param  array{end_reason?: string, linkedid?: string, channel?: string, metadata?: array}  $context
+     * @param  array{end_reason?: string, linkedid?: string, channel?: string, metadata?: array, remote_dial_outcome?: string, remote_outcome_resolved?: bool}  $context
      */
     public function transition(CallSession $session, string $toStatus, array $context = [], bool $force = false): OperationResult
     {
-        $fromStatus = $session->status;
+        return $this->applyTransition($session, $toStatus, $context, $force);
+    }
 
-        if ($fromStatus === $toStatus) {
-            return OperationResult::success(null, 'Already in state');
-        }
+    /**
+     * Mark a call connected when an authoritative telephony event confirms answer.
+     *
+     * @param  array{linkedid?: string, channel?: string, metadata?: array}  $context
+     */
+    public function markConnected(CallSession $session, array $context = []): OperationResult
+    {
+        return $this->transition($session, CallSession::STATUS_IN_CALL, array_merge($context, [
+            'remote_outcome_resolved' => true,
+        ]));
+    }
 
-        if ($session->isTerminal()) {
-            $this->telephonyLogger->info('CallStateService', 'Ignoring transition from terminal state', [
-                'session_id' => $session->id,
-                'from' => $fromStatus,
-                'to' => $toStatus,
-            ]);
-
-            return OperationResult::success(null, 'Already terminal');
-        }
-
-        if (! $force && ! $this->isValidTransition($fromStatus, $toStatus)) {
-            return OperationResult::failure("Invalid transition: {$fromStatus} -> {$toStatus}");
-        }
-
-        if ($force && ! in_array($toStatus, self::FORCE_CORRECTION_ALLOWED, true)) {
-            $allowed = implode(', ', (array) self::FORCE_CORRECTION_ALLOWED);
-
-            return OperationResult::failure("Force correction only allowed to terminal states: {$allowed}");
-        }
-
+    /**
+     * Apply a transition against the locked persisted row rather than the possibly stale model.
+     *
+     * @param  string|callable(CallSession): string  $toStatus
+     * @param  array{end_reason?: string, linkedid?: string, channel?: string, metadata?: array, assume_connected?: bool, remote_dial_outcome?: string, remote_outcome_resolved?: bool}  $context
+     */
+    private function applyTransition(
+        CallSession $session,
+        string|callable $toStatus,
+        array $context = [],
+        bool $force = false,
+        string $terminalMessage = 'Already terminal',
+    ): OperationResult {
         try {
-            DB::transaction(function () use ($session, $fromStatus, $toStatus, $context) {
-                $session->status = $toStatus;
-                $session->end_reason = $context['end_reason'] ?? $session->end_reason;
-                $session->linkedid = $context['linkedid'] ?? $session->linkedid;
-                $session->channel = $context['channel'] ?? $session->channel;
-                if (! empty($context['metadata'])) {
-                    $meta = $session->metadata ?? [];
-                    $session->metadata = array_merge($meta, $context['metadata']);
+            $outcome = DB::transaction(function () use ($session, $toStatus, $context, $force, $terminalMessage): array {
+                $persisted = CallSession::query()
+                    ->whereKey($session->getKey())
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $persisted) {
+                    return ['result' => OperationResult::failure('Call session no longer exists.'), 'session' => null];
                 }
 
-                match ($toStatus) {
-                    CallSession::STATUS_RINGING => $session->ringing_at ??= now(),
-                    CallSession::STATUS_ANSWERED, CallSession::STATUS_IN_CALL => $session->answered_at ??= now(),
-                    CallSession::STATUS_COMPLETED, CallSession::STATUS_FAILED, CallSession::STATUS_ABANDONED => $session->ended_at = now(),
+                $fromStatus = (string) $persisted->status;
+                $resolvedToStatus = is_callable($toStatus) ? $toStatus($persisted) : $toStatus;
+
+                if ($persisted->isTerminal()) {
+                    return ['result' => OperationResult::success(null, $terminalMessage), 'session' => $persisted];
+                }
+
+                if ($fromStatus === $resolvedToStatus) {
+                    return ['result' => OperationResult::success(null, 'Already in state'), 'session' => $persisted];
+                }
+
+                if ($force && ! in_array($resolvedToStatus, self::FORCE_CORRECTION_ALLOWED, true)) {
+                    $allowed = implode(', ', self::FORCE_CORRECTION_ALLOWED);
+
+                    return [
+                        'result' => OperationResult::failure("Force correction only allowed to terminal states: {$allowed}"),
+                        'session' => null,
+                    ];
+                }
+
+                if (! $force && ! $this->isValidTransition($fromStatus, $resolvedToStatus)) {
+                    return [
+                        'result' => OperationResult::failure("Invalid transition: {$fromStatus} -> {$resolvedToStatus}"),
+                        'session' => null,
+                    ];
+                }
+
+                $persisted->status = $resolvedToStatus;
+                $persisted->end_reason = $context['end_reason'] ?? $persisted->end_reason;
+                $persisted->linkedid = $context['linkedid'] ?? $persisted->linkedid;
+                $persisted->channel = $context['channel'] ?? $persisted->channel;
+                if (isset($context['remote_dial_outcome'])) {
+                    $persisted->remote_dial_outcome = $context['remote_dial_outcome'];
+                    $persisted->remote_dial_outcome_at = now();
+                } elseif (($context['remote_outcome_resolved'] ?? false) && $persisted->remote_dial_outcome === 'unknown') {
+                    $persisted->remote_dial_outcome = 'accepted';
+                    $persisted->remote_dial_outcome_at = now();
+                }
+                if (! empty($context['metadata'])) {
+                    $persisted->metadata = array_merge($persisted->metadata ?? [], $context['metadata']);
+                }
+
+                match ($resolvedToStatus) {
+                    CallSession::STATUS_RINGING => $persisted->ringing_at ??= now(),
+                    CallSession::STATUS_ANSWERED, CallSession::STATUS_IN_CALL => $persisted->answered_at ??= now(),
+                    CallSession::STATUS_COMPLETED, CallSession::STATUS_FAILED, CallSession::STATUS_ABANDONED => $persisted->ended_at = now(),
                     default => null,
                 };
 
-                if (($context['assume_connected'] ?? false) && $toStatus === CallSession::STATUS_COMPLETED && $session->answered_at === null) {
-                    $session->answered_at = $session->ringing_at ?? $session->dialed_at ?? now();
+                if (($context['assume_connected'] ?? false) && $resolvedToStatus === CallSession::STATUS_COMPLETED && $persisted->answered_at === null) {
+                    $persisted->answered_at = $persisted->ringing_at ?? $persisted->dialed_at ?? now();
                 }
 
-                if ($session->ended_at && $session->answered_at) {
-                    $session->call_duration_seconds = (int) $session->answered_at->diffInSeconds($session->ended_at);
+                if ($persisted->ended_at && $persisted->answered_at) {
+                    $persisted->call_duration_seconds = (int) $persisted->answered_at->diffInSeconds($persisted->ended_at);
                 }
 
-                $session->save();
-                $this->syncLeadHopperByTerminalState($session, $toStatus);
+                $persisted->save();
+                $this->syncLeadHopperByTerminalState($persisted, $resolvedToStatus);
+                event(new CallStateChanged($persisted, $fromStatus, $resolvedToStatus));
 
-                event(new CallStateChanged($session, $fromStatus, $toStatus));
+                return ['result' => OperationResult::success(), 'session' => $persisted];
             });
 
-            return OperationResult::success();
+            if ($outcome['session'] instanceof CallSession && $outcome['result']->success) {
+                $session->setRawAttributes($outcome['session']->getAttributes(), true);
+            }
+
+            return $outcome['result'];
         } catch (\Throwable $e) {
             $this->telephonyLogger->error('CallStateService', 'Transition failed', [
                 'session_id' => $session->id,
-                'from' => $fromStatus,
-                'to' => $toStatus,
+                'to' => is_string($toStatus) ? $toStatus : 'hangup_target',
                 'error' => $e->getMessage(),
             ]);
 
@@ -168,6 +218,54 @@ class CallStateService
     }
 
     /**
+     * Preserve an ambiguous remote dial result without releasing the active
+     * reservation. A callback may have advanced the persisted session while
+     * the HTTP request was waiting, so always inspect and update the locked row.
+     */
+    public function markOutboundDialOutcomeUnknown(CallSession $session): OperationResult
+    {
+        try {
+            $persisted = DB::transaction(function () use ($session): ?CallSession {
+                $persisted = CallSession::query()->whereKey($session->getKey())->lockForUpdate()->first();
+                if (! $persisted) {
+                    return $persisted;
+                }
+
+                if ($persisted->status !== CallSession::STATUS_DIALING) {
+                    if ($persisted->remote_dial_outcome === null || $persisted->remote_dial_outcome === 'unknown') {
+                        $persisted->remote_dial_outcome = 'accepted';
+                        $persisted->remote_dial_outcome_at = now();
+                        $persisted->save();
+                    }
+
+                    return $persisted;
+                }
+
+                $persisted->remote_dial_outcome = 'unknown';
+                $persisted->remote_dial_outcome_at = now();
+                $persisted->save();
+
+                return $persisted;
+            });
+
+            if ($persisted) {
+                $session->setRawAttributes($persisted->getAttributes(), true);
+            }
+
+            return $persisted
+                ? OperationResult::success(['session_id' => $persisted->id, 'outcome' => $persisted->remote_dial_outcome])
+                : OperationResult::failure('Call session no longer exists.');
+        } catch (\Throwable $e) {
+            $this->telephonyLogger->error('CallStateService', 'Unable to preserve unknown remote dial outcome', [
+                'session_id' => $session->id,
+                'exception_class' => $e::class,
+            ]);
+
+            return OperationResult::failure('Unable to record the remote dial outcome.');
+        }
+    }
+
+    /**
      * Pre-answer statuses: call never connected, so hangup resolves to failed.
      */
     private const PRE_ANSWER_STATUSES = [
@@ -181,17 +279,16 @@ class CallStateService
      */
     public function recordHangup(CallSession $session, array $context = []): OperationResult
     {
-        if ($session->isTerminal()) {
-            return OperationResult::success(null, 'Already ended');
-        }
-
         $ctx = array_merge($context, ['end_reason' => $context['end_reason'] ?? 'hangup']);
 
-        $toStatus = in_array($session->status, self::PRE_ANSWER_STATUSES, true)
-            ? CallSession::STATUS_FAILED
-            : CallSession::STATUS_COMPLETED;
-
-        return $this->transition($session, $toStatus, $ctx);
+        return $this->applyTransition(
+            $session,
+            static fn (CallSession $persisted): string => in_array($persisted->status, self::PRE_ANSWER_STATUSES, true)
+                ? CallSession::STATUS_FAILED
+                : CallSession::STATUS_COMPLETED,
+            $ctx,
+            terminalMessage: 'Already ended',
+        );
     }
 
     /**

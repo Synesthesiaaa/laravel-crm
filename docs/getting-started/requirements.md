@@ -4,7 +4,7 @@ Versions below were read from manifests and lockfiles on 2026-10-15. They are no
 
 | Component | Declaration | Current locked requirement or version |
 | --- | --- | --- |
-| PHP | `^8.2` in Composer | **PHP 8.4 or newer within PHP 8.x** is required by locked Symfony 8 packages; PHP 8.2/8.3 cannot install this lockfile |
+| PHP | `^8.4` in Composer | PHP 8.4 or newer within PHP 8.x; PHP 8.2/8.3 are unsupported |
 | Laravel | `^12.0` | 12.53.0 |
 | Node.js | `>=20.0.0`; `.nvmrc` says `20` | Vite 7.3.1 and Laravel Vite plugin 2.1.0 require `^20.19.0 || >=22.12.0` |
 | Composer | Composer project | Use Composer 2 and the committed lockfile |

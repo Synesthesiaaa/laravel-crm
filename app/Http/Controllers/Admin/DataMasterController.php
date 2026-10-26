@@ -2,13 +2,17 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Contracts\Repositories\FormFieldRepositoryInterface;
 use App\Events\DashboardDataUpdated;
 use App\Http\Controllers\Controller;
 use App\Services\CampaignService;
 use App\Services\DataMasterService;
+use App\Support\FormFieldValidationRules;
 use App\Support\PercentageValue;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
 
 class DataMasterController extends Controller
@@ -16,6 +20,7 @@ class DataMasterController extends Controller
     public function __construct(
         protected CampaignService $campaignService,
         protected DataMasterService $dataMasterService,
+        protected FormFieldRepositoryInterface $formFieldRepository,
     ) {}
 
     public function index(Request $request): View
@@ -81,6 +86,7 @@ class DataMasterController extends Controller
 
         $layout = $this->dataMasterService->getColumnLayout($campaign, $type, array_keys((array) $record));
         $percentageColumns = $this->dataMasterService->getPercentageColumns($campaign, $type);
+        $editableColumns = $this->editableColumns($campaign, $type, $tableName);
 
         return view('admin.data_master_edit', [
             'campaign' => $campaign,
@@ -91,6 +97,7 @@ class DataMasterController extends Controller
             'columns' => $layout['columns'],
             'headers' => $layout['headers'],
             'percentageColumns' => $percentageColumns,
+            'editableColumns' => $editableColumns,
             'dataMasterService' => $this->dataMasterService,
         ]);
     }
@@ -113,24 +120,60 @@ class DataMasterController extends Controller
             return back()->with('error', 'Record not found.');
         }
 
-        $skip = ['id', 'created_at', 'updated_at', '_table', '_id', '_token'];
-        $columns = array_keys((array) $record);
         $type = (string) $request->input('_type', '');
-        $percentageColumns = $this->dataMasterService->getPercentageColumns($campaign, $type);
-        $updates = [];
-        foreach ($columns as $col) {
-            if (in_array($col, $skip, true)) {
+        $formConfig = $campaignConfig['forms'][$type] ?? null;
+        $configuredTable = is_array($formConfig)
+            ? (string) ($formConfig['table_name'] ?? $formConfig['table'] ?? '')
+            : '';
+        if ($configuredTable === '' || ! hash_equals($configuredTable, $tableName)) {
+            return back()->withErrors(['edit' => 'The selected form does not match this record.'])->withInput();
+        }
+
+        $editableColumns = $this->editableColumns($campaign, $type, $tableName);
+        $allowedInput = ['_table', '_id', '_type', '_token', '_method'];
+        $unexpected = array_diff(array_keys($request->all()), [...$allowedInput, ...$editableColumns]);
+        if ($unexpected !== []) {
+            return back()->withErrors(['edit' => 'The request includes fields that are not editable.'])->withInput();
+        }
+
+        $fieldMap = $this->formFieldRepository->getFieldsForForm($campaign, $type)
+            ->keyBy('field_name');
+        $input = [];
+        $rules = [];
+        foreach ($editableColumns as $column) {
+            if (! $request->exists($column)) {
                 continue;
             }
-            if ($request->has($col)) {
-                if (in_array($col, $percentageColumns, true)) {
-                    $updates[$col] = $this->dataMasterService->storesPercentageAsNumeric($tableName, $col)
-                        ? PercentageValue::numeric($request->input($col))
-                        : PercentageValue::normalize($request->input($col));
-                } else {
-                    $updates[$col] = $request->input($col);
-                }
+
+            $field = $fieldMap->get($column);
+            if ($field === null) {
+                continue;
             }
+
+            $value = $request->input($column);
+            if ($field->field_type === 'multiselect') {
+                $value = $this->normalizeMultiselectInput($value);
+            } elseif ($field->field_type === 'percentage') {
+                $value = $this->dataMasterService->storesPercentageAsNumeric($tableName, $column)
+                    ? PercentageValue::numeric($value)
+                    : PercentageValue::normalize($value);
+            }
+
+            $input[$column] = $value;
+            $rules += FormFieldValidationRules::for($field);
+        }
+
+        $validated = Validator::make($input, $rules)->validate();
+        $updates = [];
+        foreach ($validated as $column => $value) {
+            $field = $fieldMap->get($column);
+            $updates[$column] = $field?->field_type === 'multiselect'
+                ? json_encode(array_values((array) $value), JSON_THROW_ON_ERROR)
+                : $value;
+        }
+
+        if ($updates === []) {
+            return back()->withErrors(['edit' => 'Select at least one editable field to update.'])->withInput();
         }
 
         if ($this->dataMasterService->updateRecord($tableName, $id, $updates, $allowedTables)) {
@@ -138,6 +181,35 @@ class DataMasterController extends Controller
         }
 
         return redirect()->route('admin.data-master.index', ['type' => $type])->with('success', 'Record updated.');
+    }
+
+    /** @return list<string> */
+    private function editableColumns(string $campaign, string $type, string $tableName): array
+    {
+        return $this->formFieldRepository->getFieldsForForm($campaign, $type)
+            ->filter(fn ($field): bool => ! in_array((string) $field->field_name, [
+                'id', 'date', 'request_id', 'agent', 'lead_id', 'phone_number', 'created_at', 'updated_at',
+            ], true) && Schema::hasColumn($tableName, (string) $field->field_name))
+            ->pluck('field_name')
+            ->values()
+            ->all();
+    }
+
+    private function normalizeMultiselectInput(mixed $value): array
+    {
+        if (is_array($value)) {
+            return array_values($value);
+        }
+        if (! is_string($value) || trim($value) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+        if (is_array($decoded)) {
+            return array_values($decoded);
+        }
+
+        return array_values(array_filter(array_map('trim', preg_split('/[\r\n,]+/', $value) ?: []), static fn (string $item): bool => $item !== ''));
     }
 
     public function destroy(Request $request): RedirectResponse

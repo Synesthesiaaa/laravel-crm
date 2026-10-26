@@ -67,6 +67,66 @@ class VicidialNonAgentApiServiceTest extends TestCase
         Http::assertNotSent(fn ($request): bool => str_starts_with($request->url(), 'https://agent-a.example/'));
     }
 
+    public function test_it_rejects_transport_reserved_parameters_before_sending_a_request(): void
+    {
+        VicidialServer::factory()->create([
+            'campaign_code' => 'campaign-a',
+            'api_url' => 'https://campaign-a.example/agc/api.php',
+            'api_user' => 'campaign-a-user',
+            'api_pass' => 'campaign-a-pass',
+            'is_default' => true,
+        ]);
+        Http::fake(['*' => Http::response('SUCCESS', 200)]);
+
+        $service = new VicidialNonAgentApiService(
+            app(VicidialServerRepository::class),
+            Mockery::mock(TelephonyLogger::class)->shouldIgnoreMissing(),
+        );
+
+        $result = $service->execute(User::factory()->make(), 'campaign-a', 'add_lead', [
+            'phone_number' => '15551234567',
+            'function' => 'delete_lead',
+            'source' => 'untrusted-source',
+            'user' => 'untrusted-user',
+            'pass' => 'untrusted-password',
+        ]);
+
+        $this->assertFalse($result->success);
+        $this->assertSame('INVALID_PARAMETERS', $result->meta['classification']);
+        Http::assertNothingSent();
+    }
+
+    public function test_non_agent_lead_writes_are_not_retried_after_an_ambiguous_connection_failure(): void
+    {
+        VicidialServer::factory()->create([
+            'campaign_code' => 'campaign-a',
+            'api_url' => 'https://campaign-a.example/agc/api.php',
+            'api_user' => 'campaign-a-user',
+            'api_pass' => 'campaign-a-pass',
+            'is_default' => true,
+        ]);
+        $attempts = 0;
+        Http::fake(function () use (&$attempts) {
+            $attempts++;
+
+            throw new ConnectionException('synthetic connection loss after dispatch');
+        });
+
+        $service = new VicidialNonAgentApiService(
+            app(VicidialServerRepository::class),
+            Mockery::mock(TelephonyLogger::class)->shouldIgnoreMissing(),
+        );
+
+        $result = $service->execute(User::factory()->make(), 'campaign-a', 'add_lead', [
+            'phone_number' => '15551234567',
+        ], true, ['retry_times' => 3]);
+
+        $this->assertFalse($result->success);
+        $this->assertSame('OUTCOME_UNKNOWN', $result->meta['classification']);
+        $this->assertTrue($result->meta['outcome_unknown']);
+        $this->assertSame(1, $attempts);
+    }
+
     public function test_it_batches_named_reports_on_one_campaign_server_and_preserves_independent_failures(): void
     {
         VicidialServer::factory()->create([
@@ -115,6 +175,38 @@ class VicidialNonAgentApiServiceTest extends TestCase
                 && ($request->data()['pass'] ?? null) === 'campaign-a-pass';
         });
         Http::assertNotSent(fn ($request): bool => str_starts_with($request->url(), 'https://campaign-b.example/'));
+    }
+
+    public function test_invalid_batch_entry_keeps_its_parameter_error_if_a_valid_request_fails(): void
+    {
+        VicidialServer::factory()->create([
+            'campaign_code' => 'campaign-a',
+            'api_url' => 'https://campaign-a.example/agc/api.php',
+            'api_user' => 'campaign-a-user',
+            'api_pass' => 'campaign-a-pass',
+            'is_default' => true,
+        ]);
+        Http::fake(fn () => throw new ConnectionException('synthetic connection failure'));
+
+        $service = new VicidialNonAgentApiService(
+            app(VicidialServerRepository::class),
+            Mockery::mock(TelephonyLogger::class)->shouldIgnoreMissing(),
+        );
+
+        $results = $service->executeBatch(User::factory()->make(), 'campaign-a', [
+            'invalid' => [
+                'function' => 'version',
+                'params' => ['function' => 'delete_lead'],
+            ],
+            'valid' => [
+                'function' => 'version',
+                'params' => [],
+            ],
+        ], true, ['retry_times' => 0]);
+
+        $this->assertFalse($results['invalid']->success);
+        $this->assertSame('INVALID_PARAMETERS', $results['invalid']->meta['classification']);
+        $this->assertFalse($results['valid']->success);
     }
 
     public function test_it_redacts_non_agent_api_credentials_from_connection_error_telemetry(): void

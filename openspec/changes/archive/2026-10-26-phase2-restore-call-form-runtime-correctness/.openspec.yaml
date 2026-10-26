@@ -1,0 +1,5 @@
+schema: spec-driven
+created: 2026-10-26
+goal: Make verified Phase 2 call, form, import, and browser runtime paths
+  deterministic and replay-safe without changing production records or
+  exercising live integrations.

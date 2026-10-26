@@ -442,4 +442,41 @@ class CaptureRecordsAdminTest extends TestCase
         $this->assertStringNotContainsString('agent_mb_exp', $content);
         $this->assertStringNotContainsString('100', $content);
     }
+
+    public function test_capture_export_escapes_formula_text_and_preserves_configured_numeric_values(): void
+    {
+        AgentScreenField::create([
+            'campaign_code' => 'mbsales',
+            'field_key' => 'customer_note',
+            'field_label' => 'Customer Note',
+            'field_type' => 'text',
+            'field_order' => 1,
+        ]);
+        AgentScreenField::create([
+            'campaign_code' => 'mbsales',
+            'field_key' => 'sale_amount',
+            'field_label' => 'Sale Amount',
+            'field_type' => 'number',
+            'field_order' => 2,
+        ]);
+        AgentCaptureRecord::create([
+            'campaign_code' => 'mbsales',
+            'lead_id' => 999,
+            'phone_number' => '639100000000',
+            'agent' => '=IMPORTDATA("https://example.test")',
+            'capture_data' => [
+                'customer_note' => " \t=HYPERLINK(\"https://example.test\",\"open\")",
+                'sale_amount' => '1250.50',
+            ],
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->withSession($this->campaignSession())
+            ->post(route('admin.capture-records.export'));
+
+        $rows = array_map(static fn (string $line): array => str_getcsv($line), preg_split('/\r\n|\r|\n/', trim($response->streamedContent())) ?: []);
+        $this->assertSame("'=IMPORTDATA(\"https://example.test\")", $rows[1][3]);
+        $this->assertSame("' \t=HYPERLINK(\"https://example.test\",\"open\")", $rows[1][6]);
+        $this->assertSame('1250.50', $rows[1][7]);
+    }
 }

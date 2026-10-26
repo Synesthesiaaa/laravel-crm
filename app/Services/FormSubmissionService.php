@@ -4,21 +4,19 @@ namespace App\Services;
 
 use App\Events\DashboardDataUpdated;
 use App\Events\FormSubmitted;
+use App\Models\LeadImportRow;
 use App\Repositories\FormFieldRepository;
 use App\Repositories\FormSubmissionRepository;
+use App\Support\FormFieldNumber;
+use App\Support\FormFieldVisibility;
 use App\Support\OperationResult;
 use App\Support\PercentageValue;
-use Illuminate\Database\Schema\Blueprint;
+use App\Support\SafeOperationFailure;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class FormSubmissionService
 {
-    private const WIDE_NUMBER_PRECISION = 65;
-
-    private const WIDE_NUMBER_SCALE = 2;
-
     /**
      * Columns populated by the submission pipeline or framework internals.
      *
@@ -40,10 +38,49 @@ class FormSubmissionService
         protected FormFieldRepository $formFieldRepository,
         protected FormSubmissionRepository $formSubmissionRepository,
         protected CallHistoryService $callHistoryService,
+        protected FormStorageSchemaService $formStorageSchema,
     ) {}
 
     public function submit(string $campaign, string $formType, array $data, string $agent, ?int $userId = null): OperationResult
     {
+        return $this->persistSubmission($campaign, $formType, $data, $agent, $userId, null, null, true);
+    }
+
+    public function submitImportRow(
+        string $campaign,
+        string $formType,
+        array $data,
+        string $agent,
+        ?int $userId,
+        int $leadImportId,
+        int $rowNumber,
+        string $requestId,
+    ): OperationResult {
+        return $this->persistSubmission(
+            $campaign,
+            $formType,
+            $data,
+            $agent,
+            $userId,
+            $requestId,
+            ['lead_import_id' => $leadImportId, 'row_number' => $rowNumber],
+            false,
+        );
+    }
+
+    /**
+     * @param  array{lead_import_id: int, row_number: int}|null  $importReceipt
+     */
+    private function persistSubmission(
+        string $campaign,
+        string $formType,
+        array $data,
+        string $agent,
+        ?int $userId,
+        ?string $stableRequestId,
+        ?array $importReceipt,
+        bool $catchPersistenceExceptions,
+    ): OperationResult {
         $formConfig = $this->campaignService->getFormConfig($campaign, $formType);
         if (! $formConfig) {
             return OperationResult::failure('Invalid form.');
@@ -53,10 +90,18 @@ class FormSubmissionService
             return OperationResult::failure('Invalid table.');
         }
         $fields = $this->formFieldRepository->getFieldsForForm($campaign, $formType);
-        $fieldMap = $this->resolveStorageFieldMap($tableName, $fields);
+        $visibilityValues = $data;
+        foreach ($fields as $field) {
+            if (! FormFieldVisibility::isVisible($field->visibility, $visibilityValues)) {
+                unset($data[$field->field_name]);
+            }
+        }
+        $fieldMap = $this->formStorageSchema->resolveStorageFieldMap($tableName, $fields);
         $this->setStorageFieldNames($fields, $fieldMap);
         $data = $this->mapSubmissionDataToStorageFields($data, $fieldMap);
-        $this->ensureStorageTableAndColumns($tableName, $fields);
+        if (! $this->formStorageSchema->isReady($tableName, $fields)) {
+            return OperationResult::failure('Form storage needs administrator provisioning before records can be saved.');
+        }
 
         $date = $this->sanitizeDate($data['date'] ?? '');
         if ($date === '') {
@@ -64,12 +109,12 @@ class FormSubmissionService
         }
 
         try {
-            $recordId = DB::transaction(function () use ($tableName, $fields, $data, $agent, $userId, $campaign, $formType, $date): int {
+            $recordId = DB::transaction(function () use ($tableName, $fields, $data, $visibilityValues, $agent, $userId, $campaign, $formType, $date, $stableRequestId, $importReceipt): int {
                 $merged = array_merge($data, [
                     'date' => $date,
-                    'request_id' => $this->generateUniqueRequestId($tableName),
+                    'request_id' => $stableRequestId ?? $this->generateUniqueRequestId($tableName),
                 ]);
-                $prepared = $this->prepareFormRow($fields, $merged, $agent, $tableName);
+                $prepared = $this->prepareFormRow($fields, $merged, $agent, $tableName, $visibilityValues);
                 if ($prepared === null) {
                     throw new \RuntimeException('Invalid submission data.');
                 }
@@ -90,6 +135,15 @@ class FormSubmissionService
                     throw new \RuntimeException($historyResult->message ?? 'Unable to record form activity.');
                 }
 
+                if ($importReceipt !== null) {
+                    LeadImportRow::query()->create([
+                        ...$importReceipt,
+                        'request_id' => $stableRequestId ?? $merged['request_id'],
+                        'status' => LeadImportRow::STATUS_IMPORTED,
+                        'record_id' => $id,
+                    ]);
+                }
+
                 return $id;
             });
 
@@ -98,13 +152,23 @@ class FormSubmissionService
 
             return OperationResult::success($recordId);
         } catch (\Throwable $e) {
-            return OperationResult::failure($e->getMessage());
+            if (! $catchPersistenceExceptions) {
+                throw $e;
+            }
+
+            return SafeOperationFailure::result($e, 'form_submission.save', 'The record could not be saved.');
         }
     }
 
     /** @return array<string, mixed>|null */
-    public function prepareFormRow(Collection $fields, array $data, string $agent, ?string $tableName = null): ?array
-    {
+    public function prepareFormRow(
+        Collection $fields,
+        array $data,
+        string $agent,
+        ?string $tableName = null,
+        ?array $visibilityValues = null,
+    ): ?array {
+        $visibilityValues ??= $data;
         $date = $this->sanitizeDate($data['date'] ?? '');
         $requestId = trim((string) ($data['request_id'] ?? ''));
         if ($date === '' || $requestId === '') {
@@ -118,6 +182,10 @@ class FormSubmissionService
             'updated_at' => now(),
         ];
         foreach ($fields as $field) {
+            if (! FormFieldVisibility::isVisible($field->visibility ?? null, $visibilityValues)) {
+                continue;
+            }
+
             $fieldName = $field->field_name;
             $colName = $field->storage_field_name ?? $fieldName;
             if (in_array($colName, self::SYSTEM_COLUMNS, true)) {
@@ -155,11 +223,14 @@ class FormSubmissionService
 
             $value = $data[$colName] ?? $data[$fieldName] ?? '';
             $value = is_string($value) ? trim($value) : $value;
-            if ($field->field_type === 'number') {
-                $value = preg_replace('/[^0-9.]/', '', (string) $value);
+            if ($field->field_type === 'number'
+                && ! FormFieldNumber::isIdentifierLike((string) $fieldName)
+                && (string) $value !== ''
+                && ! FormFieldNumber::isValidDecimal($value)) {
+                throw new \InvalidArgumentException("Field '{$colName}' must be a valid decimal value.");
             }
             if ($field->field_type === 'percentage') {
-                $value = $this->storesPercentageAsNumeric($tableName, $colName)
+                $value = $tableName !== null && $this->formStorageSchema->storesPercentageAsNumeric($tableName, $colName)
                     ? PercentageValue::numeric($value)
                     : PercentageValue::normalize($value);
             }
@@ -174,289 +245,6 @@ class FormSubmissionService
         }
 
         return $row;
-    }
-
-    /**
-     * Ensure the per-form storage table exists and contains columns for all active form fields.
-     * This allows creating new forms (e.g. table_name = 'ploan') without manually running migrations.
-     */
-    protected function ensureStorageTableAndColumns(string $tableName, Collection $fields): void
-    {
-        if (! Schema::hasTable($tableName)) {
-            Schema::create($tableName, function ($table) {
-                $table->id();
-                $table->date('date')->index();
-                $table->string('request_id', 255)->index();
-                $table->string('agent', 255)->index();
-                $table->timestamps();
-            });
-        } else {
-            // Base table safety: create missing required base columns.
-            if (! Schema::hasColumn($tableName, 'date')) {
-                Schema::table($tableName, function ($table) {
-                    $table->date('date')->index();
-                });
-            }
-            if (! Schema::hasColumn($tableName, 'request_id')) {
-                Schema::table($tableName, function ($table) {
-                    $table->string('request_id', 255)->index();
-                });
-            }
-            if (! Schema::hasColumn($tableName, 'agent')) {
-                Schema::table($tableName, function ($table) {
-                    $table->string('agent', 255)->index();
-                });
-            }
-            if (! Schema::hasColumn($tableName, 'created_at')) {
-                Schema::table($tableName, function ($table) {
-                    $table->timestamp('created_at')->nullable();
-                });
-            }
-            if (! Schema::hasColumn($tableName, 'updated_at')) {
-                Schema::table($tableName, function ($table) {
-                    $table->timestamp('updated_at')->nullable();
-                });
-            }
-        }
-
-        $missingFieldCols = [];
-        foreach ($fields as $field) {
-            $colName = $field->storage_field_name ?? $field->field_name;
-            if (in_array($colName, self::SYSTEM_COLUMNS, true)) {
-                continue;
-            }
-            if (! Schema::hasColumn($tableName, $colName)) {
-                $missingFieldCols[] = $field;
-            }
-        }
-
-        if (! empty($missingFieldCols)) {
-            Schema::table($tableName, function ($table) use ($missingFieldCols) {
-                foreach ($missingFieldCols as $field) {
-                    /** @var \App\Models\FormField $field */
-                    $colName = $field->storage_field_name ?? $field->field_name;
-                    $nullable = ! $field->is_required;
-                    $type = (string) $field->field_type;
-
-                    switch ($type) {
-                        case 'textarea':
-                            $table->text($colName)->nullable($nullable);
-
-                            break;
-                        case 'date':
-                            $table->date($colName)->nullable($nullable);
-
-                            break;
-                        case 'select':
-                            $table->string($colName, 255)->nullable($nullable);
-
-                            break;
-                        case 'multiselect':
-                            $table->text($colName)->nullable($nullable);
-
-                            break;
-                        case 'number':
-                            if ($this->isIdentifierField($colName)) {
-                                $table->string($colName, 255)->nullable($nullable);
-                            } else {
-                                $table->decimal($colName, self::WIDE_NUMBER_PRECISION, self::WIDE_NUMBER_SCALE)->nullable($nullable);
-                            }
-
-                            break;
-                        case 'percentage':
-                            $table->string($colName, 50)->nullable($nullable);
-
-                            break;
-                        case 'text':
-                        default:
-                            $table->string($colName, 255)->nullable($nullable);
-
-                            break;
-                    }
-                }
-            });
-        }
-
-        $this->alignNumericStorageColumns($tableName, $fields);
-        $this->alignStorageNullability($tableName, $fields);
-    }
-
-    /** Keep removed fields and optional edits from blocking new records. */
-    private function alignStorageNullability(string $tableName, Collection $fields): void
-    {
-        $activeFields = $fields->keyBy(fn ($field): string => $field->storage_field_name ?? $field->field_name);
-        $columns = array_filter(Schema::getColumns($tableName), function (array $column) use ($activeFields): bool {
-            $name = $column['name'];
-            if (in_array($name, self::SYSTEM_COLUMNS, true)
-                || $column['nullable']
-                || $column['auto_increment']
-                || $column['generation'] !== null) {
-                return false;
-            }
-
-            $field = $activeFields->get($name);
-
-            return $field !== null ? ! $field->is_required : $column['default'] === null;
-        });
-
-        if ($columns === []) {
-            return;
-        }
-
-        $connection = Schema::getConnection();
-        $driver = $connection->getDriverName();
-        $extras = in_array($driver, ['mysql', 'mariadb'], true)
-            ? collect($connection->select('SHOW FULL COLUMNS FROM '.$connection->getQueryGrammar()->wrapTable($tableName)))->keyBy('Field')
-            : collect();
-
-        Schema::table($tableName, function (Blueprint $table) use ($columns, $driver, $connection, $extras): void {
-            foreach ($columns as $column) {
-                $definition = $table->rawColumn($column['name'], $column['type'])->nullable()->change();
-                if ($column['collation'] !== null) {
-                    $definition->collation($column['collation']);
-                }
-                if ($column['comment'] !== null) {
-                    $definition->comment($column['comment']);
-                }
-
-                $extra = strtolower((string) ($extras->get($column['name'])->Extra ?? ''));
-                if ($column['default'] !== null) {
-                    $rawDefault = $driver === 'sqlite'
-                        || $driver === 'mariadb'
-                        || ($driver === 'mysql' && $connection->isMaria())
-                        || str_contains($extra, 'default_generated');
-                    $definition->default($rawDefault ? DB::raw($column['default']) : $column['default']);
-                }
-                if (str_contains($extra, 'on update current_timestamp')) {
-                    $definition->useCurrentOnUpdate();
-                }
-                if (str_contains($extra, 'invisible')) {
-                    $definition->invisible();
-                }
-            }
-        });
-    }
-
-    private function alignNumericStorageColumns(string $tableName, Collection $fields): void
-    {
-        $needsAlignment = $fields->contains(function ($field): bool {
-            $colName = $field->storage_field_name ?? $field->field_name;
-
-            return (string) $field->field_type === 'number' || $this->isIdentifierField($colName);
-        });
-        if (! $needsAlignment) {
-            return;
-        }
-
-        $columns = collect(Schema::getColumns($tableName))->keyBy('name');
-        $stringColumns = [];
-        $wideNumberColumns = [];
-
-        foreach ($fields as $field) {
-            $colName = $field->storage_field_name ?? $field->field_name;
-            if (in_array($colName, self::SYSTEM_COLUMNS, true)) {
-                continue;
-            }
-
-            $column = $columns->get($colName);
-            if (! is_array($column)) {
-                continue;
-            }
-
-            $columnType = strtolower((string) ($column['type_name'] ?? $column['type'] ?? ''));
-            if (! $this->isNumericColumnType($columnType)) {
-                continue;
-            }
-
-            $nullable = (bool) ($column['nullable'] ?? true);
-            if ($this->isIdentifierField($colName)) {
-                $stringColumns[$colName] = $nullable;
-
-                continue;
-            }
-
-            if ((string) $field->field_type !== 'number' || $this->isWideDecimalColumn($column)) {
-                continue;
-            }
-
-            $wideNumberColumns[$colName] = $nullable;
-        }
-
-        if ($stringColumns === [] && $wideNumberColumns === []) {
-            return;
-        }
-
-        Schema::table($tableName, function ($table) use ($stringColumns, $wideNumberColumns) {
-            foreach ($stringColumns as $colName => $nullable) {
-                $table->string($colName, 255)->nullable($nullable)->change();
-            }
-
-            foreach ($wideNumberColumns as $colName => $nullable) {
-                $table->decimal($colName, self::WIDE_NUMBER_PRECISION, self::WIDE_NUMBER_SCALE)
-                    ->nullable($nullable)
-                    ->change();
-            }
-        });
-    }
-
-    private function isIdentifierField(string $columnName): bool
-    {
-        $columnName = strtolower($columnName);
-
-        return preg_match('/(^|_)(phone|mobile|telephone)($|_)/', $columnName) === 1
-            || preg_match('/(^|_)(id|code|number|no|num)$/', $columnName) === 1;
-    }
-
-    private function isNumericColumnType(string $columnType): bool
-    {
-        return preg_match('/^(bigint|decimal|double|float|integer|mediumint|numeric|real|smallint|tinyint)/', $columnType) === 1;
-    }
-
-    /** @param array<string, mixed> $column */
-    private function isWideDecimalColumn(array $column): bool
-    {
-        if (DB::connection()->getDriverName() === 'sqlite'
-            && strtolower((string) ($column['type_name'] ?? '')) === 'numeric') {
-            return true;
-        }
-
-        $definition = strtolower((string) ($column['type'] ?? ''));
-
-        return preg_match(
-            '/decimal\(\s*'.self::WIDE_NUMBER_PRECISION.'\s*,\s*'.self::WIDE_NUMBER_SCALE.'\s*\)/',
-            $definition,
-        ) === 1;
-    }
-
-    /**
-     * Find a safe one-to-one mapping when a form field name and a storage column
-     * drift apart. Ambiguous differences are left untouched for normal schema
-     * validation and migration handling.
-     *
-     * @return array<string, string>
-     */
-    private function resolveStorageFieldMap(string $tableName, Collection $fields): array
-    {
-        if (! Schema::hasTable($tableName)) {
-            return [];
-        }
-
-        $storageColumns = Schema::getColumnListing($tableName);
-        $fieldNames = $fields
-            ->pluck('field_name')
-            ->filter(fn (mixed $fieldName): bool => is_string($fieldName) && $fieldName !== '')
-            ->unique()
-            ->values()
-            ->all();
-        $storageFieldNames = array_values(array_diff($storageColumns, self::SYSTEM_COLUMNS));
-        $unmatchedFields = array_values(array_diff($fieldNames, $storageColumns));
-        $unrepresentedColumns = array_values(array_diff($storageFieldNames, $fieldNames));
-
-        if (count($unmatchedFields) !== 1 || count($unrepresentedColumns) !== 1) {
-            return [];
-        }
-
-        return [$unmatchedFields[0] => $unrepresentedColumns[0]];
     }
 
     /**
@@ -519,27 +307,5 @@ class FormSubmissionService
         }
 
         return '';
-    }
-
-    private function storesPercentageAsNumeric(?string $tableName, string $columnName): bool
-    {
-        if ($tableName === null || ! Schema::hasTable($tableName) || ! Schema::hasColumn($tableName, $columnName)) {
-            return false;
-        }
-
-        try {
-            return in_array(Schema::getColumnType($tableName, $columnName), [
-                'bigint',
-                'decimal',
-                'double',
-                'float',
-                'integer',
-                'numeric',
-                'smallint',
-                'tinyint',
-            ], true);
-        } catch (\Throwable) {
-            return false;
-        }
     }
 }

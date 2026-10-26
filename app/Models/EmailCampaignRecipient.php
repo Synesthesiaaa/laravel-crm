@@ -9,7 +9,7 @@ class EmailCampaignRecipient extends Model
 {
     protected $fillable = ['email_campaign_id', 'email', 'name', 'status', 'error', 'sent_at', 'employee_id', 'period', 'pdf_filename'];
 
-    protected $hidden = ['delivery_snapshot'];
+    protected $hidden = ['delivery_snapshot', 'delivery_snapshot_hash'];
 
     protected function casts(): array
     {

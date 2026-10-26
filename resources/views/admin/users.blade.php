@@ -16,11 +16,11 @@
               x-data="{ submitting: false }" @submit="submitting = true">
             @csrf
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                <x-form.input name="username"  label="Username"  :value="old('username')"  required />
-                <x-form.input name="full_name" label="Full Name" :value="old('full_name')" required />
-                <x-form.input name="password" type="password" label="Password" autocomplete="new-password" required />
-                <x-form.input name="password_confirmation" type="password" label="Confirm Password" autocomplete="new-password" required />
-                <x-form.select name="role" label="Role"
+                <x-form.input name="username" id="add-username" label="Username" :value="old('username')" required />
+                <x-form.input name="full_name" id="add-full-name" label="Full Name" :value="old('full_name')" required />
+                <x-form.input name="password" id="add-password" type="password" label="Password" autocomplete="new-password" required />
+                <x-form.input name="password_confirmation" id="add-password-confirmation" type="password" label="Confirm Password" autocomplete="new-password" required />
+                <x-form.select name="role" id="add-role" label="Role"
                     :options="\App\Models\User::roleOptions()"
                     :selected="old('role', 'Agent')" :empty="false" />
             </div>
@@ -90,17 +90,18 @@
             <tr x-show="editOpen" class="inline-edit-row" x-collapse>
                 <td colspan="4">
                     <form method="POST" action="{{ route('admin.users.update', $usr) }}"
-                          x-data="{ submitting: false }" @submit="submitting = true; $el.prepend(document.createElement('input')).name='_editing', $el.querySelector('input[name=_editing]').value='{{ $usr->id }}'">
+                          x-data="{ submitting: false }" @submit="submitting = true">
                         @csrf
                         @method('PUT')
+                        <input type="hidden" name="_editing" value="{{ $usr->id }}">
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                            <x-form.input name="username" label="Username" :value="old('username', $usr->username)" required />
-                            <x-form.input name="full_name" label="Full Name" :value="old('full_name', $usr->full_name ?? $usr->name)" required />
-                            <x-form.select name="role" label="Role"
+                            <x-form.input name="username" :id="'edit-'.$usr->id.'-username'" label="Username" :value="old('username', $usr->username)" required />
+                            <x-form.input name="full_name" :id="'edit-'.$usr->id.'-full-name'" label="Full Name" :value="old('full_name', $usr->full_name ?? $usr->name)" required />
+                            <x-form.select name="role" :id="'edit-'.$usr->id.'-role'" label="Role"
                                 :options="\App\Models\User::roleOptions()"
                                 :selected="old('role', $usr->role)" :empty="false" />
-                            <x-form.input name="password" type="password" label="New Password" autocomplete="new-password" help="Leave blank to keep" />
-                            <x-form.input name="password_confirmation" type="password" label="Confirm" autocomplete="new-password" />
+                            <x-form.input name="password" :id="'edit-'.$usr->id.'-password'" type="password" label="New Password" autocomplete="new-password" help="Leave blank to keep" />
+                            <x-form.input name="password_confirmation" :id="'edit-'.$usr->id.'-password-confirmation'" type="password" label="Confirm" autocomplete="new-password" />
                         </div>
                         <x-admin.user-telephony-fields :user="$usr" :campaign-options="$campaignOptions ?? []" />
                         <div class="mt-4">

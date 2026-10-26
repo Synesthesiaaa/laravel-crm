@@ -8,15 +8,20 @@ use App\Http\Requests\Admin\StoreFormRequest;
 use App\Http\Requests\Admin\UpdateFormRequest;
 use App\Models\Campaign;
 use App\Models\Form;
+use App\Models\FormField;
 use App\Services\CampaignService;
 use App\Services\DashboardLayoutService;
 use App\Services\DashboardSalesRuleService;
 use App\Services\DashboardStatsService;
+use App\Services\FormStorageSchemaService;
 use Illuminate\Broadcasting\BroadcastException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Throwable;
 
 class FormsController extends Controller
 {
@@ -25,6 +30,7 @@ class FormsController extends Controller
         protected DashboardLayoutService $layoutService,
         protected DashboardSalesRuleService $salesRuleService,
         protected DashboardStatsService $dashboardStats,
+        protected FormStorageSchemaService $formStorageSchema,
     ) {}
 
     public function index(Request $request): View
@@ -71,7 +77,7 @@ class FormsController extends Controller
         if ($exists) {
             return back()->with('error', 'Form code already exists for this campaign.');
         }
-        Form::create([
+        $form = Form::create([
             'campaign_code' => $validated['campaign_code'],
             'form_code' => $validated['form_code'],
             'name' => $validated['name'],
@@ -82,8 +88,12 @@ class FormsController extends Controller
             'is_active' => true,
         ]);
         $this->campaignService->clearCampaignsCache();
+        $storageFailure = $this->provisionFormStorage($form);
 
-        return redirect()->route('admin.forms.index', ['campaign' => $validated['campaign_code']])->with('success', 'Form created.');
+        $redirect = redirect()->route('admin.forms.index', ['campaign' => $validated['campaign_code']])
+            ->with('success', 'Form created.');
+
+        return $storageFailure === null ? $redirect : $redirect->with('error', $storageFailure);
     }
 
     public function update(UpdateFormRequest $request, Form $form): RedirectResponse
@@ -120,6 +130,7 @@ class FormsController extends Controller
 
         $this->campaignService->clearCampaignsCache();
         $this->dashboardStats->invalidate((string) $form->campaign_code);
+        $storageFailure = $this->provisionFormStorage($form);
 
         try {
             event(new DashboardLayoutUpdated((string) $form->campaign_code));
@@ -127,7 +138,10 @@ class FormsController extends Controller
             report($exception);
         }
 
-        return redirect()->route('admin.forms.index', ['campaign' => $form->campaign_code])->with('success', 'Form updated.');
+        $redirect = redirect()->route('admin.forms.index', ['campaign' => $form->campaign_code])
+            ->with('success', 'Form updated.');
+
+        return $storageFailure === null ? $redirect : $redirect->with('error', $storageFailure);
     }
 
     public function destroy(Request $request): RedirectResponse
@@ -137,6 +151,28 @@ class FormsController extends Controller
         $this->campaignService->clearCampaignsCache();
 
         return redirect()->route('admin.forms.index', ['campaign' => $form->campaign_code])->with('success', 'Form deactivated.');
+    }
+
+    private function provisionFormStorage(Form $form): ?string
+    {
+        try {
+            $fields = FormField::query()
+                ->where('campaign_code', $form->campaign_code)
+                ->where('form_type', $form->form_code)
+                ->get();
+            $this->formStorageSchema->provision((string) $form->table_name, $fields);
+
+            return null;
+        } catch (Throwable $exception) {
+            $reference = (string) Str::uuid();
+            Log::error('Form storage provisioning failed after form metadata change.', [
+                'reference' => $reference,
+                'form_id' => $form->id,
+                'exception_class' => $exception::class,
+            ]);
+
+            return 'Form settings were saved, but storage provisioning needs attention. Run forms:provision-storage. Reference: '.$reference;
+        }
     }
 
     /**

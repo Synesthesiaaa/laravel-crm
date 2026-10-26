@@ -22,6 +22,8 @@ class DataMasterService
         'date',
         'request_id',
         'agent',
+        'lead_id',
+        'phone_number',
         'created_at',
         'updated_at',
     ];

@@ -30,6 +30,7 @@ window.callHistoryPage = function callHistoryPage(config = {}) {
         requestController: null,
         requestNumber: 0,
         textFilterTimer: null,
+        destroyed: false,
         columns: [
             { label: 'Date/Time', key: 'called_at', sortable: true },
             { label: 'Agent', key: 'agent', sortable: true },
@@ -74,10 +75,21 @@ window.callHistoryPage = function callHistoryPage(config = {}) {
         },
 
         async init() {
+            this.destroyed = false;
             await this.load();
         },
 
+        destroy() {
+            this.destroyed = true;
+            this.requestNumber += 1;
+            this.requestController?.abort();
+            this.requestController = null;
+            window.clearTimeout(this.textFilterTimer);
+            this.textFilterTimer = null;
+        },
+
         async load(page = null) {
+            if (this.destroyed) return;
             if (page !== null) this.filters.page = page;
             if (this.requestController) this.requestController.abort();
 
@@ -161,8 +173,9 @@ window.callHistoryPage = function callHistoryPage(config = {}) {
         },
 
         async pollRefresh() {
-            for (let attempt = 0; attempt < 8; attempt += 1) {
+            for (let attempt = 0; attempt < 8 && !this.destroyed; attempt += 1) {
                 await new Promise((resolve) => window.setTimeout(resolve, attempt === 0 ? 600 : 1500));
+                if (this.destroyed) return;
                 try {
                     const { data } = await window.axios.get('/api/call-history/status', { params: { campaign: this.campaign } });
                     this.sourceHealth = data.source_health || this.sourceHealth;

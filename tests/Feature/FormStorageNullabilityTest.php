@@ -6,7 +6,9 @@ use App\Models\Campaign;
 use App\Models\Form;
 use App\Models\FormField;
 use App\Models\User;
+use App\Services\FormStorageSchemaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -49,6 +51,10 @@ class FormStorageNullabilityTest extends TestCase
             'customer_name' => 'Historical Customer',
             '24k_card_number' => '001234',
         ]);
+        app(FormStorageSchemaService::class)->provision(
+            'winback_test_records',
+            FormField::where('campaign_code', 'storage_test')->where('form_type', 'winback_test')->get(),
+        );
     }
 
     public function test_admin_can_delete_required_field_then_save_without_losing_historical_data(): void
@@ -118,6 +124,10 @@ class FormStorageNullabilityTest extends TestCase
             $table->decimal('deleted_amount', 12, 3);
             $table->integer('legacy_with_default')->default(7);
         });
+        app(FormStorageSchemaService::class)->provision(
+            'winback_test_records',
+            FormField::where('campaign_code', 'storage_test')->where('form_type', 'winback_test')->get(),
+        );
         $before = collect(Schema::getColumns('winback_test_records'))->keyBy('name');
 
         $this->submit(['24k_card_number' => '001234'])->assertOk();
@@ -143,6 +153,16 @@ class FormStorageNullabilityTest extends TestCase
         $this->assertDatabaseCount('winback_test_records', 1);
         $column = collect(Schema::getColumns('winback_test_records'))->firstWhere('name', '24k_card_number');
         $this->assertFalse($column['nullable']);
+    }
+
+    public function test_storage_provision_command_is_idempotent_for_registered_forms(): void
+    {
+        $this->assertSame(0, Artisan::call('forms:provision-storage'));
+        $this->assertSame(0, Artisan::call('forms:provision-storage'));
+        $this->assertTrue(app(FormStorageSchemaService::class)->isReady(
+            'winback_test_records',
+            FormField::query()->where('campaign_code', 'storage_test')->where('form_type', 'winback_test')->get(),
+        ));
     }
 
     private function field(string $name, bool $required = true, string $type = 'text'): FormField

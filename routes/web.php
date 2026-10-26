@@ -18,14 +18,6 @@ Route::get('email/unsubscribe/{recipient}', [\App\Http\Controllers\EmailUnsubscr
     ->middleware('signed')->name('email-campaigns.unsubscribe');
 Route::post('email/unsubscribe/{recipient}', [\App\Http\Controllers\EmailUnsubscribeController::class, 'store'])
     ->middleware(['signed', 'throttle:10,1']);
-Route::get('/operations-insights', [OperationsInsightsController::class, 'index'])->name('operations-insights');
-Route::get('/api/operations-insights', [OperationsInsightsController::class, 'data'])
-    ->middleware('throttle:60,1')
-    ->name('api.operations-insights');
-Route::get('/api/operations-insights/records', [OperationsInsightsController::class, 'records'])
-    ->middleware('throttle:60,1')
-    ->name('api.operations-insights.records');
-
 Route::middleware('guest')->group(function () {
     Route::get('login', [LoginController::class, 'showLoginForm'])->name('login');
     Route::post('login', [LoginController::class, 'login'])->middleware('throttle:login');
@@ -71,8 +63,8 @@ Route::middleware('auth')->group(function () {
     Route::post('api/vicidial/session/pause-code', [\App\Http\Controllers\Api\VicidialSessionController::class, 'pauseCode'])->name('api.vicidial.session.pause-code')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
     Route::post('api/vicidial/session/logout', [\App\Http\Controllers\Api\VicidialSessionController::class, 'logout'])->name('api.vicidial.session.logout')->middleware(['throttle:vicidial', 'telephony_feature:session_controls']);
     Route::post('api/vicidial/session/ingroups', [\App\Http\Controllers\Api\VicidialSessionController::class, 'ingroups'])->name('api.vicidial.session.ingroups')->middleware(['throttle:vicidial', 'telephony_feature:ingroup_management']);
-    Route::get('api/vicidial/session/status', [\App\Http\Controllers\Api\VicidialSessionController::class, 'status'])->name('api.vicidial.session.status')->middleware(['throttle:telephony-poll', 'telephony_feature:session_controls', 'log_throttle']);
-    Route::get('api/vicidial/session/local-status', [\App\Http\Controllers\Api\VicidialSessionController::class, 'localStatus'])->name('api.vicidial.session.local-status')->middleware(['throttle:telephony-poll', 'telephony_feature:session_controls', 'log_throttle']);
+    Route::get('api/vicidial/session/status', [\App\Http\Controllers\Api\VicidialSessionController::class, 'status'])->name('api.vicidial.session.status')->middleware(['log_throttle', 'throttle:telephony-poll', 'telephony_feature:session_controls']);
+    Route::get('api/vicidial/session/local-status', [\App\Http\Controllers\Api\VicidialSessionController::class, 'localStatus'])->name('api.vicidial.session.local-status')->middleware(['log_throttle', 'throttle:telephony-poll', 'telephony_feature:session_controls']);
     Route::get('api/vicidial/session/iframe-url', [\App\Http\Controllers\Api\VicidialSessionController::class, 'iframeUrl'])->name('api.vicidial.session.iframe-url')->middleware(['throttle:api', 'telephony_feature:session_controls']);
 });
 
@@ -89,7 +81,7 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::post('api/call/dial', [\App\Http\Controllers\Api\CallController::class, 'dial'])->name('api.call.dial')->middleware('throttle:vicidial');
     Route::post('api/call/predictive-dial', [\App\Http\Controllers\Api\CallController::class, 'predictiveDial'])->name('api.call.predictive-dial')->middleware(['throttle:vicidial', 'telephony_feature:predictive_dialing']);
     Route::post('api/call/hangup', [\App\Http\Controllers\Api\CallController::class, 'hangup'])->name('api.call.hangup')->middleware('throttle:api');
-    Route::get('api/call/status', [\App\Http\Controllers\Api\CallController::class, 'status'])->name('api.call.status')->middleware(['throttle:telephony-poll', 'log_throttle']);
+    Route::get('api/call/status', [\App\Http\Controllers\Api\CallController::class, 'status'])->name('api.call.status')->middleware(['log_throttle', 'throttle:telephony-poll']);
     Route::post('api/call/dtmf', \App\Http\Controllers\Api\DtmfController::class)->name('api.call.dtmf')->middleware(['throttle:api', 'telephony_feature:dtmf_controls']);
     Route::post('api/call/transfer/blind', [\App\Http\Controllers\Api\TransferController::class, 'blind'])->name('api.call.transfer.blind')->middleware(['throttle:vicidial', 'telephony_feature:transfer_controls']);
     Route::post('api/call/transfer/warm', [\App\Http\Controllers\Api\TransferController::class, 'warm'])->name('api.call.transfer.warm')->middleware(['throttle:vicidial', 'telephony_feature:transfer_controls']);
@@ -139,7 +131,7 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::get('api/reports/user-group-status', [\App\Http\Controllers\Api\ReportingController::class, 'userGroupStatus'])->name('api.reports.user-group-status')->middleware('throttle:api');
     Route::get('api/reports/in-group-status', [\App\Http\Controllers\Api\ReportingController::class, 'inGroupStatus'])->name('api.reports.in-group-status')->middleware('throttle:api');
     Route::get('api/reports/agent-status', [\App\Http\Controllers\Api\ReportingController::class, 'agentStatus'])->name('api.reports.agent-status')->middleware('throttle:api');
-    Route::get('api/sip/credentials', [\App\Http\Controllers\Api\SipCredentialsController::class, 'show'])->name('api.sip.credentials')->middleware(['throttle:telephony-poll', 'log_throttle']);
+    Route::get('api/sip/credentials', [\App\Http\Controllers\Api\SipCredentialsController::class, 'show'])->name('api.sip.credentials')->middleware(['log_throttle', 'throttle:telephony-poll']);
     Route::post('api/agent/capture', [\App\Http\Controllers\Api\AgentCaptureController::class, 'store'])
         ->name('api.agent.capture')
         ->middleware(['throttle:api', 'telephony_feature:agent_screen_access']);
@@ -156,7 +148,9 @@ Route::middleware(['auth', 'campaign'])->group(function () {
         ->middleware(['role:Team Leader,Admin,Super Admin', 'throttle:telephony-poll', 'log_throttle']);
     Route::post('api/notifications/read-all', \App\Http\Controllers\Api\MarkNotificationsReadController::class)->name('api.notifications.read-all')->middleware('throttle:api');
     Route::post('api/disposition/save', \App\Http\Controllers\Api\SaveDispositionController::class)->name('api.disposition.save')->middleware('throttle:api');
-    Route::post('api/client-errors', fn () => response()->json(['ok' => true]))->name('api.client-errors');
+    Route::post('api/client-errors', \App\Http\Controllers\Api\ClientErrorController::class)
+        ->middleware(['log_throttle', 'throttle:client-errors'])
+        ->name('api.client-errors');
     Route::get('api/widgets/layouts', [\App\Http\Controllers\Api\WidgetLayoutController::class, 'index'])->name('api.widgets.layouts')->middleware('throttle:api');
     Route::put('api/widgets/layouts/{widget}', [\App\Http\Controllers\Api\WidgetLayoutController::class, 'update'])->name('api.widgets.layouts.update')->middleware('throttle:api');
     Route::get('api/forms/quick/bootstrap', [\App\Http\Controllers\Api\QuickFormController::class, 'bootstrap'])->name('api.forms.quick.bootstrap')->middleware('throttle:api');
@@ -166,6 +160,13 @@ Route::middleware(['auth', 'campaign'])->group(function () {
     Route::get('api/attendance/current', [\App\Http\Controllers\Api\AttendanceStatusController::class, 'current'])->name('api.attendance.current')->middleware('throttle:api');
     Route::middleware('role:Team Leader,Admin,Super Admin')->group(function () {
         Route::get('reports', [ReportsController::class, 'index'])->name('reports.index');
+        Route::get('/operations-insights', [OperationsInsightsController::class, 'index'])->name('operations-insights');
+        Route::get('/api/operations-insights', [OperationsInsightsController::class, 'data'])
+            ->middleware('throttle:60,1')
+            ->name('api.operations-insights');
+        Route::get('/api/operations-insights/records', [OperationsInsightsController::class, 'records'])
+            ->middleware('throttle:60,1')
+            ->name('api.operations-insights.records');
         Route::post('api/supervisor/monitor', [\App\Http\Controllers\Api\SupervisorTelephonyController::class, 'monitor'])->name('api.supervisor.monitor')->middleware('throttle:vicidial');
         Route::post('api/supervisor/whisper', [\App\Http\Controllers\Api\SupervisorTelephonyController::class, 'whisper'])->name('api.supervisor.whisper')->middleware('throttle:vicidial');
         Route::post('api/supervisor/force-pause', [\App\Http\Controllers\Api\SupervisorTelephonyController::class, 'forcePause'])->name('api.supervisor.force-pause')->middleware('throttle:vicidial');

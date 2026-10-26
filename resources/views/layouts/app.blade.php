@@ -257,11 +257,12 @@
                          'call-connected': $store.call.state === 'connected',
                          'call-hold':      $store.call.state === 'hold',
                          'call-wrapup':    $store.call.state === 'wrapup',
-                         'call-ringing':   $store.call.state === 'ringing',
+                         'call-ringing':   $store.call.state === 'ringing' || $store.call.state === 'outcome_unknown',
                      }"
                      style="display: none;">
                     <x-icon name="phone" class="w-3.5 h-3.5" />
                     <span x-show="$store.call.state === 'ringing'">Ringing...</span>
+                    <span x-show="$store.call.state === 'outcome_unknown'">Outcome unknown · verify before retry</span>
                     <span x-show="$store.call.state === 'connected'" x-text="'On Call - ' + $store.call.formattedDuration()"></span>
                     <span x-show="$store.call.state === 'hold'">On Hold</span>
                     <span x-show="$store.call.state === 'wrapup'">Wrap-up</span>
@@ -608,7 +609,9 @@
 
         function rehydrateFromStatus(res) {
             if (res.active && res.call) {
-                store.state = mapBackendToUI(res.call.status);
+                store.state = res.call.outcome_unknown || res.call.remote_dial_outcome === 'unknown'
+                    ? 'outcome_unknown'
+                    : mapBackendToUI(res.call.status);
                 store.sessionId = res.call.session_id;
                 store.number = res.call.phone_number || '';
                 if (store.state === 'connected' && res.call.duration_seconds) {

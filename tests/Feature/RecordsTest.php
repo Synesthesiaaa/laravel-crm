@@ -146,6 +146,7 @@ final class RecordsTest extends TestCase
         $this->postJson(route('api.webhooks.vicidial-events'), [
             'user' => 'agent_vici',
             'event' => 'agent_hangup',
+            'call_id' => 'VICI-RACE-1',
         ], ['X-Webhook-Secret' => 'vicidial-secret'])
             ->assertOk()
             ->assertJsonPath('processed', true);

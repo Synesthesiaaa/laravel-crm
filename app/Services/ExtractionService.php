@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Form;
 use App\Models\FormField;
+use App\Support\CsvCellEncoder;
 use App\Support\PercentageValue;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -77,12 +78,19 @@ class ExtractionService
 
             // Stream rows to avoid loading the entire dataset into memory.
             // This prevents production 500 errors caused by timeouts/memory exhaustion.
-            fputcsv($handle, $columns);
+            fputcsv($handle, array_map(CsvCellEncoder::encode(...), $columns));
+            $numericColumns = collect(Schema::getColumns($tableName))
+                ->filter(fn (array $column): bool => preg_match('/^(bigint|decimal|double|float|integer|mediumint|numeric|real|smallint|tinyint)/', strtolower((string) ($column['type_name'] ?? $column['type'] ?? ''))) === 1)
+                ->pluck('name')
+                ->all();
             $percentageColumns = $this->percentageColumnsForTable($tableName, $campaignCode);
             foreach ($query->cursor() as $row) {
                 $formatted = $this->formatCsvRow((array) $row, $percentageColumns);
                 fputcsv($handle, array_map(
-                    static fn (string $column): mixed => $formatted[$column] ?? null,
+                    static fn (string $column): string => CsvCellEncoder::encode(
+                        $formatted[$column] ?? null,
+                        in_array($column, $numericColumns, true),
+                    ),
                     $columns,
                 ));
                 fflush($handle);

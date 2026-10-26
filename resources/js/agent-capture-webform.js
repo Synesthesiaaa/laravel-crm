@@ -12,9 +12,17 @@ window.agentCaptureWebform = function agentCaptureWebform(initial = {}) {
             success: false,
         },
         errors: {},
+        _initialized: false,
 
-        init(seed = {}) {
-            visibilityState.init.call(this, seed);
+        init() {
+            if (this._initialized) return;
+            this._initialized = true;
+            visibilityState.init.call(this, initial.values ?? {});
+        },
+
+        destroy() {
+            visibilityState.destroy.call(this);
+            this._initialized = false;
         },
 
         visibleCaptureFields(form) {

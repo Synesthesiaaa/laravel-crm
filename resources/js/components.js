@@ -443,6 +443,14 @@ window.clickToCall = function() {
                 // State transitions are driven by SIP.js events + Reverb broadcasts;
                 // do not hard-code 'connected' here.
             } catch (e) {
+                const response = e.response?.data;
+                if (response?.outcome_unknown && response.session_id) {
+                    store.state = 'outcome_unknown';
+                    store.setSessionId(response.session_id);
+                    store.number = this.phoneNumber;
+                    Alpine.store('toast').warning(response.message || 'VICIdial may have received the dial request. Check the active call before retrying.');
+                    return;
+                }
                 store.state = 'idle';
                 const errMsg = e.response?.data?.error?.message
                     || e.response?.data?.message

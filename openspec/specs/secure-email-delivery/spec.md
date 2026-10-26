@@ -68,3 +68,27 @@ The system SHALL permit authorized bulk delivery in APP_ENV=local only when both
 - **WHEN** either required flag is disabled locally, or a real transport is attempted in testing
 - **THEN** HTTP live start/retry or the worker live attempt is blocked without a transport submission
 
+### Requirement: Frozen delivery verification is recipient-bounded
+
+Newly frozen campaigns SHALL retain the full canonical approval hash and independently authenticate a compact campaign header and each recipient snapshot. A delivery attempt SHALL verify only the selected recipient and its assigned documents. Previously frozen version-1 campaigns SHALL retain full-manifest verification through completion.
+
+#### Scenario: New campaign delivers one recipient
+- **WHEN** a version-2 campaign sends a recipient from a large frozen recipient list
+- **THEN** the worker authenticates that recipient and its assigned document metadata without hashing or scanning the whole recipient list
+
+#### Scenario: Frozen data is tampered with
+- **WHEN** the campaign header, selected recipient payload, or assigned document metadata fails authentication
+- **THEN** the recipient is blocked before the transport boundary
+
+### Requirement: Campaign counters follow recipient transitions
+
+Sent, failed, skipped, open, and attention counters SHALL change atomically with each authorized recipient status transition. Active campaign counters SHALL be reconciled periodically without resending recipients. New counter columns SHALL be nullable for existing rows and SHALL NOT require a deployment backfill.
+
+#### Scenario: Recipient reaches a terminal outcome
+- **WHEN** an accepted, skipped, blocked, uncertain, cancelled, retried, or reconciled status is recorded
+- **THEN** the corresponding campaign counters change exactly once with that status transition
+
+#### Scenario: Active campaign counters drift
+- **WHEN** periodic maintenance reconciles an active campaign
+- **THEN** it repairs stored counters and final status from grouped recipient states without sending any message
+

@@ -12,6 +12,7 @@ import './telephony-media-path';
 import './call-history';
 import TelephonyCore from './telephony-core';
 import { shouldReleaseWrapupForVicidialDisposition } from './agent-vicidial-events';
+import { readRecentSearches, readSidebarCollapsed, saveRecentSearches, saveSidebarCollapsed } from './preferences-storage';
 
 window.AgentVicidialEvents = {
     ...(window.AgentVicidialEvents || {}),
@@ -286,23 +287,23 @@ Alpine.store('search', {
     query: '',
     results: [],
     loading: false,
-    recent: JSON.parse(localStorage.getItem('crm_recent_searches') ?? '[]'),
+    recent: readRecentSearches(),
     toggle() { this.open = !this.open; if (!this.open) { this.query = ''; this.results = []; } },
     close()  { this.open = false; this.query = ''; this.results = []; },
     addRecent(q) {
         if (!q.trim()) return;
         this.recent = [q, ...this.recent.filter(r => r !== q)].slice(0, 6);
-        localStorage.setItem('crm_recent_searches', JSON.stringify(this.recent));
+        saveRecentSearches(this.recent);
     },
 });
 
 // Global sidebar store
 Alpine.store('sidebar', {
-    collapsed: localStorage.getItem('sidebar_collapsed') === 'true',
+    collapsed: readSidebarCollapsed(),
     mobileOpen: false,
     toggle() {
         this.collapsed = !this.collapsed;
-        localStorage.setItem('sidebar_collapsed', this.collapsed);
+        saveSidebarCollapsed(this.collapsed);
     },
     openMobile()  { this.mobileOpen = true; },
     closeMobile(restoreFocus = false) {
@@ -436,6 +437,7 @@ window.crmGracefulLogout = async function () {
     }
 
     crmLogoutInProgress = true;
+    window.crmClearFormDrafts?.();
 
     const withTimeout = (promise, milliseconds) => Promise.race([
         promise,
@@ -532,11 +534,9 @@ document.addEventListener('keydown', (e) => {
 window.addEventListener('error', (event) => {
     if (window.axios) {
         window.axios.post('/api/client-errors', {
-            message: event.message,
-            source:  event.filename,
-            line:    event.lineno,
-            col:     event.colno,
-            url:     location.href,
+            error_type: 'javascript_error',
+            line: event.lineno,
+            column: event.colno,
         }, { timeout: 5000 }).catch((error) => {
             reportClientWarning(error, 'Unable to submit client error report.');
         });

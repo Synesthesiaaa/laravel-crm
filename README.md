@@ -46,11 +46,13 @@ Some setup routes remain Super Admin-only even when an Admin has a similarly nam
 
 Laravel **12.53.0**, Blade, Alpine.js **3.15.8**, Tailwind CSS **4.2.0**, Vite **7.3.1**, SIP.js **0.21.2**, Horizon **5.45.0**, Reverb **1.8.0**, and Sanctum **4.3.1** are present in the lockfiles. SQLite is used by tests; MySQL connections support the inspected application and telephony integration.
 
-Although manifests declare PHP `^8.2` and Node `>=20.0.0`, the committed dependency graph requires **PHP 8.4+ within PHP 8.x** and **Node `^20.19.0 || >=22.12.0`**. Horizon needs Unix PCNTL/POSIX extensions. Read [requirements](docs/getting-started/requirements.md) before installation.
+The Composer manifest requires **PHP 8.4+ within PHP 8.x**; the frontend lockfile requires **Node `^20.19.0 || >=22.12.0`**. Horizon needs Unix PCNTL/POSIX extensions. Read [requirements](docs/getting-started/requirements.md) before installation.
 
 ## Quick start
 
 Use an empty local database with synthetic data and sending/calling disabled. Follow the copyable [quick start](docs/getting-started/quick-start.md) for dependency installation, environment setup, migrations, development seeders, assets, and first login. The [full installation guide](docs/getting-started/installation.md) covers Windows/Linux differences.
+
+For a local database-backed worker, consume both the telephony and default queues: `php artisan queue:work database --queue=telephony,default --tries=1 --timeout=800`. Email campaign workers use the separate `email-campaigns` queue; see [queue and worker operations](docs/operations/queues-and-workers.md).
 
 Do not apply development seeders, database resets, or new application-key generation to an existing production installation. For an existing deployment, use [maintenance](docs/operations/maintenance.md).
 
@@ -70,7 +72,7 @@ Do not apply development seeders, database resets, or new application-key genera
 
 ## Project status and limits
 
-This documentation describes source reviewed on **2026-10-15**, not a completed live-integration or production certification. Campaign selection is not a general per-user membership boundary. Operations Insights and diagnostic endpoints have public routes. The current CSV import job saves form records rather than populating hopper leads. External call/media behavior, fresh installation, restore drills, and SMTP delivery were not exercised for this documentation update.
+This documentation describes source reviewed on **2026-10-26**; it is not a live-integration or production certification. Automated checks use synthetic data and do not establish deployment-specific access mappings, live VICIdial/Asterisk connectivity, email delivery, fresh installation, or restore readiness. Validate those operations in an approved non-production environment before enabling them for users.
 
 Confidential email documents require correct recipient assignment and passing validation. Payroll remains blocked when required password protection cannot be satisfied. See [email controls](docs/EMAIL_CAMPAIGNS.md) and [known findings](docs/audit/documentation-modernization.md).
 

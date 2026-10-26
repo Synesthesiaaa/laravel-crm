@@ -25,18 +25,17 @@ class AmiWebhookController extends Controller
 
     /**
      * Handle incoming AMI event (POST). Expects JSON payload with event type and identifiers.
-     * If ASTERISK_AMI_WEBHOOK_SECRET is set, require X-Webhook-Secret header.
+     * Requires X-Webhook-Secret in every environment.
      */
     public function __invoke(Request $request): JsonResponse
     {
-        $secret = config('asterisk.webhook_secret');
+        $secret = (string) config('asterisk.webhook_secret', '');
         if ($secret === '') {
-            if (app()->environment('production')) {
-                $this->telephonyLogger->warning('AmiWebhookController', 'AMI webhook rejected: secret missing in production');
+            $this->telephonyLogger->warning('AmiWebhookController', 'AMI webhook rejected: secret is not configured');
 
-                return response()->json(['received' => false, 'error' => 'Webhook secret is not configured'], 503);
-            }
-        } elseif ($request->header('X-Webhook-Secret') !== $secret) {
+            return response()->json(['received' => false, 'error' => 'Webhook secret is not configured'], 503);
+        }
+        if (! hash_equals($secret, (string) $request->header('X-Webhook-Secret', ''))) {
             $this->telephonyLogger->warning('AmiWebhookController', 'AMI webhook rejected: invalid or missing secret');
 
             return response()->json(['received' => false, 'error' => 'Unauthorized'], 401);
@@ -108,7 +107,7 @@ class AmiWebhookController extends Controller
         $this->mapping->attachAsteriskIdentifiers($session, $linkedid, $channel);
 
         // Transition ringing/answered → in_call
-        $result = $this->callStateService->transition($session, \App\Models\CallSession::STATUS_IN_CALL, [
+        $result = $this->callStateService->markConnected($session, [
             'linkedid' => $linkedid,
             'channel' => $channel,
             'metadata' => ['ami_payload' => $payload],
@@ -139,9 +138,8 @@ class AmiWebhookController extends Controller
 
         if ($dialStatus === 'ANSWER') {
             // Remote (GSM) answered → establish the call
-            $result = $this->callStateService->transition(
+            $result = $this->callStateService->markConnected(
                 $session,
-                \App\Models\CallSession::STATUS_IN_CALL,
                 ['linkedid' => $linkedid, 'channel' => $channel, 'metadata' => ['ami_payload' => $payload]],
             );
         } else {
@@ -156,7 +154,7 @@ class AmiWebhookController extends Controller
             $result = $this->callStateService->transition(
                 $session,
                 \App\Models\CallSession::STATUS_FAILED,
-                ['end_reason' => $endReason, 'metadata' => ['ami_payload' => $payload]],
+                ['end_reason' => $endReason, 'metadata' => ['ami_payload' => $payload], 'remote_outcome_resolved' => true],
                 true,
             );
         }
@@ -194,6 +192,7 @@ class AmiWebhookController extends Controller
             'linkedid' => $linkedid,
             'channel' => $channel,
             'metadata' => ['ami_payload' => $payload],
+            'remote_outcome_resolved' => true,
         ]);
 
         return $result->success;

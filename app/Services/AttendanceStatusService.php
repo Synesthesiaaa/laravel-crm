@@ -20,30 +20,30 @@ class AttendanceStatusService
      */
     public function startStatus(User $user, string $code, ?string $ip): AttendanceLog
     {
-        $type = AttendanceStatusType::query()->where('code', $code)->active()->first();
-        if (! $type) {
-            throw ValidationException::withMessages([
-                'code' => [__('Invalid or inactive attendance status.')],
-            ]);
-        }
+        return DB::transaction(function () use ($user, $code, $ip) {
+            $this->lockUserState($user);
 
-        if ($this->getOpenStatus($user) !== null) {
-            throw ValidationException::withMessages([
-                'code' => [__('End your current status before starting another.')],
-            ]);
-        }
+            $type = AttendanceStatusType::query()->where('code', $code)->active()->first();
+            if (! $type) {
+                throw ValidationException::withMessages([
+                    'code' => [__('Invalid or inactive attendance status.')],
+                ]);
+            }
 
-        $eventType = $type->code.'_'.AttendanceLog::DIRECTION_START;
+            if ($this->getOpenStatus($user) !== null) {
+                throw ValidationException::withMessages([
+                    'code' => [__('End your current status before starting another.')],
+                ]);
+            }
 
-        return DB::transaction(function () use ($user, $type, $eventType, $ip) {
             return $this->attendanceRepository->logCustomEvent(
                 $user->id,
-                $eventType,
+                $type->code.'_'.AttendanceLog::DIRECTION_START,
                 $type->id,
                 AttendanceLog::DIRECTION_START,
                 $ip,
             );
-        });
+        }, attempts: 3);
     }
 
     /**
@@ -51,17 +51,20 @@ class AttendanceStatusService
      */
     public function endStatus(User $user, ?string $ip): AttendanceLog
     {
-        $open = $this->getOpenStatus($user);
-        if ($open === null) {
-            throw ValidationException::withMessages([
-                'status' => [__('No active attendance status to end.')],
-            ]);
-        }
+        return DB::transaction(function () use ($user, $ip): AttendanceLog {
+            $this->lockUserState($user);
+            $open = $this->getOpenStatus($user);
+            if ($open === null) {
+                throw ValidationException::withMessages([
+                    'status' => [__('No active attendance status to end.')],
+                ]);
+            }
 
-        return $this->closeStatus($user, $open, $ip);
+            return $this->appendCloseStatus($user, $open, $ip);
+        }, attempts: 3);
     }
 
-    private function closeStatus(User $user, AttendanceLog $open, ?string $ip): AttendanceLog
+    private function appendCloseStatus(User $user, AttendanceLog $open, ?string $ip): AttendanceLog
     {
         $type = $open->statusType;
         if (! $type) {
@@ -72,50 +75,35 @@ class AttendanceStatusService
 
         $eventType = $type->code.'_'.AttendanceLog::DIRECTION_END;
 
-        return DB::transaction(function () use ($user, $type, $eventType, $ip) {
-            return $this->attendanceRepository->logCustomEvent(
-                $user->id,
-                $eventType,
-                $type->id,
-                AttendanceLog::DIRECTION_END,
-                $ip,
-            );
-        });
+        return $this->attendanceRepository->logCustomEvent(
+            $user->id,
+            $eventType,
+            $type->id,
+            AttendanceLog::DIRECTION_END,
+            $ip,
+        );
     }
 
     /**
-     * If there is an unmatched start today, return that log row; otherwise null.
+     * Return the most recently opened custom status that has no matching end.
      */
     public function getOpenStatus(User $user): ?AttendanceLog
     {
-        $logs = AttendanceLog::query()
-            ->select([
-                'id',
-                'user_id',
-                'attendance_status_type_id',
-                'direction',
-                'event_time',
-            ])
+        $latestEventIds = AttendanceLog::query()
+            ->selectRaw('MAX(id) as latest_id')
             ->where('user_id', $user->id)
-            ->whereDate('event_time', today())
             ->whereNotNull('attendance_status_type_id')
             ->whereNotNull('direction')
-            ->orderBy('event_time')
-            ->orderBy('id')
-            ->get();
+            ->groupBy('attendance_status_type_id')
+            ->pluck('latest_id');
 
-        $open = null;
-        foreach ($logs as $log) {
-            if ($log->direction === AttendanceLog::DIRECTION_START) {
-                $open = $log;
-            } elseif ($log->direction === AttendanceLog::DIRECTION_END
-                && $open !== null
-                && (int) $log->attendance_status_type_id === (int) $open->attendance_status_type_id) {
-                $open = null;
-            }
-        }
-
-        return $open?->loadMissing('statusType');
+        return AttendanceLog::query()
+            ->select(['id', 'user_id', 'attendance_status_type_id', 'direction', 'event_time'])
+            ->whereIn('id', $latestEventIds)
+            ->where('direction', AttendanceLog::DIRECTION_START)
+            ->orderByDesc('id')
+            ->first()
+            ?->loadMissing('statusType');
     }
 
     /**
@@ -123,15 +111,21 @@ class AttendanceStatusService
      */
     public function autoCloseOnLogout(User $user, ?string $ip): void
     {
-        $open = $this->getOpenStatus($user);
-        if ($open === null) {
-            return;
-        }
-
         try {
-            $this->closeStatus($user, $open, $ip);
+            DB::transaction(function () use ($user, $ip): void {
+                $this->lockUserState($user);
+                $open = $this->getOpenStatus($user);
+                if ($open !== null) {
+                    $this->appendCloseStatus($user, $open, $ip);
+                }
+            }, attempts: 3);
         } catch (ValidationException) {
-            // Should not happen if getOpenStatus matched; ignore to not block logout.
+            // Do not block logout if status metadata was concurrently changed.
         }
+    }
+
+    private function lockUserState(User $user): void
+    {
+        User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
     }
 }

@@ -37,6 +37,7 @@ class FormShowViewRenderTest extends TestCase
             'is_required' => true,
             'field_order' => 1,
             'field_width' => 'full',
+            'draft_safe' => true,
             'visibility' => [
                 'field' => 'account_type',
                 'operator' => 'equals',
@@ -66,6 +67,7 @@ class FormShowViewRenderTest extends TestCase
         $this->assertStringContainsString('selectForm($event.target.value)', $html);
         $this->assertStringContainsString('data-user-id="'.$user->id.'"', $html);
         $this->assertStringContainsString('data-campaign="mbsales"', $html);
+        $this->assertStringContainsString('data-draft-safe-field="cardholder_name"', $html);
     }
 
     public function test_widget_form_show_renders_the_same_async_submission_hooks(): void
@@ -115,6 +117,7 @@ class FormShowViewRenderTest extends TestCase
         $this->assertStringContainsString('Back to Form', $html);
         $this->assertStringContainsString('Confirm &amp; Save', $html);
         $this->assertStringContainsString('data-user-id="'.$user->id.'"', $html);
+        $this->assertStringNotContainsString('data-draft-safe-field=', $html);
     }
 
     public function test_agent_sees_a_read_only_date_on_regular_crm_forms(): void

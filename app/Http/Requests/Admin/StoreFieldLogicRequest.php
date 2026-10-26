@@ -24,6 +24,7 @@ class StoreFieldLogicRequest extends FormRequest
             'field_type' => ['required', 'in:text,textarea,number,date,select,multiselect,percentage'],
             'is_required' => ['nullable', 'boolean'],
             'is_sale_amount' => ['nullable', 'boolean'],
+            'draft_safe' => ['nullable', 'boolean'],
             'field_order' => ['nullable', 'integer'],
             'field_width' => ['nullable', 'in:full,half,third'],
             'options' => ['nullable', 'string', 'max:65535'],

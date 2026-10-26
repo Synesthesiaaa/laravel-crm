@@ -8,6 +8,7 @@ use App\Models\Form;
 use App\Models\FormField;
 use App\Models\User;
 use App\Services\CampaignService;
+use App\Services\FormStorageSchemaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -48,6 +49,10 @@ class FormSubmissionTest extends TestCase
                 'form_type' => 'ezycash',
             ], $f));
         }
+        app(FormStorageSchemaService::class)->provision(
+            'ezycash',
+            FormField::query()->where('campaign_code', 'mbsales')->where('form_type', 'ezycash')->get(),
+        );
     }
 
     public function test_form_submit_succeeds_with_valid_data(): void
@@ -120,6 +125,10 @@ class FormSubmissionTest extends TestCase
             $table->unsignedBigInteger('cebuana_customer_number')->nullable();
             $table->unsignedBigInteger('dormancy_months')->nullable();
         });
+        app(FormStorageSchemaService::class)->provision(
+            'ezycash',
+            FormField::query()->where('campaign_code', 'mbsales')->where('form_type', 'ezycash')->get(),
+        );
 
         $user = User::factory()->create(['username' => 'agent1']);
         $customerNumber = '0012345678901234567890';
@@ -151,6 +160,93 @@ class FormSubmissionTest extends TestCase
         );
         $dormancyColumn = collect(Schema::getColumns('ezycash'))->firstWhere('name', 'dormancy_months');
         $this->assertContains($dormancyColumn['type_name'] ?? null, ['decimal', 'numeric']);
+    }
+
+    public function test_hidden_required_form_field_is_optional_and_hidden_value_is_not_persisted(): void
+    {
+        FormField::create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'existing_account',
+            'field_label' => 'Existing account',
+            'field_type' => 'select',
+            'is_required' => true,
+            'options' => json_encode(['Yes', 'No']),
+            'field_order' => 20,
+        ]);
+        FormField::create([
+            'campaign_code' => 'mbsales',
+            'form_type' => 'ezycash',
+            'field_name' => 'existing_account_number',
+            'field_label' => 'Existing account number',
+            'field_type' => 'text',
+            'is_required' => true,
+            'visibility' => ['field' => 'existing_account', 'operator' => 'equals', 'values' => ['Yes']],
+            'field_order' => 21,
+        ]);
+        app(FormStorageSchemaService::class)->provision(
+            'ezycash',
+            FormField::query()->where('campaign_code', 'mbsales')->where('form_type', 'ezycash')->get(),
+        );
+        app(CampaignService::class)->clearCampaignsCache();
+
+        $user = User::factory()->create(['username' => 'conditional_agent']);
+        $response = $this->actingAs($user)->postJson(route('forms.store'), [
+            'campaign' => 'mbsales',
+            'form_type' => 'ezycash',
+            'date' => '2026-08-20',
+            'cardholder_name' => 'Conditional Test',
+            'mpi_credit_card_no' => '4111111111111111',
+            'bank' => 'Test Bank',
+            'account_type' => 'Savings',
+            'account_number' => '123456',
+            'surname' => 'Test',
+            'first_name' => 'Conditional',
+            'ezycash_amount' => '100.00',
+            'term' => '12',
+            'rate' => '5.00',
+            'existing_account' => 'No',
+            'existing_account_number' => 'forged-hidden-value',
+        ]);
+
+        $response->assertOk()->assertJsonPath('success', true);
+        $row = DB::table('ezycash')->where('cardholder_name', 'Conditional Test')->first();
+        $this->assertNotNull($row);
+        $this->assertSame('No', $row->existing_account);
+        $this->assertNull($row->existing_account_number);
+    }
+
+    public function test_number_form_fields_preserve_negative_decimals_and_reject_exponents_or_excess_scale(): void
+    {
+        $user = User::factory()->create(['username' => 'number_agent']);
+        $base = [
+            'campaign' => 'mbsales',
+            'form_type' => 'ezycash',
+            'date' => '2026-08-20',
+            'mpi_credit_card_no' => '4111111111111111',
+            'bank' => 'Test Bank',
+            'account_type' => 'Savings',
+            'account_number' => '123456',
+            'surname' => 'Test',
+            'first_name' => 'Numeric',
+            'term' => '12',
+            'rate' => '5.00',
+        ];
+
+        $this->actingAs($user)->postJson(route('forms.store'), $base + [
+            'cardholder_name' => 'Negative Decimal',
+            'ezycash_amount' => '-100.25',
+        ])->assertOk()->assertJsonPath('success', true);
+
+        $this->actingAs($user)->postJson(route('forms.store'), $base + [
+            'cardholder_name' => 'Exponent Decimal',
+            'ezycash_amount' => '1e3',
+        ])->assertUnprocessable()->assertJsonValidationErrors(['ezycash_amount']);
+
+        $this->actingAs($user)->postJson(route('forms.store'), $base + [
+            'cardholder_name' => 'Excess Scale Decimal',
+            'ezycash_amount' => '12.345',
+        ])->assertUnprocessable()->assertJsonValidationErrors(['ezycash_amount']);
     }
 
     public function test_agent_submission_uses_the_current_server_date_even_when_request_contains_a_different_date(): void
@@ -329,7 +425,7 @@ class FormSubmissionTest extends TestCase
         $this->assertNotNull($submission->updated_at);
     }
 
-    public function test_dynamic_form_table_gets_timestamp_columns_before_submission(): void
+    public function test_dynamic_form_table_is_provisioned_before_submission(): void
     {
         Event::fake([DashboardDataUpdated::class]);
         Form::create([
@@ -355,6 +451,12 @@ class FormSubmissionTest extends TestCase
             $table->string('agent');
             $table->string('customer_name');
         });
+        app(FormStorageSchemaService::class)->provision(
+            'dynamic_form_records',
+            FormField::query()->where('campaign_code', 'mbsales')->where('form_type', 'dynamic_form')->get(),
+        );
+        $this->assertTrue(Schema::hasColumn('dynamic_form_records', 'created_at'));
+        $this->assertTrue(Schema::hasColumn('dynamic_form_records', 'updated_at'));
 
         $user = User::factory()->create(['username' => 'dynamic_agent']);
 
@@ -634,6 +736,10 @@ class FormSubmissionTest extends TestCase
                 'form_type' => 'ezytransfer',
             ], $field));
         }
+        app(FormStorageSchemaService::class)->provision(
+            'ezytransfer',
+            FormField::query()->where('campaign_code', 'mbsales')->where('form_type', 'ezytransfer')->get(),
+        );
         app(CampaignService::class)->clearCampaignsCache();
 
         $user = User::factory()->create(['username' => 'agent1']);

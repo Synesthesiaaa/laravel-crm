@@ -33,6 +33,10 @@ final class CallErrors
     /** VICIdial Agent API rejected external_dial for reasons other than auth or login state. */
     public const VICIDIAL_DIAL_FAILED = 'VICIDIAL_DIAL_FAILED';
 
+    public const VICIDIAL_OUTCOME_UNKNOWN = 'VICIDIAL_OUTCOME_UNKNOWN';
+
+    public const INVALID_VICIDIAL_PARAMETERS = 'INVALID_VICIDIAL_PARAMETERS';
+
     public const MESSAGES = [
         self::NETWORK_FAILURE => 'Network error during call setup.',
         self::EXTENSION_OFFLINE => 'Agent extension is offline.',
@@ -46,6 +50,8 @@ final class CallErrors
         self::VICIDIAL_UNAVAILABLE => 'VICIdial is temporarily unavailable.',
         self::VICIDIAL_AGENT_NOT_LOGGED_IN => 'Log into VICIdial before dialing.',
         self::VICIDIAL_DIAL_FAILED => 'VICIdial could not complete the dial request.',
+        self::VICIDIAL_OUTCOME_UNKNOWN => 'VICIdial may have received the dial request. Check the active call before retrying.',
+        self::INVALID_VICIDIAL_PARAMETERS => 'Invalid VICIdial API parameters.',
     ];
 
     public static function toJson(string $code, ?string $asteriskResponse = null): array

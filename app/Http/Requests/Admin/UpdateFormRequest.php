@@ -3,10 +3,14 @@
 namespace App\Http\Requests\Admin;
 
 use App\Models\Form;
+use App\Models\FormField;
 use App\Services\DashboardSalesRuleService;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use Throwable;
 
 class UpdateFormRequest extends FormRequest
 {
@@ -47,11 +51,46 @@ class UpdateFormRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            $form = $this->route('form');
+            if ($form instanceof Form) {
+                $identity = [
+                    'campaign_code' => (string) $form->campaign_code,
+                    'form_code' => (string) $form->form_code,
+                    'table_name' => (string) $form->table_name,
+                ];
+                $changed = array_filter(
+                    array_keys($identity),
+                    fn (string $key): bool => $this->has($key)
+                        && (string) $this->input($key) !== $identity[$key],
+                );
+
+                if ($changed !== []) {
+                    try {
+                        $hasMetadata = FormField::withTrashed()
+                            ->where('campaign_code', $form->campaign_code)
+                            ->where('form_type', $form->form_code)
+                            ->exists();
+                        $hasStoredRecords = preg_match('/^[A-Za-z0-9_]+$/', (string) $form->table_name) === 1
+                            && Schema::hasTable($form->table_name)
+                            && DB::table($form->table_name)->exists();
+
+                        if ($hasMetadata || $hasStoredRecords) {
+                            foreach ($changed as $field) {
+                                $validator->errors()->add($field, 'Form identifiers cannot be changed after fields or records are in use.');
+                            }
+                        }
+                    } catch (Throwable) {
+                        foreach ($changed as $field) {
+                            $validator->errors()->add($field, 'Form usage could not be verified. Try again or contact an administrator.');
+                        }
+                    }
+                }
+            }
+
             if (! $this->has('sales_rule') || ! $this->boolean('sales_rule.enabled')) {
                 return;
             }
 
-            $form = $this->route('form');
             if (! $form instanceof Form) {
                 $validator->errors()->add('sales_rule.form_code', 'The selected form could not be loaded.');
 

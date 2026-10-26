@@ -6,7 +6,7 @@
 
 @section('content')
 <script type="application/json" id="agent-screen-telephony-features">@json($telephonyFeatures ?? [])</script>
-<div x-data="agentScreen()" x-init="init()" data-agent-screen data-campaign="{{ session('campaign', 'mbsales') }}" data-user-id="{{ auth()->id() }}" class="agent-workspace flex flex-col lg:flex-row gap-6 h-full">
+<div x-data="agentScreen()" data-agent-screen data-campaign="{{ session('campaign', 'mbsales') }}" data-user-id="{{ auth()->id() }}" class="agent-workspace flex flex-col lg:flex-row gap-6 h-full">
 
     {{-- WebSocket health banner --}}
     <div x-show="$store.ws.isDisconnected && !$store.ws.dismissed"
@@ -68,7 +68,6 @@
             <h3 class="text-sm font-semibold text-[var(--color-on-surface)] mb-4">Capture Details</h3>
             <form id="capture-form"
                   x-data="formVisibility()"
-                  x-init="init({})"
                   @submit.prevent="saveForm()"
                   class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 @foreach($fields as $field)
@@ -184,7 +183,7 @@
                 <div role="status" aria-live="polite" aria-atomic="true" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold mb-4"
                      :class="{
                          'call-connected': callState === 'connected',
-                         'call-ringing':   callState === 'dialing' || callState === 'ringing',
+                         'call-ringing':   callState === 'dialing' || callState === 'ringing' || callState === 'outcome_unknown',
                          'call-wrapup':    callState === 'wrapup',
                          'bg-[var(--color-surface-2)] text-[var(--color-on-surface-dim)] border border-[var(--color-border)]': callState === 'idle',
                      }">
@@ -192,6 +191,7 @@
                     <span x-show="callState === 'idle'">Ready</span>
                     <span x-show="callState === 'dialing'">Dialing...</span>
                     <span x-show="callState === 'ringing'">Ringing...</span>
+                    <span x-show="callState === 'outcome_unknown'">Outcome unknown · verify before retry</span>
                     <span x-show="callState === 'connected'" x-text="'Connected · ' + formatDuration(duration)"></span>
                     <span x-show="callState === 'wrapup'">Wrap-up</span>
                 </div>
@@ -862,6 +862,7 @@ window.agentScreen = function() {
                 idle: 'Ready',
                 dialing: 'Dialing',
                 ringing: 'Ringing',
+                outcome_unknown: 'Outcome unknown · verify before retry',
                 connected: 'Connected',
                 wrapup: 'Wrap-up',
             }[this.callState] || 'Call state';
@@ -889,7 +890,9 @@ window.agentScreen = function() {
                     }
                     this.duration = res.data.call.duration_seconds || 0;
                     const statusMap = { dialing: 'dialing', ringing: 'ringing', answered: 'connected', in_call: 'connected' };
-                    this.callState = statusMap[res.data.call.status] || 'connected';
+                    this.callState = res.data.call.outcome_unknown || res.data.call.remote_dial_outcome === 'unknown'
+                        ? 'outcome_unknown'
+                        : (statusMap[res.data.call.status] || 'connected');
                     Alpine.store('call').state = this.callState;
                     Alpine.store('call').number = this.phoneNumber;
                     Alpine.store('call').setSessionId(this.sessionId);
@@ -915,7 +918,7 @@ window.agentScreen = function() {
                 }
                 // On network/auth error, reset to idle so the UI is never
                 // permanently stuck in a non-interactive state.
-                if (this.callState !== 'connected' && this.callState !== 'dialing' && this.callState !== 'ringing') {
+                if (this.callState !== 'connected' && this.callState !== 'dialing' && this.callState !== 'ringing' && this.callState !== 'outcome_unknown') {
                     this.dialBlocked = false;
                     this.hasDispositionPending = false;
                     this.callState = 'idle';
@@ -1215,6 +1218,16 @@ window.agentScreen = function() {
                 }
                 // Wait for SIP.js state + AMI events to transition dialing -> ringing -> connected.
             } catch (e) {
+                const response = e.response?.data;
+                if (response?.outcome_unknown && response.session_id) {
+                    this.sessionId = response.session_id;
+                    this.callState = 'outcome_unknown';
+                    Alpine.store('call').state = 'outcome_unknown';
+                    Alpine.store('call').setSessionId(response.session_id);
+                    Alpine.store('call').number = this.phoneNumber;
+                    Alpine.store('toast').warning(response.message || 'VICIdial may have received the dial request. Check the active call before retrying.');
+                    return;
+                }
                 this.callState = 'idle';
                 Alpine.store('call').state = 'idle';
                 Alpine.store('toast').error(e.response?.data?.message || 'Failed to originate call. Check connection.');

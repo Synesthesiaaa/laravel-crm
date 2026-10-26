@@ -138,6 +138,7 @@ The system SHALL render the Call History page shell independently of VICIdial an
 - **AND** the sidebar and other navigation remain interactive
 
 #### Scenario: Record-list navigation is immediate
+
 - **WHEN** a user follows an existing Record List Call History link with a lead or phone filter
 - **THEN** the destination renders immediately and applies the deep-link filter to the local query
 
@@ -155,3 +156,19 @@ The system SHALL render the Call History page shell independently of VICIdial an
 - **WHEN** a user requests a Call History refresh
 - **THEN** the application dispatches or reports the scoped sync job without waiting for VICIdial
 - **AND** only the Refresh control is disabled while dispatch is pending
+
+### Requirement: Filter options are database-distinct
+
+Agent and raw-status filter options SHALL be selected from the authorized local campaign/date scope using database-level distinct values, then returned in deterministic sorted order.
+
+#### Scenario: Many calls share a small option set
+- **WHEN** the local call history contains repeated agent and status values
+- **THEN** the filter response contains each distinct value once without loading every matching call row into application memory
+
+### Requirement: History synchronization streams bounded pages
+
+Historical sync SHALL fetch a stable keyset page, persist that page through the existing idempotent source-identity upsert, and only then fetch the next page. The completed-window checkpoint SHALL advance only after every page succeeds.
+
+#### Scenario: A page in a large window fails
+- **WHEN** a later remote page or local upsert fails after earlier pages were written
+- **THEN** the checkpoint remains unchanged and retry safely replays the earlier rows without duplication

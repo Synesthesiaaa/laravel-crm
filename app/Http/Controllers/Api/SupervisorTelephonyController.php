@@ -118,7 +118,6 @@ class SupervisorTelephonyController extends Controller
         $agent = User::findOrFail((int) $validated['agent_user_id']);
 
         $query = array_merge([
-            'agent_user' => (string) ($agent->vici_user ?? ''),
             'phone_login' => $validated['phone_login'] ?? '',
             'session_id' => $validated['session_id'] ?? '',
             'server_ip' => $validated['server_ip'] ?? '',
@@ -126,6 +125,7 @@ class SupervisorTelephonyController extends Controller
 
         $result = $this->agentApi->execute($request->user(), $campaign, $action, [
             'value' => $query['value'] ?? '',
+            'target_agent_user' => (string) ($agent->vici_user ?? ''),
             'query' => array_filter($query, static fn ($v) => $v !== ''),
         ]);
 

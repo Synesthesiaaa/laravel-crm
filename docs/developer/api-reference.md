@@ -78,7 +78,7 @@ Required query `campaign` is checked for an empty string. Missing campaign retur
 
 AMI accepts `event|Event`, correlation `linkedid|Linkedid|Uniqueid` and `channel|Channel`; missing event returns 200 `{received:true,processed:false,reason:"missing event"}`. Supported branches include hangup variants, Bridge/BridgeEnter and DialEnd. A known event without a matched call can remain unprocessed. VICIdial events require nonempty event/user for processing; additional inputs include message/lead_id/counter. Missing event/user returns a received-but-unprocessed acknowledgment. GET `/api/webhooks/vicidial-events` is only a liveness acknowledgment (`POST only`), not event processing.
 
-Both POST webhooks require `X-Webhook-Secret` if a secret is configured; wrong/missing header gives 401. Empty secret configuration is accepted outside production but gives 503 in production. Their secrets are distinct config keys. Example body for a parser-compatible AMI event (not a call fixture):
+Both POST webhooks require a nonempty configured secret and a matching `X-Webhook-Secret` in every environment; an empty secret returns 503, and a wrong or missing header returns 401. Their secrets are distinct config keys and use constant-time comparison. Example body for a parser-compatible AMI event (not a call fixture):
 
 ```json
 {"event":"Hangup","linkedid":"example-linked-id","channel":"SIP/example-00000001"}

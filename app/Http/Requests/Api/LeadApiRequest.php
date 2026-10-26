@@ -38,13 +38,13 @@ class LeadApiRequest extends FormRequest
                 'phone_number' => ['required', 'string', 'max:32'],
                 'phone_code' => ['nullable', 'string', 'max:4'],
                 'list_id' => ['nullable', 'string', 'max:12'],
-            ],
+            ] + $this->reservedTransportParameterRules(),
             'api.leads.update' => [
                 'campaign' => ['nullable', 'string', 'max:50'],
                 'lead_id' => ['nullable', 'integer'],
                 'vendor_lead_code' => ['nullable', 'string', 'max:50'],
                 'phone_number' => ['nullable', 'string', 'max:32'],
-            ],
+            ] + $this->reservedTransportParameterRules(),
             'api.leads.switch' => [
                 'campaign' => ['nullable', 'string', 'max:50'],
                 'lead_id' => ['required', 'integer'],
@@ -55,5 +55,20 @@ class LeadApiRequest extends FormRequest
             ],
             default => [],
         };
+    }
+
+    /** @return array<string, list<string>> */
+    private function reservedTransportParameterRules(): array
+    {
+        return array_fill_keys([
+            'function',
+            'source',
+            'user',
+            'pass',
+            'agent_user',
+            'credentials',
+            'query',
+            'campaign_id',
+        ], ['prohibited']);
     }
 }

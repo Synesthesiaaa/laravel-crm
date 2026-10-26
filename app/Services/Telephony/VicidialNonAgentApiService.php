@@ -12,6 +12,23 @@ use Throwable;
 
 class VicidialNonAgentApiService
 {
+    private const RESERVED_TRANSPORT_PARAMETERS = ['function', 'source', 'user', 'pass'];
+
+    /** Only explicitly known read-only endpoints may be retried automatically. */
+    private const RETRY_SAFE_FUNCTIONS = [
+        'agent_ingroup_info',
+        'agent_status',
+        'call_dispo_report',
+        'call_status_stats',
+        'lead_all_info',
+        'lead_field_info',
+        'lead_search',
+        'logged_in_agents',
+        'phone_number_log',
+        'recording_lookup',
+        'version',
+    ];
+
     public function __construct(
         protected VicidialServerRepository $serverRepository,
         protected TelephonyLogger $telephonyLogger,
@@ -52,6 +69,14 @@ class VicidialNonAgentApiService
         array $httpOptions = [],
     ): OperationResult {
 
+        if ($this->hasReservedTransportParameters($params)) {
+            return OperationResult::failure('Invalid VICIdial transport parameters.', null, $this->baseMeta(
+                $campaign,
+                $server,
+                'INVALID_PARAMETERS',
+            ));
+        }
+
         $baseUrl = $this->endpointResolver->nonAgentApi($server);
         if ($baseUrl === '') {
             return OperationResult::failure('Non-Agent API URL is not configured.', null, $this->baseMeta(
@@ -81,28 +106,32 @@ class VicidialNonAgentApiService
         $startedAt = microtime(true);
 
         try {
-            $response = Http::when(! config('vicidial.verify_ssl', true), fn ($h) => $h->withoutVerifying())
+            $request = Http::when(! config('vicidial.verify_ssl', true), fn ($h) => $h->withoutVerifying())
                 ->connectTimeout((int) ($httpOptions['connect_timeout'] ?? config('vicidial.connect_timeout', 5)))
-                ->timeout((int) ($httpOptions['timeout'] ?? config('vicidial.timeout', 10)))
-                ->retry(
-                    (int) ($httpOptions['retry_times'] ?? config('vicidial.retry_times', 2)),
+                ->timeout((int) ($httpOptions['timeout'] ?? config('vicidial.timeout', 10)));
+            if ($this->isRetrySafeFunction($function)) {
+                $request = $request->retry(
+                    max(1, (int) ($httpOptions['retry_times'] ?? config('vicidial.retry_times', 2))),
                     (int) ($httpOptions['retry_sleep_ms'] ?? config('vicidial.retry_sleep_ms', 500)),
-                )
-                ->get($baseUrl, $query);
+                );
+            }
+            $response = $request->get($baseUrl, $query);
         } catch (Throwable $e) {
-            $classification = $this->classifyException($e);
+            $retrySafe = $this->isRetrySafeFunction($function);
+            $classification = $retrySafe ? $this->classifyException($e) : 'OUTCOME_UNKNOWN';
             $meta = array_merge($this->baseMeta($campaign, $server, $classification), [
                 'duration_ms' => $this->durationMs($startedAt),
                 'parser' => 'not_run',
                 'parsed_rows' => 0,
-                'error' => $this->redactConnectionExceptionMessage($e->getMessage()),
+                'error' => $retrySafe ? $this->redactConnectionExceptionMessage($e->getMessage()) : 'Remote write outcome is unknown.',
+                'outcome_unknown' => ! $retrySafe,
             ]);
             $this->logRequest($function, $meta, 'HTTP request failed', 'error');
 
             return OperationResult::failure($this->safeMessage($classification), null, $meta);
         }
 
-        return $this->responseResult($response, $campaign, $function, $server, $startedAt);
+        return $this->responseResult($response, $campaign, $function, $server, $startedAt, $this->isRetrySafeFunction($function));
     }
 
     /**
@@ -143,9 +172,21 @@ class VicidialNonAgentApiService
 
         $source = (string) ($server->source ?: config('vicidial.default_source', 'crm_tracker'));
         $requestQueries = [];
+        $invalidRequests = [];
         foreach ($requests as $key => $definition) {
             $function = trim((string) ($definition['function'] ?? ''));
             if ($function === '') {
+                continue;
+            }
+
+            $params = (array) ($definition['params'] ?? []);
+            if ($this->hasReservedTransportParameters($params)) {
+                $invalidRequests[$key] = OperationResult::failure(
+                    'Invalid VICIdial transport parameters.',
+                    null,
+                    $this->baseMeta($campaign, $server, 'INVALID_PARAMETERS'),
+                );
+
                 continue;
             }
 
@@ -161,7 +202,9 @@ class VicidialNonAgentApiService
         }
 
         if ($requestQueries === []) {
-            return $this->failedBatch($requests, 'No valid VICIdial functions were requested.', 'PARSE_ERROR');
+            return $invalidRequests !== []
+                ? $invalidRequests
+                : $this->failedBatch($requests, 'No valid VICIdial functions were requested.', 'PARSE_ERROR');
         }
 
         $connectTimeout = (int) ($httpOptions['connect_timeout'] ?? config('vicidial.connect_timeout', 5));
@@ -174,17 +217,19 @@ class VicidialNonAgentApiService
         try {
             $responses = Http::pool(function (Pool $pool) use ($requestQueries, $baseUrl, $connectTimeout, $timeout, $retryTimes, $retrySleepMs): array {
                 $pending = [];
-                foreach ($requestQueries as $key => $request) {
+                foreach ($requestQueries as $key => $definition) {
                     $client = $pool->as((string) $key);
                     if (! config('vicidial.verify_ssl', true)) {
                         $client = $client->withoutVerifying();
                     }
 
-                    $pending[] = $client
+                    $pendingRequest = $client
                         ->connectTimeout($connectTimeout)
-                        ->timeout($timeout)
-                        ->retry($retryTimes, $retrySleepMs)
-                        ->get($baseUrl, $request['query']);
+                        ->timeout($timeout);
+                    if ($this->isRetrySafeFunction($definition['function'])) {
+                        $pendingRequest = $pendingRequest->retry(max(1, $retryTimes), $retrySleepMs);
+                    }
+                    $pending[] = $pendingRequest->get($baseUrl, $definition['query']);
                 }
 
                 return $pending;
@@ -201,15 +246,19 @@ class VicidialNonAgentApiService
             return $this->failedBatch($requests, $this->safeMessage($classification), $classification, $meta);
         }
 
-        $results = [];
+        $results = $invalidRequests;
         foreach ($requestQueries as $key => $request) {
             $response = $responses[$key] ?? null;
             if (! $response instanceof Response) {
                 $exception = $response instanceof Throwable ? $response : null;
-                $classification = $exception ? $this->classifyException($exception) : 'NETWORK_ERROR';
+                $retrySafe = $this->isRetrySafeFunction($request['function']);
+                $classification = $retrySafe
+                    ? ($exception ? $this->classifyException($exception) : 'NETWORK_ERROR')
+                    : 'OUTCOME_UNKNOWN';
                 $meta = array_merge($this->baseMeta($campaign, $server, $classification), [
                     'parser' => 'not_run',
                     'parsed_rows' => 0,
+                    'outcome_unknown' => ! $retrySafe,
                 ]);
                 $this->logRequest($request['function'], $meta, 'HTTP batch request failed');
                 $results[$key] = OperationResult::failure($this->safeMessage($classification), null, $meta);
@@ -223,6 +272,7 @@ class VicidialNonAgentApiService
                 $request['function'],
                 $server,
                 $batchStartedAt,
+                $this->isRetrySafeFunction($request['function']),
             );
         }
 
@@ -235,12 +285,20 @@ class VicidialNonAgentApiService
         string $function,
         \App\Models\VicidialServer $server,
         float $startedAt,
+        bool $retrySafe,
     ): OperationResult {
         $body = trim((string) $response->body());
         $normalized = strtolower($body);
         $isNotice = str_starts_with($normalized, 'notice:');
         $rows = $this->parseDelimitedRows($body);
         $classification = $this->classifyResponse($response, $body, $rows);
+        $hasDefinitiveApiError = str_starts_with(strtolower($body), 'error:');
+        $outcomeUnknown = ! $retrySafe
+            && ! $hasDefinitiveApiError
+            && (! $response->successful() || $body === '');
+        if ($outcomeUnknown) {
+            $classification = 'OUTCOME_UNKNOWN';
+        }
         $parsedRows = $classification === 'OK' ? count($rows) : 0;
         $meta = array_merge($this->baseMeta($campaign, $server, $classification), [
             'http_status' => $response->status(),
@@ -252,6 +310,7 @@ class VicidialNonAgentApiService
                 : 'delimited_rows',
             'parsed_rows' => $parsedRows,
             'body_sha256' => hash('sha256', $body),
+            'outcome_unknown' => $outcomeUnknown,
         ]);
 
         $this->logRequest($function, $meta, $classification === 'OK' || $classification === 'REPORT_EMPTY'
@@ -301,6 +360,22 @@ class VicidialNonAgentApiService
     protected function redactConnectionExceptionMessage(string $message): string
     {
         return preg_replace('/([?&](?:user|pass)=)[^&#\s]*/i', '$1[redacted]', $message) ?? $message;
+    }
+
+    /**
+     * Prevent caller-controlled values from replacing transport-owned API parameters.
+     *
+     * @param  array<string|int, mixed>  $parameters
+     */
+    private function hasReservedTransportParameters(array $parameters): bool
+    {
+        foreach (array_keys($parameters) as $key) {
+            if (in_array(strtolower((string) $key), self::RESERVED_TRANSPORT_PARAMETERS, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -427,6 +502,7 @@ class VicidialNonAgentApiService
     private function safeMessage(string $classification): string
     {
         return match ($classification) {
+            'OUTCOME_UNKNOWN' => 'VICIdial may have received the request, but the result could not be confirmed. Check the remote state before retrying.',
             'AUTHENTICATION_FAILED' => 'VICIdial authentication failed for the configured reporting account.',
             'PERMISSION_DENIED' => 'VICIdial denied access to this report for the configured API account.',
             'REPORT_HTML_CHANGED' => 'VICIdial returned an unexpected report page format.',
@@ -437,6 +513,11 @@ class VicidialNonAgentApiService
             'CONNECTION_REFUSED' => 'The VICIdial report connection was refused.',
             default => 'Unable to reach the VICIdial reporting API.',
         };
+    }
+
+    private function isRetrySafeFunction(string $function): bool
+    {
+        return in_array(strtolower(trim($function)), self::RETRY_SAFE_FUNCTIONS, true);
     }
 
     private function durationMs(float $startedAt): int

@@ -67,6 +67,12 @@
       "skillPath": "skills/redesign-skill/SKILL.md",
       "computedHash": "53d20b546631e3579da1cc581d98061bb1a09fda8f6378d7af3267972796dcc4"
     },
+    "repo-analyzer": {
+      "source": "yzddmr6/repo-analyzer",
+      "sourceType": "github",
+      "skillPath": "skills/repo-analyzer/SKILL.md",
+      "computedHash": "c40c682a9c8f6d0c46d8eb0887361fb69a57c9bbdede3f6e2dae249340d90998"
+    },
     "stitch-design-taste": {
       "source": "Leonxlnx/taste-skill",
       "sourceType": "github",

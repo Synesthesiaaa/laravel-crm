@@ -3,14 +3,15 @@
 namespace App\Services;
 
 use App\Events\DispositionSaved;
-use App\Jobs\SyncVicidialDispositionJob;
 use App\Models\CallSession;
 use App\Models\CampaignDispositionRecord;
 use App\Models\DispositionCode;
 use App\Repositories\DispositionRepository;
 use App\Services\Telephony\CallStateService;
 use App\Services\Telephony\TelephonyLogger;
+use App\Services\Telephony\TelephonySyncOutboxService;
 use App\Support\OperationResult;
+use App\Support\SafeOperationFailure;
 use Illuminate\Support\Facades\DB;
 
 class DispositionService
@@ -19,6 +20,7 @@ class DispositionService
         protected DispositionRepository $dispositionRepository,
         protected CallStateService $callStateService,
         protected TelephonyLogger $telephonyLogger,
+        protected TelephonySyncOutboxService $telephonySyncOutbox,
     ) {}
 
     public function getCodesForCampaign(string $campaignCode): array
@@ -133,6 +135,14 @@ class DispositionService
                     }
                 }
 
+                if ($syncSessionId !== null) {
+                    $this->telephonySyncOutbox->record(
+                        TelephonySyncOutboxService::OPERATION_DISPOSITION,
+                        'disposition:call-session:'.$syncSessionId,
+                        ['call_session_id' => $syncSessionId],
+                    );
+                }
+
                 if ($persistRecord) {
                     event(new DispositionSaved($campaignCode, $agent, $dispositionCode, $leadId));
                 }
@@ -141,18 +151,19 @@ class DispositionService
             });
 
             if ($syncSessionId !== null) {
-                SyncVicidialDispositionJob::dispatch($syncSessionId);
+                try {
+                    $this->telephonySyncOutbox->dispatchPending();
+                } catch (\Throwable $dispatchException) {
+                    $this->telephonyLogger->warning('DispositionService', 'Durable VICIdial sync remains pending for dispatcher', [
+                        'session_id' => $syncSessionId,
+                        'exception_class' => $dispatchException::class,
+                    ]);
+                }
             }
 
             return OperationResult::success();
         } catch (\Throwable $e) {
-            $this->telephonyLogger->error('DispositionService', 'Save failed', [
-                'error' => $e->getMessage(),
-                'campaign' => $campaignCode,
-                'session_id' => $callSessionId,
-            ]);
-
-            return OperationResult::failure($e->getMessage());
+            return SafeOperationFailure::result($e, 'disposition.save', 'Disposition could not be saved.');
         }
     }
 

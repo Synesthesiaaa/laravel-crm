@@ -4,7 +4,7 @@ This guide executes the direct integration model used by this CRM:
 - CRM controls dialing via AMI
 - Agent channel is SIP-only (`SIP/{extension}`)
 - Outbound leg goes to `SIP/goip-trunk/{number}`
-- AMI events are pushed to `/api/webhooks/ami` through `php artisan ami:listen`
+- AMI events are handled by the persistent listener through `php artisan ami:listen`
 
 ## 1) Asterisk server readiness
 

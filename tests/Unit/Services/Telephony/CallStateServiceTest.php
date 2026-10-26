@@ -41,6 +41,20 @@ class CallStateServiceTest extends TestCase
         $this->assertNotNull($session->answered_at);
     }
 
+    public function test_authoritative_answer_can_connect_a_dialing_or_ringing_call(): void
+    {
+        foreach ([CallSession::STATUS_DIALING, CallSession::STATUS_RINGING] as $status) {
+            $session = CallSession::factory()->create(['status' => $status]);
+
+            $result = $this->service->markConnected($session);
+
+            $this->assertTrue($result->success);
+            $session->refresh();
+            $this->assertSame(CallSession::STATUS_IN_CALL, $session->status);
+            $this->assertNotNull($session->answered_at);
+        }
+    }
+
     public function test_valid_transition_in_call_to_completed(): void
     {
         $session = CallSession::factory()->inCall()->create();
@@ -89,6 +103,32 @@ class CallStateServiceTest extends TestCase
         $session->refresh();
         $this->assertEquals(CallSession::STATUS_COMPLETED, $session->status);
         $this->assertEquals('agent_hangup', $session->end_reason);
+    }
+
+    public function test_stale_model_cannot_overwrite_a_persisted_terminal_state(): void
+    {
+        $stale = CallSession::factory()->ringing()->create();
+        $current = $stale->fresh();
+
+        $this->service->transition($current, CallSession::STATUS_COMPLETED);
+        $result = $this->service->transition($stale, CallSession::STATUS_RINGING);
+
+        $this->assertTrue($result->success);
+        $this->assertSame('Already terminal', $result->message);
+        $this->assertSame(CallSession::STATUS_COMPLETED, $stale->fresh()->status);
+    }
+
+    public function test_stale_hangup_uses_the_persisted_connected_state(): void
+    {
+        $stale = CallSession::factory()->ringing()->create();
+        $current = $stale->fresh();
+        $this->service->markConnected($current);
+
+        $result = $this->service->recordHangup($stale, ['end_reason' => 'agent_hangup']);
+
+        $this->assertTrue($result->success);
+        $this->assertSame(CallSession::STATUS_COMPLETED, $stale->fresh()->status);
+        $this->assertSame('agent_hangup', $stale->fresh()->end_reason);
     }
 
     public function test_record_hangup_idempotent_on_terminal(): void

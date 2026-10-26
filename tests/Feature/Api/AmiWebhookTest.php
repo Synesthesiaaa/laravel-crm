@@ -11,6 +11,14 @@ class AmiWebhookTest extends TestCase
 {
     use RefreshDatabase;
 
+    private const TEST_SECRET = 'synthetic-ami-webhook-secret';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['asterisk.webhook_secret' => self::TEST_SECRET]);
+    }
+
     private function setEnvironment(string $environment): void
     {
         app()->detectEnvironment(fn () => $environment);
@@ -19,7 +27,7 @@ class AmiWebhookTest extends TestCase
 
     public function test_webhook_returns_received_when_event_missing(): void
     {
-        $response = $this->postJson(route('api.webhooks.ami'), []);
+        $response = $this->postJson(route('api.webhooks.ami'), [], $this->validSecretHeader());
         $response->assertOk();
         $response->assertJson(['received' => true, 'processed' => false]);
     }
@@ -29,7 +37,7 @@ class AmiWebhookTest extends TestCase
         $response = $this->postJson(route('api.webhooks.ami'), [
             'event' => 'VarSet',
             'linkedid' => 'xyz',
-        ]);
+        ], $this->validSecretHeader());
         $response->assertOk();
         $response->assertJson(['received' => true, 'processed' => false]);
     }
@@ -47,7 +55,7 @@ class AmiWebhookTest extends TestCase
             'event' => 'Hangup',
             'linkedid' => '1699123456.123',
             'channel' => 'PJSIP/1001-00000001',
-        ]);
+        ], $this->validSecretHeader());
 
         $response->assertOk();
         $response->assertJson(['received' => true, 'processed' => true]);
@@ -56,13 +64,56 @@ class AmiWebhookTest extends TestCase
         $this->assertNotNull($session->ended_at);
     }
 
+    public function test_bridge_event_connects_a_ringing_session(): void
+    {
+        $user = User::factory()->create(['extension' => '1003']);
+        $session = CallSession::factory()
+            ->for($user)
+            ->ringing()
+            ->withLinkedId('1699123456.321')
+            ->create();
+
+        $this->postJson(route('api.webhooks.ami'), [
+            'event' => 'Bridge',
+            'linkedid' => '1699123456.321',
+            'channel' => 'PJSIP/1003-00000003',
+        ], $this->validSecretHeader())
+            ->assertOk()
+            ->assertJsonPath('processed', true);
+
+        $this->assertSame(CallSession::STATUS_IN_CALL, $session->fresh()->status);
+        $this->assertNotNull($session->fresh()->answered_at);
+    }
+
+    public function test_answer_dial_status_connects_a_dialing_session(): void
+    {
+        $user = User::factory()->create(['extension' => '1004']);
+        $session = CallSession::factory()
+            ->for($user)
+            ->dialing()
+            ->withLinkedId('1699123456.654')
+            ->create();
+
+        $this->postJson(route('api.webhooks.ami'), [
+            'event' => 'DialEnd',
+            'dialstatus' => 'ANSWER',
+            'linkedid' => '1699123456.654',
+            'channel' => 'PJSIP/1004-00000004',
+        ], $this->validSecretHeader())
+            ->assertOk()
+            ->assertJsonPath('processed', true);
+
+        $this->assertSame(CallSession::STATUS_IN_CALL, $session->fresh()->status);
+        $this->assertNotNull($session->fresh()->answered_at);
+    }
+
     public function test_hangup_not_processed_when_no_matching_session(): void
     {
         $response = $this->postJson(route('api.webhooks.ami'), [
             'event' => 'Hangup',
             'linkedid' => 'nonexistent-linkedid',
             'channel' => 'PJSIP/9999-00000001',
-        ]);
+        ], $this->validSecretHeader());
 
         $response->assertOk();
         $response->assertJson(['received' => true, 'processed' => false, 'reason' => 'no matching session']);
@@ -80,7 +131,7 @@ class AmiWebhookTest extends TestCase
         $response = $this->postJson(route('api.webhooks.ami'), [
             'event' => 'Hangup',
             'channel' => 'PJSIP/1002-00000002',
-        ]);
+        ], $this->validSecretHeader());
 
         $response->assertOk();
         $response->assertJson(['processed' => true]);
@@ -110,22 +161,26 @@ class AmiWebhookTest extends TestCase
         config(['asterisk.webhook_secret' => '']);
     }
 
-    public function test_webhook_returns_503_when_secret_missing_in_production(): void
+    public function test_webhook_returns_503_when_secret_is_missing_in_any_environment(): void
     {
-        $this->setEnvironment('production');
-        config(['asterisk.webhook_secret' => '']);
-
-        try {
+        foreach (['testing', 'staging', 'production'] as $environment) {
+            $this->setEnvironment($environment);
+            config(['asterisk.webhook_secret' => '']);
             $response = $this->postJson(route('api.webhooks.ami'), [
                 'event' => 'Hangup',
                 'linkedid' => 'xyz',
             ]);
 
-            $response->assertStatus(503);
-            $response->assertJsonPath('error', 'Webhook secret is not configured');
-        } finally {
-            $this->setEnvironment('testing');
-            config(['asterisk.webhook_secret' => '']);
+            $response->assertStatus(503)
+                ->assertJsonPath('error', 'Webhook secret is not configured');
         }
+
+        $this->setEnvironment('testing');
+    }
+
+    /** @return array<string, string> */
+    private function validSecretHeader(): array
+    {
+        return ['X-Webhook-Secret' => self::TEST_SECRET];
     }
 }

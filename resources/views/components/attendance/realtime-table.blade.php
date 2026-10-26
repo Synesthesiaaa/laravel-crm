@@ -15,7 +15,6 @@
     data-poll-seconds="{{ $pollSeconds }}"
     data-max-session-hours="{{ $maxSessionHours }}"
     x-data="attendanceRealtimeTable($el.dataset)"
-    x-init="init()"
     :aria-busy="loading || refreshing"
 >
     <div class="border-b border-[var(--color-border)] p-4 sm:p-5">

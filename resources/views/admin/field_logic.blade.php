@@ -10,6 +10,9 @@
     @if(session('success'))
         <x-alert type="success" class="mb-4">{{ session('success') }}</x-alert>
     @endif
+    @if(session('error'))
+        <x-alert type="error" class="mb-4">{{ session('error') }}</x-alert>
+    @endif
     <x-validation-errors />
     @if(empty($forms))
         <x-alert type="warning" class="mb-4">No active forms are configured for this campaign.</x-alert>
@@ -104,6 +107,10 @@
                             <input type="checkbox" name="is_required" value="1" id="add_req" @checked(old('is_required'))>
                             <span>Required</span>
                         </label>
+                        <label class="checkbox-row" title="Only values from this field may be kept in a local draft for up to eight hours.">
+                            <input type="checkbox" name="draft_safe" value="1" id="add_draft_safe" @checked(old('draft_safe'))>
+                            <span>Allow local draft saving</span>
+                        </label>
                         <label class="checkbox-row" x-show="ft === 'number'" x-cloak>
                             <input type="checkbox" name="is_sale_amount" value="1" id="add_sale_amount" @checked(old('is_sale_amount'))>
                             <span>Is sale amount</span>
@@ -142,6 +149,7 @@
             ['label' => 'Type'],
             ['label' => 'Width'],
             ['label' => 'Required'],
+            ['label' => 'Draft saving'],
             ['label' => 'Sale amount'],
             ['label' => 'Actions', 'align' => 'right'],
         ]" />
@@ -156,6 +164,11 @@
                     <td>
                         <x-badge :type="$f->is_required ? 'info' : 'inactive'">
                             {{ $f->is_required ? 'Yes' : 'No' }}
+                        </x-badge>
+                    </td>
+                    <td>
+                        <x-badge :type="$f->draft_safe ? 'active' : 'inactive'">
+                            {{ $f->draft_safe ? 'Allowed' : 'Off' }}
                         </x-badge>
                     </td>
                     <td>

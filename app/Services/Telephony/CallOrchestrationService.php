@@ -40,13 +40,6 @@ class CallOrchestrationService
             );
         }
 
-        if ($this->dispositionService->hasPendingDisposition($user->id)) {
-            return OperationResult::failure(
-                CallErrors::MESSAGES[CallErrors::DIAL_BLOCKED_DISPOSITION],
-                CallErrors::toJson(CallErrors::DIAL_BLOCKED_DISPOSITION),
-            );
-        }
-
         if (empty($user->vici_user) || empty($user->vici_pass)) {
             return OperationResult::failure(
                 'ViciDial credentials are not set. Contact administrator.',
@@ -56,26 +49,51 @@ class CallOrchestrationService
 
         $skipAgentSessionCheck = app()->runningInConsole() && ! app()->runningUnitTests();
 
-        $agentSession = VicidialAgentSession::query()
-            ->where('user_id', $user->id)
-            ->where('campaign_code', $campaign)
-            ->first();
-
-        if (! $skipAgentSessionCheck && config('vicidial.require_vicidial_agent_session_before_dial', true)) {
-            if (! $agentSession
-                || ! in_array($agentSession->session_status, VicidialSessionService::USABLE_STATUSES, true)) {
-                return OperationResult::failure(
-                    'Log into VICIdial for this campaign on the agent screen first, then wait until Online.',
-                    CallErrors::toJson(CallErrors::VICIDIAL_AGENT_NOT_LOGGED_IN),
-                );
-            }
-        }
-
-        // Create session first so we have a session_id for the timeout job
+        // Lock the agent row and reserve the call before any remote request.
         try {
-            $session = DB::transaction(function () use ($user, $campaign, $phoneNumber, $leadId, $agentSession) {
+            $reservation = DB::transaction(function () use ($user, $campaign, $phoneNumber, $leadId, $skipAgentSessionCheck) {
+                $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->first();
+                if (! $lockedUser) {
+                    return OperationResult::failure('Agent account is no longer available.');
+                }
+
+                $activeSessions = CallSession::query()
+                    ->where('user_id', $lockedUser->id)
+                    ->active()
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get(['id']);
+                if ($activeSessions->isNotEmpty()) {
+                    return OperationResult::failure(
+                        CallErrors::MESSAGES[CallErrors::ALREADY_IN_CALL],
+                        CallErrors::toJson(CallErrors::ALREADY_IN_CALL),
+                    );
+                }
+
+                if ($this->dispositionService->hasPendingDisposition($lockedUser->id)) {
+                    return OperationResult::failure(
+                        CallErrors::MESSAGES[CallErrors::DIAL_BLOCKED_DISPOSITION],
+                        CallErrors::toJson(CallErrors::DIAL_BLOCKED_DISPOSITION),
+                    );
+                }
+
+                $agentSession = VicidialAgentSession::query()
+                    ->where('user_id', $lockedUser->id)
+                    ->where('campaign_code', $campaign)
+                    ->first();
+
+                if (! $skipAgentSessionCheck && config('vicidial.require_vicidial_agent_session_before_dial', true)) {
+                    if (! $agentSession
+                        || ! in_array($agentSession->session_status, VicidialSessionService::USABLE_STATUSES, true)) {
+                        return OperationResult::failure(
+                            'Log into VICIdial for this campaign on the agent screen first, then wait until Online.',
+                            CallErrors::toJson(CallErrors::VICIDIAL_AGENT_NOT_LOGGED_IN),
+                        );
+                    }
+                }
+
                 return CallSession::create([
-                    'user_id' => $user->id,
+                    'user_id' => $lockedUser->id,
                     'campaign_code' => $campaign,
                     'lead_id' => $leadId,
                     'phone_number' => $phoneNumber,
@@ -86,14 +104,20 @@ class CallOrchestrationService
                     ],
                 ]);
             });
+
+            if ($reservation instanceof OperationResult) {
+                return $reservation;
+            }
+
+            $session = $reservation;
         } catch (\Throwable $e) {
             $this->telephonyLogger->error('CallOrchestrationService', 'Failed to create CallSession', [
-                'error' => $e->getMessage(),
+                'exception' => $e::class,
                 'campaign' => $campaign,
                 'user_id' => $user->id,
             ]);
 
-            return OperationResult::failure($e->getMessage());
+            return OperationResult::failure('Unable to reserve a call session. Please try again.');
         }
 
         // Dial via ViciDial external_dial API – ViciDial handles ringing the agent and
@@ -114,11 +138,24 @@ class CallOrchestrationService
         if (! $dialResult['success']) {
             $this->telephonyLogger->warning('CallOrchestrationService', 'ViciDial external_dial failed', [
                 'user_id' => $user->id,
-                'number' => $phoneNumber,
-                'response' => $dialResult['raw_response'],
+                'session_id' => $session->id,
+                'failure_code' => $dialResult['failure_code'] ?? CallErrors::VICIDIAL_DIAL_FAILED,
+                'outcome_unknown' => (bool) ($dialResult['outcome_unknown'] ?? false),
             ]);
+
+            if ($dialResult['outcome_unknown'] ?? false) {
+                $this->callStateService->markOutboundDialOutcomeUnknown($session);
+
+                return OperationResult::failure(
+                    $dialResult['message'] ?? CallErrors::MESSAGES[CallErrors::VICIDIAL_OUTCOME_UNKNOWN],
+                    ['session_id' => $session->id],
+                    ['outcome_unknown' => true],
+                );
+            }
+
             $this->callStateService->transition($session, CallSession::STATUS_FAILED, [
                 'end_reason' => 'vicidial_dial_failed',
+                'remote_dial_outcome' => 'rejected',
             ], true);
 
             $errorCode = $dialResult['failure_code'] ?? CallErrors::VICIDIAL_DIAL_FAILED;
@@ -132,9 +169,9 @@ class CallOrchestrationService
         // Transition the local state first. A queue outage must not turn a dial
         // already accepted by VICIdial into a false "call setup failed" result.
         try {
-            DB::transaction(function () use ($session) {
-                $this->callStateService->transition($session, CallSession::STATUS_RINGING);
-            });
+            $this->callStateService->transition($session, CallSession::STATUS_RINGING, [
+                'remote_dial_outcome' => 'accepted',
+            ]);
         } catch (\Throwable $e) {
             $this->telephonyLogger->error('CallOrchestrationService', 'Failed to transition to ringing', [
                 'session_id' => $session->id,
@@ -223,37 +260,46 @@ class CallOrchestrationService
      */
     public function getActiveSession(User $user): ?CallSession
     {
-        $session = CallSession::where('user_id', $user->id)->active()->orderByDesc('created_at')->first();
-        if (! $session) {
-            return null;
-        }
-
         $noAnswerTimeout = (int) config('webrtc.no_answer_timeout', 45);
+        $sessions = CallSession::where('user_id', $user->id)
+            ->active()
+            ->orderByDesc('created_at')
+            ->get();
 
-        // Pre-answer states (dialing/ringing) stale after no-answer timeout
-        // (covers normal timeouts and orphaned sessions from AMI/PAMI errors)
-        if (in_array($session->status, [CallSession::STATUS_DIALING, CallSession::STATUS_RINGING], true)) {
-            $staleAt = ($session->dialed_at ?? $session->created_at)->addSeconds($noAnswerTimeout);
-            if (now()->greaterThanOrEqualTo($staleAt)) {
-                $this->callStateService->transition($session, CallSession::STATUS_FAILED, [
+        foreach ($sessions as $session) {
+            // Pre-answer states (dialing/ringing) stale after no-answer timeout.
+            if ($session->remote_dial_outcome !== 'unknown'
+                && in_array($session->status, [CallSession::STATUS_DIALING, CallSession::STATUS_RINGING], true)) {
+                $staleAt = ($session->dialed_at ?? $session->created_at)->addSeconds($noAnswerTimeout);
+                if (now()->greaterThanOrEqualTo($staleAt)) {
+                    $result = $this->callStateService->transition($session, CallSession::STATUS_FAILED, [
+                        'end_reason' => 'stale_session',
+                    ], true);
+                    if (! $result->success) {
+                        return $session;
+                    }
+
+                    continue;
+                }
+            }
+
+            // Any session older than the global stale threshold is abandoned.
+            $globalStaleAt = $session->created_at->addMinutes(CallStateService::STALE_CALL_MINUTES);
+            if ($session->remote_dial_outcome !== 'unknown' && now()->greaterThanOrEqualTo($globalStaleAt)) {
+                $result = $this->callStateService->transition($session, CallSession::STATUS_ABANDONED, [
                     'end_reason' => 'stale_session',
                 ], true);
+                if (! $result->success) {
+                    return $session;
+                }
 
-                return null;
+                continue;
             }
+
+            return $session;
         }
 
-        // Any session older than the global stale threshold is abandoned
-        $globalStaleAt = $session->created_at->addMinutes(CallStateService::STALE_CALL_MINUTES);
-        if (now()->greaterThanOrEqualTo($globalStaleAt)) {
-            $this->callStateService->transition($session, CallSession::STATUS_ABANDONED, [
-                'end_reason' => 'stale_session',
-            ], true);
-
-            return null;
-        }
-
-        return $session;
+        return null;
     }
 
     /**

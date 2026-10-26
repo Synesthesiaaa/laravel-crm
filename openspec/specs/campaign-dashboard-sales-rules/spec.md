@@ -107,3 +107,11 @@ The system SHALL resolve saved form, field, table, and column references against
 
 - **WHEN** no saved custom rule can be safely resolved
 - **THEN** sales-derived results return zero and empty collections while the dashboard continues to render
+
+### Requirement: Custom sales aggregation uses a shared bounded service
+
+Dashboard summary, range, and daily custom-sales paths SHALL use one shared rule evaluator and bounded aggregation service. The service SHALL preserve tag trimming and case normalization, form and numeric-marker triggers, amount conversion, selected date boundaries, per-agent and per-form results, and public response shapes.
+
+#### Scenario: A custom rule is evaluated in multiple report modes
+- **WHEN** the same custom rule is used by summary, range, and daily reports
+- **THEN** all modes count the same qualifying submissions and amounts while reading source rows in bounded chunks

@@ -213,6 +213,26 @@ function storageAvailable() {
     }
 }
 
+window.crmClearFormDrafts = function crmClearFormDrafts() {
+    if (!storageAvailable()) {
+        return;
+    }
+
+    try {
+        const storage = window.localStorage;
+        const keys = [];
+        for (let index = 0; index < storage.length; index += 1) {
+            const key = storage.key(index);
+            if (key?.startsWith('crm-form-draft:v1|') || key?.startsWith('crm-form-draft:v2|')) {
+                keys.push(key);
+            }
+        }
+        keys.forEach((key) => storage.removeItem(key));
+    } catch {
+        // Draft storage is an optional browser convenience.
+    }
+};
+
 window.formVisibility = function formVisibility(extraState = {}) {
     return {
         values: {},
@@ -239,6 +259,7 @@ window.formVisibility = function formVisibility(extraState = {}) {
             this.applyValuesToForm(form, this.values);
 
             if (this.autosave === true) {
+                this.purgeStoredDrafts();
                 this.draftStorageKey = this.buildDraftStorageKey(form);
                 this.attachAutosaveListeners();
 
@@ -547,13 +568,11 @@ window.formVisibility = function formVisibility(extraState = {}) {
         buildDraftStorageKey(form = this.getFormElement()) {
             const context = this.getDraftContext(form);
             const segments = [
-                'crm-form-draft:v1',
-                `path:${window.location.pathname}`,
+                'crm-form-draft:v2',
                 `user:${context.userId || 'guest'}`,
                 `campaign:${context.campaign || ''}`,
                 `form:${context.formType || ''}`,
                 `lead:${context.leadId || ''}`,
-                `phone:${context.phoneNumber || ''}`,
             ];
 
             return segments.join('|');
@@ -567,9 +586,57 @@ window.formVisibility = function formVisibility(extraState = {}) {
                 campaign: String(dataset.campaign || '').trim(),
                 formType: String(dataset.formType || '').trim(),
                 leadId: String(dataset.leadId || '').trim(),
-                phoneNumber: String(dataset.phoneNumber || '').trim(),
                 formId: form?.id ? String(form.id).trim() : '',
             };
+        },
+
+        draftSafeFieldNames(form = this.getFormElement()) {
+            if (!form) {
+                return new Set();
+            }
+
+            return new Set(Array.from(form.querySelectorAll('[data-draft-safe-field]'))
+                .map((container) => String(container.dataset?.draftSafeField || '').trim())
+                .filter((name) => name !== '' && !reviewExcludedFields.has(name)));
+        },
+
+        collectDraftValues(form = this.getFormElement()) {
+            const values = this.collectFormValues(form);
+            const allowed = this.draftSafeFieldNames(form);
+
+            return Object.fromEntries(Object.entries(values).filter(([name]) => allowed.has(name)));
+        },
+
+        purgeStoredDrafts() {
+            if (!storageAvailable()) {
+                return;
+            }
+
+            try {
+                const storage = window.localStorage;
+                const keys = [];
+                for (let index = 0; index < storage.length; index += 1) {
+                    const key = storage.key(index);
+                    if (key?.startsWith('crm-form-draft:v1|')) {
+                        keys.push(key);
+                    } else if (key?.startsWith('crm-form-draft:v2|')) {
+                        try {
+                            const payload = JSON.parse(storage.getItem(key) || 'null');
+                            const savedAt = Date.parse(payload?.saved_at || '');
+                            if (payload?.version !== 2 || !Number.isFinite(savedAt)
+                                || savedAt > Date.now() + 5 * 60 * 1000
+                                || Date.now() - savedAt >= 8 * 60 * 60 * 1000) {
+                                keys.push(key);
+                            }
+                        } catch {
+                            keys.push(key);
+                        }
+                    }
+                }
+                keys.forEach((key) => storage.removeItem(key));
+            } catch {
+                // Draft storage is an optional browser convenience.
+            }
         },
 
         readDraftPayload() {
@@ -584,11 +651,19 @@ window.formVisibility = function formVisibility(extraState = {}) {
                 }
 
                 const parsed = JSON.parse(raw);
-                if (!parsed || typeof parsed !== 'object' || !parsed.values || typeof parsed.values !== 'object') {
+                const savedAt = Date.parse(parsed?.saved_at || '');
+                if (!parsed || typeof parsed !== 'object' || parsed.version !== 2
+                    || !parsed.values || typeof parsed.values !== 'object' || Array.isArray(parsed.values)
+                    || !Number.isFinite(savedAt) || savedAt > Date.now() + 5 * 60 * 1000
+                    || Date.now() - savedAt >= 8 * 60 * 60 * 1000) {
+                    window.localStorage.removeItem(this.draftStorageKey);
                     return null;
                 }
 
-                return parsed;
+                const allowed = this.draftSafeFieldNames();
+                const values = Object.fromEntries(Object.entries(parsed.values).filter(([name]) => allowed.has(name)));
+
+                return { ...parsed, values };
             } catch {
                 return null;
             }
@@ -625,16 +700,17 @@ window.formVisibility = function formVisibility(extraState = {}) {
             }
 
             try {
-                const payload = this.collectFormValues(form);
-                this.values = this.cloneValues(payload);
-                if (this.areValuesEqual(payload, this.initialValues)) {
+            const payload = this.collectDraftValues(form);
+            const initialDraftValues = Object.fromEntries(Object.entries(this.initialValues)
+                .filter(([name]) => this.draftSafeFieldNames(form).has(name)));
+            if (Object.keys(payload).length === 0 || this.areValuesEqual(payload, initialDraftValues)) {
                     window.localStorage.removeItem(this.draftStorageKey);
                     this.isDirty = false;
 
                     return;
                 }
                 window.localStorage.setItem(this.draftStorageKey, JSON.stringify({
-                    version: 1,
+                    version: 2,
                     saved_at: new Date().toISOString(),
                     values: payload,
                 }));

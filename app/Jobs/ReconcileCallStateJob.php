@@ -2,10 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Models\CallSession;
-use App\Models\UnmatchedAmiEvent;
-use App\Services\Telephony\CallStateService;
-use App\Services\Telephony\CallUuidMappingService;
+use App\Services\Telephony\TelephonyReconciliationService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -27,10 +24,10 @@ class ReconcileCallStateJob implements ShouldQueue
         $this->onQueue('default');
     }
 
-    public function handle(CallStateService $callStateService, CallUuidMappingService $mapping): void
+    public function handle(TelephonyReconciliationService $reconciliation): void
     {
-        $this->forceStaleCallsToFailed($callStateService);
-        $this->retryUnmatchedAmiEvents($callStateService, $mapping);
+        $summary = $reconciliation->run();
+        Log::channel('telephony')->info('ReconcileCallState completed', $summary);
     }
 
     /**
@@ -43,62 +40,5 @@ class ReconcileCallStateJob implements ShouldQueue
                 ->releaseAfter(60)
                 ->expireAfter(600),
         ];
-    }
-
-    protected function forceStaleCallsToFailed(CallStateService $callStateService): void
-    {
-        $staleAt = now()->subMinutes(CallStateService::STALE_CALL_MINUTES);
-        $stale = CallSession::active()
-            ->where('dialed_at', '<', $staleAt)
-            ->get();
-
-        foreach ($stale as $session) {
-            $result = $callStateService->forceStaleToTerminal($session, CallSession::STATUS_FAILED);
-            if ($result->success) {
-                Log::channel('telephony')->warning('ReconcileCallState: Forced stale call to failed', [
-                    'session_id' => $session->id,
-                    'user_id' => $session->user_id,
-                    'dialed_at' => $session->dialed_at?->toIso8601String(),
-                ]);
-            }
-        }
-    }
-
-    /**
-     * Retry matching unmatched AMI hangup events (e.g. session created after event).
-     */
-    protected function retryUnmatchedAmiEvents(CallStateService $callStateService, CallUuidMappingService $mapping): void
-    {
-        $events = UnmatchedAmiEvent::unprocessed()
-            ->whereIn('event', ['Hangup', 'HangupRequest', 'SoftHangupRequest'])
-            ->where('received_at', '>=', now()->subHours(2))
-            ->limit(100)
-            ->get();
-
-        foreach ($events as $ev) {
-            $session = $mapping->findSessionForHangup(
-                $ev->linkedid,
-                $ev->channel,
-                $ev->payload ?? [],
-            );
-
-            if ($session) {
-                $mapping->attachAsteriskIdentifiers($session, $ev->linkedid, $ev->channel);
-                $callStateService->recordHangup($session, [
-                    'end_reason' => 'reconciliation',
-                    'linkedid' => $ev->linkedid,
-                    'channel' => $ev->channel,
-                ]);
-                $ev->update(['processed' => true]);
-                Log::channel('telephony')->info('ReconcileCallState: Matched and processed previously unmatched AMI event', [
-                    'event_id' => $ev->id,
-                    'session_id' => $session->id,
-                ]);
-            }
-        }
-
-        UnmatchedAmiEvent::where('processed', true)
-            ->where('updated_at', '<', now()->subDays(7))
-            ->delete();
     }
 }

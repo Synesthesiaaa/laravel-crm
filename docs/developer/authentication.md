@@ -18,6 +18,6 @@ Default framework error behavior includes unauthenticated JSON 401, forbidden 40
 
 ## Public and machine ingress
 
-Operations insights and health endpoints are public at the application-route layer. AMI and VICIdial event webhooks validate configured shared secrets; production rejects missing secret configuration. Call URL GET callbacks require a nonempty shared `sig` in all environments. Signed unsubscribe routes use signed URL validation. See [authorization](authorization.md) and [integrations](../integrations/README.md).
+Operations insights requires an authenticated Team Leader, Admin, or Super Admin session. Health endpoints remain public diagnostic surfaces. AMI and VICIdial event webhooks require configured shared secrets in all environments. Call URL GET callbacks require a nonempty shared `sig` in all environments. Signed unsubscribe routes use signed URL validation. See [authorization](authorization.md) and [integrations](../integrations/README.md).
 
 [Authentication diagram](../diagrams/authentication.md)

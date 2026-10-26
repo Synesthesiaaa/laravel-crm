@@ -10,11 +10,22 @@ class EmailCampaign extends Model
 {
     protected $fillable = ['email_template_id', 'created_by_user_id', 'name', 'status', 'recipient_count', 'batch_size', 'delay_seconds', 'purpose', 'attachment_mode', 'started_at', 'completed_at'];
 
-    protected $hidden = ['delivery_snapshot'];
+    protected $hidden = ['delivery_snapshot', 'delivery_snapshot_hash'];
 
     protected function casts(): array
     {
-        return ['started_at' => 'datetime', 'completed_at' => 'datetime', 'approved_at' => 'datetime', 'delivery_snapshot' => 'encrypted:array'];
+        return [
+            'started_at' => 'datetime',
+            'completed_at' => 'datetime',
+            'approved_at' => 'datetime',
+            'delivery_snapshot' => 'encrypted:array',
+            'delivery_snapshot_version' => 'integer',
+            'sent_count' => 'integer',
+            'failed_count' => 'integer',
+            'skipped_count' => 'integer',
+            'open_count' => 'integer',
+            'attention_count' => 'integer',
+        ];
     }
 
     public function template(): BelongsTo

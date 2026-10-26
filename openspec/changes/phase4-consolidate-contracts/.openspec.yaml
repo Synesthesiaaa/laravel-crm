@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-10-26
+goal: Protect persisted metadata and customer data while making form submission,
+  attendance, exports, and browser workflows predictable

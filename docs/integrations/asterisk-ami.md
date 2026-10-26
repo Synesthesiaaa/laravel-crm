@@ -4,7 +4,7 @@ AMI is the Asterisk Manager Interface over TCP; it is distinct from the browser 
 
 ## Listener and webhook are distinct paths
 
-`app/Console/Commands/AmiListenerCommand.php` provides a persistent PAMI event loop with in-process call-state/correlation updates. Its signature is plain `ami:listen`; reconnect timing comes from configuration. Another class, `AmiEventListenerCommand`, declares the same command name and implements a different path. This duplicate declaration is a source ambiguity. Read-only runtime command inspection during this documentation review selected `AmiListenerCommand`; deployment/provider ordering must be checked before relying on that resolution.
+`app/Console/Commands/AmiListenerCommand.php` provides a persistent PAMI event loop with in-process call-state/correlation updates. Its signature is plain `ami:listen`; reconnect timing comes from configuration. The alternate webhook-forwarding implementation is registered separately as `ami:events:listen`.
 
 ```console
 php artisan ami:listen
@@ -12,7 +12,7 @@ php artisan ami:listen
 
 This is an operator procedure, not a command run for this guide. It connects to AMI and changes CRM state on incoming events. No `--reconnect-delay` option exists on the selected command; use `AMI_LISTENER_RECONNECT_DELAY` and `AMI_LISTENER_MAX_RECONNECT_DELAY`. A preserved deployment example currently includes the unsupported option; do not copy it unchanged.
 
-Separately, POST `/api/webhooks/ami` accepts external JSON/form events, with explicit CSRF exemption and no session auth. `ASTERISK_AMI_WEBHOOK_SECRET`, when set, is checked against `X-Webhook-Secret`. Empty secret is accepted outside production; production returns 503. A configured secret mismatch gives 401. Missing event returns a received-but-unprocessed acknowledgment. Existing historical guides may describe listener-to-webhook forwarding; that is not the selected persistent listener's in-process architecture.
+Separately, POST `/api/webhooks/ami` accepts external JSON/form events, with explicit CSRF exemption and no session auth. `ASTERISK_AMI_WEBHOOK_SECRET` is mandatory in every environment and is checked against `X-Webhook-Secret` using a constant-time comparison. Empty secret configuration returns 503; a missing or incorrect header returns 401. Missing event returns a received-but-unprocessed acknowledgment. Existing historical guides may describe listener-to-webhook forwarding; that is not the selected persistent listener's in-process architecture.
 
 ## State and correlation
 

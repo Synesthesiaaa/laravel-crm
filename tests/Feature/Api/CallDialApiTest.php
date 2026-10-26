@@ -73,4 +73,34 @@ class CallDialApiTest extends TestCase
             ->assertJsonPath('client_name', null)
             ->assertJsonPath('lead_data', []);
     }
+
+    public function test_unknown_dial_outcome_returns_session_identity_to_prevent_blind_retry(): void
+    {
+        config(['vicidial.require_vicidial_agent_session_before_dial' => false]);
+
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'vici_user' => 'testagent',
+            'vici_pass' => 'secret',
+            'extension' => '6001',
+        ]);
+
+        $orchestration = Mockery::mock(CallOrchestrationService::class);
+        $orchestration->shouldReceive('startOutboundCall')
+            ->once()
+            ->andReturn(OperationResult::failure(
+                'VICIdial may have received the dial request. Check the active call before retrying.',
+                ['session_id' => 1001],
+                ['outcome_unknown' => true],
+            ));
+        $this->instance(CallOrchestrationService::class, $orchestration);
+
+        $this->actingAs($user)
+            ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB'])
+            ->postJson('/api/call/dial?campaign=mbsales', ['phone_number' => '15551234567'])
+            ->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('outcome_unknown', true)
+            ->assertJsonPath('session_id', 1001);
+    }
 }

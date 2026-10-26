@@ -289,6 +289,97 @@ class VicidialCallUrlControllerTest extends TestCase
         $this->assertDatabaseCount('campaign_disposition_records', 1);
     }
 
+    public function test_disposition_callback_does_not_fall_back_when_call_id_is_unknown(): void
+    {
+        $user = User::factory()->create([
+            'username' => 'agent009',
+            'vici_user' => 'agent009',
+        ]);
+        $session = CallSession::factory()->for($user)->inCall()->create([
+            'campaign_code' => 'mbsales',
+            'lead_id' => 901,
+            'vicidial_lead_id' => '901',
+            'phone_number' => '15550009901',
+            'vicidial_call_id' => 'VICI-KNOWN-901',
+        ]);
+
+        $this->getJson(route('api.webhooks.vicidial.dispo-call', [
+            'sig' => 'vicidial-secret',
+            'campaign' => 'mbsales',
+            'call_id' => 'VICI-UNKNOWN-901',
+            'lead_id' => 901,
+            'phone_number' => '15550009901',
+            'user' => 'agent009',
+            'dispo' => 'SALE',
+        ]))
+            ->assertOk()
+            ->assertJsonPath('ok', false);
+
+        $this->assertSame(CallSession::STATUS_IN_CALL, $session->fresh()->status);
+        $this->assertDatabaseCount('campaign_disposition_records', 0);
+    }
+
+    public function test_disposition_callback_rejects_a_call_id_with_mismatched_campaign(): void
+    {
+        $user = User::factory()->create([
+            'username' => 'agent010',
+            'vici_user' => 'agent010',
+        ]);
+        $session = CallSession::factory()->for($user)->inCall()->create([
+            'campaign_code' => 'mbsales',
+            'lead_id' => 902,
+            'vicidial_lead_id' => '902',
+            'phone_number' => '15550009902',
+            'vicidial_call_id' => 'VICI-CAMPAIGN-902',
+        ]);
+
+        $this->getJson(route('api.webhooks.vicidial.dispo-call', [
+            'sig' => 'vicidial-secret',
+            'campaign' => 'other-campaign',
+            'call_id' => 'VICI-CAMPAIGN-902',
+            'lead_id' => 902,
+            'phone_number' => '15550009902',
+            'user' => 'agent010',
+            'dispo' => 'SALE',
+        ]))
+            ->assertOk()
+            ->assertJsonPath('ok', false);
+
+        $this->assertSame(CallSession::STATUS_IN_CALL, $session->fresh()->status);
+        $this->assertDatabaseCount('campaign_disposition_records', 0);
+    }
+
+    public function test_disposition_callback_requires_a_unique_full_identity_without_call_id(): void
+    {
+        $user = User::factory()->create([
+            'username' => 'agent011',
+            'vici_user' => 'agent011',
+        ]);
+        foreach (['VICI-DUPLICATE-1', 'VICI-DUPLICATE-2'] as $callId) {
+            CallSession::factory()->for($user)->inCall()->create([
+                'campaign_code' => 'mbsales',
+                'lead_id' => 903,
+                'vicidial_lead_id' => '903',
+                'phone_number' => '15550009903',
+                'vicidial_call_id' => $callId,
+            ]);
+        }
+
+        $this->getJson(route('api.webhooks.vicidial.dispo-call', [
+            'sig' => 'vicidial-secret',
+            'campaign' => 'mbsales',
+            'lead_id' => 903,
+            'phone_number' => '15550009903',
+            'user' => 'agent011',
+            'dispo' => 'SALE',
+        ]))
+            ->assertOk()
+            ->assertJsonPath('ok', false);
+
+        $this->assertDatabaseCount('campaign_disposition_records', 0);
+        $this->assertDatabaseCount('call_sessions', 2);
+    }
+
     public function test_dispo_call_skips_report_persistence_for_system_dispositions(): void
     {
         Event::fake();
@@ -403,6 +494,17 @@ class VicidialCallUrlControllerTest extends TestCase
                 'vicidial_call_id' => 'VICI-DEAD-1',
             ]);
 
+        $newerSession = CallSession::factory()
+            ->for($user)
+            ->inCall()
+            ->create([
+                'campaign_code' => 'mbsales',
+                'lead_id' => 1000,
+                'phone_number' => '15550003334',
+                'vicidial_lead_id' => '1000',
+                'vicidial_call_id' => 'VICI-DEAD-2',
+            ]);
+
         $payload = [
             'sig' => 'vicidial-secret',
             'campaign' => 'mbsales',
@@ -425,6 +527,7 @@ class VicidialCallUrlControllerTest extends TestCase
         $this->assertSame(CallSession::STATUS_COMPLETED, $session->status);
         $this->assertSame('customer_hangup', $session->end_reason);
         $this->assertNotNull($endedAt);
+        $this->assertSame(CallSession::STATUS_IN_CALL, $newerSession->fresh()->status);
 
         $secondResponse = $this->getJson(route('api.webhooks.vicidial.dead-call-trigger', $payload));
 
@@ -436,6 +539,7 @@ class VicidialCallUrlControllerTest extends TestCase
         $session->refresh();
         $this->assertSame(CallSession::STATUS_COMPLETED, $session->status);
         $this->assertEquals($endedAt?->toDateTimeString(), $session->ended_at?->toDateTimeString());
+        $this->assertSame(CallSession::STATUS_IN_CALL, $newerSession->fresh()->status);
     }
 
     public function test_pause_max_only_logs_alert_and_does_not_mutate_call_state(): void

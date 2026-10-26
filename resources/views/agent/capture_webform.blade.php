@@ -36,7 +36,6 @@
                   'phoneNumber' => $prefill['phone_number'],
                   'values' => $prefill['fields'],
               ]))"
-              x-init="init(values)"
               @submit.prevent="submitCapture()"
               class="space-y-5">
             @csrf

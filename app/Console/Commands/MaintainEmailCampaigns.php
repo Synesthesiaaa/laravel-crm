@@ -7,6 +7,7 @@ use App\Models\EmailCampaign;
 use App\Models\EmailCampaignDocument;
 use App\Models\EmailCampaignRecipient;
 use App\Services\EmailCampaignDeliveryService;
+use App\Services\EmailCampaignRecipientTransitionService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -17,7 +18,7 @@ class MaintainEmailCampaigns extends Command
 
     protected $description = 'Purge expired documents and reconcile interrupted deliveries without resending uncertain messages';
 
-    public function handle(EmailCampaignDeliveryService $delivery): int
+    public function handle(EmailCampaignDeliveryService $delivery, EmailCampaignRecipientTransitionService $transitions): int
     {
         $purged = 0;
         $disk = Storage::disk('email_documents');
@@ -41,6 +42,11 @@ class MaintainEmailCampaigns extends Command
             $stale = EmailCampaignRecipient::where('email_campaign_id', $id)->where('status', 'sending')->where('claimed_at', '<', now()->subMinutes(3))->pluck('id');
             $delivery->interrupted($id, $stale->all());
         }
+        EmailCampaign::query()->whereIn('status', ['queued', 'sending', 'needs_attention'])->orderBy('id')->chunkById(100, function ($campaigns) use ($transitions): void {
+            foreach ($campaigns as $campaign) {
+                $transitions->reconcile($campaign->id);
+            }
+        });
         $recovered = 0;
         if ($this->option('recover')) {
             foreach (EmailCampaign::whereIn('status', ['queued', 'sending'])->whereNotNull('manifest_hash')->cursor() as $campaign) {

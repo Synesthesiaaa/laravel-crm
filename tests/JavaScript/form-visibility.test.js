@@ -82,10 +82,12 @@ class FakeTextAreaElement extends FakeInputElement {
 }
 
 class FakeFormElement {
-    constructor(controls, { valid = true } = {}) {
+    constructor(controls, { valid = true, draftSafeFields = [], dataset = {} } = {}) {
         this.controls = controls;
         this.valid = valid;
         this.reported = false;
+        this.draftSafeFields = draftSafeFields;
+        this.dataset = dataset;
     }
 
     querySelectorAll(selector) {
@@ -95,6 +97,9 @@ class FakeFormElement {
 
         if (selector === 'label') {
             return this.controls.map((control) => ({ htmlFor: control.id, textContent: control.label }));
+        }
+        if (selector === '[data-draft-safe-field]') {
+            return this.draftSafeFields.map((name) => ({ dataset: { draftSafeField: name } }));
         }
 
         return [];
@@ -111,13 +116,13 @@ class FakeFormElement {
     }
 }
 
-function loadFormVisibility(form) {
+function loadFormVisibility(form, localStorage = undefined) {
     const context = {
         HTMLFormElement: FakeFormElement,
         HTMLInputElement: FakeInputElement,
         HTMLSelectElement: FakeSelectElement,
         HTMLTextAreaElement: FakeTextAreaElement,
-        window: {},
+        window: { localStorage },
     };
 
     vm.runInNewContext(formVisibilitySource, context);
@@ -125,6 +130,19 @@ function loadFormVisibility(form) {
     return {
         ...context.window.formVisibility({ submitting: false }),
         $el: form,
+    };
+}
+
+function memoryStorage(initial = {}) {
+    const values = new Map(Object.entries(initial));
+
+    return {
+        get length() { return values.size; },
+        key(index) { return [...values.keys()][index] ?? null; },
+        getItem(key) { return values.get(key) ?? null; },
+        setItem(key, value) { values.set(key, String(value)); },
+        removeItem(key) { values.delete(key); },
+        has(key) { return values.has(key); },
     };
 }
 
@@ -176,6 +194,51 @@ test('cancel preserves values and confirm delegates the save', async () => {
     component.openReview();
     await component.confirmReview();
     assert.equal(submits, 1);
+});
+
+test('draft values are restricted to opted-in fields and never add phone values to the key', () => {
+    const form = new FakeFormElement([
+        textInput('draft_note', 'Note', 'follow up'),
+        textInput('customer_secret', 'Customer secret', 'private'),
+        textInput('phone_number', 'Phone', '15551234567', { type: 'hidden' }),
+    ], {
+        draftSafeFields: ['draft_note', 'phone_number'],
+        dataset: { userId: '7', campaign: 'sales', formType: 'callback', leadId: '42', phoneNumber: '15551234567' },
+    });
+    const component = loadFormVisibility(form);
+
+    assert.deepEqual(JSON.parse(JSON.stringify(component.collectDraftValues())), { draft_note: 'follow up' });
+    const key = component.buildDraftStorageKey();
+    assert.match(key, /user:7\|campaign:sales\|form:callback\|lead:42/);
+    assert.doesNotMatch(key, /phone|15551234567|agent\/form/);
+});
+
+test('draft reads discard unapproved keys and expired payloads and purge legacy v1 drafts', () => {
+    const form = new FakeFormElement([textInput('draft_note', 'Note', 'current')], { draftSafeFields: ['draft_note'] });
+    const key = 'crm-form-draft:v2|user:7|campaign:sales|form:callback|lead:';
+    const storage = memoryStorage({
+        [key]: JSON.stringify({
+            version: 2,
+            saved_at: new Date().toISOString(),
+            values: { draft_note: 'safe', customer_secret: 'blocked' },
+        }),
+        'crm-form-draft:v1|legacy': JSON.stringify({ values: { customer_secret: 'old' } }),
+    });
+    const component = loadFormVisibility(form, storage);
+    component.autosave = true;
+    component.draftStorageKey = key;
+
+    assert.deepEqual(JSON.parse(JSON.stringify(component.readDraftPayload().values)), { draft_note: 'safe' });
+    component.purgeStoredDrafts();
+    assert.equal(storage.has('crm-form-draft:v1|legacy'), false);
+
+    storage.setItem(key, JSON.stringify({
+        version: 2,
+        saved_at: new Date(Date.now() - 9 * 60 * 60 * 1000).toISOString(),
+        values: { draft_note: 'expired' },
+    }));
+    assert.equal(component.readDraftPayload(), null);
+    assert.equal(storage.has(key), false);
 });
 
 test('invalid forms stay closed and report native validation', () => {

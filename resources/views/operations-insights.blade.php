@@ -36,7 +36,6 @@
 <body class="min-h-screen bg-[var(--color-surface)] text-[var(--color-on-surface)] antialiased">
     <div
         x-data="operationsInsightsDashboard({ selectedCampaign: @js($selectedCampaign) })"
-        x-init="init()"
         @beforeunload.window="cleanup()"
         class="min-h-screen"
     >
@@ -363,6 +362,10 @@
                 init() {
                     this.refreshAll();
                     this.$watch('section', () => this.renderChartsSoon());
+                },
+
+                destroy() {
+                    this.cleanup();
                 },
 
                 toggleTheme() {

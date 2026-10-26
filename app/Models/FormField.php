@@ -28,6 +28,7 @@ class FormField extends Model
                 'options',
                 'field_width',
                 'visibility',
+                'draft_safe',
             ])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
@@ -46,6 +47,7 @@ class FormField extends Model
         'vici_params',
         'field_width',
         'visibility',
+        'draft_safe',
     ];
 
     protected function casts(): array
@@ -54,6 +56,7 @@ class FormField extends Model
             'is_required' => 'boolean',
             'is_sale_amount' => 'boolean',
             'visibility' => 'array',
+            'draft_safe' => 'boolean',
         ];
     }
 

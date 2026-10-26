@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class LocalCallHistoryQueryService
@@ -95,9 +96,11 @@ class LocalCallHistoryQueryService
         }
 
         $filterOptions['agents'] = $personalAgent === null
-            ? $this->agentOptions($baseQuery->clone()->pluck('vicidial_user')->filter()->unique()->sort()->values()->all())
+            ? $this->agentOptions($baseQuery->clone()->select('vicidial_user')->distinct()->pluck('vicidial_user')->filter()->sort()->values()->all())
             : [];
-        $filterOptions['statuses'] = $baseQuery->clone()->pluck('status')->filter()->map(fn (mixed $status): string => (string) $status)->unique()->sort()->values()->all();
+        $statusQuery = $baseQuery->clone();
+        $statusQuery->selectRaw(DB::connection()->getDriverName() === 'mysql' ? 'BINARY status as status' : 'status');
+        $filterOptions['statuses'] = $statusQuery->distinct()->pluck('status')->filter()->map(fn (mixed $status): string => (string) $status)->sort()->values()->all();
         $filterOptions['campaigns'] = $selectedCampaignCodes;
 
         $query = $baseQuery->clone();

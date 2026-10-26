@@ -8,7 +8,10 @@ use App\Models\CampaignVicidialMapping;
 use App\Models\TelephonyCallHistory;
 use App\Models\User;
 use App\Models\VicidialServer;
+use App\Services\Telephony\LocalCallHistoryQueryService;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -160,5 +163,36 @@ final class LocalCallHistoryApiTest extends TestCase
             'crm_campaign_id' => $this->campaign->id,
         ]);
         Queue::assertPushed(SyncVicidialCallHistoryJob::class, 1);
+    }
+
+    public function test_filter_options_use_database_distinct_values(): void
+    {
+        $viewer = User::factory()->create(['role' => User::ROLE_TEAM_LEADER]);
+        foreach (range(1, 80) as $index) {
+            TelephonyCallHistory::factory()->create([
+                'vicidial_server_id' => $this->server->id,
+                'crm_campaign_id' => $this->campaign->id,
+                'source_unique_id' => 'filter-call-'.$index,
+                'vicidial_user' => $index % 2 === 0 ? 'agent_a' : 'agent_b',
+                'status' => $index % 3 === 0 ? 'SALE' : 'NA',
+                'call_date' => now(),
+            ]);
+        }
+
+        $queries = [];
+        DB::listen(function (QueryExecuted $query) use (&$queries): void {
+            $queries[] = strtolower($query->sql);
+        });
+
+        $page = app(LocalCallHistoryQueryService::class)->getPage(
+            $viewer,
+            $this->campaign->code,
+            ['start_date' => now()->toDateString(), 'end_date' => now()->toDateString()],
+        );
+
+        $this->assertCount(2, $page->filterOptions['agents']);
+        $this->assertSame(['NA', 'SALE'], $page->filterOptions['statuses']);
+        $this->assertTrue(collect($queries)->contains(fn (string $sql): bool => str_contains($sql, 'distinct') && str_contains($sql, 'vicidial_user')));
+        $this->assertTrue(collect($queries)->contains(fn (string $sql): bool => str_contains($sql, 'distinct') && str_contains($sql, 'status')));
     }
 }

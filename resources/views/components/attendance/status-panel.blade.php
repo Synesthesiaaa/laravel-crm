@@ -6,7 +6,6 @@
     data-end-url="{{ route('api.attendance.end') }}"
     data-time-zone="{{ config('app.timezone') }}"
     x-data="attendanceStatusPanel($el.dataset)"
-    x-init="init()"
     :aria-busy="(!ready || loading) ? 'true' : 'false'"
 >
     <div class="flex flex-col gap-2 border-b border-[var(--color-border)] px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">

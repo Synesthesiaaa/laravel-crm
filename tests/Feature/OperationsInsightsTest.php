@@ -7,6 +7,7 @@ use App\Models\Campaign;
 use App\Models\CampaignVicidialMapping;
 use App\Models\Form;
 use App\Models\FormField;
+use App\Models\User;
 use App\Models\VicidialServer;
 use App\Services\DashboardLayoutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -20,12 +21,48 @@ class OperationsInsightsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_guest_can_open_operations_insights_with_professional_neutral_labels(): void
+    public function test_guest_cannot_access_operations_insights_or_its_data_endpoints(): void
+    {
+        $this->get(route('operations-insights'))
+            ->assertRedirect(route('login'));
+
+        $this->getJson(route('api.operations-insights'))
+            ->assertUnauthorized();
+
+        $this->getJson(route('api.operations-insights.records'))
+            ->assertUnauthorized();
+    }
+
+    public function test_agent_cannot_access_operations_insights_or_its_data_endpoints(): void
+    {
+        Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+        $this->signInAsOperationsRole(User::ROLE_AGENT);
+
+        $this->get(route('operations-insights'))->assertForbidden();
+        $this->getJson(route('api.operations-insights'))->assertForbidden();
+        $this->getJson(route('api.operations-insights.records'))->assertForbidden();
+    }
+
+    public function test_admin_and_super_admin_can_access_operations_insights(): void
+    {
+        Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
+
+        foreach ([User::ROLE_ADMIN, User::ROLE_SUPER_ADMIN] as $role) {
+            $this->signInAsOperationsRole($role);
+
+            $this->get(route('operations-insights'))->assertOk();
+            $this->getJson(route('api.operations-insights'))->assertOk();
+            $this->getJson(route('api.operations-insights.records'))->assertOk();
+        }
+    }
+
+    public function test_team_leader_can_open_operations_insights_with_professional_neutral_labels(): void
     {
         Campaign::factory()->create([
             'code' => 'campaign-a',
             'name' => 'Campaign A',
         ]);
+        $this->signInAsOperationsRole();
 
         $response = $this->get('/operations-insights');
 
@@ -67,7 +104,7 @@ class OperationsInsightsTest extends TestCase
         $this->get('/readonly-dashboard')->assertNotFound();
     }
 
-    public function test_guest_can_view_paginated_form_submissions_without_write_actions(): void
+    public function test_team_leader_can_view_paginated_form_submissions_without_write_actions(): void
     {
         Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
         Form::create([
@@ -123,6 +160,7 @@ class OperationsInsightsTest extends TestCase
             ],
         ]);
         $this->app->make(\App\Services\CampaignService::class)->clearCampaignsCache();
+        $this->signInAsOperationsRole();
 
         $response = $this->getJson('/api/operations-insights/records?campaign=campaign-a&form=applications&search=Bob');
 
@@ -159,13 +197,14 @@ class OperationsInsightsTest extends TestCase
             'is_active' => true,
         ]);
         $this->app->make(\App\Services\CampaignService::class)->clearCampaignsCache();
+        $this->signInAsOperationsRole();
 
         $this->getJson('/api/operations-insights/records?campaign=campaign-a&form=private-form')
             ->assertUnprocessable()
             ->assertJsonValidationErrors('form');
     }
 
-    public function test_guest_can_load_historical_dashboard_and_report_data_with_server_reporting_credentials(): void
+    public function test_team_leader_can_load_historical_dashboard_and_report_data_with_server_reporting_credentials(): void
     {
         $campaign = Campaign::factory()->create([
             'code' => 'campaign-a',
@@ -183,6 +222,7 @@ class OperationsInsightsTest extends TestCase
             'vicidial_campaign_code' => 'TESTCAMP',
         ]);
         $this->app->make(\App\Services\CampaignService::class)->clearCampaignsCache();
+        $this->signInAsOperationsRole();
 
         Http::fake(function ($request) {
             return match ($request->data()['function'] ?? null) {
@@ -218,7 +258,7 @@ class OperationsInsightsTest extends TestCase
         });
     }
 
-    public function test_guest_can_load_live_read_only_metrics_without_raw_vicidial_snapshot_data(): void
+    public function test_team_leader_can_load_live_read_only_metrics_without_raw_vicidial_snapshot_data(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-26 12:00:00'));
 
@@ -248,6 +288,7 @@ class OperationsInsightsTest extends TestCase
                 'disposition_at' => now()->subMinutes(4),
             ]);
             $this->app->make(\App\Services\CampaignService::class)->clearCampaignsCache();
+            $this->signInAsOperationsRole();
 
             Http::fake(function ($request) {
                 return match ($request->data()['function'] ?? null) {
@@ -275,7 +316,7 @@ class OperationsInsightsTest extends TestCase
         }
     }
 
-    public function test_public_dashboard_does_not_expose_amount_fields_when_campaign_amounts_are_disabled(): void
+    public function test_authorized_dashboard_does_not_expose_amount_fields_when_campaign_amounts_are_disabled(): void
     {
         Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
         $sections = array_keys(DashboardLayoutService::sectionDefinitions());
@@ -286,6 +327,7 @@ class OperationsInsightsTest extends TestCase
             amountConfig: ['enabled' => false],
         );
         $this->app->make(\App\Services\CampaignService::class)->clearCampaignsCache();
+        $this->signInAsOperationsRole();
 
         $response = $this->getJson('/api/operations-insights?campaign=campaign-a&mode=historical');
 
@@ -301,13 +343,28 @@ class OperationsInsightsTest extends TestCase
             ->assertJsonMissingPath('data.dashboard.campaign_report.totals.month_to_date.total_amount');
     }
 
-    public function test_public_dashboard_rejects_historical_ranges_larger_than_31_days(): void
+    public function test_authorized_dashboard_rejects_historical_ranges_larger_than_31_days(): void
     {
         Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
         $this->app->make(\App\Services\CampaignService::class)->clearCampaignsCache();
+        $this->signInAsOperationsRole();
 
         $this->getJson('/api/operations-insights?campaign=campaign-a&mode=historical&query_date=2026-08-01&end_date=2026-09-01')
             ->assertUnprocessable()
             ->assertJsonValidationErrors('end_date');
+    }
+
+    private function signInAsOperationsRole(string $role = User::ROLE_TEAM_LEADER): void
+    {
+        $user = User::factory()->create([
+            'role' => $role,
+            'default_campaign' => 'campaign-a',
+        ]);
+
+        $this->actingAs($user)
+            ->withSession([
+                'campaign' => 'campaign-a',
+                'campaign_name' => 'Campaign A',
+            ]);
     }
 }

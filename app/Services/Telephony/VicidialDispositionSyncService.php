@@ -4,9 +4,7 @@ namespace App\Services\Telephony;
 
 use App\Models\CallSession;
 use App\Models\VicidialAgentSession;
-use App\Models\VicidialServer;
-use App\Repositories\VicidialServerRepository;
-use Illuminate\Support\Facades\Http;
+use App\Support\OperationResult;
 
 /**
  * Syncs disposition to VICIdial when lead_id is available.
@@ -16,90 +14,54 @@ use Illuminate\Support\Facades\Http;
 class VicidialDispositionSyncService
 {
     public function __construct(
-        protected VicidialServerRepository $serverRepository,
         protected VicidialProxyService $vicidialProxy,
         protected TelephonyLogger $telephonyLogger,
+        protected VicidialNonAgentApiService $nonAgentApi,
     ) {}
 
     /**
-     * Attempt to update lead status in VICIdial. Logs errors; does not throw.
+     * Update remote lead/disposition state and report transport outcome safely.
      */
-    public function syncDispositionToVicidial(CallSession $session): void
+    public function syncDispositionToVicidial(CallSession $session): OperationResult
     {
         $viciCode = $this->mapLaravelToVicidial($session->disposition_code);
 
         if ($session->lead_id !== null) {
-            $this->syncLeadStatus($session, $viciCode);
+            $leadStatus = $this->syncLeadStatus($session, $viciCode);
+            if (! $leadStatus->success) {
+                return $leadStatus;
+            }
         }
 
-        if ($this->sendExternalStatus($session, $viciCode)) {
-            $this->restoreAgentAvailability($session);
+        $externalStatus = $this->sendExternalStatus($session, $viciCode);
+        if (! $externalStatus->success) {
+            return $externalStatus;
         }
+
+        $restored = $this->restoreAgentAvailability($session);
+
+        return OperationResult::success(null, null, ['availability_restore_failed' => ! $restored]);
     }
 
-    private function syncLeadStatus(CallSession $session, string $viciCode): void
+    private function syncLeadStatus(CallSession $session, string $viciCode): OperationResult
     {
-        $server = $this->serverRepository->getForCampaign($session->campaign_code);
-        if (! $server) {
-            $this->telephonyLogger->debug('VicidialDispositionSyncService', 'No server for campaign', [
-                'campaign' => $session->campaign_code,
-            ]);
-
-            return;
-        }
-
-        $baseUrl = $this->getNonAgentApiUrl($server);
-        if ($baseUrl === '') {
-            return;
-        }
-
         $params = [
-            'source' => $server->source ?: config('vicidial.default_source', 'crm_tracker'),
-            'user' => $server->api_user ?? '',
-            'pass' => $server->api_pass ?? '',
-            'function' => 'update_lead',
             'search_method' => 'lead_id',
             'lead_id' => $session->lead_id,
             'status' => $viciCode,
         ];
 
-        if (empty($params['user']) || empty($params['pass'])) {
-            $this->telephonyLogger->debug('VicidialDispositionSyncService', 'No API credentials');
-
-            return;
-        }
-
-        try {
-            $url = $baseUrl.(str_contains($baseUrl, '?') ? '&' : '?').http_build_query($params);
-            $response = Http::when(! config('vicidial.verify_ssl', true), fn ($h) => $h->withoutVerifying())
-                ->timeout(5)->get($url);
-            $body = $response->body();
-            $success = stripos($body, 'SUCCESS') !== false;
-
-            if (! $success) {
-                $this->telephonyLogger->warning('VicidialDispositionSyncService', 'Write-back failed', [
-                    'lead_id' => $session->lead_id,
-                    'status' => $viciCode,
-                    'response' => substr($body, 0, 200),
-                ]);
-            }
-        } catch (\Throwable $e) {
-            $this->telephonyLogger->warning('VicidialDispositionSyncService', 'Exception while syncing disposition', [
-                'lead_id' => $session->lead_id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
+        return $this->nonAgentApi->execute(null, $session->campaign_code, 'update_lead', $params, true);
     }
 
     /**
      * Call Agent API external_status so ViciDial moves the agent past disposition.
      */
-    protected function sendExternalStatus(CallSession $session, string $viciCode): bool
+    protected function sendExternalStatus(CallSession $session, string $viciCode): OperationResult
     {
         $user = $session->user;
         if (! $user) {
-            return false;
+            return OperationResult::failure('Agent account is no longer available.', null, ['failure_code' => 'USER_NOT_FOUND']);
         }
 
         try {
@@ -110,34 +72,40 @@ class VicidialDispositionSyncService
             if (! $result['success']) {
                 $this->telephonyLogger->warning('VicidialDispositionSyncService', 'external_status failed', [
                     'session_id' => $session->id,
-                    'status' => $viciCode,
-                    'response' => $result['raw_response'],
+                    'failure_code' => $result['failure_code'] ?? 'REMOTE_OPERATION_FAILED',
+                    'outcome_unknown' => (bool) ($result['outcome_unknown'] ?? false),
                 ]);
 
-                return false;
+                return OperationResult::failure($result['message'] ?: 'Unable to sync disposition status.', null, [
+                    'failure_code' => $result['failure_code'] ?? 'REMOTE_OPERATION_FAILED',
+                    'outcome_unknown' => (bool) ($result['outcome_unknown'] ?? false),
+                ]);
             }
 
-            return true;
+            return OperationResult::success();
         } catch (\Throwable $e) {
             $this->telephonyLogger->warning('VicidialDispositionSyncService', 'external_status exception (non-blocking)', [
                 'session_id' => $session->id,
-                'error' => $e->getMessage(),
+                'exception_class' => $e::class,
             ]);
 
-            return false;
+            return OperationResult::failure('VICIdial disposition outcome is unknown.', null, [
+                'failure_code' => 'VICIDIAL_OUTCOME_UNKNOWN',
+                'outcome_unknown' => true,
+            ]);
         }
     }
 
-    private function restoreAgentAvailability(CallSession $session): void
+    private function restoreAgentAvailability(CallSession $session): bool
     {
         $statusBeforeCall = strtolower((string) data_get($session->metadata, 'vicidial_session_status_before_call', ''));
         if ($statusBeforeCall === 'paused') {
-            return;
+            return true;
         }
 
         $user = $session->user;
         if (! $user) {
-            return;
+            return false;
         }
 
         try {
@@ -148,10 +116,10 @@ class VicidialDispositionSyncService
             if (! $result['success']) {
                 $this->telephonyLogger->warning('VicidialDispositionSyncService', 'Agent resume failed after disposition', [
                     'session_id' => $session->id,
-                    'response' => $result['raw_response'],
+                    'failure_code' => $result['failure_code'] ?? 'REMOTE_OPERATION_FAILED',
                 ]);
 
-                return;
+                return false;
             }
 
             VicidialAgentSession::query()
@@ -162,30 +130,16 @@ class VicidialDispositionSyncService
                     'pause_code' => null,
                     'last_synced_at' => now(),
                 ]);
+
+            return true;
         } catch (\Throwable $e) {
             $this->telephonyLogger->warning('VicidialDispositionSyncService', 'Agent resume exception after disposition', [
                 'session_id' => $session->id,
-                'error' => $e->getMessage(),
+                'exception_class' => $e::class,
             ]);
-        }
-    }
 
-    protected function getNonAgentApiUrl(VicidialServer $server): string
-    {
-        $configuredUrl = trim((string) ($server->non_agent_api_url ?? ''));
-        if ($configuredUrl !== '') {
-            return $configuredUrl;
+            return false;
         }
-
-        $apiUrl = rtrim($server->api_url ?? '', '/');
-        if ($apiUrl === '') {
-            return '';
-        }
-        $nonAgent = str_contains($apiUrl, 'agc/api.php')
-            ? preg_replace('#agc/api\.php.*$#', 'non_agent_api.php', $apiUrl)
-            : $apiUrl;
-
-        return $nonAgent ?: '';
     }
 
     protected function mapLaravelToVicidial(string $code): string

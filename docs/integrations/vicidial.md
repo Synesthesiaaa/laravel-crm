@@ -25,7 +25,7 @@ Current default session mode is iframe plus Agent API (`session_iframe_agent_api
 
 ## Incoming events and campaign Call URLs
 
-POST `/api/webhooks/vicidial-events` accepts user, event, message, lead_id and counter. The configured `VICIDIAL_EVENTS_WEBHOOK_SECRET` is required as `X-Webhook-Secret` when nonempty. Empty configuration is accepted outside production; production rejects it with 503. An invalid configured header yields 401. The GET route only returns an acknowledgment saying POST only. Push is not the only synchronization path: active-lead polling remains available.
+POST `/api/webhooks/vicidial-events` accepts user, event, message, lead_id and counter. `VICIDIAL_EVENTS_WEBHOOK_SECRET` is mandatory in every environment as `X-Webhook-Secret`; the comparison is constant-time. Empty configuration returns 503 and a missing or invalid header yields 401. The GET route only returns an acknowledgment saying POST only. Push is not the only synchronization path: active-lead polling remains available.
 
 The five GET callbacks under `/api/webhooks/vicidial/` are start-call, dispo-call, no-agent-call, dead-call-trigger and pause-max. Each uses `throttle:vicidial` and query `sig` checked against the nonempty `VICIDIAL_CALL_URL_SECRET` (fallback to the events secret). Empty secrets are rejected in every environment. This is a shared-secret equality check, not a signed payload/HMAC. Query strings can be logged by infrastructure; protect/redact them. See [callback validation and response shapes](../developer/api-reference.md#webhooks-and-public-operations).
 

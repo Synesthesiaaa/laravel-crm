@@ -82,6 +82,9 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         viewportHeight: window.innerHeight,
         bounds,
         sessionControls: boot.sessionControls !== false,
+        _eventHandlers: null,
+        _statusSyncTimer: null,
+        _destroyed: false,
 
         vici: {
             loading: false,
@@ -462,24 +465,31 @@ window.phoneWidget = function phoneWidget(boot = {}) {
         },
 
         async init() {
+            if (this._eventHandlers) return;
+
+            this._destroyed = false;
             widgetCtx = this;
             this.controlsHeight = this.clampControlsHeight(this.controlsHeight, this.height);
-            window.addEventListener('vicidial-ws-phase', this._onWsPhase.bind(this));
-            window.addEventListener('telephony-shortcut-pause', this._pauseShortcut.bind(this));
-            window.addEventListener('crm-widget-workspace', this._onWorkspaceChange.bind(this));
-            window.addEventListener('crm-widget-panel-open', this._onWidgetPanelOpen.bind(this));
-            window.addEventListener('crm-campaign-changed', this.handleCrmCampaignChanged.bind(this));
-            window.addEventListener('resize', this.onWindowResize.bind(this));
+            this._eventHandlers = [
+                ['vicidial-ws-phase', this._onWsPhase.bind(this)],
+                ['telephony-shortcut-pause', this._pauseShortcut.bind(this)],
+                ['crm-widget-workspace', this._onWorkspaceChange.bind(this)],
+                ['crm-widget-panel-open', this._onWidgetPanelOpen.bind(this)],
+                ['crm-campaign-changed', this.handleCrmCampaignChanged.bind(this)],
+                ['resize', this.onWindowResize.bind(this)],
+            ];
+            this._eventHandlers.forEach(([name, handler]) => window.addEventListener(name, handler));
             this.splitScreen = window.crmWidgetWorkspace?.isSplitScreen?.() === true;
             this.open = this.isSplitActive() ? true : this.open;
             this.onWindowResize();
             await persistence.load();
 
-            if (!this.sessionControls) return;
+            if (this._destroyed || !this.sessionControls) return;
 
             let viciStatusData = null;
             try {
                 viciStatusData = await Alpine.store('vicidial').sync(this.telephonyCampaign());
+                if (this._destroyed) return;
                 this.syncCampaignFromStatus(viciStatusData);
             } catch (_) {}
 
@@ -516,7 +526,18 @@ window.phoneWidget = function phoneWidget(boot = {}) {
 
             // Periodically sync session status for phase / INCALL hints on agent page
             const pollMs = 60000;
-            setInterval(() => this.syncVicidialStatusFromPhone(), pollMs);
+            this._statusSyncTimer = window.setInterval(() => this.syncVicidialStatusFromPhone(), pollMs);
+        },
+
+        destroy() {
+            this._destroyed = true;
+            this._eventHandlers?.forEach(([name, handler]) => window.removeEventListener(name, handler));
+            this._eventHandlers = null;
+            if (this._statusSyncTimer !== null) {
+                window.clearInterval(this._statusSyncTimer);
+                this._statusSyncTimer = null;
+            }
+            if (widgetCtx === this) widgetCtx = null;
         },
 
         async syncVicidialStatusFromPhone() {

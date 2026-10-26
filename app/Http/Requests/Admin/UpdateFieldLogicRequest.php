@@ -23,6 +23,7 @@ class UpdateFieldLogicRequest extends FormRequest
             'options' => ['nullable', 'string', 'max:65535'],
             'is_required' => ['nullable', 'boolean'],
             'is_sale_amount' => ['nullable', 'boolean'],
+            'draft_safe' => ['nullable', 'boolean'],
             'field_order' => ['nullable', 'integer'],
             'field_width' => ['nullable', 'in:full,half,third'],
             'visibility' => ['nullable', 'array'],

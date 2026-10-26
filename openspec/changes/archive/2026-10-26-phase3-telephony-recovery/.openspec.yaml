@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-10-26
+goal: Preserve reconcilable call and lead state through remote failures, and
+  report correct current operational state without duplicate remote actions.

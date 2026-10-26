@@ -50,12 +50,28 @@ class VicidialCallHistorySyncService
             'current_window_end' => $window['to'],
         ]);
 
-        $providerResult = $this->provider->fetchRange(
+        $rowsInserted = 0;
+        $rowsUpdated = 0;
+        $latest = null;
+        $providerResult = $this->provider->streamRange(
             $scope->server,
             $campaignModel,
             $campaignCodes,
             $window['from'],
             $window['to'],
+            function (array $records) use ($scope, $campaignModel, &$rowsInserted, &$rowsUpdated, &$latest): void {
+                [$inserted, $updated] = $this->upsertRecords($records, $scope->server->getKey(), $campaignModel);
+                $rowsInserted += $inserted;
+                $rowsUpdated += $updated;
+
+                foreach ($records as $record) {
+                    if ($record->callDate !== null
+                        && ($latest === null || $latest->callDate === null || $record->callDate->greaterThanOrEqualTo($latest->callDate))) {
+                        $latest = $record;
+                    }
+                }
+            },
+            max(1, (int) config('vicidial.call_history_sync.chunk_size', 500)),
         );
         if (! $providerResult->success) {
             return $this->failed(
@@ -69,15 +85,6 @@ class VicidialCallHistorySyncService
         }
 
         try {
-            [$rowsInserted, $rowsUpdated] = $this->upsertRecords(
-                $providerResult->records,
-                $scope->server->getKey(),
-                $campaignModel,
-            );
-            $latest = collect($providerResult->records)
-                ->filter(fn (HistoricalCallRecord $record): bool => $record->callDate !== null)
-                ->sortBy(fn (HistoricalCallRecord $record): int => $record->callDate?->getTimestamp() ?? 0)
-                ->last();
             $checkpoint = $previousCheckpoint?->greaterThan($window['to']) ? null : $previousCheckpoint;
             if ($latest instanceof HistoricalCallRecord && $latest->callDate !== null && ($checkpoint === null || $latest->callDate->greaterThan($checkpoint))) {
                 $checkpoint = $latest->callDate;
@@ -92,7 +99,7 @@ class VicidialCallHistorySyncService
                 'last_unique_id' => $latest instanceof HistoricalCallRecord ? $latest->uniqueCallId : $state->last_unique_id,
                 'last_successful_sync_at' => now(),
                 'last_sync_duration_ms' => $this->durationMs($startedAt),
-                'last_rows_received' => count($providerResult->records),
+                'last_rows_received' => $providerResult->total,
                 'last_rows_inserted' => $rowsInserted,
                 'last_rows_updated' => $rowsUpdated,
                 'last_error_classification' => null,
@@ -103,7 +110,7 @@ class VicidialCallHistorySyncService
             $state->refresh();
             $meta = array_merge($providerResult->meta, [
                 'duration_ms' => $this->durationMs($startedAt),
-                'rows_received' => count($providerResult->records),
+                'rows_received' => $providerResult->total,
                 'rows_inserted' => $rowsInserted,
                 'rows_updated' => $rowsUpdated,
             ]);
@@ -116,7 +123,7 @@ class VicidialCallHistorySyncService
 
             return VicidialCallHistorySyncResult::success(
                 $state,
-                count($providerResult->records),
+                $providerResult->total,
                 $rowsInserted,
                 $rowsUpdated,
                 $meta,

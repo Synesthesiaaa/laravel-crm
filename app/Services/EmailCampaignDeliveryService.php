@@ -3,11 +3,9 @@
 namespace App\Services;
 
 use App\Models\EmailCampaign;
-use App\Models\EmailCampaignRecipient;
 use App\Models\EmailOptOut;
 use App\Models\EmailTemplate;
 use Illuminate\Mail\Message;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
@@ -15,24 +13,19 @@ use Throwable;
 
 class EmailCampaignDeliveryService
 {
-    public function __construct(private EmailCampaignAttachmentService $attachments, private EmailCampaignPreflightService $preflight, private EmailCampaignDocumentService $generated, private EmailSmtpService $smtp, private EmailCampaignSendingPolicy $sendingPolicy) {}
+    public function __construct(
+        private EmailCampaignAttachmentService $attachments,
+        private EmailCampaignPreflightService $preflight,
+        private EmailCampaignDocumentService $generated,
+        private EmailSmtpService $smtp,
+        private EmailCampaignSendingPolicy $sendingPolicy,
+        private EmailCampaignRecipientTransitionService $transitions,
+        private EmailCampaignSnapshotAuthenticator $authenticator,
+    ) {}
 
     public function send(int $campaignId, int $recipientId): void
     {
-        $recipient = DB::transaction(function () use ($campaignId, $recipientId) {
-            $campaign = EmailCampaign::whereKey($campaignId)->lockForUpdate()->first();
-            if (! $campaign || ! in_array($campaign->status, ['queued', 'sending'], true)) {
-                return null;
-            }
-            $recipient = $campaign->recipients()->whereKey($recipientId)->lockForUpdate()->first();
-            if (! $recipient || $recipient->status !== 'pending') {
-                return null;
-            }
-            $recipient->forceFill(['status' => 'sending', 'claimed_at' => now(), 'error' => null])->save();
-            $campaign->update(['status' => 'sending']);
-
-            return $recipient;
-        });
+        $recipient = $this->transitions->claim($campaignId, $recipientId);
         if (! $recipient) {
             return;
         }
@@ -55,19 +48,43 @@ class EmailCampaignDeliveryService
                 throw ValidationException::withMessages(['campaign' => 'Current payroll protection policy blocks sending.']);
             }
             if ($purpose === 'marketing' && EmailOptOut::where('email', strtolower($recipient->email))->exists()) {
-                $recipient->update(['status' => 'skipped']);
-                $this->totals($campaignId);
+                $this->transitions->transition($campaignId, $recipientId, 'sending', 'skipped');
 
                 return;
             }
             $values = $recipient->delivery_snapshot ?? ['id' => $recipient->id, ...$recipient->only(['email', 'name', 'employee_id', 'period', 'pdf_filename']), 'documents' => []];
             if ($snapshot) {
-                if (! hash_equals((string) $campaign->manifest_hash, hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR)))) {
-                    throw ValidationException::withMessages(['documents' => 'Frozen manifest failed verification.']);
-                }
-                $frozen = collect($snapshot['recipients'])->firstWhere('id', $recipient->id);
-                if ($frozen !== $values || $values['email'] !== $recipient->email || $purpose !== $campaign->purpose || $snapshot['attachment_mode'] !== $campaign->attachment_mode) {
-                    throw ValidationException::withMessages(['documents' => 'Recipient manifest failed verification.']);
+                if ((int) $campaign->delivery_snapshot_version === 2) {
+                    $headerValid = $this->authenticator->verify(
+                        (string) $campaign->delivery_snapshot_hash,
+                        $this->authenticator->campaignDigest($campaign->id, (string) $campaign->manifest_hash, $snapshot),
+                    );
+                    $recipientValid = $this->authenticator->verify(
+                        (string) $recipient->delivery_snapshot_hash,
+                        $this->authenticator->recipientDigest($campaign->id, $recipient->id, (string) $campaign->manifest_hash, $values),
+                    );
+                    $currentRecipient = [
+                        'id' => $recipient->id,
+                        'email' => $recipient->email,
+                        'name' => $recipient->name,
+                        'employee_id' => $recipient->employee_id,
+                        'period' => $recipient->period,
+                        'pdf_filename' => $recipient->pdf_filename,
+                    ];
+                    $frozenRecipient = collect($values)->except('documents')->all();
+                    if (! $headerValid || ! $recipientValid || $frozenRecipient !== $currentRecipient
+                        || $purpose !== $campaign->purpose || $snapshot['attachment_mode'] !== $campaign->attachment_mode) {
+                        throw ValidationException::withMessages(['documents' => 'Recipient snapshot failed authentication.']);
+                    }
+                } else {
+                    if ((int) $campaign->delivery_snapshot_version !== 1
+                        || ! hash_equals((string) $campaign->manifest_hash, hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR)))) {
+                        throw ValidationException::withMessages(['documents' => 'Frozen manifest failed verification.']);
+                    }
+                    $frozen = collect($snapshot['recipients'])->firstWhere('id', $recipient->id);
+                    if ($frozen !== $values || $values['email'] !== $recipient->email || $purpose !== $campaign->purpose || $snapshot['attachment_mode'] !== $campaign->attachment_mode) {
+                        throw ValidationException::withMessages(['documents' => 'Recipient manifest failed verification.']);
+                    }
                 }
             } elseif ($campaign->needsReview()) {
                 throw ValidationException::withMessages(['documents' => 'Required immutable manifest is missing.']);
@@ -80,10 +97,18 @@ class EmailCampaignDeliveryService
                 $html .= '<p style="font-size:12px">You are receiving this message because you subscribed to updates. <a href="'.e($unsubscribe).'">Unsubscribe</a></p>';
             }
             $loaded = [];
-            $metadata = $campaign->documents()->whereIn('id', $values['documents'])->get()->keyBy('id');
-            foreach ($values['documents'] as $id) {
+            if ((int) $campaign->delivery_snapshot_version === 2 && $snapshot) {
+                $expectedDocuments = [...($snapshot['shared_documents'] ?? []), ...($values['documents'] ?? [])];
+            } else {
+                $expectedDocuments = collect($snapshot['documents'] ?? [])
+                    ->whereIn('id', $values['documents'] ?? [])
+                    ->values()->all();
+            }
+            $documentIds = array_map(static fn (array $document): int => (int) $document['id'], $expectedDocuments);
+            $metadata = $campaign->documents()->whereIn('id', $documentIds)->get()->keyBy('id');
+            foreach ($expectedDocuments as $expected) {
+                $id = (int) $expected['id'];
                 $document = $metadata->get($id);
-                $expected = collect($snapshot['documents'])->firstWhere('id', $id);
                 if (! $document || $document->only(['id', 'email_campaign_id', 'email_campaign_recipient_id', 'filename', 'sha256', 'size']) !== $expected
                     || ($document->email_campaign_recipient_id && $document->email_campaign_recipient_id !== $recipient->id)) {
                     throw ValidationException::withMessages(['documents' => 'Attachment ownership failed verification.']);
@@ -126,10 +151,16 @@ class EmailCampaignDeliveryService
                     $message->attachData($bytes, $filename, ['mime' => 'application/pdf']);
                 }
             });
-            $recipient->update(['status' => $snapshot ? 'accepted' : 'sent', 'sent_at' => now()]);
+            $this->transitions->transition($campaignId, $recipientId, 'sending', $snapshot ? 'accepted' : 'sent', ['sent_at' => now()]);
         } catch (Throwable) {
             // Transport exception details may contain addresses or credentials. Never log them.
-            $recipient->update(['status' => $submitted ? 'uncertain' : 'blocked', 'error' => $submitted ? 'Transport outcome uncertain; reconcile with provider before any resend.' : 'Pre-send verification failed; revalidate the campaign.']);
+            $this->transitions->transition(
+                $campaignId,
+                $recipientId,
+                'sending',
+                $submitted ? 'uncertain' : 'blocked',
+                ['error' => $submitted ? 'Transport outcome uncertain; reconcile with provider before any resend.' : 'Pre-send verification failed; revalidate the campaign.'],
+            );
         } finally {
             foreach ($streams as $stream) {
                 fclose($stream);
@@ -141,34 +172,15 @@ class EmailCampaignDeliveryService
                 rmdir($workspace);
             }
         }
-        $this->totals($campaignId);
     }
 
     public function interrupted(int $campaignId, array $ids): void
     {
-        EmailCampaignRecipient::where('email_campaign_id', $campaignId)->whereIn('id', $ids)->where('status', 'sending')
-            ->update(['status' => 'uncertain', 'error' => 'Worker interrupted; provider reconciliation required.']);
-        $this->totals($campaignId);
+        $this->transitions->transitionMany($campaignId, $ids, 'sending', 'uncertain', ['error' => 'Worker interrupted; provider reconciliation required.']);
     }
 
     public function totals(int $campaignId): void
     {
-        DB::transaction(function () use ($campaignId): void {
-            $campaign = EmailCampaign::whereKey($campaignId)->lockForUpdate()->first();
-            if (! $campaign) {
-                return;
-            }
-            $counts = $campaign->recipients()->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
-            $campaign->forceFill([
-                'sent_count' => ($counts['accepted'] ?? 0) + ($counts['sent'] ?? 0),
-                'failed_count' => ($counts['failed'] ?? 0) + ($counts['blocked'] ?? 0) + ($counts['uncertain'] ?? 0),
-                'skipped_count' => $counts['skipped'] ?? 0,
-            ]);
-            if (! ($counts['pending'] ?? 0) && ! ($counts['sending'] ?? 0) && in_array($campaign->status, ['queued', 'sending', 'needs_attention'], true)) {
-                $campaign->status = ($counts['blocked'] ?? 0) || ($counts['uncertain'] ?? 0) ? 'needs_attention' : 'completed';
-                $campaign->completed_at = now();
-            }
-            $campaign->save();
-        });
+        $this->transitions->reconcile($campaignId);
     }
 }

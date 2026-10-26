@@ -3,9 +3,7 @@
 ## Purpose
 
 Keep the CRM's compiled frontend assets, Alpine bootstrap, and shared UI motion behavior reliable after production deployments.
-
 ## Requirements
-
 ### Requirement: Production HTML resolves the current frontend build
 
 The application SHALL prevent successful HTML shell responses from being served from a stale browser or intermediary cache, while allowing hashed Vite build assets to use long-lived caching.
@@ -47,3 +45,19 @@ The shared JavaScript bundle SHALL expose a readiness marker only after Alpine, 
 
 - **WHEN** the browser cannot load or execute the shared JavaScript entry point
 - **THEN** the readiness marker is not set, allowing browser smoke checks to distinguish an asset/bootstrap failure from a motion-style issue
+
+### Requirement: Alpine component initialization and teardown are singular
+
+An Alpine component SHALL run its `init()` method once per initialized component tree and SHALL release page-scoped timers, listeners, subscriptions, and polling when the component is destroyed during soft navigation.
+
+#### Scenario: Component initializes on a page load
+- **WHEN** Alpine initializes a component that defines `init()`
+- **THEN** its setup runs once without an additional explicit `x-init="init()"` invocation
+
+#### Scenario: Component initializes after soft navigation
+- **WHEN** soft navigation replaces a page-scoped component tree
+- **THEN** the old component releases its resources before the replacement initializes once
+
+#### Scenario: Shared widget remains mounted
+- **WHEN** soft navigation replaces only the main page content
+- **THEN** global telephony widgets outside the swap boundary remain mounted and do not initialize again

@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\Telephony\HistoricalCallHistoryPage;
 use App\Services\Telephony\LocalCallHistoryQueryService;
 use App\Support\OperationResult;
+use App\Support\SafeOperationFailure;
 use Illuminate\Support\Collection;
 
 class CallHistoryService
@@ -143,7 +144,7 @@ class CallHistoryService
 
             return OperationResult::success();
         } catch (\Throwable $e) {
-            return OperationResult::failure($e->getMessage());
+            return SafeOperationFailure::result($e, 'call_history.save', 'Call history could not be saved.');
         }
     }
 

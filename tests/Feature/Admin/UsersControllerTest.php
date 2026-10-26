@@ -36,10 +36,16 @@ class UsersControllerTest extends TestCase
 
     public function test_super_admin_can_view_users_list(): void
     {
+        $staff = User::factory()->create(['role' => User::ROLE_AGENT]);
         $response = $this->actingAs($this->superAdmin)
             ->withSession(['campaign' => 'test', 'campaign_name' => 'Test'])
             ->get(route('admin.users.index'));
         $response->assertOk();
+        $response->assertSee('id="add-username"', false)
+            ->assertSee('id="edit-'.$staff->id.'-username"', false)
+            ->assertSee('id="vici-user-'.$staff->id.'"', false)
+            ->assertSee('name="_editing" value="'.$staff->id.'"', false)
+            ->assertDontSee('$el.prepend(document.createElement', false);
     }
 
     public function test_users_list_is_paginated_for_large_staff_directories(): void

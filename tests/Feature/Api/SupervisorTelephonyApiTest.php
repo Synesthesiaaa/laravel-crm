@@ -33,7 +33,8 @@ class SupervisorTelephonyApiTest extends TestCase
                         && $action === 'blind_monitor'
                         && $params === [
                             'value' => '',
-                            'query' => ['agent_user' => 'agent-b', 'stage' => 'MONITOR'],
+                            'target_agent_user' => 'agent-b',
+                            'query' => ['stage' => 'MONITOR'],
                         ];
                 })
                 ->andReturn([

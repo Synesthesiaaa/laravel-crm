@@ -8,7 +8,6 @@
 
 <section
     x-data="callHistoryPage({ campaign: @js($campaign), personal: @js($personal), initialFilters: @js($initialFilters) })"
-    x-init="init()"
     x-cloak
     :aria-busy="loading || refreshing ? 'true' : 'false'"
     aria-labelledby="call-history-heading"

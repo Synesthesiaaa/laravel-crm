@@ -23,7 +23,6 @@
      :class="isSplitActive() ? 'widget-root--split widget-root--split-left' : ''"
      :style="rootStyle"
      x-data="phoneWidget(@js($phoneWidgetBoot))"
-     x-init="init()"
      @click.stop>
 
     <button type="button"

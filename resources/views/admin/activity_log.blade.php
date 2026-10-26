@@ -165,60 +165,7 @@
 </div>
 @endsection
 
-@push('styles')
-<style>
-    .activity-log-filter-card, .activity-log-filters { min-width: 0; }
-    .activity-log-filter-actions { flex-wrap: wrap; }
-    .activity-log-connection-dot { width: .5rem; height: .5rem; border-radius: 999px; background: var(--color-on-surface-dim); }
-    .activity-log-connection-dot--connected { background: var(--color-success); box-shadow: 0 0 0 .2rem var(--color-success-muted); }
-    .activity-log-connection-dot--polling { background: var(--color-warning); box-shadow: 0 0 0 .2rem var(--color-warning-muted); }
-    .activity-log-connection-dot--offline { background: var(--color-danger); box-shadow: 0 0 0 .2rem var(--color-danger-muted); }
-    .activity-terminal { min-width: 0; overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-card); background: var(--color-surface-1); color: var(--color-on-surface); box-shadow: var(--shadow-2); }
-    .activity-terminal-toolbar, .activity-terminal-footer { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .8rem 1rem; font: 600 .72rem/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    .activity-terminal-toolbar { border-bottom: 1px solid var(--color-border); background: var(--color-surface-2); }
-    .activity-terminal-footer { border-top: 1px solid var(--color-border); color: var(--color-on-surface-muted); }
-    .activity-terminal-prompt { color: var(--color-action); }
-    .activity-terminal-button { min-height: 2.75rem; border: 1px solid var(--color-border-strong); border-radius: var(--radius-control); padding: .35rem .65rem; color: var(--color-on-surface-muted); background: var(--color-surface-3); transition: background var(--motion-fast) ease, color var(--motion-fast) ease; }
-    .activity-terminal-button:hover { color: var(--color-on-surface); background: var(--color-primary-muted); }
-    .activity-terminal-output { max-width: 100%; max-height: min(65vh, 42rem); overflow: auto; padding: .8rem 0; font: 500 .78rem/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; scrollbar-color: var(--color-border-strong) var(--color-surface-1); }
-    .activity-terminal-entry { border-left: 2px solid transparent; }
-    .activity-terminal-entry:hover { background: var(--color-surface-2); }
-    .activity-terminal-entry--success { border-left-color: var(--color-success); }
-    .activity-terminal-entry--warning { border-left-color: var(--color-warning); }
-    .activity-terminal-entry--error { border-left-color: var(--color-danger); }
-    .activity-terminal-line { display: grid; grid-template-columns: 10.5rem 1rem 6.5rem minmax(0, 1fr) auto auto; gap: .55rem; width: 100%; min-width: 0; padding: .2rem 1rem; text-align: left; color: inherit; }
-    .activity-terminal-line > * { min-width: 0; }
-    .activity-terminal-time, .activity-terminal-actor { color: var(--color-on-surface-muted); }
-    .activity-terminal-mark { color: var(--color-success); }
-    .activity-terminal-action { color: var(--color-info); text-transform: uppercase; }
-    .activity-terminal-severity { color: var(--color-on-surface-dim); font-size: .68rem; text-transform: uppercase; }
-    .activity-terminal-entry--warning .activity-terminal-mark, .activity-terminal-entry--warning .activity-terminal-action { color: var(--color-warning); }
-    .activity-terminal-entry--error .activity-terminal-mark, .activity-terminal-entry--error .activity-terminal-action { color: var(--color-danger); }
-    .activity-terminal-description { overflow: hidden; color: var(--color-on-surface); overflow-wrap: anywhere; text-overflow: ellipsis; white-space: nowrap; }
-    .activity-terminal-details { margin: .15rem 1rem .65rem 18.2rem; min-width: 0; overflow-wrap: anywhere; border-left: 1px solid var(--color-border-strong); padding: .45rem .75rem; color: var(--color-on-surface-muted); }
-    .activity-terminal-detail-section { margin-top: .85rem; }
-    .activity-terminal-section-title { margin-bottom: .4rem; color: var(--color-action); font-size: .68rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-    .activity-terminal-key { display: inline-block; width: 5.5rem; color: var(--color-on-surface-dim); }
-    .activity-terminal-diff { display: grid; gap: .35rem; }
-    .activity-terminal-diff-row { display: grid; grid-template-columns: minmax(7rem, .7fr) minmax(0, 1fr) minmax(0, 1fr); gap: .65rem; border-top: 1px solid var(--color-border); padding-top: .35rem; }
-    .activity-terminal-diff-field { color: var(--color-info); }
-    .activity-terminal-json { max-width: 100%; margin-top: .65rem; overflow-x: auto; overflow-wrap: anywhere; white-space: pre-wrap; color: var(--color-success); }
-    .activity-terminal-empty { padding: 2.5rem 1rem; text-align: center; color: var(--color-on-surface-muted); }
-    @media (max-width: 720px) {
-        .activity-terminal-line { grid-template-columns: 7.5rem 1rem minmax(0, 1fr); gap: .35rem; padding-inline: .7rem; }
-        .activity-terminal-action { grid-column: 3; grid-row: 1; }
-        .activity-terminal-description { grid-column: 3; grid-row: 2; overflow: visible; white-space: normal; }
-        .activity-terminal-actor { display: block; grid-column: 3; grid-row: 3; overflow-wrap: anywhere; }
-        .activity-terminal-severity { grid-column: 3; grid-row: 4; justify-self: start; }
-        .activity-terminal-details { margin-left: .7rem; margin-right: .7rem; }
-        .activity-terminal-diff-row { grid-template-columns: 1fr; gap: .2rem; }
-        .activity-terminal-toolbar { align-items: flex-start; flex-direction: column; }
-        .activity-terminal-toolbar > div:last-child { width: 100%; flex-wrap: wrap; }
-        .activity-terminal-button { flex: 1 1 7rem; }
-        .activity-log-filter-actions .btn-primary, .activity-log-filter-actions .btn-secondary { flex: 1 1 10rem; }
-    }
-</style>
-@endpush
+
 
 @push('scripts')
 <script>

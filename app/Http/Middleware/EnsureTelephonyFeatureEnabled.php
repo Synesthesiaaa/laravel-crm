@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use App\Services\TelephonyFeatureService;
 use Closure;
 use Illuminate\Http\Request;
@@ -13,7 +14,7 @@ class EnsureTelephonyFeatureEnabled
 
     public function handle(Request $request, Closure $next, string $feature): Response
     {
-        if ($request->user()?->hasRole('Super Admin')) {
+        if ($request->user()?->role === User::ROLE_SUPER_ADMIN) {
             return $next($request);
         }
 

@@ -12,7 +12,7 @@ use PAMI\Message\IncomingMessage;
  * Long-running AMI event listener. Connects to Asterisk AMI, subscribes to
  * Hangup, Bridge, DialEnd events, and forwards them to the Laravel webhook.
  *
- * Run as: php artisan ami:listen
+ * Run as: php artisan ami:events:listen
  * Use Supervisor or systemd to keep it running. Stop with Ctrl+C.
  */
 class AmiEventListenerCommand extends Command
@@ -23,7 +23,7 @@ class AmiEventListenerCommand extends Command
         parent::__construct();
     }
 
-    protected $signature = 'ami:listen
+    protected $signature = 'ami:events:listen
                             {--reconnect-delay=5 : Seconds to wait before reconnecting after disconnect}
                             {--webhook-url= : Override webhook URL (default: APP_URL/api/webhooks/ami)}';
 

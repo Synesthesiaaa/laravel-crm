@@ -26,7 +26,7 @@ npm run build
 vendor/bin/pint --test
 ```
 
-The existing [.github workflow](../../.github/workflows/ci.yml) targets PHP 8.2/8.3, which conflicts with the current lockfile's Symfony 8 requirement of PHP 8.4+. This documentation does not repair or claim a green CI run.
+The [.github workflow](../../.github/workflows/ci.yml) must use the supported PHP 8.4+ runtime declared in Composer and locked dependencies.
 
 `package.json` currently declares only `build` and `dev` scripts: there is no `npm test` or `npm run lint` contract. `composer test` clears configuration before running Artisan tests, so it changes cached state. Review scripts before use.
 

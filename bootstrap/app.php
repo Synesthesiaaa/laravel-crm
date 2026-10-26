@@ -65,6 +65,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'telephony_feature' => \App\Http\Middleware\EnsureTelephonyFeatureEnabled::class,
             'log_throttle' => \App\Http\Middleware\LogThrottleResponses::class,
         ]);
+        $middleware->prependToPriorityList(
+            \Illuminate\Routing\Middleware\ThrottleRequests::class,
+            \App\Http\Middleware\LogThrottleResponses::class,
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (HttpException $exception, Request $request): ?Response {
@@ -119,6 +123,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
         RateLimiter::for('csv-import', function (Request $request) {
             return Limit::perHour(2)->by($request->user()?->id ?: $request->ip());
+        });
+
+        RateLimiter::for('client-errors', function (Request $request) {
+            return Limit::perMinute(30)->by($request->user()?->id ?: $request->ip());
         });
     })
     ->create();

@@ -8,7 +8,7 @@
 <x-page-header title="Telephony Monitor" description="Real-time telephony health and event feed."
     :breadcrumbs="['Admin' => route('admin.dashboard'), 'Telephony Monitor' => null]" />
 
-<div x-data="telephonyMonitor()" x-init="init()" class="space-y-6">
+<div x-data="telephonyMonitor()" class="space-y-6">
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div class="md-card p-4">
             <p class="text-xs text-[var(--color-on-surface-dim)]">Overall Status</p>

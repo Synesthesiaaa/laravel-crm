@@ -85,6 +85,12 @@
                                @checked(old('is_required', $field->is_required))>
                         <label for="edit_req" class="text-sm text-[var(--color-on-surface)]">Required</label>
                     </div>
+                    <div class="form-field flex items-center gap-2 pt-6">
+                        <input type="checkbox" name="draft_safe" value="1" id="edit_draft_safe"
+                               class="rounded border-[var(--color-border-strong)] accent-[var(--color-primary)]"
+                               @checked(old('draft_safe', $field->draft_safe))>
+                        <label for="edit_draft_safe" class="text-sm text-[var(--color-on-surface)]">Allow local draft saving for up to eight hours</label>
+                    </div>
                     <div class="form-field flex items-center gap-2 pt-6" x-show="ft === 'number'" x-cloak>
                         <input type="checkbox" name="is_sale_amount" value="1" id="edit_sale_amount"
                                class="rounded border-[var(--color-border-strong)] accent-[var(--color-primary)]"

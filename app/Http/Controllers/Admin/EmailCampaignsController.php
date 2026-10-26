@@ -156,6 +156,8 @@ class EmailCampaignsController extends Controller
                 'batch_size' => (int) $data['batch_size'],
                 'delay_seconds' => (int) $data['delay_seconds'],
                 'recipient_count' => count($rows),
+                'open_count' => count($rows),
+                'attention_count' => 0,
                 'status' => 'draft',
                 'purpose' => $purpose,
                 'attachment_mode' => $mode,
@@ -247,7 +249,7 @@ class EmailCampaignsController extends Controller
             if (in_array($locked->status, ['draft', 'queued', 'sending'], true)) {
                 $locked->update(['status' => 'cancelled', 'completed_at' => now()]);
                 if ($locked->delivery_snapshot) {
-                    $locked->recipients()->where('status', 'pending')->update(['status' => 'cancelled']);
+                    app(\App\Services\EmailCampaignRecipientTransitionService::class)->transitionAll($locked->id, 'pending', 'cancelled');
                 }
             }
         });
@@ -378,7 +380,7 @@ class EmailCampaignsController extends Controller
             if ($ids->isEmpty()) {
                 throw ValidationException::withMessages(['campaign' => 'Uncertain submissions require provider reconciliation and cannot be retried here.']);
             }
-            $locked->recipients()->whereIn('id', $ids)->update(['status' => 'pending', 'error' => null]);
+            app(\App\Services\EmailCampaignRecipientTransitionService::class)->transitionMany($locked->id, $ids->all(), 'blocked', 'pending', ['error' => null]);
             $locked->update(['status' => 'queued', 'completed_at' => null]);
             foreach ($ids as $index => $id) {
                 SendEmailCampaignRecipient::dispatch($locked->id, $id)->onConnection(config('email_campaigns.connection'))->onQueue(config('email_campaigns.queue'))
@@ -406,16 +408,20 @@ class EmailCampaignsController extends Controller
             if ($row->status !== 'uncertain') {
                 throw ValidationException::withMessages(['campaign' => 'Only uncertain outcomes can be reconciled.']);
             }
-            $row->update([
-                'status' => $data['outcome'] === 'accepted' ? 'accepted' : 'blocked',
-                'sent_at' => $data['outcome'] === 'accepted' ? $data['accepted_at'] : null,
-                'error' => $data['outcome'] === 'accepted' ? null : 'Operator recorded provider confirmation of no submission. Revalidation and explicit retry required.',
-            ]);
+            app(\App\Services\EmailCampaignRecipientTransitionService::class)->transition(
+                $locked->id,
+                $row->id,
+                'uncertain',
+                $data['outcome'] === 'accepted' ? 'accepted' : 'blocked',
+                [
+                    'sent_at' => $data['outcome'] === 'accepted' ? $data['accepted_at'] : null,
+                    'error' => $data['outcome'] === 'accepted' ? null : 'Operator recorded provider confirmation of no submission. Revalidation and explicit retry required.',
+                ],
+            );
             activity('email-campaign')->causedBy($request->user())->event('reconciliation')
                 ->withProperties(['campaign_id' => $campaign->id, 'recipient_id' => $recipient->id, 'outcome' => $data['outcome'], 'provider_case' => $data['provider_case']])
                 ->log('email_campaign.reconciliation');
         });
-        app(\App\Services\EmailCampaignDeliveryService::class)->totals($campaign->id);
 
         return back()->with('success', 'Provider evidence recorded. No message was sent by reconciliation.');
     }
