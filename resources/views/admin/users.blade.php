@@ -10,6 +10,8 @@
 
 <x-validation-errors />
 
+@include('admin.partials.user-import-panel')
+
 {{-- Add user form --}}
 <x-admin.panel title="Add New User" description="Create a staff account and optionally configure its VICIdial and browser-calling defaults." class="mb-6">
         <form method="POST" action="{{ route('admin.users.store') }}"

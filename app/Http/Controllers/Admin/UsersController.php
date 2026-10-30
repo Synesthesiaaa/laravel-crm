@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
 use App\Models\User;
+use App\Models\UserImport;
 use App\Services\CampaignService;
 use App\Services\UserService;
 use Illuminate\Http\RedirectResponse;
@@ -29,6 +30,9 @@ class UsersController extends Controller
         return view('admin.users', [
             'users' => $users,
             'campaignOptions' => $this->campaignService->getCampaigns(),
+            'userImports' => UserImport::where('user_id', $request->user()->id)->latest()->limit(5)->get()
+                ->map(fn (UserImport $run) => app(\App\Services\Imports\UserImportService::class)->present($run))->all(),
+            'userImportMaxBytes' => \App\Services\Imports\UserImportService::uploadLimitBytes(),
         ]);
     }
 

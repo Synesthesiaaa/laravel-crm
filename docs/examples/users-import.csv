@@ -1,0 +1,3 @@
+username,full_name,password,email,role,vici_user,vici_pass,extension,sip_password,default_campaign,auto_vici_login,default_blended,default_ingroups
+agent001,"Sample Agent, One",ReplaceWithUnique1!,agent001@example.test,Agent,001001,,001001,,,false,true,
+agent002,Sample Agent Two,ReplaceWithUnique2!,agent002@example.test,Agent,,,,,,false,true,

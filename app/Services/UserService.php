@@ -14,7 +14,7 @@ class UserService
     ) {}
 
     /** @param array<string, mixed> $data */
-    public function create(array $data): User
+    public function create(array $data, bool $syncVicidial = true): User
     {
         $user = DB::transaction(function () use ($data): User {
             return User::create([
@@ -36,6 +36,10 @@ class UserService
                     : null,
             ]);
         });
+
+        if (! $syncVicidial) {
+            return $user;
+        }
 
         // Push credentials to ViciDial asynchronously (best-effort, never block the UI)
         try {

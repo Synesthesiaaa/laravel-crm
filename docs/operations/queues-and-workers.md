@@ -54,6 +54,16 @@ Horizon explicitly uses Redis even if the application's default queue is databas
 
 Use a Linux service manager to run `php artisan horizon`, restart it after crashes, and allow in-flight work to finish. `php artisan horizon:terminate` gracefully reloads Horizon under supervision after deployment. For plain workers use `php artisan queue:restart`; the process manager must restart exited workers. Do not start duplicate unmanaged consumers during diagnosis.
 
+## User Access CSV import worker
+
+Super Admin previews and account imports use the dedicated `user-imports` database connection and queue, regardless of `QUEUE_CONNECTION`:
+
+```bash
+php artisan queue:work user-imports --queue=user-imports --sleep=1 --tries=0 --timeout=120
+```
+
+Each reservation processes at most 50 CSV records, commits account writes/counters/cursor together, and releases itself for the next batch. The job contains only the import UUID and phase. The 360-second reservation exceeds its 120-second timeout. Unlimited reservations are intentional; validation/runtime failures terminate the import with safe diagnostics. The existing Horizon Redis `imports` supervisor does not consume this connection. Web and worker must share private local source storage. Run `users:imports-prune` through the hourly scheduler to remove abandoned sources and old safe reports. See [bulk user imports](../bulk-user-import.md) for upload limits, authorization, and deployment.
+
 ## Dedicated email worker
 
 The default campaign connection is `email-database` and lane `email-campaigns`, independent of general `QUEUE_CONNECTION`. Run exactly one consumer matching `EMAIL_CAMPAIGN_CONNECTION` and `EMAIL_CAMPAIGN_QUEUE`:

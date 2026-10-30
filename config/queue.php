@@ -31,6 +31,15 @@ return [
 
     'connections' => [
 
+        'user-imports' => [
+            'driver' => 'database',
+            'connection' => null,
+            'table' => 'jobs',
+            'queue' => 'user-imports',
+            'retry_after' => 360,
+            'after_commit' => false,
+        ],
+
         'email-database' => [
             'driver' => 'database',
             'connection' => env('DB_QUEUE_CONNECTION'),

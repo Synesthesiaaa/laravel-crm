@@ -1,5 +1,6 @@
 import './bootstrap';
 import './components';
+import './user-import-panel';
 import './vicidial-session';
 import './widgets/workspace';
 import './phone-widget';

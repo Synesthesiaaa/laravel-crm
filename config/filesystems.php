@@ -30,6 +30,14 @@ return [
 
     'disks' => [
 
+        'user_imports' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/user-imports'),
+            'visibility' => 'private',
+            'serve' => false,
+            'throw' => true,
+        ],
+
         'email_documents' => [
             'driver' => 'local',
             'root' => storage_path('app/private/email-documents'),

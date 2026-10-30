@@ -35,6 +35,12 @@ Route::middleware('role:Team Leader,Admin,Super Admin')->prefix('admin')->name('
     Route::post('extraction', [\App\Http\Controllers\Admin\ExtractionController::class, 'export'])->name('extraction.export');
 
     Route::middleware('role:Super Admin')->group(function () {
+        Route::get('users/imports/template', [\App\Http\Controllers\Admin\UserImportsController::class, 'template'])->name('user-imports.template');
+        Route::post('users/imports', [\App\Http\Controllers\Admin\UserImportsController::class, 'store'])->middleware('throttle:10,1')->name('user-imports.store');
+        Route::get('users/imports/{userImport}', [\App\Http\Controllers\Admin\UserImportsController::class, 'show'])->whereUuid('userImport')->name('user-imports.show');
+        Route::post('users/imports/{userImport}/start', [\App\Http\Controllers\Admin\UserImportsController::class, 'start'])->whereUuid('userImport')->name('user-imports.start');
+        Route::delete('users/imports/{userImport}', [\App\Http\Controllers\Admin\UserImportsController::class, 'cancel'])->whereUuid('userImport')->name('user-imports.cancel');
+        Route::get('users/imports/{userImport}/report', [\App\Http\Controllers\Admin\UserImportsController::class, 'report'])->whereUuid('userImport')->name('user-imports.report');
         Route::get('email-configuration', [\App\Http\Controllers\Admin\EmailConfigurationController::class, 'index'])->name('email-configuration.index');
         Route::put('email-configuration', [\App\Http\Controllers\Admin\EmailConfigurationController::class, 'update'])->name('email-configuration.update');
         Route::post('email-configuration/test', [\App\Http\Controllers\Admin\EmailConfigurationController::class, 'test'])->middleware('throttle:3,1')->name('email-configuration.test');
