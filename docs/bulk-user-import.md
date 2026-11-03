@@ -35,6 +35,14 @@ Enable the existing Laravel scheduler; it invokes `users:imports-prune` hourly. 
 
 For the full 20 MiB application allowance, set PHP `upload_max_filesize=20M` and `post_max_size=21M` or greater, and align proxy/web-server body limits. The local CLI PHP configuration observed during implementation was `2M`/`8M`; it was not changed. The isolated browser fixture used explicit 20M/21M overrides. Restrict filesystem access to `storage/app/private/user-imports` and keep it outside public storage/symlinks.
 
+## Upload troubleshooting
+
+CSV uploads use a dedicated five-minute browser deadline. Ordinary API requests retain their shorter timeout. If an older deployed frontend fails after about five seconds with “Could not reach the import service”, rebuild/publish the frontend assets (`npm run build`) and reload the page after deploying the timeout fix.
+
+If the browser reports a timeout, refresh User Access and inspect recent imports before uploading the same file again; the server may have accepted a request whose response was lost. An HTTP server-error message includes its status (for example 500) without exposing exception details. Inspect the corresponding deployed Laravel/web-server log to diagnose that case.
+
+For deployment/configuration issues, verify that the user-import migration and jobs table exist in the CRM database, clear/rebuild stale Laravel configuration, and run the dedicated user-imports worker described above. A missing worker leaves jobs queued; an empty jobs table alone cannot distinguish failed insertion from work that was already consumed. Never copy uploaded CSV/password contents into diagnostic reports.
+
 ## Optional command-line importer
 
 Run this Artisan script from the CRM directory using a trusted operator account with shell/database access. It imports **new CRM accounts** from a local UTF-8 CSV, one record at a time in bounded batches. No web upload or queue worker is required.

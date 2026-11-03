@@ -1,5 +1,6 @@
 export function importErrorMessage(error) {
     const status = error?.response?.status;
+    if (['ETIMEDOUT', 'ECONNABORTED'].includes(error?.code)) return 'The request timed out. Refresh the page to check recent imports before retrying.';
     if (status === 422) return error.response.data?.errors?.csv?.[0] || 'Check the CSV file and try again.';
     if (status === 401 || status === 419) return 'Your session expired. Reload the page and sign in again.';
     if (status === 403) return 'Super Admin access is required. Reload the page to check your access.';
@@ -7,6 +8,7 @@ export function importErrorMessage(error) {
     if (status === 409) return 'This import is no longer ready to start. Refresh its status or upload a new CSV.';
     if (status === 413) return 'The CSV exceeds the server upload limit. Use a smaller file or contact your administrator.';
     if (status === 429) return 'Too many uploads. Please wait a minute before trying again.';
+    if (status >= 500 && status <= 599) return `The import service returned a server error (${status}). Ask your administrator to check the server logs, then refresh recent imports before retrying.`;
     return 'Could not reach the import service. Your last progress is kept; retry to refresh it.';
 }
 
@@ -85,6 +87,8 @@ export function createUserImportPanel(config, dependencies = {}) {
             this.uploadPercent = 0;
             await this.sendRequest(() => http.post(config.uploadUrl, data, {
                 signal: this._controller.signal,
+                // File transfers must not inherit the shared five-second API deadline.
+                timeout: 300000,
                 headers: { Accept: 'application/json' },
                 onUploadProgress: progress => { this.uploadPercent = progress.total ? Math.round(progress.loaded / progress.total * 100) : 0; },
             }));

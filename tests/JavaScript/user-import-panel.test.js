@@ -43,3 +43,42 @@ test('server failures never display raw exception or credential data', () => {
     assert.match(importErrorMessage({ response: { status: 419 } }), /session/i);
     assert.match(importErrorMessage({ response: { status: 429 } }), /wait/i);
 });
+
+test('an upload slower than the normal API timeout can reach the queue response', async () => {
+    const OriginalFormData = globalThis.FormData;
+    globalThis.FormData = class {
+        set() {}
+    };
+    try {
+        const input = { files: [{ size: 1024 }], value: 'staff.csv' };
+        const queued = run('uploaded', { status: 'queued' });
+        const panel = createUserImportPanel({ runs: [], uploadUrl: '/admin/users/imports' }, {
+            http: { post: async (_url, _data, options) => {
+                // The shared Axios instance has a 5-second default; this server needs 8 seconds.
+                if ((options.timeout ?? 5000) < 8000) {
+                    throw Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' });
+                }
+                return { data: queued };
+            } },
+            schedule: () => 1, cancel: () => {},
+        });
+        await panel.upload({ querySelector: () => input });
+        assert.equal(panel.error, '');
+        assert.equal(panel.run?.status, 'queued');
+        assert.equal(input.value, '');
+        assert.equal(panel.uploading, false);
+        panel.destroy();
+    } finally {
+        globalThis.FormData = OriginalFormData;
+    }
+});
+
+test('timeouts and server errors give distinct safe recovery instructions', () => {
+    for (const code of ['ETIMEDOUT', 'ECONNABORTED']) {
+        assert.match(importErrorMessage({ code }), /timed out/i);
+        assert.match(importErrorMessage({ code }), /recent imports/i);
+    }
+    const serverMessage = importErrorMessage({ response: { status: 500, data: { message: 'SensitiveSqlBinding123!' } } });
+    assert.match(serverMessage, /server error.*500/i);
+    assert.doesNotMatch(serverMessage, /SensitiveSqlBinding/);
+});
