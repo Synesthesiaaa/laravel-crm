@@ -149,6 +149,13 @@
         </div>
     </section>
 
+    <div class="flex flex-wrap items-end gap-3">
+        <label class="text-xs font-semibold">Agent login
+            <input type="text" class="form-input mt-1" x-model="filters.agent" placeholder="All agents" maxlength="100">
+        </label>
+        <a class="btn-secondary" :href="metricsExportUrl()">Export verified metrics CSV</a>
+        <span class="text-xs text-[var(--color-on-surface-muted)]">Standardized rates use verified call evidence. Disposition filters apply to raw dialer tables.</span>
+    </div>
     <section x-show="mode !== 'historical'" x-cloak class="report-section-shell" aria-labelledby="live-report-title">
         <div class="report-section-header">
             <div>
@@ -164,7 +171,7 @@
             <template x-for="card in realtime.cards" :key="card.key">
                 <div class="reports-live-kpi">
                     <p class="report-metric-label" x-text="card.label"></p>
-                    <p class="reports-live-kpi__value" x-text="card.value"></p>
+                    <p :title="card.tooltip || card.scope" class="reports-live-kpi__value" x-text="card.value"></p>
                     <p class="mt-1 text-[11px] text-[var(--color-on-surface-dim)]" x-text="card.scope"></p>
                 </div>
             </template>
@@ -250,12 +257,12 @@
 
             <div class="grid grid-cols-1 gap-5 pt-5 xl:grid-cols-[minmax(16rem,0.9fr)_minmax(0,2.1fr)] xl:gap-6">
                 <div class="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-card)] p-5 sm:p-6">
-                    <p class="report-eyebrow">Answer Rate</p>
-                    <p class="mt-2 text-xs text-[var(--color-on-surface-muted)]">Answered ÷ total calls × 100, minus ANA abandoned rate.</p>
+                    <p class="report-eyebrow" :title="metricTooltip('answer_rate')">Answer Rate</p>
+                    <p class="mt-2 text-xs text-[var(--color-on-surface-muted)]">Verified answered attempts ÷ valid call attempts × 100. Includes verified machine answers.</p>
                     <p class="mt-3 text-3xl font-semibold leading-none tracking-tight text-[var(--color-on-surface)] tabular-nums" x-text="formatPercent(dashboard.overview.answerRate)"></p>
                     <p class="mt-3 text-sm leading-6 text-[var(--color-on-surface-muted)]">
                         <span class="font-semibold text-[var(--color-on-surface)] tabular-nums" x-text="formatNumber(dashboard.overview.answeredCalls)"></span>
-                        answered from
+                        raw dialer answers from
                         <span class="font-semibold text-[var(--color-on-surface)] tabular-nums" x-text="formatNumber(dashboard.overview.totalCalls)"></span>
                         total calls.
                     </p>
@@ -271,11 +278,11 @@
                         <dd class="mt-2 text-2xl font-bold text-[var(--color-on-surface)] tabular-nums" x-text="formatNumber(dashboard.overview.answeredCalls)"></dd>
                     </div>
                     <div class="min-w-0 border-b border-r border-[var(--color-border)] p-4 sm:border-r-0 sm:p-5">
-                        <dt class="report-metric-label">Contact Rate</dt>
+                        <dt class="report-metric-label" :title="metricTooltip('contact_rate')">Contact Rate</dt>
                         <dd class="mt-2 text-2xl font-bold text-[var(--color-on-surface)] tabular-nums" x-text="formatPercent(dashboard.overview.contactRate)"></dd>
                     </div>
                     <div class="min-w-0 border-b border-[var(--color-border)] p-4 sm:p-5">
-                        <dt class="report-metric-label">Abandoned Rate (ANA)</dt>
+                        <dt class="report-metric-label" :title="metricTooltip('abandoned_rate')">Abandoned Rate</dt>
                         <dd class="mt-2 text-2xl font-bold text-[var(--color-on-surface)] tabular-nums" x-text="formatPercent(dashboard.overview.abandonedRate)"></dd>
                     </div>
                     <div class="min-w-0 border-b border-[var(--color-border)] p-4 sm:border-b-0 sm:border-r sm:p-5">
@@ -363,9 +370,11 @@
                 <x-table.index caption="Call Status Breakdown Table">
                     <x-table.head :columns="[
                         ['label' => 'Campaign and In-Group'],
-                        ['label' => 'Total'],
-                        ['label' => 'Answered'],
+                        ['label' => 'Raw Total'],
+                        ['label' => 'Raw Answered'],
                         ['label' => 'Answer Rate', 'align' => 'right'],
+                        ['label' => 'Contact Rate', 'align' => 'right'],
+                        ['label' => 'Abandoned Rate', 'align' => 'right'],
                         ['label' => 'Top Status'],
                         ['label' => 'Peak Hour', 'align' => 'right'],
                     ]" />
@@ -376,12 +385,14 @@
                                 <td class="tabular-nums" x-text="formatNumber(row.total)"></td>
                                 <td class="tabular-nums" x-text="formatNumber(row.answered)"></td>
                                 <td class="text-right tabular-nums" x-text="formatPercent(row.answerRate)"></td>
+                                <td class="text-right tabular-nums" x-text="formatPercent(row.contactRate)"></td>
+                                <td class="text-right tabular-nums" x-text="formatPercent(row.abandonedRate)"></td>
                                 <td x-text="row.topStatus"></td>
                                 <td class="text-right tabular-nums" x-text="row.peakHourLabel"></td>
                             </tr>
                         </template>
                         <tr x-show="!dashboard.status.rows.length">
-                            <td colspan="6" class="table-empty py-8 text-center text-sm text-[var(--color-on-surface-dim)]" x-text="reportSectionMessage(dashboard.status.statusState, 'Call status data')"></td>
+                            <td colspan="8" class="table-empty py-8 text-center text-sm text-[var(--color-on-surface-dim)]" x-text="reportSectionMessage(dashboard.status.statusState, 'Call status data')"></td>
                         </tr>
                     </tbody>
                 </x-table.index>
@@ -502,7 +513,7 @@
                     <div class="report-inline-metric">
                         <p class="report-metric-label">Contact Rate</p>
                         <p class="mt-2 text-lg font-semibold text-[var(--color-on-surface)] truncate" x-text="formatPercent(dashboard.overview.contactRate)"></p>
-                        <p class="report-metric-label mt-3">Abandoned Rate (ANA)</p>
+                        <p class="report-metric-label mt-3">Abandoned Rate</p>
                         <p class="mt-2 text-lg font-semibold text-[var(--color-on-surface)]" x-text="formatPercent(dashboard.overview.abandonedRate)"></p>
                     </div>
                 </div>
@@ -645,11 +656,12 @@ window.telephonyReports = function () {
         filters: {
             crm_campaign: @json($campaign),
             campaigns: '---ALL---',
-            query_date: new Date().toISOString().slice(0, 10),
-            end_date: new Date().toISOString().slice(0, 10),
+            query_date: @json(now(config('vicidial.report_timezone', config('app.timezone')))->toDateString()),
+            end_date: @json(now(config('vicidial.report_timezone', config('app.timezone')))->toDateString()),
             timezone: @json(config('vicidial.report_timezone', config('app.timezone', 'UTC'))),
             disposition_scope: @json(($reportDispositionSettings['hide_system_dispositions'] ?? false) ? 'exclude_system' : 'all'),
             comparison: 'none',
+            agent: '',
         },
         mappedCampaigns: @json($vicidialCampaignCodes ?? []),
         dispositionScopeOptions: [
@@ -662,7 +674,7 @@ window.telephonyReports = function () {
         recordingFilters: {
             agent_user: '',
             lead_id: '',
-            date: new Date().toISOString().slice(0, 10),
+            date: @json(now(config('vicidial.report_timezone', config('app.timezone')))->toDateString()),
         },
         payloads: {
             status: null,
@@ -887,7 +899,12 @@ window.telephonyReports = function () {
             const isToday = this.mode === 'today';
             const status = data.freshness?.status || data.availability?.status || 'unavailable';
             const normalizedStatus = String(status).toLowerCase();
-            const realtimeSnapshotKey = this.mode + '|' + this.filters.crm_campaign;
+            const realtimeSnapshotKey = [this.mode, this.filters.crm_campaign, this.filters.campaigns, this.filters.agent, this.filters.timezone].join('|');
+            const verified = data.call_metrics?.metrics || {};
+            this.realtime.cards = this.realtime.cards.map((card) => {
+                const key = card.key.includes('rate') && card.label === 'Answer Rate' ? 'answer_rate' : card.key;
+                return verified[key] ? { ...card, value: this.formatPercent(verified[key].rate), tooltip: verified[key].definition, scope: verified[key].reason?.replaceAll('_', ' ') || card.scope } : card;
+            });
             const shouldPreserveLastGood = this.hasRealtimeSnapshot
                 && this.realtime.mode === this.mode
                 && this.realtimeSnapshotKey === realtimeSnapshotKey
@@ -915,8 +932,8 @@ window.telephonyReports = function () {
             }
             const numberOrDash = (value) => value === null || value === undefined ? 'N/A' : this.formatNumber(value);
             const cards = isToday ? [
-                { key: 'today-total', label: "Today's Calls", value: numberOrDash(today.total_calls), scope: this.cleanReportText(today.label || 'Midnight to Now') },
-                { key: 'today-answered', label: 'Answered', value: numberOrDash(today.answered), scope: this.cleanReportText(today.label || 'Midnight to Now') },
+                { key: 'today-total', label: 'Raw Dialer Calls', value: numberOrDash(today.total_calls), scope: this.cleanReportText(today.label || 'Midnight to Now') },
+                { key: 'today-answered', label: 'Raw Answered', value: numberOrDash(today.answered), scope: this.cleanReportText(today.label || 'Midnight to Now') },
                 { key: 'today-rate', label: 'Answer Rate', value: this.formatPercent(today.answer_rate), scope: this.cleanReportText(today.label || 'Midnight to Now') },
                 { key: 'live-calls', label: 'Live Calls', value: numberOrDash(metrics.live_calls), scope: 'Current snapshot' },
                 { key: 'waiting', label: 'Waiting Calls', value: numberOrDash(metrics.calls_waiting), scope: 'Current snapshot' },
@@ -926,9 +943,23 @@ window.telephonyReports = function () {
                 { key: 'active-agents', label: 'Active Agents', value: numberOrDash(metrics.active_agents), scope: 'Current snapshot' },
                 { key: 'available', label: 'Available Agents', value: numberOrDash(metrics.available_agents), scope: 'Current snapshot' },
                 { key: 'waiting', label: 'Waiting Calls', value: numberOrDash(metrics.calls_waiting), scope: 'Current snapshot' },
-                { key: 'rolling-answered', label: 'Answered', value: numberOrDash(rolling.answered), scope: this.cleanReportText(rolling.label || 'Rolling Window') },
+                { key: 'rolling-answered', label: 'Observed Answered', value: numberOrDash(rolling.answered), scope: this.cleanReportText(rolling.label || 'Rolling Window') },
                 { key: 'rolling-rate', label: 'Answer Rate', value: this.formatPercent(rolling.answer_rate), scope: this.cleanReportText(rolling.label || 'Rolling Window') },
             ];
+            const verifiedMetrics = data.call_metrics?.metrics || {};
+            for (const [key, label] of [['contact_rate', 'Contact Rate'], ['abandoned_rate', 'Abandoned Rate']]) {
+                const metric = verifiedMetrics[key];
+                cards.push({ key, label, value: this.formatPercent(metric?.rate), scope: metric?.reason?.replaceAll('_', ' ') || (isToday ? today.label : rolling.label), tooltip: metric?.definition });
+            }
+            const verifiedEnd = data.call_metrics?.scope?.end_exclusive;
+            for (const card of cards) {
+                const key = card.label === 'Answer Rate' ? 'answer_rate' : card.key;
+                const metric = verifiedMetrics[key];
+                if (metric) {
+                    card.tooltip = metric.definition + (metric.reason ? ' Unavailable: ' + metric.reason.replaceAll('_', ' ') : ' Counts: ' + metric.numerator + ' / ' + metric.denominator);
+                    card.scope = metric.reason?.replaceAll('_', ' ') || (verifiedEnd ? 'Verified through ' + new Date(verifiedEnd).toLocaleString(undefined, { timeZone: this.filters.timezone }) : card.scope);
+                }
+            }
             this.realtime = {
                 mode: this.mode,
                 snapshotKey: realtimeSnapshotKey,
@@ -958,6 +989,10 @@ window.telephonyReports = function () {
         },
 
         applyDashboard(data) {
+            this.dashboard.callMetrics = data.call_metrics || {};
+            for (const [key, property] of [['answer_rate', 'answerRate'], ['contact_rate', 'contactRate'], ['abandoned_rate', 'abandonedRate']]) {
+                this.dashboard.overview[property] = data.call_metrics?.rates?.[key] ?? null;
+            }
             const availabilityStatus = String(data.availability?.status || 'unavailable').toLowerCase();
             const dashboardSnapshotKey = [
                 data.filters?.crm_campaign || this.filters.crm_campaign,
@@ -967,6 +1002,7 @@ window.telephonyReports = function () {
                 this.filters.timezone,
                 this.filters.disposition_scope,
                 this.filters.comparison,
+                this.filters.agent,
             ].join('|');
             if (this.hasDashboardSnapshot
                 && this.dashboardSnapshotKey === dashboardSnapshotKey
@@ -987,6 +1023,7 @@ window.telephonyReports = function () {
             const dispositionRows = Array.isArray(data.disposition_rows) ? data.disposition_rows : [];
             const agents = Array.isArray(data.agents) ? data.agents : [];
 
+            this.dashboard.callMetrics = data.call_metrics || {};
             this.dashboard.availability = data.availability || this.dashboard.availability;
             if (Array.isArray(data.campaign_scope?.campaign_codes)) {
                 this.mappedCampaigns = data.campaign_scope.campaign_codes;
@@ -1014,6 +1051,8 @@ window.telephonyReports = function () {
                     total: row.total_calls ?? null,
                     answered: row.answered_calls ?? null,
                     answerRate: row.answer_rate ?? null,
+                    contactRate: row.contact_rate ?? null,
+                    abandonedRate: row.abandoned_rate ?? null,
                     topStatus: 'N/A',
                     peakHourLabel: 'N/A',
                 })),
@@ -1743,6 +1782,17 @@ window.telephonyReports = function () {
             return new Intl.NumberFormat().format(number);
         },
 
+        metricTooltip(key) {
+            const definitions = @js(\App\Services\Telephony\VerifiedCallMetricsService::DEFINITIONS);
+            const metric = this.dashboard.callMetrics?.metrics?.[key];
+            return definitions[key] + (metric?.reason ? ' Unavailable: ' + metric.reason.replaceAll('_', ' ') : (metric ? ' Counts: ' + metric.numerator + ' / ' + metric.denominator : ' Awaiting verified evidence.'));
+        },
+
+        metricsExportUrl() {
+            const params = new URLSearchParams({ ...this.filters, campaign: this.filters.crm_campaign, mode: this.mode === 'historical' ? 'historical' : this.mode });
+            return @js(route('api.reports.verified-metrics.export')) + '?' + params.toString();
+        },
+
         formatPercent(value) {
             if (value === null || value === undefined || value === '') {
                 return 'N/A';
@@ -1753,7 +1803,7 @@ window.telephonyReports = function () {
                 return 'N/A';
             }
 
-            return `${number.toFixed(1)}%`;
+            return `${number.toFixed(2)}%`;
         },
     };
 };

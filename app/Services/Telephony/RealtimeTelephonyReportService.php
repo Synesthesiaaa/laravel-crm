@@ -29,12 +29,19 @@ class RealtimeTelephonyReportService
             (array) ($snapshot['routing']['live_vicidial_campaigns'] ?? []),
             static fn (mixed $code): bool => trim((string) $code) !== '',
         ));
-        $now = now();
+        $timezone = (string) ($request->input('timezone') ?: config('app.timezone'));
+        $now = now($timezone);
         $windowMinutes = max(1, (int) config('vicidial.supervisor.rolling_window_minutes', 15));
         $rolling = is_array($snapshot['stats']['rolling'] ?? null)
             ? $snapshot['stats']['rolling']
             : $this->rollingMetrics($vicidialCampaigns, $now->copy()->subMinutes($windowMinutes), $now, $windowMinutes);
         $today = $this->todayMetrics($vicidialCampaigns, $now, $snapshot);
+        $metricService = app(VerifiedCallMetricsService::class);
+        $filters = $request->only(['campaigns', 'agent', 'timezone', 'ingroups']) + ['historical' => false];
+        $rollingVerified = $snapshot['stats']['rolling']['call_metrics'] ?? $metricService->forCampaign($campaign, $now->copy()->subMinutes($windowMinutes), $now, $filters);
+        $todayVerified = $snapshot['stats']['call_metrics'] ?? $metricService->forCampaign($campaign, $now->copy()->startOfDay(), $now, $filters);
+        $rolling = array_replace($rolling, $rollingVerified['rates'], ['call_metrics' => $rollingVerified]);
+        $today = array_replace($today, $todayVerified['rates'], ['call_metrics' => $todayVerified]);
         $snapshotHealth = (string) ($snapshot['health'] ?? 'offline');
         $availabilityStatus = match ($snapshotHealth) {
             'live' => 'live',
@@ -44,6 +51,7 @@ class RealtimeTelephonyReportService
 
         return [
             'mode' => $mode,
+            'call_metrics' => $mode === 'today' ? $todayVerified : $rollingVerified,
             'time_scope' => $mode === 'today'
                 ? ['label' => 'Today', 'start' => $now->copy()->startOfDay()->toIso8601String(), 'end' => $now->toIso8601String()]
                 : ['label' => 'Last '.$windowMinutes.' minutes', 'start' => $now->copy()->subMinutes($windowMinutes)->toIso8601String(), 'end' => $now->toIso8601String()],
@@ -156,7 +164,7 @@ class RealtimeTelephonyReportService
             'calls_initiated' => $attempted,
             'answered' => $metrics['answered'],
             'abandoned' => $metrics['abandoned'],
-            'answer_rate' => $attempted > 0 ? round(($metrics['answered'] / $attempted) * 100, 2) : 0,
+            'answer_rate' => null,
             'average_wait_seconds' => $metrics['wait_count'] > 0 ? round($metrics['wait_total'] / $metrics['wait_count'], 1) : null,
             'average_talk_seconds' => $metrics['talk_count'] > 0 ? round($metrics['talk_total'] / $metrics['talk_count'], 1) : null,
             'dispositions' => $dispositions,
@@ -171,7 +179,6 @@ class RealtimeTelephonyReportService
         $stats = is_array($snapshot['stats'] ?? null) ? $snapshot['stats'] : [];
         $remoteTotal = $stats['todayTotal'] ?? null;
         $remoteAnswered = $stats['callsAnswered'] ?? null;
-        $remoteAnswerRate = $stats['answerRate'] ?? null;
 
         if (($stats['callSource'] ?? null) === 'vicidial'
             && is_numeric($remoteTotal)
@@ -186,9 +193,7 @@ class RealtimeTelephonyReportService
                 'end' => $now->toIso8601String(),
                 'total_calls' => $totalCalls,
                 'answered' => $answered,
-                'answer_rate' => is_numeric($remoteAnswerRate)
-                    ? round((float) $remoteAnswerRate, 1)
-                    : ($totalCalls > 0 ? round(($answered / $totalCalls) * 100, 1) : 0),
+                'answer_rate' => null,
                 'source' => 'vicidial',
                 'available' => true,
                 'dispositions' => [],
@@ -238,7 +243,7 @@ class RealtimeTelephonyReportService
             'end' => $now->toIso8601String(),
             'total_calls' => $attempted,
             'answered' => $answered,
-            'answer_rate' => $attempted > 0 ? round(($answered / $attempted) * 100, 2) : 0,
+            'answer_rate' => null,
             'source' => 'crm',
             'available' => true,
             'dispositions' => $dispositions,

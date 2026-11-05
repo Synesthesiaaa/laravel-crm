@@ -110,7 +110,7 @@ final class RealtimeTelephonyReportAggregationTest extends TestCase
         $this->assertSame(5, $result['calls_initiated']);
         $this->assertSame(3, $result['answered']);
         $this->assertSame(1, $result['abandoned']);
-        $this->assertSame(60.0, $result['answer_rate']);
+        $this->assertNull($result['answer_rate']); // Raw timestamps cannot prove a customer-leg answer.
         $this->assertSame(80.0, $result['average_wait_seconds']);
         $this->assertSame(30.0, $result['average_talk_seconds']);
         $this->assertSame(['BUSY' => 2, 'NOANSWER' => 1, 'SALE' => 1, 'UPDATED' => 1], $result['dispositions']);

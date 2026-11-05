@@ -31,6 +31,8 @@ class SupervisorOperationalService
      */
     public function snapshot(Request $request): array
     {
+        $request->validate(['timezone' => 'nullable|timezone', 'agent' => 'nullable|string|max:100',
+            'campaigns' => 'nullable|string|max:255', 'ingroups' => 'nullable|string|max:255']);
         $today = Carbon::today();
         $campaigns = $this->campaignService->getCampaigns();
         $campaign = $this->resolveCampaign($request, $campaigns);
@@ -228,7 +230,6 @@ class SupervisorOperationalService
         $waitSeconds = (int) $todayCallMetrics->sum('wait_seconds');
         $handleSamples = (int) $todayCallMetrics->sum('handle_samples');
         $handleSeconds = (int) $todayCallMetrics->sum('handle_seconds');
-        $crmAnswerRate = $crmTotalToday > 0 ? round(($crmAnsweredToday / $crmTotalToday) * 100, 1) : 0;
         $crmCallsByHour = $todayCalls
             ->filter(fn (CallSession $call): bool => $call->dialed_at !== null)
             ->groupBy(fn (CallSession $call): string => $call->dialed_at->format('H'))
@@ -240,7 +241,13 @@ class SupervisorOperationalService
         $remotePerformanceStats = $remoteSnapshot['performance_stats'];
         $totalToday = $remoteCallStats['total'] ?? $crmTotalToday;
         $answeredToday = $remoteCallStats['answered'] ?? $crmAnsweredToday;
-        $answerRate = $remoteCallStats['answer_rate'] ?? $crmAnswerRate;
+        $timezone = (string) ($request->input('timezone') ?: config('app.timezone'));
+        $metricNow = now($timezone);
+        $metricFilters = $request->only(['campaigns', 'agent', 'timezone', 'ingroups']) + ['historical' => false];
+        $verifiedMetrics = app(VerifiedCallMetricsService::class)->forScope($scope, $metricNow->copy()->startOfDay(), $metricNow, $metricFilters);
+        $answerRate = $verifiedMetrics['rates']['answer_rate'];
+        $verifiedRolling = app(VerifiedCallMetricsService::class)->forScope($scope, $metricNow->copy()->subMinutes((int) config('vicidial.supervisor.rolling_window_minutes', 15)), $metricNow, $metricFilters);
+        $rolling = array_replace($rolling, $verifiedRolling['rates'], ['call_metrics' => $verifiedRolling]);
         $callsByHour = $remoteCallStats['calls_by_hour'] ?? $crmCallsByHour;
         $callsWaiting = $remoteRealtimeStats['calls_waiting'] ?? $this->fallbackQueueCount($agents);
         $agentsOnline = $remoteRealtimeStats['agents_online']
@@ -290,6 +297,9 @@ class SupervisorOperationalService
                 'todayTotal' => $totalToday,
                 'callsAnswered' => $answeredToday,
                 'answerRate' => $answerRate,
+                'contactRate' => $verifiedMetrics['rates']['contact_rate'],
+                'abandonedRate' => $verifiedMetrics['rates']['abandoned_rate'],
+                'call_metrics' => $verifiedMetrics,
                 'callsByHour' => $callsByHour,
                 'callSource' => $remoteCallStats !== null ? 'vicidial' : 'crm',
                 'realtimeSource' => $remoteSnapshot['realtime_source'],
@@ -591,9 +601,7 @@ class SupervisorOperationalService
             'calls_initiated' => $windowCalls->count(),
             'answered' => $answeredCalls->count(),
             'abandoned' => $windowCalls->where('status', CallSession::STATUS_ABANDONED)->count(),
-            'answer_rate' => $windowCalls->count() > 0
-                ? round(($answeredCalls->count() / $windowCalls->count()) * 100, 2)
-                : 0,
+            'answer_rate' => null,
             'average_wait_seconds' => $waits->isNotEmpty() ? round($waits->avg(), 1) : null,
             'average_talk_seconds' => $talks->isNotEmpty() ? round($talks->avg(), 1) : null,
             'dispositions' => $dispositions,

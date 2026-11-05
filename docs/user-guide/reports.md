@@ -17,13 +17,15 @@ Historical reports concern the selected period. Today means midnight to now in t
 | Metric | Implemented meaning |
 | --- | --- |
 | Total calls | Available scoped call-status totals, subject to selected disposition scope. |
-| Answer rate | (Answered calls − ANA calls) ÷ total calls × 100, rounded to two decimals. This subtracts the abandoned rate from the original answer rate. Confirmed zero totals return zero; unverifiable inputs stay unavailable. |
-| Abandoned rate | ANA (Agent Not Available) calls ÷ total calls × 100. Displayed beside Contact Rate. |
-| Contact rate | Sum of all non-system disposition counts ÷ total calls × 100. Uses the configured system disposition list and does not require a contacted-code group. |
+| Answer rate | Verified answered customer attempts ÷ valid customer attempts × 100. Verified human and machine answers count; abandoned rate is not subtracted. |
+| Abandoned rate | Verified live answers disconnected before agent connection ÷ all verified live answers × 100. Displayed beside Contact Rate. A disposition code alone cannot establish abandonment. |
+| Contact rate | Unique dialer leads with a verified live agent–customer conversation ÷ unique attempted dialer leads × 100. Redials count once per lead. |
 | Calls per agent | Total calls ÷ agents with activity, rounded to two decimals; unavailable when no usable agent count exists. |
 | Average talk time | The parsed agent summary uses total talk seconds ÷ total agent calls when talk data is available, rounded to one decimal. It is not assumed to use only answered calls. |
 
-The optional conversion funnel retains its configurable disposition groups. A system disposition can be included, excluded, or selected alone. Changing scope changes the rate inputs: ANA calls excluded by the selected scope do not contribute to its abandoned rate, and system-only scope has zero contacted calls. Some scoped answer metrics remain unavailable when the source cannot verify them consistently. Compare the same filters and source availability. Live operational metrics retain their existing source definitions.
+Standardized rates share one verified evidence service across the dashboard, campaign monitoring, historical reports, Live/Today and CSV exports. Each percentage uses two decimals; hover its label for its formula and verified counts or the reason for N/A. Complete empty evidence returns 0.00%; missing evidence is N/A. Raw VICIdial counts, status tables and the optional configured-disposition funnel are diagnostic views, not substitutes for these rate inputs. Disposition filters apply to raw reports, not standardized lifecycle metrics. The Agent login filter uses verified participants; agent-filtered abandonment is N/A because pre-agent calls cannot be assigned reliably.
+
+Use **Export verified metrics CSV** to download the same calculations with counts, scope, formula and provenance. Live rates disclose their source watermark; feeds more than 60 seconds behind become unavailable. Production activation requires a verified evidence feed; existing disposition records do not populate it automatically. See [verified metric operations](../telephony/verified-call-metrics.md) for source verification, import/webhook setup and coverage requirements.
 
 Dashboard **Daily Comparison** has an **Overall / form** selector. Its chart and accessible data table compare the selected form against the equivalent previous-month days, with the existing volume/amount controls. Daily, weekly, and monthly activity charts show an Overall series and a named series for each form; use the legend to show or hide a series. Empty forms retain zero buckets. Activity counts all submissions; Daily Comparison follows configured sales qualification rules.
 

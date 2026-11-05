@@ -73,6 +73,7 @@
     $formatSignedCount = static fn (float|int $count): string => ($count > 0 ? '+' : ($count < 0 ? '-' : '')).number_format(abs((float) $count));
 @endphp
 <div class="dashboard-page flex flex-col gap-8">
+    <x-call-metric-cards :report="$telephonyMetrics ?? []" style="order: 1" />
 
     {{-- Welcome hero --}}
     @if($sectionVisible('welcome'))
