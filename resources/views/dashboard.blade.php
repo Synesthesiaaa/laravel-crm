@@ -24,6 +24,7 @@
     $summaryPrevious = data_get($summary, 'summary.previous', ['count' => 0, 'amount' => 0.0]);
     $summaryCountComparison = data_get($summary, 'comparison.count', []);
     $summaryAmountComparison = data_get($summary, 'comparison.amount', []);
+    $summaryForms = data_get($summary, 'forms', []);
     $summaryDaily = data_get($summary, 'daily', []);
     $summaryHasActivity = (bool) data_get($summary, 'has_activity', false);
     $activityHasValues = static function (array $activity): bool {
@@ -175,6 +176,13 @@
                 <div class="flex items-start justify-between gap-4 flex-wrap">
                     <div>
                         <h4 class="chart-title mb-1">Daily Comparison</h4>
+                        <label class="mt-2 block text-xs font-semibold" for="dashboard-comparison-form">Compare form</label>
+                        <select id="dashboard-comparison-form" class="mt-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-card)] px-3 py-2 text-sm" onchange="window.setDashboardSummaryForm?.(this.value)">
+                            <option value="">Overall</option>
+                            @foreach($summaryForms as $comparisonForm)
+                                <option value="{{ $comparisonForm['code'] }}">{{ $comparisonForm['name'] }}</option>
+                            @endforeach
+                        </select>
                         <p class="text-xs text-[var(--color-on-surface-muted)]">Current period versus the equivalent previous-month days.</p>
                         @if($amountsEnabled)
                         <p class="text-xs text-[var(--color-on-surface-dim)] mt-1">{{ data_get($summary, 'amount_definition', 'Amount attribution follows the campaign configuration.') }}</p>
@@ -197,10 +205,11 @@
 
                     <details class="mt-4 border-t border-[var(--color-border)] pt-3">
                         <summary class="cursor-pointer text-xs font-semibold text-[var(--color-on-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">View Daily Summary Data</summary>
-                        <div class="md-table-wrap mt-3">
+                        @foreach(array_merge([['code' => '', 'name' => 'Overall', 'daily' => $summaryDaily]], $summaryForms) as $comparisonData)
+                        <div class="md-table-wrap mt-3" data-summary-form-table="{{ $comparisonData['code'] }}" @if($comparisonData['code'] !== '') hidden @endif>
                             <div class="table-scroll-wrap">
                             <table>
-                                <caption class="sr-only">Daily current and previous period {{ $amountVisible('tables') ? 'transaction and amount' : 'transaction' }} comparison</caption>
+                                <caption class="sr-only">{{ $comparisonData['name'] }} daily current and previous period {{ $amountVisible('tables') ? 'transaction and amount' : 'transaction' }} comparison</caption>
                                 <thead>
                                     <tr>
                                         <th>Day</th>
@@ -213,7 +222,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach($summaryDaily as $summaryDay)
+                                    @foreach($comparisonData['daily'] as $summaryDay)
                                         <tr>
                                             <td class="font-medium text-[var(--color-on-surface)]" title="{{ $summaryDay['current_date'] }}">{{ $summaryDay['label'] }}</td>
                                             <td class="text-right tabular-nums">{{ number_format($summaryDay['current']['count']) }}</td>
@@ -228,17 +237,18 @@
                                 <tfoot>
                                     <tr>
                                         <th scope="row" class="font-semibold text-[var(--color-on-surface)]">Total</th>
-                                        <td class="text-right font-semibold tabular-nums">{{ number_format($summaryCurrent['count'] ?? 0) }}</td>
-                                        <td class="text-right font-semibold tabular-nums">{{ number_format($summaryPrevious['count'] ?? 0) }}</td>
+                                        <td class="text-right font-semibold tabular-nums">{{ number_format(array_sum(array_column(array_column($comparisonData['daily'], 'current'), 'count'))) }}</td>
+                                        <td class="text-right font-semibold tabular-nums">{{ number_format(array_sum(array_column(array_column($comparisonData['daily'], 'previous'), 'count'))) }}</td>
                                         @if($amountVisible('tables'))
-                                            <td class="text-right font-semibold tabular-nums">{{ $formatSummaryAmount($summaryCurrent['amount'] ?? 0) }}</td>
-                                            <td class="text-right font-semibold tabular-nums">{{ $formatSummaryAmount($summaryPrevious['amount'] ?? 0) }}</td>
+                                            <td class="text-right font-semibold tabular-nums">{{ $formatSummaryAmount(array_sum(array_column(array_column($comparisonData['daily'], 'current'), 'amount'))) }}</td>
+                                            <td class="text-right font-semibold tabular-nums">{{ $formatSummaryAmount(array_sum(array_column(array_column($comparisonData['daily'], 'previous'), 'amount'))) }}</td>
                                         @endif
                                     </tr>
                                 </tfoot>
                             </table>
                             </div>
                         </div>
+                        @endforeach
                     </details>
                 @else
                     <x-empty-state
@@ -697,7 +707,9 @@
     let summaryChart = null;
     let summaryChartConfig = null;
     let summaryMode = 'volume';
-    const summaryDaily = @json($summaryDaily);
+    const overallSummaryDaily = @json($summaryDaily);
+    const summaryForms = @json($summaryForms);
+    let summaryDaily = overallSummaryDaily;
     const summaryCurrencySymbol = @json($summaryCurrencySymbol);
     const summaryCurrentLabel = @json($summaryCurrentPeriodLabel);
     const summaryPreviousLabel = @json($summaryPreviousPeriodLabel);
@@ -951,7 +963,15 @@
         });
     };
 
-    async function mountAreaChart(ApexCharts, elId, categories, values, config) {
+    window.setDashboardSummaryForm = (code) => {
+        summaryDaily = summaryForms.find((form) => form.code === code)?.daily ?? overallSummaryDaily;
+        document.querySelectorAll('[data-summary-form-table]').forEach((table) => {
+            table.hidden = table.dataset.summaryFormTable !== code;
+        });
+        window.setDashboardSummaryMode?.(summaryMode);
+    };
+
+    async function mountAreaChart(ApexCharts, elId, categories, values, config, forms = []) {
         const el = document.getElementById(elId);
         if (!el || !document.getElementById('main-layout')?.contains(el)) {
             return;
@@ -966,7 +986,8 @@
         el.innerHTML = '';
         const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
         const chart = new ApexCharts(el, {
-            series: [{ name: 'Submissions', data: values }],
+            series: [{ name: 'Overall', data: values }, ...forms.map((form) => ({ name: form.name, data: form.values }))],
+            legend: { show: true, position: 'bottom', labels: { colors: config.textColor } },
             chart: {
                 type: 'area',
                 height: 240,
@@ -976,7 +997,7 @@
                 fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
                 animations: { enabled: !reduceMotion, easing: 'easeinout', speed: 600 },
             },
-            colors: ['#e91e8c'],
+            colors: ['#e91e8c', '#2563eb', '#16a34a', '#9333ea', '#d97706', '#0891b2', '#dc2626'],
             fill: { type: 'solid', opacity: .12 },
             stroke: { curve: 'straight', width: 2 },
             xaxis: {
@@ -1028,9 +1049,9 @@
         };
 
         await Promise.all([
-            mountAreaChart(ApexCharts, 'chart-daily-activity', @json($dailyActivity['labels'] ?? []), @json($dailyActivity['values'] ?? []), config),
-            mountAreaChart(ApexCharts, 'chart-weekly-activity', @json($weeklyActivity['labels'] ?? []), @json($weeklyActivity['values'] ?? []), config),
-            mountAreaChart(ApexCharts, 'chart-monthly-activity', @json($monthlyActivity['labels'] ?? []), @json($monthlyActivity['values'] ?? []), config),
+            mountAreaChart(ApexCharts, 'chart-daily-activity', @json($dailyActivity['labels'] ?? []), @json($dailyActivity['values'] ?? []), config, @json($dailyActivity['forms'] ?? [])),
+            mountAreaChart(ApexCharts, 'chart-weekly-activity', @json($weeklyActivity['labels'] ?? []), @json($weeklyActivity['values'] ?? []), config, @json($weeklyActivity['forms'] ?? [])),
+            mountAreaChart(ApexCharts, 'chart-monthly-activity', @json($monthlyActivity['labels'] ?? []), @json($monthlyActivity['values'] ?? []), config, @json($monthlyActivity['forms'] ?? [])),
             mountDashboardSummaryChart(ApexCharts, config),
         ]);
 

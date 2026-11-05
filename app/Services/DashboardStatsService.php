@@ -27,125 +27,86 @@ class DashboardStatsService
         protected DashboardCustomSalesAggregationService $dashboardCustomSalesAggregationService,
     ) {}
 
-    /**
-     * Rolling last 24 hours of form submissions, one bucket per clock hour (uses created_at).
-     *
-     * @return array{labels: list<string>, values: list<int>}
-     */
     public function getLast24HourActivityTrend(string $campaignCode): array
     {
-        $ttl = (int) config('dashboard.last_24h_activity_cache_seconds', 120);
+        $ttl = max(30, (int) config('dashboard.last_24h_activity_cache_seconds', 120));
 
-        return Cache::remember("activity_trend_24h_{$campaignCode}", max(30, $ttl), function () use ($campaignCode) {
-            $tables = $this->resolveAllowedTablesWithCreatedAt($campaignCode);
-            if (empty($tables)) {
-                return ['labels' => [], 'values' => []];
-            }
-
-            $since = now()->copy()->subHours(24);
-
-            /** @var array<string, int> $bucketCounts keys Y-m-d H */
-            $bucketCounts = [];
-            $labels = [];
-            for ($i = 23; $i >= 0; $i--) {
-                $h = now()->copy()->subHours($i)->startOfHour();
-                $key = $h->format('Y-m-d H');
-                $bucketCounts[$key] = 0;
-                $labels[] = $h->format('M j H:00');
-            }
-
-            $minuteExpression = $this->dashboardMinuteBucketExpression();
-            foreach ($tables as $t) {
-                $rows = DB::table($t)
-                    ->where('created_at', '>=', $since)
-                    ->selectRaw("{$minuteExpression} as minute_key, COUNT(*) as total")
-                    ->groupByRaw($minuteExpression)
-                    ->get();
-
-                foreach ($rows as $row) {
-                    $key = Carbon::parse((string) $row->minute_key)
-                        ->timezone((string) config('app.timezone'))
-                        ->startOfHour()
-                        ->format('Y-m-d H');
-                    if (array_key_exists($key, $bucketCounts)) {
-                        $bucketCounts[$key] += (int) $row->total;
-                    }
-                }
-            }
-
-            $values = [];
-            foreach (array_keys($bucketCounts) as $key) {
-                $values[] = $bucketCounts[$key];
-            }
-
-            return ['labels' => $labels, 'values' => $values];
-        });
+        return Cache::remember("activity_trend_v2_24h_{$campaignCode}", $ttl,
+            fn () => $this->formActivityTrend($campaignCode, now()->copy()->subHours(23)->startOfHour(), now(), true));
     }
 
     public function getActivityTrend(string $campaignCode, int $days = 14): array
     {
-        return Cache::remember("activity_trend_{$campaignCode}_{$days}", 300, function () use ($campaignCode, $days) {
-            $cutoff = now()->subDays($days)->format('Y-m-d');
-            $activityData = $this->aggregateSubmissionTotalsByDay($campaignCode, $cutoff);
-
-            $labels = [];
-            $values = [];
-            for ($i = $days - 1; $i >= 0; $i--) {
-                $d = now()->subDays($i)->format('Y-m-d');
-                $labels[] = now()->subDays($i)->format('M d');
-                $values[] = $activityData[$d] ?? 0;
-            }
-
-            return ['labels' => $labels, 'values' => $values];
-        });
+        return Cache::remember("activity_trend_v2_{$campaignCode}_{$days}", 300,
+            fn () => $this->formActivityTrend($campaignCode, now()->copy()->subDays($days - 1)->startOfDay(), now()));
     }
 
-    /** @return array{labels: list<string>, values: list<int>} */
     public function getWeeklyActivityTrend(string $campaignCode): array
     {
         $weekKey = now()->format('o-\WW');
 
-        return Cache::remember("activity_trend_weekly_{$campaignCode}_{$weekKey}", 300, function () use ($campaignCode) {
-            $weekStart = now()->copy()->startOfWeek(CarbonInterface::MONDAY);
-            $cutoff = $weekStart->format('Y-m-d');
-            $activityData = $this->aggregateSubmissionTotalsByDay($campaignCode, $cutoff);
-
-            $labels = [];
-            $values = [];
-            $today = now()->copy()->startOfDay();
-
-            for ($d = $weekStart->copy(); $d->lte($today); $d->addDay()) {
-                $key = $d->format('Y-m-d');
-                $labels[] = $d->format('D M j');
-                $values[] = $activityData[$key] ?? 0;
-            }
-
-            return ['labels' => $labels, 'values' => $values];
-        });
+        return Cache::remember("activity_trend_v2_weekly_{$campaignCode}_{$weekKey}", 300,
+            fn () => $this->formActivityTrend($campaignCode, now()->copy()->startOfWeek(CarbonInterface::MONDAY), now(), false, 'D M j'));
     }
 
-    /** @return array{labels: list<string>, values: list<int>} */
     public function getMonthlyActivityTrend(string $campaignCode): array
     {
         $ym = sprintf('%04d_%02d', now()->year, now()->month);
 
-        return Cache::remember("activity_trend_monthly_{$campaignCode}_{$ym}", 300, function () use ($campaignCode) {
-            $monthStart = now()->copy()->startOfMonth()->format('Y-m-d');
-            $activityData = $this->aggregateSubmissionTotalsByDay($campaignCode, $monthStart);
+        return Cache::remember("activity_trend_v2_monthly_{$campaignCode}_{$ym}", 300,
+            fn () => $this->formActivityTrend($campaignCode, now()->copy()->startOfMonth(), now()));
+    }
 
-            $labels = [];
-            $values = [];
-            $daysInPartialMonth = now()->day;
-
-            for ($i = 0; $i < $daysInPartialMonth; $i++) {
-                $cursor = now()->copy()->startOfMonth()->addDays($i);
-                $d = $cursor->format('Y-m-d');
-                $labels[] = $cursor->format('M d');
-                $values[] = $activityData[$d] ?? 0;
+    /** @return list<array{code: string, name: string, table: string}> */
+    private function campaignChartForms(string $campaignCode): array
+    {
+        $campaigns = $this->campaignRepository->getCampaignsWithForms();
+        $allowed = $this->campaignRepository->getAllFormTableNames();
+        $forms = [];
+        foreach ($campaigns[$campaignCode]['forms'] ?? [] as $code => $form) {
+            $table = (string) ($form['table'] ?? '');
+            if (in_array($table, $allowed, true)) {
+                $forms[] = ['code' => (string) $code, 'name' => (string) ($form['name'] ?? $code), 'table' => $table];
             }
+        }
 
-            return ['labels' => $labels, 'values' => $values];
-        });
+        return $forms;
+    }
+
+    private function formActivityTrend(string $campaignCode, Carbon $start, Carbon $end, bool $hourly = false, string $dayLabelFormat = 'M d'): array
+    {
+        $forms = $this->campaignChartForms($campaignCode);
+        $allowedTables = $hourly ? $this->resolveAllowedTablesWithCreatedAt($campaignCode) : $this->resolveAllowedTables($campaignCode);
+        if ($allowedTables === []) {
+            return ['labels' => [], 'values' => [], 'forms' => []];
+        }
+        $labels = [];
+        $buckets = [];
+        for ($cursor = $start->copy(); $cursor->lte($end); $hourly ? $cursor->addHour() : $cursor->addDay()) {
+            $key = $cursor->format($hourly ? 'Y-m-d H' : 'Y-m-d');
+            $buckets[$key] = 0;
+            $labels[] = $cursor->format($hourly ? 'M j H:00' : $dayLabelFormat);
+        }
+        $byTable = [];
+        foreach (array_unique($allowedTables) as $table) {
+            $counts = array_fill_keys(array_keys($buckets), 0);
+            $column = $hourly ? 'created_at' : 'date';
+            $expression = $hourly ? $this->dashboardMinuteBucketExpression() : 'date';
+            $rows = DB::table($table)->whereBetween($column, [$hourly ? now()->copy()->subHours(24) : $start->toDateString(), $hourly ? $end : $end->toDateString()])
+                ->selectRaw("{$expression} as bucket, COUNT(*) as total")->groupByRaw($expression)->get();
+            foreach ($rows as $row) {
+                $key = $hourly ? Carbon::parse((string) $row->bucket)->timezone((string) config('app.timezone'))->format('Y-m-d H') : (string) $row->bucket;
+                if (array_key_exists($key, $counts)) {
+                    $counts[$key] += (int) $row->total;
+                    $buckets[$key] += (int) $row->total;
+                }
+            }
+            $byTable[$table] = array_values($counts);
+        }
+
+        return ['labels' => $labels, 'values' => array_values($buckets), 'forms' => array_map(
+            fn (array $form): array => ['code' => $form['code'], 'name' => $form['name'], 'values' => $byTable[$form['table']] ?? array_fill(0, count($labels), 0)], $forms,
+        )];
     }
 
     /**
@@ -220,6 +181,13 @@ class DashboardStatsService
                 }
             }
 
+            $formComparisons = [];
+            foreach ($this->campaignChartForms($campaignCode) as $form) {
+                $formComparisons[] = [
+                    'code' => $form['code'], 'name' => $form['name'],
+                    'daily' => $aggregate['forms'][$resolvedSalesRules['mode'] === DashboardSalesRuleService::MODE_CUSTOM ? 'form:'.$form['code'] : $form['table']] ?? $this->emptyDashboardSummaryDaily($periods),
+                ];
+            }
             $current = $aggregate['totals']['current'];
             $previous = $aggregate['totals']['previous'];
             $currentCount = (int) $current['count'];
@@ -251,6 +219,7 @@ class DashboardStatsService
                     'amount' => $this->dashboardPeriodService->compare($currentAmount, $previousAmount),
                 ],
                 'daily' => $aggregate['daily'],
+                'forms' => $formComparisons,
             ];
         });
     }
@@ -715,16 +684,16 @@ class DashboardStatsService
         $this->bumpDashboardCacheGeneration($campaignCode);
         unset($this->salesContexts[$campaignCode], $this->markedSaleFields[$campaignCode]);
 
-        Cache::forget("activity_trend_{$campaignCode}_{$days}");
+        Cache::forget("activity_trend_v2_{$campaignCode}_{$days}");
         Cache::forget("top_agents_{$campaignCode}_10");
 
-        Cache::forget("activity_trend_24h_{$campaignCode}");
+        Cache::forget("activity_trend_v2_24h_{$campaignCode}");
 
         $ym = sprintf('%04d_%02d', now()->year, now()->month);
-        Cache::forget("activity_trend_monthly_{$campaignCode}_{$ym}");
+        Cache::forget("activity_trend_v2_monthly_{$campaignCode}_{$ym}");
 
         $wk = now()->format('o-\WW');
-        Cache::forget("activity_trend_weekly_{$campaignCode}_{$wk}");
+        Cache::forget("activity_trend_v2_weekly_{$campaignCode}_{$wk}");
 
         $callHours = (int) config('dashboard.kpi_window_hours', 9);
         $salesHours = (int) config('dashboard.sales_kpi_window_hours', 24);
@@ -804,7 +773,7 @@ class DashboardStatsService
 
         $signature = hash('sha256', implode('|', $parts));
 
-        return 'dashboard_summary_'.$campaignCode.'_'.$this->dashboardCacheGeneration($campaignCode).'_'.$signature;
+        return 'dashboard_summary_v2_'.$campaignCode.'_'.$this->dashboardCacheGeneration($campaignCode).'_'.$signature;
     }
 
     private function dashboardCacheGeneration(string $campaignCode): int
@@ -1403,8 +1372,11 @@ class DashboardStatsService
                 'previous' => ['count' => 0, 'amount' => 0.0],
             ],
             'daily' => $this->emptyDashboardSummaryDaily($periods),
+            'forms' => [],
         ];
 
+        $sharedTables = array_filter(array_count_values(array_column($sources, 'table')), static fn (int $count): bool => $count > 1);
+        $seen = [];
         foreach ($sources as $source) {
             $tableName = (string) $source['table'];
             if (! Schema::hasTable($tableName) || ! Schema::hasColumn($tableName, 'created_at')) {
@@ -1417,7 +1389,7 @@ class DashboardStatsService
                 ->where('created_at', $endOperator, $periods['current']['end'])
                 ->select($source['select'])
                 ->orderBy('id')
-                ->chunk(1000, function ($rows) use (&$result, $periods, $source, $resolveAmount): void {
+                ->chunk(1000, function ($rows) use (&$result, $periods, $source, $tableName, $sharedTables, &$seen, $resolveAmount): void {
                     foreach ($rows as $row) {
                         $amount = $resolveAmount($row, $source);
                         if ($amount === null) {
@@ -1439,6 +1411,17 @@ class DashboardStatsService
                             continue;
                         }
 
+                        $formKey = isset($source['rule']['form_code']) ? 'form:'.$source['rule']['form_code'] : $tableName;
+                        $result['forms'][$formKey] ??= $this->emptyDashboardSummaryDaily($periods);
+                        $result['forms'][$formKey][$dailyIndex][$periodKey]['count']++;
+                        $result['forms'][$formKey][$dailyIndex][$periodKey]['amount'] += $amount;
+                        // Shared storage contributes a qualifying record only once to Overall.
+                        if (isset($sharedTables[$tableName])) {
+                            if (isset($seen[$tableName][$row->id])) {
+                                continue;
+                            }
+                            $seen[$tableName][$row->id] = true;
+                        }
                         $result['totals'][$periodKey]['count']++;
                         $result['totals'][$periodKey]['amount'] += $amount;
                         $result['daily'][$dailyIndex][$periodKey]['count']++;
@@ -1452,6 +1435,17 @@ class DashboardStatsService
         }
         unset($totals);
 
+        foreach ($result['forms'] as &$formDaily) {
+            foreach ($formDaily as &$formDay) {
+                foreach (['current', 'previous'] as $periodKey) {
+                    if ($formDay[$periodKey]['amount'] !== null) {
+                        $formDay[$periodKey]['amount'] = round($formDay[$periodKey]['amount'], 2);
+                    }
+                }
+            }
+            unset($formDay);
+        }
+        unset($formDaily);
         foreach ($result['daily'] as &$day) {
             $day['current']['amount'] = round($day['current']['amount'], 2);
             if ($day['previous']['amount'] !== null) {
@@ -1512,45 +1506,6 @@ class DashboardStatsService
                 'day_count' => $periods['previous']['day_count'],
             ],
         ];
-    }
-
-    /**
-     * Daily form submission totals for allowed tables since $sinceDateYmd (inclusive day).
-     *
-     * @return array<string, int>
-     */
-    private function aggregateSubmissionTotalsByDay(string $campaignCode, string $sinceDateYmd): array
-    {
-        $tables = $this->resolveAllowedTables($campaignCode);
-        if (empty($tables)) {
-            return [];
-        }
-
-        $queries = [];
-        foreach ($tables as $t) {
-            $queries[] = DB::table($t)
-                ->select(DB::raw("'$t' as source, `date`"))
-                ->where('date', '>=', $sinceDateYmd);
-        }
-
-        $union = array_shift($queries);
-        foreach ($queries as $q) {
-            $union = $union->unionAll($q);
-        }
-
-        $rows = DB::table(DB::raw("({$union->toSql()}) as combined"))
-            ->mergeBindings($union)
-            ->select(DB::raw('`date`, COUNT(*) as total'))
-            ->groupBy('date')
-            ->orderBy('date')
-            ->get();
-
-        $activityData = [];
-        foreach ($rows as $row) {
-            $activityData[$row->date] = (int) $row->total;
-        }
-
-        return $activityData;
     }
 
     /** @return list<string> */

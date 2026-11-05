@@ -547,7 +547,7 @@ class DashboardSalesRangeTest extends TestCase
         $response->assertSee('id="chart-dashboard-summary"', false);
         $response->assertSee('Chart measure', false);
         $response->assertSee('View Daily Summary Data', false);
-        $response->assertSee('Daily current and previous period transaction and amount comparison', false);
+        $response->assertSee('Overall daily current and previous period transaction and amount comparison', false);
         $response->assertSee('Amount is the sum of numeric form fields marked as sale amounts for qualifying records.', false);
         $response->assertSee('$100.00', false);
         $response->assertSee('+$20.00', false);
@@ -555,7 +555,7 @@ class DashboardSalesRangeTest extends TestCase
         $response->assertSee('No change vs last month', false);
 
         $content = $response->getContent();
-        $tableStart = strpos($content, '<caption class="sr-only">Daily current and previous period transaction and amount comparison</caption>');
+        $tableStart = strpos($content, '<caption class="sr-only">Overall daily current and previous period transaction and amount comparison</caption>');
         $tableEnd = $tableStart === false ? false : strpos($content, '</table>', $tableStart);
         $summaryTable = $tableStart === false || $tableEnd === false
             ? ''

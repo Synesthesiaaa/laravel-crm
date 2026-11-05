@@ -251,6 +251,7 @@
             <div class="grid grid-cols-1 gap-5 pt-5 xl:grid-cols-[minmax(16rem,0.9fr)_minmax(0,2.1fr)] xl:gap-6">
                 <div class="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-card)] p-5 sm:p-6">
                     <p class="report-eyebrow">Answer Rate</p>
+                    <p class="mt-2 text-xs text-[var(--color-on-surface-muted)]">Answered ÷ total calls × 100, minus ANA abandoned rate.</p>
                     <p class="mt-3 text-3xl font-semibold leading-none tracking-tight text-[var(--color-on-surface)] tabular-nums" x-text="formatPercent(dashboard.overview.answerRate)"></p>
                     <p class="mt-3 text-sm leading-6 text-[var(--color-on-surface-muted)]">
                         <span class="font-semibold text-[var(--color-on-surface)] tabular-nums" x-text="formatNumber(dashboard.overview.answeredCalls)"></span>
@@ -260,7 +261,7 @@
                     </p>
                 </div>
 
-                <dl class="grid grid-cols-2 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] sm:grid-cols-3">
+                <dl class="grid grid-cols-2 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] sm:grid-cols-4">
                     <div class="min-w-0 border-b border-r border-[var(--color-border)] p-4 sm:p-5">
                         <dt class="report-metric-label">Total Calls</dt>
                         <dd class="mt-2 text-2xl font-bold text-[var(--color-on-surface)] tabular-nums" x-text="formatNumber(dashboard.overview.totalCalls)"></dd>
@@ -272,6 +273,10 @@
                     <div class="min-w-0 border-b border-r border-[var(--color-border)] p-4 sm:border-r-0 sm:p-5">
                         <dt class="report-metric-label">Contact Rate</dt>
                         <dd class="mt-2 text-2xl font-bold text-[var(--color-on-surface)] tabular-nums" x-text="formatPercent(dashboard.overview.contactRate)"></dd>
+                    </div>
+                    <div class="min-w-0 border-b border-[var(--color-border)] p-4 sm:p-5">
+                        <dt class="report-metric-label">Abandoned Rate (ANA)</dt>
+                        <dd class="mt-2 text-2xl font-bold text-[var(--color-on-surface)] tabular-nums" x-text="formatPercent(dashboard.overview.abandonedRate)"></dd>
                     </div>
                     <div class="min-w-0 border-b border-[var(--color-border)] p-4 sm:border-b-0 sm:border-r sm:p-5">
                         <dt class="report-metric-label">Calls per Agent</dt>
@@ -497,6 +502,8 @@
                     <div class="report-inline-metric">
                         <p class="report-metric-label">Contact Rate</p>
                         <p class="mt-2 text-lg font-semibold text-[var(--color-on-surface)] truncate" x-text="formatPercent(dashboard.overview.contactRate)"></p>
+                        <p class="report-metric-label mt-3">Abandoned Rate (ANA)</p>
+                        <p class="mt-2 text-lg font-semibold text-[var(--color-on-surface)]" x-text="formatPercent(dashboard.overview.abandonedRate)"></p>
                     </div>
                 </div>
             </div>
@@ -671,6 +678,7 @@ window.telephonyReports = function () {
                 answeredCalls: null,
                 answerRate: null,
                 contactRate: null,
+                abandonedRate: null,
                 averageTalkTimeSeconds: null,
                 agentsWithActivity: null,
                 callsPerAgent: null,
@@ -994,6 +1002,7 @@ window.telephonyReports = function () {
                 answeredCalls: summary.answered_calls,
                 answerRate: summary.answer_rate,
                 contactRate: summary.contact_rate ?? null,
+                abandonedRate: summary.abandoned_rate ?? null,
                 averageTalkTimeSeconds: summary.average_talk_time_seconds ?? null,
                 agentsWithActivity: summary.agents_with_activity,
                 callsPerAgent: summary.calls_per_agent,
@@ -1098,6 +1107,7 @@ window.telephonyReports = function () {
                 answered_calls: 'Answered',
                 answer_rate: 'Answer Rate',
                 contact_rate: 'Contact Rate',
+                abandoned_rate: 'Abandoned Rate',
                 average_talk_time_seconds: 'Average Talk',
                 agents_with_activity: 'Agents With Activity',
                 calls_per_agent: 'Calls per Agent',

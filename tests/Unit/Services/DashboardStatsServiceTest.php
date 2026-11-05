@@ -21,11 +21,97 @@ class DashboardStatsServiceTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_activity_and_comparison_expose_separate_forms_and_overall_totals(): void
+    {
+        Carbon::setTestNow('2026-05-07 15:00:00');
+        $this->seed(CampaignSeeder::class);
+        Cache::flush();
+        FormField::query()->create([
+            'campaign_code' => 'mbsales', 'form_type' => 'ezycash',
+            'field_name' => 'ezycash_amount', 'field_label' => 'Amount',
+            'field_type' => 'number', 'is_required' => false,
+            'is_sale_amount' => true, 'field_order' => 1,
+        ]);
+        $this->insertEzycashSaleRow('2026-05-07', 'Alice', 100, 10, '2026-05-07 14:00:00', 1);
+        $this->insertEzycashSaleRow('2026-04-07', 'Alice', 80, 10, '2026-04-07 14:00:00', 2);
+        Schema::create('comparison_samples', function ($table): void {
+            $table->id();
+            $table->date('date');
+            $table->string('agent');
+            $table->decimal('amount', 12, 2);
+            $table->timestamps();
+        });
+        Form::create(['campaign_code' => 'mbsales', 'form_code' => 'samples', 'name' => 'Samples', 'table_name' => 'comparison_samples']);
+        FormField::query()->create([
+            'campaign_code' => 'mbsales', 'form_type' => 'samples',
+            'field_name' => 'amount', 'field_label' => 'Amount', 'field_type' => 'number',
+            'is_sale_amount' => true, 'field_order' => 1,
+        ]);
+        DB::table('comparison_samples')->insert([
+            ['date' => '2026-05-07', 'agent' => 'Alice', 'amount' => 50, 'created_at' => '2026-05-07 14:00:00'],
+            ['date' => '2026-05-07', 'agent' => 'Alice', 'amount' => 25, 'created_at' => '2026-05-07 13:00:00'],
+        ]);
+        Cache::flush();
+        $service = app(DashboardStatsService::class);
+        foreach ([$service->getLast24HourActivityTrend('mbsales'), $service->getWeeklyActivityTrend('mbsales'), $service->getMonthlyActivityTrend('mbsales')] as $trend) {
+            $forms = array_column($trend['forms'], null, 'code');
+            $this->assertSame(1, array_sum($forms['ezycash']['values']));
+            $this->assertSame(2, array_sum($forms['samples']['values']));
+            $this->assertSame(0, array_sum($forms['ezytransfer']['values']));
+            $this->assertSame(3, array_sum($trend['values']));
+            $this->assertCount(count($trend['labels']), $forms['ezycash']['values']);
+            $this->assertGreaterThan(1, count($forms));
+        }
+        $summary = $service->getDashboardSummaryForCampaign('mbsales');
+        $forms = array_column($summary['forms'], null, 'code');
+        $this->assertSame(1, $forms['ezycash']['daily'][6]['current']['count']);
+        $this->assertSame(100.0, $forms['ezycash']['daily'][6]['current']['amount']);
+        $this->assertSame(80.0, $forms['ezycash']['daily'][6]['previous']['amount']);
+        $this->assertSame(2, $forms['samples']['daily'][6]['current']['count']);
+        $this->assertSame(75.0, $forms['samples']['daily'][6]['current']['amount']);
+        $this->assertSame(3, $summary['daily'][6]['current']['count']);
+        $this->assertSame(175.0, $summary['daily'][6]['current']['amount']);
+        $this->assertSame(0, $forms['ezytransfer']['daily'][6]['current']['count']);
+
+        $this->actingAs(\App\Models\User::factory()->create(['role' => \App\Models\User::ROLE_AGENT]))
+            ->withSession(['campaign' => 'mbsales'])
+            ->get(route('dashboard'))->assertOk()
+            ->assertSee('id="dashboard-comparison-form"', false)
+            ->assertSee('data-summary-form-table="ezycash"', false)
+            ->assertSee('data-summary-form-table="samples"', false);
+    }
+
     protected function tearDown(): void
     {
         Carbon::setTestNow();
         config(['vicidial.report_system_disposition_codes' => []]);
         parent::tearDown();
+    }
+
+    public function test_custom_comparison_keeps_shared_table_forms_separate_without_duplicating_overall(): void
+    {
+        Carbon::setTestNow('2026-05-07 15:00:00');
+        $this->seed(CampaignSeeder::class);
+        Form::create(['campaign_code' => 'mbsales', 'form_code' => 'alias', 'name' => 'Alias', 'table_name' => 'ezycash']);
+        $this->insertEzycashSaleRow('2026-05-07', 'Alice', 100, 10, '2026-05-07 14:00:00', 900);
+        $layout = app(DashboardLayoutService::class);
+        $rule = ['form_code' => 'ezycash', 'trigger' => 'form', 'amount_field' => null, 'conditions' => []];
+        $layout->saveForCampaign('mbsales', [], [], ['mode' => 'custom', 'forms' => [$rule]]);
+        $service = app(DashboardStatsService::class);
+        $service->invalidate('mbsales');
+        $summary = $service->getDashboardSummaryForCampaign('mbsales');
+        $forms = array_column($summary['forms'], null, 'code');
+        $this->assertSame(1, $forms['ezycash']['daily'][6]['current']['count']);
+        $this->assertSame(0, $forms['alias']['daily'][6]['current']['count']);
+
+        $aliasRule = array_replace($rule, ['form_code' => 'alias']);
+        $layout->saveForCampaign('mbsales', [], [], ['mode' => 'custom', 'forms' => [$rule, $aliasRule]]);
+        $service->invalidate('mbsales');
+        $summary = $service->getDashboardSummaryForCampaign('mbsales');
+        $forms = array_column($summary['forms'], null, 'code');
+        $this->assertSame(1, $forms['alias']['daily'][6]['current']['count']);
+        $this->assertSame(1, $forms['ezycash']['daily'][6]['current']['count']);
+        $this->assertSame(1, $summary['summary']['current']['count']);
     }
 
     public function test_get_kpis_returns_zero_without_disposition_rows(): void

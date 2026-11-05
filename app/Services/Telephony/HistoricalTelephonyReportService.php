@@ -142,6 +142,8 @@ class HistoricalTelephonyReportService
             'total_calls' => null,
             'answered_calls' => null,
             'answer_rate' => null,
+            'abandoned_calls' => null,
+            'abandoned_rate' => null,
             'contact_rate' => null,
             'average_talk_time_seconds' => null,
             'agents_with_activity' => null,
@@ -285,6 +287,7 @@ class HistoricalTelephonyReportService
             'total_calls' => 'count',
             'answered_calls' => 'count',
             'answer_rate' => 'rate',
+            'abandoned_rate' => 'rate',
             'contact_rate' => 'rate',
             'average_talk_time_seconds' => 'duration',
             'agents_with_activity' => 'count',
@@ -406,6 +409,7 @@ class HistoricalTelephonyReportService
         $totalCalls = $callDataAvailable ? ($callStatus['total_calls'] ?? null) : null;
         $answeredCalls = $callDataAvailable ? ($callStatus['answered_calls'] ?? null) : null;
         $contacted = $dispositions['group_totals']['contacted'] ?? null;
+        $abandoned = $dispositions['abandoned_calls'] ?? null;
         $averageTalk = $agentDataAvailable ? $agents['summary']['average_talk_time_seconds'] : null;
         $agentCount = $agentDataAvailable ? ($agents['summary']['agents_with_activity'] ?? null) : null;
 
@@ -413,8 +417,12 @@ class HistoricalTelephonyReportService
             'total_calls' => $totalCalls,
             'answered_calls' => $answeredCalls,
             'answer_rate' => $totalCalls !== null && $answeredCalls !== null && $totalCalls > 0
-                ? round(($answeredCalls / $totalCalls) * 100, 2)
-                : ($totalCalls === 0 && $answeredCalls !== null ? 0 : null),
+                ? (is_numeric($abandoned) ? round((($answeredCalls - $abandoned) / $totalCalls) * 100, 2) : null)
+                : ($totalCalls === 0 && $answeredCalls !== null && is_numeric($abandoned) ? 0 : null),
+            'abandoned_calls' => $abandoned,
+            'abandoned_rate' => is_numeric($abandoned) && $totalCalls !== null && $totalCalls > 0
+                ? round(($abandoned / $totalCalls) * 100, 2)
+                : (is_numeric($abandoned) && $totalCalls === 0 ? 0 : null),
             'contact_rate' => is_numeric($contacted) && $totalCalls !== null && $totalCalls > 0
                 ? round(((float) $contacted / $totalCalls) * 100, 2)
                 : (is_numeric($contacted) && $totalCalls === 0 ? 0 : null),
@@ -780,6 +788,8 @@ class HistoricalTelephonyReportService
             'rows' => [],
             'pareto' => ['labels' => [], 'values' => [], 'percentages' => [], 'state' => 'empty'],
             'code_totals' => [],
+            'abandoned_calls' => null,
+            'abandoned_campaign_totals' => [],
             'group_totals' => [],
             'group_campaign_totals' => [],
             'total_calls' => null,
@@ -820,6 +830,8 @@ class HistoricalTelephonyReportService
                 'state' => 'confirmed_zero',
                 'pareto' => ['labels' => [], 'values' => [], 'percentages' => [], 'state' => 'confirmed_zero'],
                 'total_calls' => 0,
+                'abandoned_calls' => 0,
+                'group_totals' => ['contacted' => 0],
             ];
         }
         $codeTotals = [];
@@ -916,6 +928,19 @@ class HistoricalTelephonyReportService
             }
         }
 
+        // Contacted is every visible non-system outcome, independent of optional funnel groups.
+        $groupTotals['contacted'] = $parseFailures === 0 ? 0 : null;
+        $groupCampaignTotals['contacted'] = [];
+        $abandonedByCampaign = [];
+        foreach ($campaignCodeTotals as $campaignCode => $metrics) {
+            $contacted = array_sum(array_filter($metrics, fn ($value, $code): bool => ! isset($systemCodes[$code]), ARRAY_FILTER_USE_BOTH));
+            $groupCampaignTotals['contacted'][$campaignCode] = $parseFailures === 0 ? $contacted : null;
+            $abandonedByCampaign[$campaignCode] = $parseFailures === 0 ? ($metrics['ANA'] ?? 0) : null;
+            if ($parseFailures === 0) {
+                $groupTotals['contacted'] += $contacted;
+            }
+        }
+
         return [
             'state' => $parseFailures > 0 ? 'degraded' : ($total === 0 ? 'confirmed_zero' : 'data'),
             'rows' => $reportRows,
@@ -924,6 +949,8 @@ class HistoricalTelephonyReportService
                 array_map(fn (string $code): string => $codeLabels[$code] ?? $code, array_keys($codeTotals)),
                 array_values($codeTotals),
             ) ?: [],
+            'abandoned_calls' => $parseFailures === 0 ? ($codeTotals['ANA'] ?? 0) : null,
+            'abandoned_campaign_totals' => $abandonedByCampaign,
             'group_totals' => $groupTotals,
             'group_campaign_totals' => $groupCampaignTotals,
             'total_calls' => $total,
@@ -1368,6 +1395,15 @@ class HistoricalTelephonyReportService
             $code = (string) ($campaign['campaign'] ?? '');
             $contacted = is_array($contactedByCampaign) && array_key_exists($code, $contactedByCampaign)
                 ? $contactedByCampaign[$code]
+                : (($dispositions['state'] ?? '') === 'confirmed_zero' ? 0 : null);
+            $abandoned = $dispositions['abandoned_campaign_totals'][$code] ?? (($dispositions['state'] ?? '') === 'confirmed_zero' ? 0 : null);
+            $campaign['abandoned_calls'] = $abandoned;
+            $campaign['abandoned_rate'] = is_numeric($abandoned) && is_numeric($campaign['total_calls'])
+                ? ($campaign['total_calls'] > 0 ? round(($abandoned / $campaign['total_calls']) * 100, 2) : 0)
+                : null;
+            $answered = $campaign['answered_calls'] ?? null;
+            $campaign['answer_rate'] = is_numeric($answered) && is_numeric($abandoned) && is_numeric($campaign['total_calls'])
+                ? ($campaign['total_calls'] > 0 ? round((($answered - $abandoned) / $campaign['total_calls']) * 100, 2) : 0)
                 : null;
             $campaign['contact_rate'] = is_numeric($contacted) && is_numeric($campaign['total_calls']) && $campaign['total_calls'] > 0
                 ? round(((float) $contacted / (float) $campaign['total_calls']) * 100, 2)

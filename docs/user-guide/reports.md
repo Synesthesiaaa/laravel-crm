@@ -17,12 +17,15 @@ Historical reports concern the selected period. Today means midnight to now in t
 | Metric | Implemented meaning |
 | --- | --- |
 | Total calls | Available scoped call-status totals, subject to selected disposition scope. |
-| Answer rate | Answered calls ÷ total calls × 100, rounded to two decimals, when both inputs are available. A confirmed zero denominator returns zero; unavailable inputs stay unavailable. |
-| Contact rate | Count in configured contacted disposition group ÷ total calls × 100, when the group and call totals are available. It is not automatically the answer rate. |
+| Answer rate | (Answered calls − ANA calls) ÷ total calls × 100, rounded to two decimals. This subtracts the abandoned rate from the original answer rate. Confirmed zero totals return zero; unverifiable inputs stay unavailable. |
+| Abandoned rate | ANA (Agent Not Available) calls ÷ total calls × 100. Displayed beside Contact Rate. |
+| Contact rate | Sum of all non-system disposition counts ÷ total calls × 100. Uses the configured system disposition list and does not require a contacted-code group. |
 | Calls per agent | Total calls ÷ agents with activity, rounded to two decimals; unavailable when no usable agent count exists. |
 | Average talk time | The parsed agent summary uses total talk seconds ÷ total agent calls when talk data is available, rounded to one decimal. It is not assumed to use only answered calls. |
 
-Contacted, qualified, and successful disposition groups are configurable. A system disposition can be included, excluded, or selected alone. Changing scope can change denominators; some scoped answer metrics are deliberately unavailable when the source cannot verify them consistently. Compare the same filters and source availability.
+The optional conversion funnel retains its configurable disposition groups. A system disposition can be included, excluded, or selected alone. Changing scope changes the rate inputs: ANA calls excluded by the selected scope do not contribute to its abandoned rate, and system-only scope has zero contacted calls. Some scoped answer metrics remain unavailable when the source cannot verify them consistently. Compare the same filters and source availability. Live operational metrics retain their existing source definitions.
+
+Dashboard **Daily Comparison** has an **Overall / form** selector. Its chart and accessible data table compare the selected form against the equivalent previous-month days, with the existing volume/amount controls. Daily, weekly, and monthly activity charts show an Overall series and a named series for each form; use the legend to show or hide a series. Empty forms retain zero buckets. Activity counts all submissions; Daily Comparison follows configured sales qualification rules.
 
 ## Sales are a separate measure
 
