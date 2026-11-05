@@ -15,7 +15,7 @@ use Tests\TestCase;
 
 class HistoricalTelephonyReportServiceTest extends TestCase
 {
-    public function test_dispositions_alone_cannot_verify_answer_contact_or_abandonment_rates(): void
+    public function test_ana_is_subtracted_and_contacts_include_every_non_system_status(): void
     {
         config()->set('vicidial.report_system_disposition_codes', ['SYS']);
         config()->set('vicidial.report_disposition_groups.contacted', []);
@@ -28,13 +28,13 @@ class HistoricalTelephonyReportServiceTest extends TestCase
         $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver(), null))->dashboard(
             null, 'crm-campaign', ['query_date' => '2026-11-05', 'disposition_scope' => 'all'],
         );
-        $this->assertNull($data['summary']['abandoned_calls']);
-        $this->assertNull($data['summary']['abandoned_rate']);
-        $this->assertNull($data['summary']['answer_rate']);
-        $this->assertNull($data['summary']['contact_rate']);
-        $this->assertNull($data['campaigns'][0]['answer_rate']);
-        $this->assertNull($data['campaigns'][0]['abandoned_rate']);
-        $this->assertNull($data['campaigns'][0]['contact_rate']);
+        $this->assertSame(10, $data['summary']['abandoned_calls']);
+        $this->assertSame(10.0, $data['summary']['abandoned_rate']);
+        $this->assertSame(50.0, $data['summary']['answer_rate']);
+        $this->assertSame(80.0, $data['summary']['contact_rate']);
+        $this->assertSame(50.0, $data['campaigns'][0]['answer_rate']);
+        $this->assertSame(10.0, $data['campaigns'][0]['abandoned_rate']);
+        $this->assertSame(80.0, $data['campaigns'][0]['contact_rate']);
     }
 
     protected function tearDown(): void
@@ -44,15 +44,15 @@ class HistoricalTelephonyReportServiceTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_aggregate_only_rates_stay_unavailable_for_zero_missing_and_partial_data(): void
+    public function test_rates_handle_zero_missing_and_partial_disposition_data(): void
     {
         foreach ([
-            [0, 0, [['campaign', 'ANA', 'SALE'], ['campaign-a', '0', '0']]],
-            [7, 4, [['campaign', 'ANA', 'SALE'], ['campaign-a', '1', '6']]],
-            [10, 6, [['campaign', 'SALE', 'NA'], ['campaign-a', '4', '6']]],
-            [10, 6, [['campaign', 'ANA', 'SALE'], ['campaign-a', 'bad', '6']]],
-            [0, 0, []],
-        ] as [$total, $answered, $dispositions]) {
+            [0, 0, [['campaign', 'ANA', 'SALE'], ['campaign-a', '0', '0']], 0, 0, 0],
+            [7, 4, [['campaign', 'ANA', 'SALE'], ['campaign-a', '1', '6']], 42.86, 14.29, 100.0],
+            [10, 6, [['campaign', 'SALE', 'NA'], ['campaign-a', '4', '6']], 60.0, 0.0, 100.0],
+            [10, 6, [['campaign', 'ANA', 'SALE'], ['campaign-a', 'bad', '6']], null, null, null],
+            [0, 0, [], null, null, null],
+        ] as [$total, $answered, $dispositions, $answerRate, $abandonedRate, $contactRate]) {
             $reporting = Mockery::mock(ReportingService::class);
             $reporting->shouldReceive('historicalSnapshot')->once()->andReturn($this->snapshot(
                 [['campaign-a', (string) $total, (string) $answered, '', '']],
@@ -62,14 +62,14 @@ class HistoricalTelephonyReportServiceTest extends TestCase
             $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver(), null))->dashboard(
                 null, 'crm-campaign', ['query_date' => '2026-11-05', 'disposition_scope' => 'all'],
             );
-            $this->assertNull($data['summary']['answer_rate']);
-            $this->assertNull($data['summary']['abandoned_rate']);
-            $this->assertNull($data['summary']['contact_rate']);
-            $this->assertNull($data['campaigns'][0]['answer_rate']);
+            $this->assertSame($answerRate, $data['summary']['answer_rate']);
+            $this->assertSame($abandonedRate, $data['summary']['abandoned_rate']);
+            $this->assertSame($contactRate, $data['summary']['contact_rate']);
+            $this->assertSame($answerRate, $data['campaigns'][0]['answer_rate']);
         }
     }
 
-    public function test_aggregate_only_comparisons_do_not_fabricate_verified_rates(): void
+    public function test_ana_rates_are_weighted_and_compared_as_percentage_points(): void
     {
         $reporting = Mockery::mock(ReportingService::class);
         $reporting->shouldReceive('historicalSnapshot')->twice()->andReturn(
@@ -87,11 +87,11 @@ class HistoricalTelephonyReportServiceTest extends TestCase
         $data = (new HistoricalTelephonyReportService($reporting, $this->legacyScopeResolver(), null))->dashboard(
             null, 'crm-campaign', ['query_date' => '2026-11-05', 'comparison' => 'previous_period', 'disposition_scope' => 'all'],
         );
-        $this->assertNull($data['summary']['answer_rate']);
-        $this->assertNull($data['campaigns'][0]['answer_rate']);
-        $this->assertNull($data['campaigns'][1]['answer_rate']);
-        $this->assertNull($data['comparison']['metrics']['answer_rate']['change']);
-        $this->assertNull($data['comparison']['metrics']['abandoned_rate']['change']);
+        $this->assertSame(14.0, $data['summary']['answer_rate']);
+        $this->assertSame(50.0, $data['campaigns'][0]['answer_rate']);
+        $this->assertSame(10.0, $data['campaigns'][1]['answer_rate']);
+        $this->assertSame(-5.0, $data['comparison']['metrics']['answer_rate']['change']);
+        $this->assertSame(5.0, $data['comparison']['metrics']['abandoned_rate']['change']);
     }
 
     public function test_dashboard_aggregates_duplicate_agent_rows_and_returns_configured_funnel_data(): void
@@ -206,7 +206,7 @@ class HistoricalTelephonyReportServiceTest extends TestCase
             ],
         );
 
-        $this->assertNull($data['comparison']['metrics']['answer_rate']['change']);
+        $this->assertSame(20.0, $data['comparison']['metrics']['answer_rate']['change']);
         $this->assertSame('rate', $data['comparison']['metrics']['answer_rate']['unit']);
         $this->assertSame('2026-08-13', $data['comparison']['period']['start']);
         $this->assertSame('2026-08-19', $data['comparison']['period']['end']);
@@ -255,12 +255,12 @@ class HistoricalTelephonyReportServiceTest extends TestCase
         $this->assertSame(4, $data['comparison']['metrics']['total_calls']['current']);
         $this->assertSame(5, $data['comparison']['metrics']['total_calls']['previous']);
         $this->assertSame(-20.0, $data['comparison']['metrics']['total_calls']['change']);
-        $this->assertNull($data['comparison']['metrics']['answer_rate']['current']);
-        $this->assertNull($data['comparison']['metrics']['answer_rate']['previous']);
-        $this->assertNull($data['comparison']['metrics']['answer_rate']['change']);
+        $this->assertSame(25.0, $data['comparison']['metrics']['answer_rate']['current']);
+        $this->assertSame(60.0, $data['comparison']['metrics']['answer_rate']['previous']);
+        $this->assertSame(-35.0, $data['comparison']['metrics']['answer_rate']['change']);
     }
 
-    public function test_raw_campaign_totals_do_not_establish_verified_answer_rate(): void
+    public function test_answer_rate_is_weighted_from_raw_campaign_totals(): void
     {
         $reporting = Mockery::mock(ReportingService::class);
         $reporting->shouldReceive('historicalSnapshot')
@@ -282,7 +282,7 @@ class HistoricalTelephonyReportServiceTest extends TestCase
 
         $this->assertSame(1000, $data['summary']['total_calls']);
         $this->assertSame(140, $data['summary']['answered_calls']);
-        $this->assertNull($data['summary']['answer_rate']);
+        $this->assertSame(14.0, $data['summary']['answer_rate']);
     }
 
     public function test_system_disposition_scope_is_applied_to_pareto_and_contact_rate(): void
@@ -323,8 +323,8 @@ class HistoricalTelephonyReportServiceTest extends TestCase
 
         $this->assertSame(3, $data['summary']['total_calls']);
         $this->assertSame(1, $data['summary']['answered_calls']);
-        $this->assertNull($data['summary']['answer_rate']);
-        $this->assertNull($data['summary']['contact_rate']);
+        $this->assertSame(33.33, $data['summary']['answer_rate']);
+        $this->assertSame(100.0, $data['summary']['contact_rate']);
         $this->assertSame(3, $data['campaigns'][0]['total_calls']);
         $this->assertSame(['SALE'], $data['dispositions']['labels']);
         $this->assertSame(['SALE' => 3], $data['status_totals']);
@@ -357,7 +357,7 @@ class HistoricalTelephonyReportServiceTest extends TestCase
 
         $this->assertSame(10, $data['summary']['total_calls']);
         $this->assertSame(4, $data['summary']['answered_calls']);
-        $this->assertNull($data['summary']['answer_rate']);
+        $this->assertSame(40.0, $data['summary']['answer_rate']);
         $this->assertSame(['SYS', 'SALE'], $data['dispositions']['labels']);
         $this->assertSame(['SYS' => 7, 'SALE' => 3], $data['status_totals']);
         $this->assertSame('SYS', $data['campaigns'][0]['top_status']);
@@ -397,7 +397,7 @@ class HistoricalTelephonyReportServiceTest extends TestCase
 
         $this->assertSame(7, $data['summary']['total_calls']);
         $this->assertSame(1, $data['summary']['answered_calls']);
-        $this->assertNull($data['summary']['answer_rate']);
+        $this->assertSame(14.29, $data['summary']['answer_rate']);
         $this->assertSame(['SYS'], $data['dispositions']['labels']);
         $this->assertSame(['SYS' => 7], $data['status_totals']);
         $this->assertSame('SYS', $data['campaigns'][0]['top_status']);

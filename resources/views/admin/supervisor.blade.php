@@ -17,17 +17,6 @@
     <x-page-header title="Supervisor Dashboard" description="Real-time agent monitoring."
         :breadcrumbs="['Admin' => route('admin.dashboard'), 'Supervisor' => null]" />
 
-    <section class="grid grid-cols-1 gap-4 sm:grid-cols-3" aria-label="Today's verified call metrics">
-        @foreach(['answer_rate' => 'Answer Rate', 'contact_rate' => 'Contact Rate', 'abandoned_rate' => 'Abandoned Rate'] as $metricKey => $metricLabel)
-            <article class="md-card p-4" title="{{ \App\Services\Telephony\VerifiedCallMetricsService::DEFINITIONS[$metricKey] }}">
-                <h3 class="text-sm font-semibold">{{ $metricLabel }}</h3>
-                <p class="mt-2 text-2xl font-bold tabular-nums" x-text="stats.call_metrics?.metrics?.{{ $metricKey }}?.rate == null ? 'N/A' : Number(stats.call_metrics.metrics.{{ $metricKey }}.rate).toFixed(2) + '%'"></p>
-                <p class="mt-2 text-xs text-[var(--color-on-surface-muted)]">{{ \App\Services\Telephony\VerifiedCallMetricsService::DEFINITIONS[$metricKey] }}</p>
-                <p class="mt-2 text-xs text-[var(--color-on-surface-dim)]" x-text="stats.call_metrics?.metrics?.{{ $metricKey }}?.reason?.replaceAll('_', ' ') || 'Verified source coverage'"></p>
-            </article>
-        @endforeach
-    </section>
-
     <section class="md-card p-4" aria-labelledby="supervisor-routing-title">
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -503,7 +492,6 @@ window.supervisorDashboard = function(initialCampaign = '') {
                 const res = await window.axios.get('/api/supervisor/agents', {
                     params: { campaign: this.selectedCampaign || initialCampaign },
                 });
-                this.stats.call_metrics = res.data.stats?.call_metrics || {};
                 const incomingRouting = res.data.routing ?? {};
                 const incomingFreshness = res.data.freshness ?? {};
                 const incomingStatus = String(incomingFreshness.status || '').toLowerCase();

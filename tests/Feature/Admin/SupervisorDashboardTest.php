@@ -32,7 +32,7 @@ class SupervisorDashboardTest extends TestCase
             ->assertSee('Queue Monitor')
             ->assertSee('Calls Waiting')
             ->assertSee('Oldest Wait')
-            ->assertSee('Answer Rate')
+            ->assertDontSee('Answer Rate')
             ->assertSee('Live state:')
             ->assertSee('Agent timing:')
             ->assertSee('Call totals:')

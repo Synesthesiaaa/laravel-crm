@@ -41,7 +41,6 @@ class DashboardController extends Controller
         $dashboardLayout = $this->dashboardLayoutService->getForCampaign($campaign);
 
         return view('dashboard', [
-            'telephonyMetrics' => app(\App\Services\Telephony\VerifiedCallMetricsService::class)->forCampaign($campaign, $salesFilter['from'], $salesFilter['until']->copy()->min(now()), ['historical' => ! $salesFilter['until']->isFuture()]),
             'campaign' => $campaign,
             'campaignName' => $campaignName,
             'user' => $request->user(),

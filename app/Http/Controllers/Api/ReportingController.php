@@ -19,10 +19,6 @@ class ReportingController extends Controller
     ): JsonResponse {
         $validated = $request->validate([
             'mode' => ['nullable', 'in:live,today'],
-            'agent' => ['nullable', 'string', 'max:100'],
-            'timezone' => ['nullable', 'timezone'],
-            'campaigns' => ['nullable', 'string', 'max:255'],
-            'ingroups' => ['nullable', 'string', 'max:255'],
         ]);
         $mode = $mode ?? (string) ($validated['mode'] ?? 'live');
         if (! in_array($mode, ['live', 'today'], true)) {
@@ -42,8 +38,7 @@ class ReportingController extends Controller
             'campaigns' => ['nullable', 'string', 'max:255'],
             'ingroups' => ['nullable', 'string', 'max:255'],
             'query_date' => ['nullable', 'date_format:Y-m-d'],
-            'end_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:query_date'],
-            'agent' => ['nullable', 'string', 'max:100'],
+            'end_date' => ['nullable', 'date_format:Y-m-d'],
             'timezone' => ['nullable', 'timezone'],
             'disposition_scope' => ['nullable', 'in:all,exclude_system,system_only'],
             'comparison' => ['nullable', 'in:none,previous_period,previous_day,previous_week,previous_month'],

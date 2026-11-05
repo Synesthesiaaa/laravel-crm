@@ -30,8 +30,6 @@ Route::post('logout', [LoginController::class, 'logout'])->name('logout')->middl
 
 // AMI webhook (CSRF exempt, no auth) - Asterisk posts hangup/CDR events; validate via X-Webhook-Secret if configured
 Route::post('api/webhooks/ami', \App\Http\Controllers\Api\AmiWebhookController::class)->name('api.webhooks.ami');
-Route::post('api/webhooks/call-metric-evidence', [\App\Http\Controllers\Api\VerifiedCallMetricsController::class, 'ingest'])
-    ->middleware('throttle:api')->name('api.webhooks.call-metric-evidence');
 
 // ViciDial Agent Events Push webhook (CSRF exempt, no auth) - configured via ViciDial System Settings
 Route::post('api/webhooks/vicidial-events', \App\Http\Controllers\Api\VicidialEventsWebhookController::class)->name('api.webhooks.vicidial-events');
@@ -126,10 +124,6 @@ Route::middleware(['auth', 'campaign'])->group(function () {
         ->name('api.reports.today')
         ->middleware(['role:Team Leader,Admin,Super Admin', 'throttle:telephony-poll']);
     Route::get('api/reports/dashboard', [\App\Http\Controllers\Api\ReportingController::class, 'dashboard'])->name('api.reports.dashboard')->middleware('throttle:api');
-    Route::get('api/reports/verified-metrics', [\App\Http\Controllers\Api\VerifiedCallMetricsController::class, 'show'])
-        ->middleware(['role:Team Leader,Admin,Super Admin', 'throttle:api'])->name('api.reports.verified-metrics');
-    Route::get('api/reports/verified-metrics/export', [\App\Http\Controllers\Api\VerifiedCallMetricsController::class, 'export'])
-        ->middleware(['role:Team Leader,Admin,Super Admin', 'throttle:api'])->name('api.reports.verified-metrics.export');
     Route::get('api/reports/call-dispo-report', [\App\Http\Controllers\Api\ReportingController::class, 'callDispoReport'])->name('api.reports.call-dispo-report')->middleware('throttle:api');
     Route::get('api/reports/agent-stats', [\App\Http\Controllers\Api\ReportingController::class, 'agentStats'])->name('api.reports.agent-stats')->middleware('throttle:api');
     Route::get('api/reports/logged-in-agents', [\App\Http\Controllers\Api\ReportingController::class, 'loggedInAgents'])->name('api.reports.logged-in-agents')->middleware('throttle:api');

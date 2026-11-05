@@ -49,7 +49,6 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->validateCsrfTokens(except: [
             'api/webhooks/ami',
-            'api/webhooks/call-metric-evidence',
             'api/webhooks/vicidial-events',
         ]);
         $middleware->web(append: [
