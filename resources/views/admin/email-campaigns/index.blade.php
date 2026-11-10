@@ -202,7 +202,7 @@
                     Create or import a template first to prepare an email campaign.
                 </div>
             @endunless
-            <form method="POST" action="{{ route('admin.email-campaigns.store') }}" enctype="multipart/form-data"
+            <form method="POST" action="{{ route('admin.email-campaigns.protected-imports.store') }}" enctype="multipart/form-data"
                   class="space-y-5" x-data="{ submitting: false }" @submit="submitting = true">
                 @csrf
                 <input type="hidden" name="_email_campaign_form" value="campaign">
@@ -292,7 +292,7 @@
                 <button type="submit" class="btn-primary w-full justify-center" :disabled="submitting || {{ $hasTemplates ? 'false' : 'true' }}"
                         @disabled(!$hasTemplates)>
                     <x-icon name="check" class="h-4 w-4" />
-                    <span x-text="submitting ? 'Creating...' : 'Create draft campaign'">Create draft campaign</span>
+                    <span x-text="submitting ? 'Uploading...' : 'Upload and prepare draft'">Upload and prepare draft</span>
                 </button>
             </form>
         </x-admin.panel>

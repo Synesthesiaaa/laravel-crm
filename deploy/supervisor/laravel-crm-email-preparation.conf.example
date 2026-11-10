@@ -1,0 +1,14 @@
+; Example only: review service identity, paths, PHP extensions and configuration before deployment.
+; This long-timeout lane must match EMAIL_PREPARATION_CONNECTION/QUEUE.
+[program:laravel-crm-email-preparation]
+directory=/var/www/laravel-crm
+command=/usr/bin/php /var/www/laravel-crm/artisan queue:work email-preparation --queue=email-preparation --sleep=1 --timeout=300 --max-time=3600
+user=www-data
+numprocs=1
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+stopwaitsecs=660
+redirect_stderr=true
+stdout_logfile=/var/log/supervisor/laravel-crm-email-preparation.log

@@ -25,6 +25,7 @@ class EmailConfigurationController extends Controller
 
     public function update(Request $request): RedirectResponse
     {
+        $settings = EmailSmtpSetting::query()->first();
         $data = $request->validate([
             'enabled' => ['required', 'boolean'],
             'host' => ['required', 'string', 'max:255', 'regex:/^[a-zA-Z0-9.\-\[\]:]+$/'],
@@ -34,11 +35,19 @@ class EmailConfigurationController extends Controller
             'password' => ['nullable', 'string', 'max:2048'],
             'from_name' => ['required', 'string', 'max:255'],
             'from_address' => ['required', 'email:rfc', 'max:255'],
+            'provider' => ['sometimes', 'in:smtp,postmark'],
+            'rate_per_minute' => ['sometimes', 'integer', 'between:1,10000'],
+            'postmark_webhook_user' => ['required_if:provider,postmark', 'nullable', 'string', 'max:128', 'regex:/^[a-zA-Z0-9_-]+$/'],
+            'postmark_webhook_password' => [Rule::requiredIf(fn () => $request->input('provider') === 'postmark' && ! $settings?->postmark_webhook_password), 'nullable', 'string', 'min:24', 'max:512'],
+            'postmark_server_id' => ['required_if:provider,postmark', 'nullable', 'integer', 'min:1'],
+            'postmark_message_stream' => ['required_if:provider,postmark', 'nullable', 'string', 'max:100', 'regex:/^[a-zA-Z0-9_-]+$/'],
         ]);
 
         // Empty password means keep the currently saved credential. Never put it
         // back into request input or flash it to the session on validation errors.
-        $settings = EmailSmtpSetting::query()->first();
+        if (blank($data['postmark_webhook_password'] ?? null)) {
+            unset($data['postmark_webhook_password']);
+        }
         if (blank($data['password'] ?? null)) {
             unset($data['password']);
         }
@@ -52,6 +61,7 @@ class EmailConfigurationController extends Controller
         } else {
             EmailSmtpSetting::create($data);
         }
+        activity('email-campaign')->causedBy($request->user())->event('smtp_configuration_updated')->withProperties(['provider' => $data['provider'] ?? 'smtp', 'enabled' => $data['enabled']])->log('Email configuration updated');
 
         return redirect()->route('admin.email-configuration.index')
             ->with('success', 'Email configuration saved. New campaign deliveries will use these settings.');
@@ -78,7 +88,7 @@ class EmailConfigurationController extends Controller
                 },
             );
         } catch (Throwable $exception) {
-            report($exception);
+            \Illuminate\Support\Facades\Log::warning('SMTP configuration test failed.', ['exception_type' => class_basename($exception)]);
 
             return back()->with('error', 'Test email could not be sent. Check the SMTP address, port, security setting, credentials, and server logs.');
         }

@@ -13,7 +13,7 @@ class EmailCampaignRecipient extends Model
 
     protected function casts(): array
     {
-        return ['sent_at' => 'datetime', 'claimed_at' => 'datetime', 'delivery_snapshot' => 'encrypted:array'];
+        return ['sent_at' => 'datetime', 'claimed_at' => 'datetime', 'delivery_snapshot' => 'encrypted:array', 'provider_delivered_at' => 'datetime', 'provider_bounced_at' => 'datetime', 'provider_complained_at' => 'datetime', 'observed_opened_at' => 'datetime', 'observed_clicked_at' => 'datetime', 'unsubscribed_at' => 'datetime'];
     }
 
     public function campaign(): BelongsTo

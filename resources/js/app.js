@@ -543,3 +543,5 @@ window.addEventListener('error', (event) => {
         });
     }
 });
+import './email-template-editor';
+import './email-campaign-management';

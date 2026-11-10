@@ -34,7 +34,41 @@ Route::middleware('role:Team Leader,Admin,Super Admin')->prefix('admin')->name('
     Route::get('extraction', [\App\Http\Controllers\Admin\ExtractionController::class, 'index'])->name('extraction.index');
     Route::post('extraction', [\App\Http\Controllers\Admin\ExtractionController::class, 'export'])->name('extraction.export');
 
+    Route::middleware('role:Admin,Super Admin')->group(function () {
+        Route::get('email-management', [\App\Http\Controllers\Admin\EmailManagementController::class, 'index'])->name('email-management.index');
+        Route::post('email-management', [\App\Http\Controllers\Admin\EmailManagementController::class, 'store'])->middleware('throttle:10,1')->name('email-management.store');
+        Route::put('email-management/{campaign}', [\App\Http\Controllers\Admin\EmailManagementController::class, 'update'])->name('email-management.update');
+        Route::get('email-management/{campaign}', [\App\Http\Controllers\Admin\EmailManagementController::class, 'show'])->name('email-management.show');
+        Route::get('email-management/{campaign}/status', [\App\Http\Controllers\Admin\EmailManagementController::class, 'status'])->middleware('throttle:30,1')->name('email-management.status');
+        Route::get('email-management/{campaign}/report', [\App\Http\Controllers\Admin\EmailManagementController::class, 'report'])->name('email-management.report');
+        Route::post('email-management/{campaign}/actions/{action}', [\App\Http\Controllers\Admin\EmailManagementController::class, 'action'])->middleware('throttle:10,1')->name('email-management.action');
+        Route::get('email-templates', [\App\Http\Controllers\Admin\EmailTemplateController::class, 'index'])->name('email-templates.index');
+        Route::get('email-templates/create', [\App\Http\Controllers\Admin\EmailTemplateController::class, 'create'])->name('email-templates.create');
+        Route::post('email-templates', [\App\Http\Controllers\Admin\EmailTemplateController::class, 'store'])->name('email-templates.store');
+        Route::post('email-templates/preview', [\App\Http\Controllers\Admin\EmailTemplateController::class, 'preview'])->middleware('throttle:60,1')->name('email-templates.preview');
+        Route::get('email-templates/{template}/edit', [\App\Http\Controllers\Admin\EmailTemplateController::class, 'edit'])->name('email-templates.edit');
+        Route::put('email-templates/{template}', [\App\Http\Controllers\Admin\EmailTemplateController::class, 'update'])->name('email-templates.update');
+        Route::post('email-templates/{template}/test', [\App\Http\Controllers\Admin\EmailTemplateController::class, 'test'])->middleware('throttle:3,1')->name('email-templates.test');
+        Route::get('email-audiences', [\App\Http\Controllers\Admin\EmailAudiencesController::class, 'index'])->name('email-audiences.index');
+        Route::post('email-audiences/imports', [\App\Http\Controllers\Admin\EmailAudiencesController::class, 'stage'])->middleware('throttle:10,1')->name('email-audiences.imports.store');
+        Route::get('email-audiences/imports/{audienceImport}', [\App\Http\Controllers\Admin\EmailAudiencesController::class, 'show'])->name('email-audiences.imports.show');
+        Route::get('email-audiences/imports/{audienceImport}/report', [\App\Http\Controllers\Admin\EmailAudiencesController::class, 'report'])->name('email-audiences.imports.report');
+        Route::post('email-audiences/imports/{audienceImport}/apply', [\App\Http\Controllers\Admin\EmailAudiencesController::class, 'apply'])->name('email-audiences.imports.apply');
+        Route::delete('email-audiences/imports/{audienceImport}', [\App\Http\Controllers\Admin\EmailAudiencesController::class, 'cancel'])->name('email-audiences.imports.cancel');
+        Route::post('email-audiences/imports/{audienceImport}/resume', [\App\Http\Controllers\Admin\EmailAudiencesController::class, 'resume'])->name('email-audiences.imports.resume');
+        Route::post('email-audiences/contacts', [\App\Http\Controllers\Admin\EmailAudiencesController::class, 'storeContact'])->name('email-audiences.contacts.store');
+        Route::post('email-audiences/segments', [\App\Http\Controllers\Admin\EmailAudiencesController::class, 'storeSegment'])->name('email-audiences.segments.store');
+    });
+
     Route::middleware('role:Super Admin')->group(function () {
+        Route::post('email-campaigns/protected-imports', [\App\Http\Controllers\Admin\ProtectedEmailImportsController::class, 'store'])->name('email-campaigns.protected-imports.store');
+        Route::get('email-campaigns/protected-imports/{protectedImport}', [\App\Http\Controllers\Admin\ProtectedEmailImportsController::class, 'show'])->name('email-campaigns.protected-imports.show');
+        Route::get('email-campaigns/protected-imports/{protectedImport}/status', [\App\Http\Controllers\Admin\ProtectedEmailImportsController::class, 'status'])->name('email-campaigns.protected-imports.status');
+        Route::delete('email-campaigns/protected-imports/{protectedImport}', [\App\Http\Controllers\Admin\ProtectedEmailImportsController::class, 'cancel'])->name('email-campaigns.protected-imports.cancel');
+        Route::post('email-campaigns/protected-imports/{protectedImport}/resume', [\App\Http\Controllers\Admin\ProtectedEmailImportsController::class, 'resume'])->name('email-campaigns.protected-imports.resume');
+        Route::get('email-suppressions', [\App\Http\Controllers\Admin\EmailSuppressionsController::class, 'index'])->name('email-suppressions.index');
+        Route::post('email-suppressions', [\App\Http\Controllers\Admin\EmailSuppressionsController::class, 'store'])->name('email-suppressions.store');
+        Route::delete('email-suppressions/{suppression}', [\App\Http\Controllers\Admin\EmailSuppressionsController::class, 'destroy'])->name('email-suppressions.destroy');
         Route::get('users/imports/template', [\App\Http\Controllers\Admin\UserImportsController::class, 'template'])->name('user-imports.template');
         Route::post('users/imports', [\App\Http\Controllers\Admin\UserImportsController::class, 'store'])->middleware('throttle:10,1')->name('user-imports.store');
         Route::get('users/imports/{userImport}', [\App\Http\Controllers\Admin\UserImportsController::class, 'show'])->whereUuid('userImport')->name('user-imports.show');

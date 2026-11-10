@@ -73,7 +73,9 @@ class EmailCampaignPreflightService
         $settings = $this->smtp->activeSettings();
         $snapshot = [
             'purpose' => $campaign->purpose, 'attachment_mode' => $campaign->attachment_mode,
-            'template' => $campaign->template->only(['name', 'subject', 'html_body', 'pdf_enabled', 'pdf_body', 'pdf_password']),
+            'template' => $campaign->template->body_format === 'html'
+                ? app(\App\Services\Email\TemplateComposer::class)->snapshot($campaign->template)
+                : $campaign->template->only(['name', 'subject', 'html_body', 'pdf_enabled', 'pdf_body', 'pdf_password']),
             'sender' => [$address, $name],
             'transport' => $settings ? $this->smtp->transportConfiguration($settings) : config('mail.mailers.'.config('mail.default')),
             'documents' => $docRows, 'recipients' => $rows,

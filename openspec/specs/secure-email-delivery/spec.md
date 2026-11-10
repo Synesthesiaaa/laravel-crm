@@ -18,11 +18,15 @@ The system SHALL store PDFs privately and encrypted, reject unsafe archives and 
 - **THEN** no campaign is dispatched and temporary files are cleaned
 
 ### Requirement: Authorized review and immutable delivery
-Only Super Admin SHALL access documents and campaign details. The system MUST verify document ownership/hash, validate variables, run dry-run and require explicit confirmation before confidential sends. Queued content and mappings MUST be frozen.
+Only Super Admin SHALL access private documents and confidential/transactional/payroll campaign details. Admin SHALL access only their own attachment-free marketing campaigns under explicit policies, without access to private or generated protected PDFs or SMTP settings. The system MUST verify document ownership/hash, validate variables, run dry-run and require explicit confirmation before confidential sends. Queued and scheduled content and mappings MUST be frozen. Legacy version-1/2 snapshots and escaped plain-text composition MUST remain supported; new composition formats MUST be independently versioned and authenticated.
 
 #### Scenario: Tampering or unauthorized access
 - **WHEN** a file changes, a cross-campaign ID is requested or an unauthorized user requests a preview
 - **THEN** delivery or access is denied without exposing private content
+
+#### Scenario: Isolated Admin marketing access
+- **WHEN** an Admin manages an owned marketing campaign without uploaded or generated attachments
+- **THEN** permitted marketing actions work while another actor's campaigns, private files, transactional/payroll workflows and SMTP settings remain inaccessible
 
 ### Requirement: Purpose-specific composition
 Marketing SHALL retain opt-outs and unsubscribe. Transactional/payroll SHALL omit promotional disclosures and require configured organizational policy for payroll; mandated unavailable protections MUST block payroll.
@@ -32,7 +36,7 @@ Marketing SHALL retain opt-outs and unsubscribe. Transactional/payroll SHALL omi
 - **THEN** promotional footer and List-Unsubscribe are absent
 
 ### Requirement: Truthful queue outcomes and lifecycle
-The system SHALL send one message with one address per claim, report provider acceptance separately from inbox delivery, retain uncertain outcomes without blind retry, diagnose worker readiness and purge expired documents with auditable metadata.
+The system SHALL send one message with one address per claim, report provider acceptance separately from confirmed receiving-server delivery and inbox delivery, retain uncertain outcomes without blind retry, diagnose worker/scheduler readiness and purge expired documents with auditable metadata. New lifecycle states MUST preserve historical sending/needs_attention compatibility and MUST NOT collapse uncertainty into retryable failure. Provider-event and transport-result races MUST preserve verified attempt evidence.
 
 #### Scenario: Interrupted transport
 - **WHEN** SMTP might have accepted a message before interruption
@@ -45,6 +49,10 @@ The system SHALL send one message with one address per claim, report provider ac
 #### Scenario: Provider reconciliation
 - **WHEN** Super Admin explicitly confirms provider evidence with a non-personal case ID and verified outcome
 - **THEN** acceptance is recorded with its actual timestamp or verified no-submission becomes blocked for separate revalidation; reconciliation never sends mail
+
+#### Scenario: Scheduled document expires
+- **WHEN** an approved document campaign reaches its scheduled time after an original has expired
+- **THEN** dispatch is blocked with an actionable integrity/policy reason rather than bypassing document retention or approval
 
 ### Requirement: Synthetic self-test is independent of campaign delivery
 An authorized Super Admin SHALL be able to explicitly send a synthetic text-only test to their own valid account email through configured SMTP, including locally with bulk sending disabled. The system MUST NOT attach campaign documents, accept an alternate recipient, queue campaign delivery or alter mapping approval. Synthetic-test errors SHALL use a separate error bag and explain SMTP/account recovery without requiring a replacement draft.

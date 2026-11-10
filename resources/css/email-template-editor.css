@@ -1,0 +1,27 @@
+.email-template-workspace [hidden] { display: none !important; }
+.email-template-workspace { color-scheme: light dark; }
+.email-visual-canvas { max-width: 100%; min-width: 0; }
+.email-visual-canvas .gjs-one-bg { background-color: var(--color-surface-2); }
+.email-visual-canvas .gjs-two-color { color: var(--color-on-surface); }
+.email-visual-canvas .gjs-three-bg { background-color: var(--color-primary); }
+.email-visual-canvas .gjs-four-color,
+.email-visual-canvas .gjs-four-color-h:hover { color: var(--color-primary); }
+.email-visual-canvas .gjs-block { border-color: var(--color-border); min-height: 60px; box-shadow: none; color: var(--color-on-surface); }
+.email-visual-canvas .gjs-pn-btn { min-height: 44px; min-width: 44px; }
+.email-visual-canvas .gjs-field { border: 1px solid var(--color-border-strong); }
+.email-visual-canvas button:focus-visible,
+.email-visual-canvas [tabindex]:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.email-template-preview { color-scheme: light; }
+.email-preview-shell { min-width: 0; max-width: 100%; }
+@media (max-width: 767px) {
+    .email-visual-canvas .gjs-cv-canvas { width: 65%; }
+    .email-visual-canvas .gjs-pn-views-container { width: 35%; }
+    .email-visual-canvas .gjs-block { width: 95%; min-width: 0; margin: 3px; padding: 8px 2px; }
+    .email-visual-canvas .gjs-pn-commands { width: 65%; }
+    .email-visual-canvas .gjs-pn-options { right: 35%; }
+    .email-visual-canvas .gjs-pn-views { width: 35%; }
+    .email-visual-canvas .gjs-pn-devices-c { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .email-template-workspace *, .email-template-workspace *::before, .email-template-workspace *::after { scroll-behavior: auto !important; transition-duration: 0s !important; }
+}

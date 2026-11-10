@@ -188,6 +188,20 @@
                     </div>
                 </section>
 
+                <section class="border-t border-[var(--color-border)] pt-5">
+                    <h3 class="text-sm font-semibold">Provider feedback and sending limits</h3>
+                    <p class="my-3 text-sm text-[var(--color-on-surface-muted)]">SMTP acceptance alone does not confirm delivery. Select Postmark only for an approved Postmark sender with authenticated callbacks configured.</p>
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <x-form.select name="provider" label="Delivery feedback" :options="['smtp' => 'SMTP acceptance only', 'postmark' => 'Postmark events']" :selected="$settings?->provider ?? 'smtp'" :empty="false" />
+                        <x-form.input name="rate_per_minute" type="number" label="Account limit per minute" :value="$settings?->rate_per_minute ?? 60" min="1" max="10000" help="Shared across campaigns. Use a value within the approved provider quota." />
+                        <x-form.input name="postmark_webhook_user" label="Webhook username" :value="$settings?->postmark_webhook_user" maxlength="128" autocomplete="off" />
+                        <x-form.input name="postmark_webhook_password" type="password" label="Webhook password" minlength="24" maxlength="512" autocomplete="new-password" help="Separate from SMTP credentials. At least 24 characters. Blank preserves the encrypted saved value." />
+                        <x-form.input name="postmark_server_id" type="number" label="Postmark server ID" :value="$settings?->postmark_server_id" min="1" />
+                        <x-form.input name="postmark_message_stream" label="Postmark message stream" :value="$settings?->postmark_message_stream" maxlength="100" help="Use the exact stream configured for the approved sender and webhook." />
+                    </div>
+                    <p class="mt-4 break-all text-sm">HTTPS callback: <code>{{ route('email-provider.postmark', [], true) }}</code></p>
+                    <p class="mt-2 text-sm"><a class="text-[var(--color-primary)] underline" href="{{ route('admin.email-suppressions.index') }}">Manage email suppressions</a></p>
+                </section>
                 <div class="flex justify-end border-t border-[var(--color-border)] pt-5">
                     <button type="submit" class="btn-primary" :disabled="submitting">
                         <x-icon name="check" class="h-4 w-4" />

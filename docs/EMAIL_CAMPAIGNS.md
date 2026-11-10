@@ -1,5 +1,7 @@
 # Super Admin Email Campaigns and Private PDF Delivery
 
+> The extended marketing workspace, background preparation and provider-event reporting are documented in [Email campaign management](EMAIL_CAMPAIGN_MANAGEMENT.md). This guide retains the protected/legacy delivery contracts; ordinary browser uploads now pass through encrypted background preparation before the same draft/review process.
+
 > Current operator and deployment guide, checked against repository source on 2026-10-15.
 > [EMAIL.md](../EMAIL.md) preserves historical implementation requirements; this guide describes current behavior.
 > Commands below are instructions for an authorized operator, not actions performed during this documentation update.

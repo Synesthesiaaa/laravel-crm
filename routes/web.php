@@ -14,6 +14,10 @@ use App\Http\Controllers\ReportsController;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome')->name('home');
+Route::get('email/open/{token}', [\App\Http\Controllers\Email\EmailTrackingController::class, 'open'])->withoutMiddleware(\App\Http\Middleware\AuditUserActivity::class)->middleware('throttle:120,1')->name('email-tracking.open');
+Route::get('email/click/{token}', [\App\Http\Controllers\Email\EmailTrackingController::class, 'click'])->withoutMiddleware(\App\Http\Middleware\AuditUserActivity::class)->middleware('throttle:120,1')->name('email-tracking.click');
+Route::get('email/unsubscribe/token/{token}', [\App\Http\Controllers\Email\EmailTrackingController::class, 'showUnsubscribe'])->withoutMiddleware(\App\Http\Middleware\AuditUserActivity::class)->middleware('throttle:30,1')->name('email-tracking.unsubscribe');
+Route::post('email/unsubscribe/token/{token}', [\App\Http\Controllers\Email\EmailTrackingController::class, 'optOut'])->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class, \App\Http\Middleware\AuditUserActivity::class])->middleware('throttle:30,1')->name('email-tracking.opt-out');
 Route::get('email/unsubscribe/{recipient}', [\App\Http\Controllers\EmailUnsubscribeController::class, 'show'])
     ->middleware('signed')->name('email-campaigns.unsubscribe');
 Route::post('email/unsubscribe/{recipient}', [\App\Http\Controllers\EmailUnsubscribeController::class, 'store'])
