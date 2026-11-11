@@ -16,11 +16,13 @@ class EmailCampaignRecipientTransitionService
         'uncertain' => ['accepted', 'blocked'],
     ];
 
-    public function claim(int $campaignId, int $recipientId): ?EmailCampaignRecipient
+    public function claim(int $campaignId, int $recipientId, ?int $generation = null): ?EmailCampaignRecipient
     {
-        return DB::transaction(function () use ($campaignId, $recipientId): ?EmailCampaignRecipient {
+        return DB::transaction(function () use ($campaignId, $recipientId, $generation): ?EmailCampaignRecipient {
             $campaign = EmailCampaign::query()->whereKey($campaignId)->lockForUpdate()->first();
-            if (! $campaign || ! in_array($campaign->status, ['queued', 'sending'], true)) {
+            if (! $campaign || ! in_array($campaign->status, ['queued', 'sending', 'processing'], true)
+                || ($generation !== null && $campaign->generation !== $generation)
+                || ($generation === null && $campaign->generation > 0)) {
                 return null;
             }
 
@@ -28,10 +30,14 @@ class EmailCampaignRecipientTransitionService
             if (! $recipient || $recipient->status !== 'pending') {
                 return null;
             }
+            if ($campaign->management_version >= 3 && \App\Models\EmailCampaignAttempt::where('email_campaign_recipient_id', $recipientId)->whereIn('status', ['accepted', 'delivered', 'bounced', 'complained', 'submitting', 'uncertain'])->exists()) {
+                return null;
+            }
 
             $this->initializeCounters($campaign);
             $recipient->forceFill(['status' => 'sending', 'claimed_at' => now(), 'error' => null])->save();
-            $campaign->status = 'sending';
+            $campaign->status = $campaign->management_version >= 3 ? 'processing' : 'sending';
+            $campaign->progress_at = now();
             $campaign->save();
 
             return $recipient;
@@ -179,6 +185,22 @@ class EmailCampaignRecipientTransitionService
 
     private function saveCompletionState(EmailCampaign $campaign): void
     {
+        if ($campaign->management_version >= 3) {
+            if ((int) $campaign->open_count !== 0 || ! in_array($campaign->status, ['queued', 'processing', 'needs_attention'], true)) {
+                return;
+            }
+            $previous = $campaign->status;
+            $uncertain = $campaign->recipients()->where('status', 'uncertain')->exists();
+            $campaign->status = $uncertain ? 'needs_attention' : ((int) $campaign->failed_count > 0 ? ((int) $campaign->sent_count > 0 ? 'partially_failed' : 'failed') : 'completed');
+            $campaign->completed_at = now();
+            if ($previous !== $campaign->status) {
+                $campaign->terminal_version = (int) $campaign->terminal_version + 1;
+            }
+            $campaign->save();
+            app(\App\Services\Email\CampaignNotifications::class)->record($campaign, 'terminal:'.$campaign->terminal_version);
+
+            return;
+        }
         if ((int) $campaign->open_count === 0 && in_array($campaign->status, ['queued', 'sending', 'needs_attention'], true)) {
             $campaign->status = (int) $campaign->attention_count > 0 ? 'needs_attention' : 'completed';
             $campaign->completed_at = now();

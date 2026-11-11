@@ -137,6 +137,7 @@
         </button>
         <div id="sidebar-section-admin" class="sidebar-section-items" x-show="expandedSections.admin" :aria-hidden="! expandedSections.admin">
             @foreach($adminItems as $item)
+                @continue($item['route'] === 'admin.email-management.index' && !$user->isAdmin())
                 <a href="{{ route($item['route']) }}"
                    class="sidebar-item {{ $sidebarLinkActive($item['route']) ? 'active' : '' }}"
                    title="{{ $item['label'] }}"

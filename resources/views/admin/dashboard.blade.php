@@ -112,7 +112,7 @@
     @php
         $adminLinks = array_values(array_filter(
             \App\Support\AdminNavigation::adminItems(),
-            static fn (array $item): bool => $item['route'] !== 'admin.dashboard',
+            static fn (array $item): bool => $item['route'] !== 'admin.dashboard' && ($item['route'] !== 'admin.email-management.index' || $user->isAdmin()),
         ));
     @endphp
     <x-admin.tool-grid title="Admin Tools" :items="$adminLinks" />

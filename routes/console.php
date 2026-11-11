@@ -90,6 +90,8 @@ if ((bool) config('vicidial.call_history_sync.schedule_enabled', true)) {
 }
 
 Schedule::command('email-campaigns:maintain')->everyFiveMinutes()->withoutOverlapping();
+Schedule::command('email-campaigns:dispatch-due --recover')->everyMinute()->withoutOverlapping(5);
+Schedule::command('email-feedback:maintain')->everyFiveMinutes()->withoutOverlapping();
 
 Schedule::command('users:imports-prune')->hourly()->withoutOverlapping();
 

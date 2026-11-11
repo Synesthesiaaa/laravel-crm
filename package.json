@@ -8,7 +8,7 @@
     "scripts": {
         "build": "vite build",
         "dev": "vite",
-        "test:js": "node --test tests/JavaScript/agent-capture-webform.test.js tests/JavaScript/form-visibility.test.js tests/JavaScript/preferences-storage.test.js tests/JavaScript/echo-config.test.js tests/JavaScript/user-import-panel.test.js"
+        "test:js": "node --test tests/JavaScript/agent-capture-webform.test.js tests/JavaScript/form-visibility.test.js tests/JavaScript/preferences-storage.test.js tests/JavaScript/echo-config.test.js tests/JavaScript/user-import-panel.test.js tests/JavaScript/email-template-content.test.js"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",
@@ -28,6 +28,8 @@
         "apexcharts": "^5.6.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
+        "grapesjs": "^0.23.9",
+        "grapesjs-preset-newsletter": "^1.0.2",
         "lucide-react": "^1.38.0",
         "shadcn": "^4.19.1",
         "sip.js": "^0.21.2",

@@ -23,6 +23,7 @@ class AdminNavigationTest extends TestCase
             'admin.disposition-codes.index',
             'admin.field-logic.index',
             'admin.extraction.index',
+            'admin.email-management.index',
         ], array_column($items, 'route'));
 
         foreach ($items as $item) {

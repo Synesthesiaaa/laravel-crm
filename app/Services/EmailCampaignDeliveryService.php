@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\EmailCampaign;
-use App\Models\EmailOptOut;
 use App\Models\EmailTemplate;
 use Illuminate\Mail\Message;
 use Illuminate\Support\Facades\Mail;
@@ -23,9 +22,9 @@ class EmailCampaignDeliveryService
         private EmailCampaignSnapshotAuthenticator $authenticator,
     ) {}
 
-    public function send(int $campaignId, int $recipientId): void
+    public function send(int $campaignId, int $recipientId, ?int $generation = null): void
     {
-        $recipient = $this->transitions->claim($campaignId, $recipientId);
+        $recipient = $this->transitions->claim($campaignId, $recipientId, $generation);
         if (! $recipient) {
             return;
         }
@@ -47,7 +46,7 @@ class EmailCampaignDeliveryService
             if ($purpose === 'payroll' && (! config('email_campaigns.payroll_enabled') || config('email_campaigns.payroll_password_required'))) {
                 throw ValidationException::withMessages(['campaign' => 'Current payroll protection policy blocks sending.']);
             }
-            if ($purpose === 'marketing' && EmailOptOut::where('email', strtolower($recipient->email))->exists()) {
+            if (app(\App\Services\Email\SuppressionService::class)->blocked($recipient->email, $purpose)) {
                 $this->transitions->transition($campaignId, $recipientId, 'sending', 'skipped');
 
                 return;
@@ -91,7 +90,9 @@ class EmailCampaignDeliveryService
             }
             $template = $snapshot ? new EmailTemplate($snapshot['template']) : $campaign->template;
             $subject = $this->preflight->personalize($template->subject, $values);
-            $html = '<div>'.nl2br(e($this->preflight->personalize($template->html_body, $values))).'</div>';
+            $html = ($template->body_format ?? 'text') === 'html'
+                ? app(\App\Services\Email\TemplateComposer::class)->render($template, $values)
+                : '<div>'.nl2br(e($this->preflight->personalize($template->html_body, $values))).'</div>';
             $unsubscribe = $purpose === 'marketing' ? URL::signedRoute('email-campaigns.unsubscribe', ['recipient' => $recipient->id]) : null;
             if ($unsubscribe) {
                 $html .= '<p style="font-size:12px">You are receiving this message because you subscribed to updates. <a href="'.e($unsubscribe).'">Unsubscribe</a></p>';
