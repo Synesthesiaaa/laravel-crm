@@ -17,6 +17,7 @@
             ['key' => 'branding', 'label' => 'Branding', 'icon' => 'building-office', 'href' => route('admin.configuration', ['tab' => 'branding'])],
             ['key' => 'disposition', 'label' => 'Disposition', 'icon' => 'tag', 'href' => route('admin.configuration', ['tab' => 'disposition'])],
             ['key' => 'telephony', 'label' => 'Telephony Features', 'icon' => 'phone', 'href' => route('admin.configuration', ['tab' => 'telephony'])],
+            ['key' => 'data-master', 'label' => 'Data Master', 'icon' => 'list-bullet', 'href' => route('admin.configuration', ['tab' => 'data-master'])],
             ['key' => 'diagnostics', 'label' => 'Diagnostics', 'icon' => 'signal', 'href' => route('admin.configuration', ['tab' => 'diagnostics'])],
             ['key' => 'retention', 'label' => 'Data Retention', 'icon' => 'clock', 'href' => route('admin.configuration', ['tab' => 'retention'])],
         ]" />

@@ -61,6 +61,7 @@ Route::middleware('role:Team Leader,Admin,Super Admin')->prefix('admin')->name('
     });
 
     Route::middleware('role:Super Admin')->group(function () {
+        Route::put('configuration/data-master/{campaign}', [\App\Http\Controllers\Admin\AgentDataMasterAccessController::class, 'update'])->name('configuration.data-master.update');
         Route::post('email-campaigns/protected-imports', [\App\Http\Controllers\Admin\ProtectedEmailImportsController::class, 'store'])->name('email-campaigns.protected-imports.store');
         Route::get('email-campaigns/protected-imports/{protectedImport}', [\App\Http\Controllers\Admin\ProtectedEmailImportsController::class, 'show'])->name('email-campaigns.protected-imports.show');
         Route::get('email-campaigns/protected-imports/{protectedImport}/status', [\App\Http\Controllers\Admin\ProtectedEmailImportsController::class, 'status'])->name('email-campaigns.protected-imports.status');

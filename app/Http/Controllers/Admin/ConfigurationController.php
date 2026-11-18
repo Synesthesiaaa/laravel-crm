@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateBrandingRequest;
+use App\Models\Campaign;
 use App\Models\DataRetentionPolicy;
 use App\Models\Form;
+use App\Services\AgentDataMasterAccessService;
 use App\Services\BrandingService;
 use App\Services\CampaignService;
 use App\Services\DataRetentionService;
@@ -18,7 +20,7 @@ use Illuminate\View\View;
 
 class ConfigurationController extends Controller
 {
-    private const TABS = ['general', 'branding', 'disposition', 'telephony', 'diagnostics', 'retention'];
+    private const TABS = ['general', 'branding', 'disposition', 'telephony', 'data-master', 'diagnostics', 'retention'];
 
     public function __construct(
         protected CampaignService $campaignService,
@@ -38,6 +40,7 @@ class ConfigurationController extends Controller
         $data = ['tab' => $tab];
 
         $data += match ($tab) {
+            'data-master' => $this->dataMasterTabData($request),
             'branding' => [
                 'brandingSettings' => $this->brandingService->resolve(),
             ],
@@ -55,6 +58,20 @@ class ConfigurationController extends Controller
         };
 
         return view('admin.configuration', $data);
+    }
+
+    private function dataMasterTabData(Request $request): array
+    {
+        $campaigns = Campaign::query()->active()->ordered()->get();
+        $requested = $request->query('data_master_campaign', $request->session()->get('campaign'));
+        $selected = $campaigns->firstWhere('code', is_string($requested) ? $requested : '') ?? $campaigns->first();
+
+        return [
+            'dataMasterCampaigns' => $campaigns,
+            'selectedDataMasterCampaign' => $selected,
+            'dataMasterForms' => $selected ? $selected->forms()->active()->orderBy('display_order')->orderBy('id')->get() : collect(),
+            'dataMasterAccess' => app(AgentDataMasterAccessService::class)->settings($selected?->code ?? ''),
+        ];
     }
 
     /** @return array<string, mixed> */

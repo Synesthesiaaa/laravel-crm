@@ -32,6 +32,9 @@
         ['route' => 'agent.index',    'label' => 'Agent Screen', 'icon' => 'speaker-wave'],
     ];
     $adminItems = \App\Support\AdminNavigation::adminItems();
+    if ($user && app(\App\Services\AgentDataMasterAccessService::class)->canView($user, (string) $campaign)) {
+        $navItems[] = ['route' => 'agent.data-master.index', 'label' => 'Data Master', 'icon' => 'list-bullet'];
+    }
     $superAdminItems = \App\Support\AdminNavigation::superAdminItems();
     $sidebarSectionActive = static function (array $items) use ($sidebarLinkActive): bool {
         foreach ($items as $item) {

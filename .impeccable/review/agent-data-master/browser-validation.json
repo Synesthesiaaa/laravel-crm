@@ -1,0 +1,518 @@
+{
+  "checks": [
+    {
+      "name": "own scope",
+      "actual": 1
+    },
+    {
+      "name": "first page",
+      "actual": 20
+    },
+    {
+      "name": "other agents hidden",
+      "actual": 0
+    },
+    {
+      "name": "second page",
+      "actual": 4
+    },
+    {
+      "name": "combined filter results",
+      "actual": 11
+    },
+    {
+      "name": "combined filter excludes pending",
+      "actual": false
+    },
+    {
+      "name": "switch form resets filters",
+      "actual": ""
+    },
+    {
+      "name": "feedback rows",
+      "actual": 2
+    },
+    {
+      "name": "empty state",
+      "actual": 1
+    },
+    {
+      "name": "agent 375 CSS viewport",
+      "actual": 375
+    },
+    {
+      "name": "agent 375 DPR",
+      "actual": 1
+    },
+    {
+      "name": "agent 375 scale",
+      "actual": 1
+    },
+    {
+      "name": "agent 375 header",
+      "actual": 64
+    },
+    {
+      "name": "agent 375 sidebar",
+      "actual": 248
+    },
+    {
+      "name": "agent 375 xl breakpoint",
+      "actual": false
+    },
+    {
+      "name": "agent 768 CSS viewport",
+      "actual": 768
+    },
+    {
+      "name": "agent 768 DPR",
+      "actual": 1
+    },
+    {
+      "name": "agent 768 scale",
+      "actual": 1
+    },
+    {
+      "name": "agent 768 header",
+      "actual": 64
+    },
+    {
+      "name": "agent 768 sidebar",
+      "actual": 248
+    },
+    {
+      "name": "agent 768 xl breakpoint",
+      "actual": false
+    },
+    {
+      "name": "agent 1024 CSS viewport",
+      "actual": 1024
+    },
+    {
+      "name": "agent 1024 DPR",
+      "actual": 1
+    },
+    {
+      "name": "agent 1024 scale",
+      "actual": 1
+    },
+    {
+      "name": "agent 1024 header",
+      "actual": 64
+    },
+    {
+      "name": "agent 1024 sidebar",
+      "actual": 248
+    },
+    {
+      "name": "agent 1024 xl breakpoint",
+      "actual": false
+    },
+    {
+      "name": "agent 1440 CSS viewport",
+      "actual": 1440
+    },
+    {
+      "name": "agent 1440 DPR",
+      "actual": 1
+    },
+    {
+      "name": "agent 1440 scale",
+      "actual": 1
+    },
+    {
+      "name": "agent 1440 header",
+      "actual": 64
+    },
+    {
+      "name": "agent 1440 sidebar",
+      "actual": 248
+    },
+    {
+      "name": "agent 1440 xl breakpoint",
+      "actual": true
+    },
+    {
+      "name": "keyboard opens column filters",
+      "actual": 1
+    },
+    {
+      "name": "expanded mobile has no document overflow",
+      "actual": 375
+    },
+    {
+      "name": "permission save redirect",
+      "actual": 302
+    },
+    {
+      "name": "all campaign scope",
+      "actual": 1
+    },
+    {
+      "name": "other agents now visible",
+      "actual": 1
+    },
+    {
+      "name": "allowed form selection",
+      "actual": [
+        "Sales submissions"
+      ]
+    },
+    {
+      "name": "unpermitted form rejected",
+      "actual": 422
+    },
+    {
+      "name": "permission save redirect",
+      "actual": 302
+    },
+    {
+      "name": "immediate revocation",
+      "actual": 403
+    },
+    {
+      "name": "revoked navigation hidden",
+      "actual": 0
+    },
+    {
+      "name": "permission save redirect",
+      "actual": 302
+    },
+    {
+      "name": "restored access",
+      "actual": 200
+    },
+    {
+      "name": "missing storage status",
+      "actual": 503
+    },
+    {
+      "name": "missing first form recovers to healthy form",
+      "actual": 2
+    },
+    {
+      "name": "admin 375 CSS viewport",
+      "actual": 375
+    },
+    {
+      "name": "admin 375 DPR",
+      "actual": 1
+    },
+    {
+      "name": "admin 375 scale",
+      "actual": 1
+    },
+    {
+      "name": "admin 375 header",
+      "actual": 64
+    },
+    {
+      "name": "admin 375 sidebar",
+      "actual": 248
+    },
+    {
+      "name": "admin 375 xl breakpoint",
+      "actual": false
+    },
+    {
+      "name": "admin 768 CSS viewport",
+      "actual": 768
+    },
+    {
+      "name": "admin 768 DPR",
+      "actual": 1
+    },
+    {
+      "name": "admin 768 scale",
+      "actual": 1
+    },
+    {
+      "name": "admin 768 header",
+      "actual": 64
+    },
+    {
+      "name": "admin 768 sidebar",
+      "actual": 248
+    },
+    {
+      "name": "admin 768 xl breakpoint",
+      "actual": false
+    },
+    {
+      "name": "admin 1024 CSS viewport",
+      "actual": 1024
+    },
+    {
+      "name": "admin 1024 DPR",
+      "actual": 1
+    },
+    {
+      "name": "admin 1024 scale",
+      "actual": 1
+    },
+    {
+      "name": "admin 1024 header",
+      "actual": 64
+    },
+    {
+      "name": "admin 1024 sidebar",
+      "actual": 248
+    },
+    {
+      "name": "admin 1024 xl breakpoint",
+      "actual": false
+    },
+    {
+      "name": "admin 1440 CSS viewport",
+      "actual": 1440
+    },
+    {
+      "name": "admin 1440 DPR",
+      "actual": 1
+    },
+    {
+      "name": "admin 1440 scale",
+      "actual": 1
+    },
+    {
+      "name": "admin 1440 header",
+      "actual": 64
+    },
+    {
+      "name": "admin 1440 sidebar",
+      "actual": 248
+    },
+    {
+      "name": "admin 1440 xl breakpoint",
+      "actual": true
+    },
+    {
+      "name": "new campaign access disabled",
+      "actual": false
+    },
+    {
+      "name": "new campaign own-only default",
+      "actual": true
+    },
+    {
+      "name": "no JavaScript exceptions",
+      "actual": []
+    },
+    {
+      "name": "no unexpected HTTP failures",
+      "actual": []
+    }
+  ],
+  "viewports": [
+    {
+      "name": "agent",
+      "width": 375,
+      "inner": 375,
+      "dpr": 1,
+      "scale": 1,
+      "scroll": 375,
+      "header": 64,
+      "sidebar": 248,
+      "xl": false
+    },
+    {
+      "name": "agent",
+      "width": 768,
+      "inner": 768,
+      "dpr": 1,
+      "scale": 1,
+      "scroll": 768,
+      "header": 64,
+      "sidebar": 248,
+      "xl": false
+    },
+    {
+      "name": "agent",
+      "width": 1024,
+      "inner": 1024,
+      "dpr": 1,
+      "scale": 1,
+      "scroll": 1024,
+      "header": 64,
+      "sidebar": 248,
+      "xl": false
+    },
+    {
+      "name": "agent",
+      "width": 1440,
+      "inner": 1440,
+      "dpr": 1,
+      "scale": 1,
+      "scroll": 1440,
+      "header": 64,
+      "sidebar": 248,
+      "xl": true
+    },
+    {
+      "name": "admin",
+      "width": 375,
+      "inner": 375,
+      "dpr": 1,
+      "scale": 1,
+      "scroll": 375,
+      "header": 64,
+      "sidebar": 248,
+      "xl": false
+    },
+    {
+      "name": "admin",
+      "width": 768,
+      "inner": 768,
+      "dpr": 1,
+      "scale": 1,
+      "scroll": 768,
+      "header": 64,
+      "sidebar": 248,
+      "xl": false
+    },
+    {
+      "name": "admin",
+      "width": 1024,
+      "inner": 1024,
+      "dpr": 1,
+      "scale": 1,
+      "scroll": 1024,
+      "header": 64,
+      "sidebar": 248,
+      "xl": false
+    },
+    {
+      "name": "admin",
+      "width": 1440,
+      "inner": 1440,
+      "dpr": 1,
+      "scale": 1,
+      "scroll": 1440,
+      "header": 64,
+      "sidebar": 248,
+      "xl": true
+    }
+  ],
+  "pageErrors": [],
+  "consoleErrors": [
+    "WebSocket connection to 'ws://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "WebSocket connection to 'wss://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "WebSocket connection to 'ws://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "WebSocket connection to 'wss://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "WebSocket connection to 'ws://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "WebSocket connection to 'ws://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)",
+    "WebSocket connection to 'ws://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "WebSocket connection to 'ws://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)",
+    "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "WebSocket connection to 'wss://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "WebSocket connection to 'wss://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "WebSocket connection to 'ws://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)",
+    "WebSocket connection to 'ws://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "WebSocket connection to 'wss://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "WebSocket connection to 'ws://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "WebSocket connection to 'wss://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)",
+    "WebSocket connection to 'ws://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "WebSocket connection to 'wss://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "WebSocket connection to 'ws://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "WebSocket connection to 'ws://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "WebSocket connection to 'ws://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "WebSocket connection to 'wss://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)",
+    "WebSocket connection to 'wss://127.0.0.1:6001/app/local-app-key?protocol=7&client=js&version=8.4.0&flash=false' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED"
+  ],
+  "failedRequests": [
+    {
+      "url": "http://127.0.0.1:8881/api/sip/credentials",
+      "status": 422
+    },
+    {
+      "url": "http://127.0.0.1:8881/api/vicidial/session/local-status?campaign=dm_alpha",
+      "status": 403
+    },
+    {
+      "url": "http://127.0.0.1:8881/api/sip/credentials",
+      "status": 422
+    },
+    {
+      "url": "http://127.0.0.1:8881/api/vicidial/session/local-status?campaign=dm_alpha",
+      "status": 403
+    },
+    {
+      "url": "http://127.0.0.1:8881/api/sip/credentials",
+      "status": 422
+    },
+    {
+      "url": "http://127.0.0.1:8881/api/sip/credentials",
+      "status": 422
+    },
+    {
+      "url": "http://127.0.0.1:8881/api/sip/credentials",
+      "status": 422
+    },
+    {
+      "url": "http://127.0.0.1:8881/api/vicidial/session/local-status?campaign=dm_alpha",
+      "status": 403
+    },
+    {
+      "url": "http://127.0.0.1:8881/data-master",
+      "status": 403
+    },
+    {
+      "url": "http://127.0.0.1:8881/api/sip/credentials",
+      "status": 422
+    },
+    {
+      "url": "http://127.0.0.1:8881/api/sip/credentials",
+      "status": 422
+    },
+    {
+      "url": "http://127.0.0.1:8881/api/vicidial/session/local-status?campaign=dm_alpha",
+      "status": 403
+    },
+    {
+      "url": "http://127.0.0.1:8881/api/sip/credentials",
+      "status": 422
+    },
+    {
+      "url": "http://127.0.0.1:8881/api/sip/credentials",
+      "status": 422
+    },
+    {
+      "url": "http://127.0.0.1:8881/api/vicidial/session/local-status?campaign=dm_alpha",
+      "status": 403
+    },
+    {
+      "url": "http://127.0.0.1:8881/data-master",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:8881/api/sip/credentials",
+      "status": 422
+    },
+    {
+      "url": "http://127.0.0.1:8881/api/vicidial/session/local-status?campaign=dm_alpha",
+      "status": 403
+    },
+    {
+      "url": "http://127.0.0.1:8881/api/sip/credentials",
+      "status": 422
+    }
+  ]
+}

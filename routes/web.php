@@ -73,6 +73,7 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware(['auth', 'campaign'])->group(function () {
+    Route::get('data-master', [\App\Http\Controllers\AgentDataMasterController::class, 'index'])->name('agent.data-master.index');
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('records', [RecordsController::class, 'index'])->name('records.index');
     Route::get('api/call-history', [CallHistoryController::class, 'index'])->name('api.call-history')->middleware('throttle:api');
