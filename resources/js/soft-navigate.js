@@ -338,8 +338,15 @@ async function softNavigate(url, { push = true, background = false, shouldDefer 
         });
         window.scrollTo(scrollPosition.x, scrollPosition.y);
     } else {
-        document.documentElement.scrollTop = 0;
-        document.body.scrollTop = 0;
+        const fragment = new URL(url, window.location.href).hash.slice(1);
+        const target = fragment ? document.getElementById(fragment) : null;
+        if (target && mainLayout.contains(target)) {
+            target.focus({ preventScroll: true });
+            target.scrollIntoView();
+        } else {
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+        }
     }
 
     return true;

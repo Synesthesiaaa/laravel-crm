@@ -30,6 +30,17 @@
             <form method="POST" action="{{ route('admin.dashboard-layout.update') }}" class="p-5 space-y-6">
                 @csrf
                 <input type="hidden" name="campaign_code" value="{{ $campaign }}">
+                @if($user->isSuperAdmin())
+                    <div class="max-w-md space-y-2">
+                        <label for="dashboard-activity-mode" class="text-sm font-semibold">Submission trends layout</label>
+                        <select id="dashboard-activity-mode" name="activity_mode" class="form-select min-h-11 w-full" aria-describedby="dashboard-activity-mode-help">
+                            @foreach(\App\Services\DashboardLayoutService::activityModes() as $mode => $label)
+                                <option value="{{ $mode }}" @selected(old('activity_mode', $dashboardLayout['activity_mode']) === $mode)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        <p id="dashboard-activity-mode-help" class="text-sm text-[var(--color-on-surface-muted)]">Applies to Submission Trends for {{ $campaignName }}.</p>
+                    </div>
+                @endif
                 <fieldset class="space-y-2" x-data="{ amountsEnabled: @js((bool) old('amounts.enabled', data_get($dashboardLayout, 'amounts.enabled', true))) }">
                     <legend class="text-sm font-semibold text-[var(--color-on-surface)]">Dashboard amounts</legend>
                     <p class="text-xs text-[var(--color-on-surface-dim)]">Turn off all amounts for this campaign, or choose the monetary displays to include. Sales counts remain visible.</p>

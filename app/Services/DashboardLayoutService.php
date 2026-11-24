@@ -2,10 +2,17 @@
 
 namespace App\Services;
 
+use App\Models\Campaign;
 use App\Models\DashboardLayout;
+use Closure;
+use Illuminate\Support\Facades\DB;
 
 class DashboardLayoutService
 {
+    public const ACTIVITY_ALL = 'all';
+
+    public const ACTIVITY_SINGLE = 'single';
+
     /** @var array<string, int> */
     private static array $campaignRevisions = [];
 
@@ -52,14 +59,23 @@ class DashboardLayoutService
         return self::SECTION_DEFINITIONS;
     }
 
-    /** @return array{sections: array<string, array{visible: bool, order: int}>, sales?: array<string, mixed>, amounts: array<string, bool>} */
+    /** @return array<string, string> */
+    public static function activityModes(): array
+    {
+        return [
+            self::ACTIVITY_ALL => 'All forms and periods',
+            self::ACTIVITY_SINGLE => 'One form at a time',
+        ];
+    }
+
+    /** @return array{sections: array<string, array{visible: bool, order: int}>, activity_mode: string, sales?: array<string, mixed>, amounts: array<string, bool>} */
     public function defaultLayout(): array
     {
         return $this->buildLayout(array_keys(self::SECTION_DEFINITIONS), array_keys(self::SECTION_DEFINITIONS))
-            + ['amounts' => $this->normalizeAmounts(null)];
+            + ['amounts' => $this->normalizeAmounts(null), 'activity_mode' => self::ACTIVITY_ALL];
     }
 
-    /** @return array{sections: array<string, array{visible: bool, order: int}>, amounts: array<string, bool>, sales?: array<string, mixed>} */
+    /** @return array{sections: array<string, array{visible: bool, order: int}>, activity_mode: string, amounts: array<string, bool>, sales?: array<string, mixed>} */
     public function getForCampaign(string $campaignCode): array
     {
         $revision = self::$campaignRevisions[$campaignCode] ?? 0;
@@ -95,6 +111,7 @@ class DashboardLayoutService
 
         $layout = $this->buildLayout($sectionOrder, $visibleSections);
         $layout['amounts'] = $this->normalizeAmounts($record->layout['amounts'] ?? null);
+        $layout['activity_mode'] = $this->normalizeActivityMode($record->layout['activity_mode'] ?? null);
         if (is_array($record->layout['sales'] ?? null)) {
             $layout['sales'] = $record->layout['sales'];
         }
@@ -107,7 +124,7 @@ class DashboardLayoutService
      * @param  array<int, string>  $visibleSections
      * @param  array<string, mixed>|null  $salesConfig
      * @param  array<string, bool|int|string>|null  $amountConfig
-     * @return array{sections: array<string, array{visible: bool, order: int}>, sales?: array<string, mixed>, amounts: array<string, bool>}
+     * @return array{sections: array<string, array{visible: bool, order: int}>, activity_mode: string, sales?: array<string, mixed>, amounts: array<string, bool>}
      */
     public function saveForCampaign(
         string $campaignCode,
@@ -116,34 +133,26 @@ class DashboardLayoutService
         ?array $salesConfig = null,
         bool $replaceSalesConfig = false,
         ?array $amountConfig = null,
+        ?string $activityMode = null,
     ): array {
         $layout = $this->buildLayout($sectionOrder, $visibleSections);
-        $record = DashboardLayout::query()
-            ->where('campaign_code', $campaignCode)
-            ->first();
+        $saved = $this->storeCampaignLayout($campaignCode, function (?array $previous) use ($layout, $amountConfig, $activityMode, $salesConfig, $replaceSalesConfig): array {
+            $layout['amounts'] = $this->normalizeAmounts(array_replace(
+                $this->normalizeAmounts($previous['amounts'] ?? null),
+                $amountConfig ?? [],
+            ));
+            $layout['activity_mode'] = $this->normalizeActivityMode($activityMode ?? $previous['activity_mode'] ?? null);
 
-        $layout['amounts'] = $this->normalizeAmounts(array_replace(
-            $this->normalizeAmounts($record?->layout['amounts'] ?? null),
-            $amountConfig ?? [],
-        ));
+            if ($salesConfig !== null) {
+                $layout['sales'] = $salesConfig;
+            } elseif (! $replaceSalesConfig && is_array($previous['sales'] ?? null)) {
+                $layout['sales'] = $previous['sales'];
+            }
 
-        if ($replaceSalesConfig && $salesConfig === null) {
-            unset($layout['sales']);
-        } elseif ($salesConfig !== null) {
-            $layout['sales'] = $salesConfig;
-        } elseif (is_array($record?->layout['sales'] ?? null)) {
-            $layout['sales'] = $record->layout['sales'];
-        }
+            return $layout;
+        });
 
-        DashboardLayout::query()->updateOrCreate(
-            ['campaign_code' => $campaignCode],
-            ['layout' => $layout],
-        );
-
-        $revision = (self::$campaignRevisions[$campaignCode] ?? 0) + 1;
-        self::$campaignRevisions[$campaignCode] = $revision;
-
-        return $this->rememberCampaignLayout($campaignCode, $layout, $revision);
+        return $this->rememberCampaignLayout($campaignCode, $saved, self::$campaignRevisions[$campaignCode]);
     }
 
     /**
@@ -154,32 +163,47 @@ class DashboardLayoutService
      * settings from stale browser state.
      *
      * @param  array<string, mixed>|null  $salesConfig
-     * @return array{sections: array<string, array{visible: bool, order: int}>, amounts: array<string, bool>, sales?: array<string, mixed>}
+     * @return array{sections: array<string, array{visible: bool, order: int}>, activity_mode: string, amounts: array<string, bool>, sales?: array<string, mixed>}
      */
     public function saveSalesForCampaign(string $campaignCode, ?array $salesConfig): array
     {
-        $record = DashboardLayout::query()
-            ->where('campaign_code', $campaignCode)
-            ->first();
-        $layout = $record && is_array($record->layout)
-            ? $record->layout
-            : $this->defaultLayout();
+        $this->storeCampaignLayout($campaignCode, function (?array $previous) use ($salesConfig): array {
+            $layout = $previous ?? $this->defaultLayout();
+            if ($salesConfig === null) {
+                unset($layout['sales']);
+            } else {
+                $layout['sales'] = $salesConfig;
+            }
 
-        if ($salesConfig === null) {
-            unset($layout['sales']);
-        } else {
-            $layout['sales'] = $salesConfig;
-        }
-
-        DashboardLayout::query()->updateOrCreate(
-            ['campaign_code' => $campaignCode],
-            ['layout' => $layout],
-        );
-
-        $revision = (self::$campaignRevisions[$campaignCode] ?? 0) + 1;
-        self::$campaignRevisions[$campaignCode] = $revision;
+            return $layout;
+        });
 
         return $this->getForCampaign($campaignCode);
+    }
+
+    /**
+     * @param  Closure(?array): array  $update
+     */
+    private function storeCampaignLayout(string $campaignCode, Closure $update): array
+    {
+        $layout = DB::transaction(function () use ($campaignCode, $update): array {
+            // Serialize layout and sales edits, including the first save for a campaign.
+            Campaign::query()->where('code', $campaignCode)->lockForUpdate()->value('id');
+            $record = DashboardLayout::query()->firstOrNew(['campaign_code' => $campaignCode]);
+            $record->layout = $update(is_array($record->layout) ? $record->layout : null);
+            $record->save();
+
+            return $record->layout;
+        }, 3);
+
+        self::$campaignRevisions[$campaignCode] = (self::$campaignRevisions[$campaignCode] ?? 0) + 1;
+
+        return $layout;
+    }
+
+    private function normalizeActivityMode(mixed $mode): string
+    {
+        return $mode === self::ACTIVITY_SINGLE ? self::ACTIVITY_SINGLE : self::ACTIVITY_ALL;
     }
 
     /** @param array<string, mixed> $layout */

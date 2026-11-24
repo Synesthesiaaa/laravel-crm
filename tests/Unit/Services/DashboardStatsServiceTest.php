@@ -435,6 +435,31 @@ class DashboardStatsServiceTest extends TestCase
         ));
     }
 
+    public function test_historical_activity_covers_full_calendar_periods_and_reflects_edits(): void
+    {
+        Carbon::setTestNow('2024-03-06 15:00:00');
+        $this->seed(CampaignSeeder::class);
+        Cache::flush();
+
+        foreach (['2024-02-25', '2024-02-26', '2024-02-29', '2024-03-03', '2024-03-06'] as $index => $date) {
+            $this->insertEzycashSaleRow($date, 'Alice', 100, 10, "$date 14:00:00", $index);
+        }
+
+        $service = app(DashboardStatsService::class);
+        $week = $service->getWeeklyActivityTrend('mbsales', Carbon::parse('2024-02-28'));
+        $month = $service->getMonthlyActivityTrend('mbsales', Carbon::parse('2024-02-15'));
+        $this->assertSame(['Mon Feb 26', 'Tue Feb 27', 'Wed Feb 28', 'Thu Feb 29', 'Fri Mar 1', 'Sat Mar 2', 'Sun Mar 3'], $week['labels']);
+        $this->assertSame([1, 0, 0, 1, 0, 0, 1], array_column($week['forms'], 'values', 'code')['ezycash']);
+        $this->assertCount(29, $month['labels']);
+        $this->assertSame('Feb 29', $month['labels'][28]);
+        $this->assertSame(3, array_sum(array_column($month['forms'], 'values', 'code')['ezycash']));
+        $this->assertSame(1, array_sum($service->getWeeklyActivityTrend('mbsales')['values']));
+        $this->assertSame(1, array_sum($service->getLast24HourActivityTrend('mbsales')['values']));
+
+        $this->insertEzycashSaleRow('2024-03-03', 'Alice', 100, 10, '2024-03-03 15:00:00', 10);
+        $this->assertSame(4, array_sum($service->getWeeklyActivityTrend('mbsales', Carbon::parse('2024-02-26'))['values']));
+    }
+
     public function test_last_24_hour_activity_preserves_application_timezone_hour_buckets(): void
     {
         $originalTimezone = config('app.timezone');

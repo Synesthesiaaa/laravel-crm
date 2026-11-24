@@ -41,20 +41,36 @@ class DashboardStatsService
             fn () => $this->formActivityTrend($campaignCode, now()->copy()->subDays($days - 1)->startOfDay(), now()));
     }
 
-    public function getWeeklyActivityTrend(string $campaignCode): array
+    public function getWeeklyActivityTrend(string $campaignCode, ?Carbon $week = null): array
     {
-        $weekKey = now()->format('o-\WW');
+        $now = now();
+        $currentWeek = $now->copy()->startOfWeek(CarbonInterface::MONDAY);
+        if ($week !== null && $week->lt($currentWeek)) {
+            $start = $week->copy()->startOfWeek(CarbonInterface::MONDAY);
+
+            return $this->formActivityTrend($campaignCode, $start, $start->copy()->addDays(6), false, 'D M j');
+        }
+
+        $weekKey = $currentWeek->format('o-\WW');
 
         return Cache::remember("activity_trend_v2_weekly_{$campaignCode}_{$weekKey}", 300,
-            fn () => $this->formActivityTrend($campaignCode, now()->copy()->startOfWeek(CarbonInterface::MONDAY), now(), false, 'D M j'));
+            fn () => $this->formActivityTrend($campaignCode, $currentWeek, $now, false, 'D M j'));
     }
 
-    public function getMonthlyActivityTrend(string $campaignCode): array
+    public function getMonthlyActivityTrend(string $campaignCode, ?Carbon $month = null): array
     {
-        $ym = sprintf('%04d_%02d', now()->year, now()->month);
+        $now = now();
+        $currentMonth = $now->copy()->startOfMonth();
+        if ($month !== null && $month->lt($currentMonth)) {
+            $start = $month->copy()->startOfMonth();
+
+            return $this->formActivityTrend($campaignCode, $start, $start->copy()->endOfMonth());
+        }
+
+        $ym = $currentMonth->format('Y_m');
 
         return Cache::remember("activity_trend_v2_monthly_{$campaignCode}_{$ym}", 300,
-            fn () => $this->formActivityTrend($campaignCode, now()->copy()->startOfMonth(), now()));
+            fn () => $this->formActivityTrend($campaignCode, $currentMonth, $now));
     }
 
     /** @return list<array{code: string, name: string, table: string}> */

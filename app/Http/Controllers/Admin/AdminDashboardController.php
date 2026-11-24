@@ -66,9 +66,8 @@ class AdminDashboardController extends Controller
             $campaign,
             $validated['section_order'],
             $validated['visible_sections'] ?? [],
-            null,
-            false,
-            $validated['amounts'] ?? null,
+            amountConfig: $validated['amounts'] ?? null,
+            activityMode: $validated['activity_mode'] ?? null,
         );
         $this->dashboardStats->invalidate($campaign);
 

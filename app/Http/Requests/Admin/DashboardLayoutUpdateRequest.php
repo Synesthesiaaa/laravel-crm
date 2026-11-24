@@ -11,7 +11,9 @@ class DashboardLayoutUpdateRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->isAdmin() ?? false;
+        $user = $this->user();
+
+        return $user?->isAdmin() && (! $this->has('activity_mode') || $user->isSuperAdmin());
     }
 
     public function rules(): array
@@ -19,6 +21,7 @@ class DashboardLayoutUpdateRequest extends FormRequest
         $sectionKeys = array_keys(DashboardLayoutService::sectionDefinitions());
 
         return [
+            'activity_mode' => ['sometimes', 'required', 'string', Rule::in(array_keys(DashboardLayoutService::activityModes()))],
             'amounts' => ['sometimes', 'array:enabled,total,change,charts,tables'],
             'amounts.enabled' => ['sometimes', 'boolean'],
             'amounts.total' => ['sometimes', 'boolean'],

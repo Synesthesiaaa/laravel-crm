@@ -27,21 +27,7 @@
     $summaryForms = data_get($summary, 'forms', []);
     $summaryDaily = data_get($summary, 'daily', []);
     $summaryHasActivity = (bool) data_get($summary, 'has_activity', false);
-    $activityHasValues = static function (array $activity): bool {
-        foreach ((array) ($activity['values'] ?? []) as $value) {
-            if (is_numeric($value) && (float) $value > 0) {
-                return true;
-            }
-        }
-
-        return false;
-    };
-    $dailyActivityHasValues = $activityHasValues((array) ($dailyActivity ?? []));
-    $weeklyActivityHasValues = $activityHasValues((array) ($weeklyActivity ?? []));
-    $monthlyActivityHasValues = $activityHasValues((array) ($monthlyActivity ?? []));
-    $dashboardHasRenderableChartData = ($sectionVisible('activity') && (
-        $dailyActivityHasValues || $weeklyActivityHasValues || $monthlyActivityHasValues
-    )) || ($sectionVisible('kpis') && $summaryHasActivity);
+    $activityLabels = array_map(static fn (array $trend): array => $trend['labels'], $activityTrends);
     $summaryCurrencySymbol = (string) data_get($summary, 'currency.symbol', config('dashboard.currency_symbol', '₱'));
     $summaryModeLabel = data_get($summary, 'period.mode') === 'completed_month' ? 'Completed Month' : 'Month to Date';
     $summaryCurrentPeriodLabel = (string) data_get($summary, 'period.current.label', $monthTitle);
@@ -266,6 +252,9 @@
                  maxWidth="lg"
                  x-on:keydown.escape.window="if ($store.modal.is('sales-summary') || $store.modal.is('agent-leaderboard')) $store.modal.hide()">
             <form method="GET" action="{{ route('dashboard') }}" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                @foreach($activityQuery as $key => $value)
+                    <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                @endforeach
                 <label class="text-sm font-medium text-[var(--color-on-surface)]">
                     Date
                     <input type="date" name="sales_date" value="{{ $salesFilter['date'] }}" class="form-input mt-1 w-full">
@@ -323,6 +312,9 @@
                  maxWidth="lg"
                  x-on:keydown.escape.window="if ($store.modal.is('sales-summary') || $store.modal.is('agent-leaderboard')) $store.modal.hide()">
             <form method="GET" action="{{ route('dashboard') }}" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                @foreach($activityQuery as $key => $value)
+                    <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                @endforeach
                 <label class="text-sm font-medium text-[var(--color-on-surface)]">
                     Date
                     <input type="date" name="sales_date" value="{{ $salesFilter['date'] }}" class="form-input mt-1 w-full">
@@ -388,53 +380,15 @@
     </section>
     @endif
 
-    {{-- Activity charts: daily / weekly / monthly --}}
+    {{-- Submission activity by form and period --}}
     @if($sectionVisible('activity'))
-    <section data-dashboard-section="activity" style="order: {{ $sectionOrder('activity') }}">
-    <div class="dashboard-section-block">
-        <div class="dashboard-section-heading">
-            <div>
-                <p class="dashboard-eyebrow" style="text-transform: none">Activity</p>
-                <h3 class="dashboard-section-heading__title">Submission Trends</h3>
-                <p class="dashboard-section-heading__description">Compare recent activity across the last 24 hours, the current week, and {{ $monthTitle }}.</p>
+    <section data-dashboard-section="activity" aria-labelledby="dashboard-activity-title" style="order: {{ $sectionOrder('activity') }}">
+        <div class="dashboard-section-block">
+            <div class="dashboard-section-heading">
+                <h3 id="dashboard-activity-title" class="dashboard-section-heading__title scroll-mt-20" tabindex="-1">Submission Trends</h3>
             </div>
+            @include('dashboard.form-activity')
         </div>
-    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-stagger">
-        <div class="chart-container">
-            <h4 class="chart-title">Activity — Last 24 Hours</h4>
-            <div id="chart-daily-activity" class="w-full" aria-label="Daily activity chart">
-                <x-empty-state
-                    icon="chart-bar"
-                    :title="$dailyActivityHasValues ? 'Chart Visualization Unavailable' : 'No Activity Recorded Yet'"
-                    :description="$dailyActivityHasValues ? 'Activity data exists, but the chart could not be rendered. Refresh or use the activity tables below.' : 'No submissions were recorded in the last 24 hours.'"
-                    :tone="$dailyActivityHasValues ? 'warning' : 'neutral'"
-                    class="dashboard-chart-placeholder" />
-            </div>
-        </div>
-        <div class="chart-container">
-            <h4 class="chart-title">Weekly Activity — This Week</h4>
-            <div id="chart-weekly-activity" class="w-full" aria-label="Weekly activity chart">
-                <x-empty-state
-                    icon="chart-bar"
-                    :title="$weeklyActivityHasValues ? 'Chart Visualization Unavailable' : 'No Activity Recorded Yet'"
-                    :description="$weeklyActivityHasValues ? 'Activity data exists, but the chart could not be rendered. Refresh or use the activity tables below.' : 'No submissions were recorded this week.'"
-                    :tone="$weeklyActivityHasValues ? 'warning' : 'neutral'"
-                    class="dashboard-chart-placeholder" />
-            </div>
-        </div>
-        <div class="chart-container">
-            <h4 class="chart-title">Monthly Activity — {{ $monthTitle }}</h4>
-            <div id="chart-monthly-activity" class="w-full" aria-label="Monthly activity chart">
-                <x-empty-state
-                    icon="chart-bar"
-                    :title="$monthlyActivityHasValues ? 'Chart Visualization Unavailable' : 'No Activity Recorded Yet'"
-                    :description="$monthlyActivityHasValues ? 'Activity data exists, but the chart could not be rendered. Refresh or use the activity tables below.' : 'No submissions were recorded this month.'"
-                    :tone="$monthlyActivityHasValues ? 'warning' : 'neutral'"
-                    class="dashboard-chart-placeholder" />
-            </div>
-        </div>
-    </div>
-    </div>
     </section>
     @endif
 
@@ -691,9 +645,18 @@
 @push('scripts')
 <script>
 (async () => {
+    if (document.readyState === 'loading') {
+        await new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+    }
+
     const scope = window.crmSoftNav?.currentScope?.() || window.location.pathname;
     const chartGroup = 'dashboard';
     const campaignCode = @json($campaign ?? '');
+    const activityLabels = @js($activityLabels);
+    const activitySection = document.querySelector('[data-form-activity]');
+    const activityForm = activitySection?.querySelector('#dashboard-activity-form');
+    const activityPeriod = activitySection?.querySelector('#dashboard-activity-period');
+    const activityCounts = Array.from(activitySection?.querySelectorAll('[data-activity-counts]') ?? []);
     const fallbackIntervalMs = 30_000;
     let dashboardTeardown = null;
     let fallbackTimer = null;
@@ -707,6 +670,9 @@
     let summaryChart = null;
     let summaryChartConfig = null;
     let summaryMode = 'volume';
+    let activityObserver = null;
+    let activityChartLoader = null;
+    const pendingActivityCharts = new WeakSet();
     const overallSummaryDaily = @json($summaryDaily);
     const summaryForms = @json($summaryForms);
     let summaryDaily = overallSummaryDaily;
@@ -971,96 +937,150 @@
         window.setDashboardSummaryMode?.(summaryMode);
     };
 
-    async function mountAreaChart(ApexCharts, elId, categories, values, config, forms = []) {
-        const el = document.getElementById(elId);
-        if (!el || !document.getElementById('main-layout')?.contains(el)) {
-            return;
-        }
-        if (!Array.isArray(categories) || categories.length === 0) {
-            return;
-        }
-        if (!Array.isArray(values) || !values.some((value) => Number(value) > 0)) {
-            return;
-        }
-
-        el.innerHTML = '';
-        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    async function mountFormActivityChart(ApexCharts, el, categories, values, config) {
         const chart = new ApexCharts(el, {
-            series: [{ name: 'Overall', data: values }, ...forms.map((form) => ({ name: form.name, data: form.values }))],
-            legend: { show: true, position: 'bottom', labels: { colors: config.textColor } },
+            series: [{ name: 'Submissions', data: values }],
             chart: {
                 type: 'area',
-                height: 240,
+                height: 180,
                 width: '100%',
                 toolbar: { show: false },
                 background: 'transparent',
                 fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-                animations: { enabled: !reduceMotion, easing: 'easeinout', speed: 600 },
+                animations: { enabled: false },
             },
-            colors: ['#e91e8c', '#2563eb', '#16a34a', '#9333ea', '#d97706', '#0891b2', '#dc2626'],
+            colors: [getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim()],
             fill: { type: 'solid', opacity: .12 },
             stroke: { curve: 'straight', width: 2 },
+            markers: { size: categories.length === 1 ? 4 : 0 },
             xaxis: {
                 categories,
+                tickAmount: Math.max(1, Math.floor((el.clientWidth - 68) / 100)),
                 labels: { style: { colors: config.textColor, fontSize: '11px' }, rotate: 0, hideOverlappingLabels: true },
                 axisBorder: { show: false },
                 axisTicks: { show: false },
             },
-            yaxis: { labels: { style: { colors: config.textColor, fontSize: '11px' } }, min: 0 },
+            yaxis: {
+                min: 0,
+                stepSize: Math.max(1, Math.ceil(Math.max(...values) / 4)),
+                labels: { style: { colors: config.textColor, fontSize: '11px' } },
+            },
             grid: { borderColor: config.gridColor, strokeDashArray: 3 },
             tooltip: { theme: config.isDark ? 'dark' : 'light' },
             dataLabels: { enabled: false },
             theme: { mode: config.isDark ? 'dark' : 'light' },
+            responsive: [{ breakpoint: 640, options: { xaxis: { tickAmount: 2 } } }],
         });
 
-        window.crmCharts?.register?.(chartGroup, elId, chart);
+        window.crmCharts?.register?.(chartGroup, el.id, chart);
         await chart.render();
     }
 
-    async function renderCharts() {
-        destroyCharts();
+    function dashboardChartConfig() {
+        const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+        return {
+            isDark,
+            textColor: isDark ? '#a1a1aa' : '#52525b',
+            gridColor: isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)',
+        };
+    }
 
-        if (document.readyState === 'loading') {
-            await new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+    async function renderActivityChart(el) {
+        if (pendingActivityCharts.has(el)) return;
+        pendingActivityCharts.add(el);
+
+        try {
+            activityChartLoader ??= window.ApexChartsLoader?.() ?? Promise.resolve(null);
+            const ApexCharts = await activityChartLoader;
+            if (!el.isConnected || !el.clientWidth) return;
+            activityObserver.unobserve(el);
+            if (!ApexCharts) throw new Error('Chart library unavailable');
+
+            const values = JSON.parse(el.dataset.chartValues);
+            await mountFormActivityChart(ApexCharts, el, activityLabels[el.dataset.activityChart], values, dashboardChartConfig());
+        } catch (_) {
+            activityObserver.unobserve(el);
+            if (el.isConnected) {
+                el.hidden = true;
+                el.nextElementSibling.hidden = false;
+            }
+        } finally {
+            pendingActivityCharts.delete(el);
+        }
+    }
+
+    function updateActivitySelection() {
+        activitySection.querySelectorAll('[data-activity-form]').forEach((form) => {
+            form.hidden = form.dataset.activityForm !== activityForm.value;
+            form.querySelectorAll('[data-activity-period]').forEach((period) => {
+                period.hidden = period.dataset.activityPeriod !== activityPeriod.value;
+            });
+        });
+    }
+
+    function initializeFormActivity() {
+        if (!activitySection?.isConnected) return;
+
+        const saved = window.history.state?.dashboardFormActivity;
+        if (saved?.campaign === campaignCode) {
+            const expanded = new Set(Array.isArray(saved.expanded) ? saved.expanded : []);
+            activityCounts.forEach((details) => { details.open = expanded.has(details.id); });
+            if (activityForm && Array.from(activityForm.options).some(({ value }) => value === saved.form)) {
+                activityForm.value = saved.form;
+                activityPeriod.value = Object.hasOwn(activityLabels, saved.period) ? saved.period : 'daily';
+                updateActivitySelection();
+            }
         }
 
-        const hasRenderableChartData = @json($dashboardHasRenderableChartData);
-        if (!hasRenderableChartData) {
-            return;
-        }
+        activityForm?.addEventListener('change', updateActivitySelection);
+        activityPeriod?.addEventListener('change', updateActivitySelection);
+
+        const charts = activitySection.querySelectorAll('[data-activity-chart]');
+        if (!charts.length) return;
+
+        activityObserver = new IntersectionObserver((entries) => {
+            entries.forEach(({ target, isIntersecting }) => {
+                if (isIntersecting) void renderActivityChart(target);
+            });
+        }, { rootMargin: '160px 0px' });
+        charts.forEach((el) => activityObserver.observe(el));
+    }
+
+    async function renderSummaryChart() {
+        const summaryElement = document.getElementById('chart-dashboard-summary');
+        if (!summaryElement) return;
 
         const ApexCharts = await window.ApexChartsLoader?.() ?? null;
+        if (!summaryElement.isConnected) return;
         if (!ApexCharts) {
             clearSummaryChartLoading();
             setSummaryChartStatus('Chart visualization is unavailable. Use the daily summary data table below.');
             return;
         }
 
-        const main = document.getElementById('main-layout');
-        if (!main || (!main.querySelector('#chart-monthly-activity') && !main.querySelector('#chart-dashboard-summary'))) {
-            return;
-        }
+        await mountDashboardSummaryChart(ApexCharts, dashboardChartConfig());
+    }
 
-        const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-        const config = {
-            isDark,
-            textColor: isDark ? '#a1a1aa' : '#52525b',
-            gridColor: isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)',
-        };
-
-        await Promise.all([
-            mountAreaChart(ApexCharts, 'chart-daily-activity', @json($dailyActivity['labels'] ?? []), @json($dailyActivity['values'] ?? []), config, @json($dailyActivity['forms'] ?? [])),
-            mountAreaChart(ApexCharts, 'chart-weekly-activity', @json($weeklyActivity['labels'] ?? []), @json($weeklyActivity['values'] ?? []), config, @json($weeklyActivity['forms'] ?? [])),
-            mountAreaChart(ApexCharts, 'chart-monthly-activity', @json($monthlyActivity['labels'] ?? []), @json($monthlyActivity['values'] ?? []), config, @json($monthlyActivity['forms'] ?? [])),
-            mountDashboardSummaryChart(ApexCharts, config),
-        ]);
-
+    async function renderCharts() {
+        await Promise.all([initializeFormActivity(), renderSummaryChart()]);
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         window.resizeCrmDashboardCharts?.();
     }
 
     window.crmSoftNav?.register?.(scope, {
-        beforeSwap: () => {
+        beforeSwap: ({ nextScope }) => {
+            if (nextScope === scope && activitySection) {
+                window.history.replaceState({
+                    ...window.history.state,
+                    dashboardFormActivity: {
+                        campaign: campaignCode,
+                        form: activityForm?.value,
+                        period: activityPeriod?.value,
+                        expanded: activityCounts.filter((details) => details.open).map(({ id }) => id),
+                    },
+                }, '');
+            }
+            activityObserver?.disconnect();
             teardownLiveUpdates();
             destroyCharts();
         },

@@ -7,6 +7,7 @@ use App\Models\Campaign;
 use App\Models\DashboardLayout;
 use App\Models\User;
 use App\Services\DashboardLayoutService;
+use Database\Seeders\CampaignSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
@@ -56,6 +57,49 @@ class AdminDashboardLayoutTest extends TestCase
             ->assertForbidden();
 
         $this->assertDatabaseMissing('dashboard_layouts', ['campaign_code' => 'mbsales']);
+    }
+
+    public function test_super_admin_can_publish_one_form_mode_for_a_campaign(): void
+    {
+        $this->seed(CampaignSeeder::class);
+        Event::fake([DashboardLayoutUpdated::class]);
+        $sections = array_keys(DashboardLayoutService::sectionDefinitions());
+        $payload = ['campaign_code' => 'pjli', 'section_order' => $sections, 'visible_sections' => $sections];
+
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]))
+            ->withSession(['campaign' => 'mbsales']);
+        $this->get(route('admin.dashboard', ['campaign' => 'pjli']))->assertOk()->assertSee('name="activity_mode"', false);
+        $this->post(route('admin.dashboard-layout.update'), $payload + ['activity_mode' => 'invalid'])
+            ->assertSessionHasErrors('activity_mode');
+        $this->post(route('admin.dashboard-layout.update'), $payload + ['activity_mode' => DashboardLayoutService::ACTIVITY_SINGLE])
+            ->assertRedirect(route('admin.dashboard', ['campaign' => 'pjli']))
+            ->assertSessionHasNoErrors();
+        Event::assertDispatched(DashboardLayoutUpdated::class);
+
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_AGENT]))
+            ->get(route('dashboard'))->assertOk()->assertDontSee('id="dashboard-activity-form"', false);
+        $this->withSession(['campaign' => 'pjli'])
+            ->get(route('dashboard'))->assertOk()->assertSee('id="dashboard-activity-form"', false);
+    }
+
+    public function test_regular_admin_cannot_change_activity_mode_and_other_saves_preserve_it(): void
+    {
+        Event::fake([DashboardLayoutUpdated::class]);
+        $sections = array_keys(DashboardLayoutService::sectionDefinitions());
+        $service = app(DashboardLayoutService::class);
+        $service->saveForCampaign('mbsales', $sections, $sections, activityMode: DashboardLayoutService::ACTIVITY_SINGLE);
+
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_ADMIN]))
+            ->withSession(['campaign' => 'mbsales']);
+        $this->get(route('admin.dashboard'))->assertOk()->assertDontSee('name="activity_mode"', false);
+        $payload = ['section_order' => $sections, 'visible_sections' => $sections];
+        $this->post(route('admin.dashboard-layout.update'), $payload + ['activity_mode' => DashboardLayoutService::ACTIVITY_ALL])
+            ->assertForbidden();
+        $this->post(route('admin.dashboard-layout.update'), $payload + ['amounts' => ['enabled' => '0']])
+            ->assertSessionHasNoErrors();
+        $service->saveSalesForCampaign('mbsales', null);
+
+        $this->assertSame(DashboardLayoutService::ACTIVITY_SINGLE, $service->getForCampaign('mbsales')['activity_mode']);
     }
 
     public function test_applying_dashboard_layout_preserves_existing_custom_sales_attribution(): void

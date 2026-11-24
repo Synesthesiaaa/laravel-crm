@@ -4,8 +4,11 @@ namespace Tests\Feature;
 
 use App\Events\DashboardLayoutUpdated;
 use App\Models\Campaign;
+use App\Models\Form;
 use App\Models\User;
 use App\Services\DashboardLayoutService;
+use Carbon\Carbon;
+use Database\Seeders\CampaignSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
@@ -88,5 +91,86 @@ class DashboardDisplayControlsTest extends TestCase
         $this->actingAs(User::factory()->create(['role' => User::ROLE_AGENT]))
             ->withSession(['campaign' => 'mbsales'])
             ->get(route('dashboard'))->assertOk()->assertSee('Total Amount')->assertDontSee('Amount Change');
+    }
+
+    public function test_submission_trends_offer_only_active_forms_in_the_selected_campaign(): void
+    {
+        $this->seed(CampaignSeeder::class);
+        Form::query()->where('campaign_code', 'mbsales')->where('form_code', 'ezytransfer')->update(['is_active' => false]);
+
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_AGENT]))
+            ->withSession(['campaign' => 'mbsales'])
+            ->get(route('dashboard'))->assertOk()
+            ->assertSeeInOrder(['data-activity-form="ezycash"', 'data-activity-period="daily"', 'data-activity-period="weekly"', 'data-activity-period="monthly"', 'data-activity-form="ezyconvert"'], false)
+            ->assertDontSee('data-activity-form="ezytransfer"', false)
+            ->assertDontSee('data-activity-form="cycle"', false)
+            ->assertDontSee('id="dashboard-activity-form"', false)
+            ->assertSee('Submission counts')
+            ->assertViewHas('activityTrends', function (array $trends): bool {
+                $this->assertSame(['daily', 'weekly', 'monthly'], array_keys($trends));
+                foreach ($trends as $trend) {
+                    $this->assertSame(['ezycash', 'ezyconvert'], array_column($trend['forms'], 'code'));
+                    $this->assertNotEmpty($trend['labels']);
+                }
+
+                return true;
+            });
+    }
+
+    public function test_historical_activity_periods_are_independent_and_invalid_periods_fall_back(): void
+    {
+        $this->seed(CampaignSeeder::class);
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_AGENT]))
+            ->withSession(['campaign' => 'mbsales']);
+
+        $this->travelTo(Carbon::parse('2024-03-06 13:00:00'), function (): void {
+            $this->get(route('dashboard', [
+                'activity_week' => '2024-02-28',
+                'activity_month' => '2024-02',
+                'sales_date' => '2024-03-05',
+                'sales_start' => '07:00',
+                'sales_end' => '09:00',
+            ]))->assertOk()
+                ->assertViewHas('activityQuery', ['activity_week' => '2024-02-26', 'activity_month' => '2024-02'])
+                ->assertSee('sales_date=2024-03-05')
+                ->assertSee('Feb 26 – Mar 3, 2024')
+                ->assertSee('February 2024')
+                ->assertViewHas('activityTrends', function (array $trends): bool {
+                    $this->assertCount(24, $trends['daily']['labels']);
+                    $this->assertCount(7, $trends['weekly']['labels']);
+                    $this->assertCount(29, $trends['monthly']['labels']);
+
+                    return true;
+                });
+
+            $this->get(route('dashboard', ['activity_week' => ['2024-02-28'], 'activity_month' => '2024-04']))
+                ->assertOk()
+                ->assertViewHas('activityQuery', [])
+                ->assertSee('Mar 4 – Mar 10, 2024');
+
+            $this->get(route('dashboard', ['activity_week' => '2024-02-30', 'activity_month' => '2024-02']))
+                ->assertOk()
+                ->assertViewHas('activityQuery', ['activity_month' => '2024-02']);
+        });
+    }
+
+    public function test_submission_trends_handle_absent_forms_and_respect_activity_visibility(): void
+    {
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_AGENT]))
+            ->withSession(['campaign' => 'mbsales']);
+
+        $this->get(route('dashboard'))->assertOk()
+            ->assertSee('No forms configured')
+            ->assertDontSee('id="dashboard-activity-form"', false)
+            ->assertViewHas('activityTrends', []);
+
+        $this->seed(CampaignSeeder::class);
+        $service = app(DashboardLayoutService::class);
+        $sections = array_keys($service::sectionDefinitions());
+        $service->saveForCampaign('mbsales', $sections, array_diff($sections, ['activity']));
+
+        $this->get(route('dashboard'))->assertOk()
+            ->assertDontSee('data-dashboard-section="activity"', false)
+            ->assertViewHas('activityTrends', []);
     }
 }

@@ -87,7 +87,7 @@ class ViewLifecycleRenderTest extends TestCase
         $response->assertSee('window.crmSoftNav.refresh({ shouldDefer: shouldDeferRefresh })', false);
         $response->assertSee('echo.subscribeDashboardChannel?.(campaignCode, scheduleRefresh)', false);
         $response->assertSee('const fallbackIntervalMs = 30_000;', false);
-        $response->assertSee('window.crmCharts?.register?.(chartGroup, elId, chart);', false);
+        $response->assertSee('window.crmCharts?.register?.(chartGroup, el.id, chart);', false);
         $response->assertSee('window.resizeCrmDashboardCharts?.()', false);
         $response->assertSee('Total Value:', false);
         $response->assertSee('Sales by Form', false);
@@ -123,18 +123,15 @@ class ViewLifecycleRenderTest extends TestCase
             ->withSession(['campaign' => 'mbsales', 'campaign_name' => 'MB Sales'])
             ->get(route('dashboard'));
 
-        $response->assertOk();
-        $html = $response->getContent();
-
-        $this->assertStringContainsString('const hasRenderableChartData = false;', $html);
-
-        $guard = strpos($html, 'if (!hasRenderableChartData)');
-        $loader = strpos($html, 'const ApexCharts = await window.ApexChartsLoader?.() ?? null;');
-
-        $this->assertNotFalse($guard);
-        $this->assertNotFalse($loader);
-        $this->assertLessThan($loader, $guard);
-        $this->assertStringContainsString('return;', substr($html, $guard, $loader - $guard));
+        $response->assertOk()
+            ->assertDontSee('id="chart-dashboard-summary"', false)
+            ->assertSeeInOrder([
+                'if (!charts.length) return;',
+                'activityObserver = new IntersectionObserver',
+                'if (isIntersecting) void renderActivityChart(target);',
+                'if (!summaryElement) return;',
+                'const ApexCharts = await window.ApexChartsLoader?.() ?? null;',
+            ], false);
     }
 
     public function test_dashboard_chart_resize_work_is_coalesced(): void
