@@ -15,7 +15,7 @@
         <div class="report-notice report-notice--danger" role="alert" aria-live="assertive">
             <div class="flex items-start justify-between gap-3">
                 <div>
-                    <p class="text-sm font-semibold text-[var(--color-danger-fg)]" x-text="mode === 'historical' ? 'Historical report data could not be loaded' : 'Live report data could not be loaded'"></p>
+                    <p class="text-sm font-semibold text-[var(--color-danger-fg)]" x-text="mode === 'live' ? 'Live report data could not be loaded' : 'VICIdial report data could not be loaded'"></p>
                     <p class="text-xs text-[var(--color-on-surface-muted)] mt-1" x-text="errorMessage"></p>
                 </div>
                 <button type="button" class="btn-secondary text-xs" @click="refreshAll()">Retry</button>
@@ -23,7 +23,7 @@
         </div>
     </template>
 
-    <div x-show="dashboard.availability.status && dashboard.availability.status !== 'live'"
+    <div x-show="(mode === 'live' || reportIsCurrent) && dashboard.availability.status && dashboard.availability.status !== 'live'"
          class="report-notice report-notice--warning"
          role="status"
          aria-live="polite">
@@ -52,11 +52,11 @@
                     <span class="reports-context-item" x-show="mode !== 'historical'">
                         <x-icon name="clock" class="h-4 w-4" />
                         <span class="reports-context-label">Window</span>
-                        <span x-text="mode === 'today' ? 'Midnight to now' : cleanReportText(realtime.scopeLabel || 'Rolling Operational Window')"></span>
+                        <span x-text="mode === 'today' ? 'Current reporting day' : cleanReportText(realtime.scopeLabel || 'Rolling Operational Window')"></span>
                     </span>
-                    <span class="badge"
-                          :class="mode === 'historical' ? 'badge-pending' : (realtime.status === 'live' ? 'badge-active' : 'badge-warning')"
-                          x-text="mode === 'historical' ? 'Historical' : humanizeLabel(realtime.status || 'Unavailable')"></span>
+                    <span class="badge" x-show="mode === 'live'"
+                          :class="realtime.status === 'live' ? 'badge-active' : 'badge-warning'"
+                          x-text="humanizeLabel(realtime.status || 'Unavailable')"></span>
                 </div>
             </div>
 
@@ -78,21 +78,21 @@
             </div>
         </div>
 
-        <div x-show="mode === 'historical'" x-cloak class="reports-filter-bar">
+        <div x-show="mode !== 'live'" x-cloak class="reports-filter-bar">
             <div class="reports-filter-grid">
                 <div class="form-field">
                     <label class="form-label" for="reports-crm-campaign">CRM Campaign</label>
-                    <select id="reports-crm-campaign" class="form-select" x-model="filters.crm_campaign" @change="filters.campaigns = '---ALL---'; refreshAll()">
+                    <select id="reports-crm-campaign" class="form-select" x-model="filters.crm_campaign" @change="filters.campaigns = '---ALL---'; mappedCampaigns = []; refreshAll()">
                         @foreach($reportCampaigns ?? [] as $code => $config)
                             <option value="{{ $code }}">{{ $config['name'] ?? $code }} ({{ $code }})</option>
                         @endforeach
                     </select>
                 </div>
-                <div class="form-field">
+                <div class="form-field" x-show="mode === 'historical'">
                     <label class="form-label" for="reports-date-start">Start Date</label>
                     <input id="reports-date-start" class="form-input" type="date" x-model="filters.query_date" />
                 </div>
-                <div class="form-field">
+                <div class="form-field" x-show="mode === 'historical'">
                     <label class="form-label" for="reports-date-end">End Date</label>
                     <input id="reports-date-end" class="form-input" type="date" x-model="filters.end_date" />
                 </div>
@@ -114,7 +114,7 @@
                  x-cloak>
                 <div class="form-field">
                     <label class="form-label" for="reports-vici-campaign">VICIdial Campaigns</label>
-                    <select id="reports-vici-campaign" class="form-select" x-model="filters.campaigns">
+                    <select id="reports-vici-campaign" class="form-select" x-model="filters.campaigns" @change="refreshAll()">
                         <option value="---ALL---">All Mapped Campaigns</option>
                         <template x-for="code in mappedCampaigns" :key="code">
                             <option :value="code" x-text="code"></option>
@@ -124,18 +124,17 @@
                 </div>
                 <div class="form-field">
                     <label class="form-label" for="reports-disposition-scope">Disposition Scope</label>
-                    <select id="reports-disposition-scope" class="form-select" x-model="filters.disposition_scope" @change="refreshAll()" x-bind:disabled="systemDispositionFilterLocked">
+                    <select id="reports-disposition-scope" class="form-select" x-model="filters.disposition_scope" @change="refreshAll()">
                         <template x-for="option in dispositionScopeOptions" :key="option.value">
                             <option :value="option.value" x-text="option.label"></option>
                         </template>
                     </select>
                     <p class="form-help">
-                        <span x-show="systemDispositionFilterLocked" x-cloak>Locked by System Configuration. </span>
                         System codes:
                         <span class="font-medium text-[var(--color-on-surface-muted)]" x-text="systemDispositionCodes.length ? systemDispositionCodes.join(', ') : 'None configured'"></span>
                     </p>
                 </div>
-                <div class="form-field">
+                <div class="form-field" x-show="mode === 'historical'">
                     <label class="form-label" for="reports-comparison">Comparison</label>
                     <select id="reports-comparison" class="form-select" x-model="filters.comparison">
                         <option value="none">No Comparison</option>
@@ -149,10 +148,10 @@
         </div>
     </section>
 
-    <section x-show="mode !== 'historical'" x-cloak class="report-section-shell" aria-labelledby="live-report-title">
+    <section x-show="mode === 'live'" x-cloak class="report-section-shell" aria-labelledby="live-report-title">
         <div class="report-section-header">
             <div>
-                <h3 id="live-report-title" class="report-section-title" x-text="mode === 'today' ? 'Today and Live Operations' : 'Live Operational Metrics'"></h3>
+                <h3 id="live-report-title" class="report-section-title">Live Operational Metrics</h3>
                 <p class="text-xs text-[var(--color-on-surface-dim)]" x-text="realtime.scopeLabel"></p>
             </div>
             <p class="text-xs text-[var(--color-on-surface-dim)]" role="status" aria-live="polite">
@@ -221,7 +220,7 @@
         </div>
     </section>
 
-    <div x-show="mode === 'historical'" x-cloak class="reports-historical-stack">
+    <div x-show="mode !== 'live' && reportIsCurrent" x-cloak class="reports-historical-stack">
 
     <section class="md-card overflow-hidden animate-stagger" aria-labelledby="report-performance-title">
 
@@ -233,13 +232,14 @@
                         <p class="report-eyebrow">Performance Snapshot</p>
                     </div>
                     <h3 id="report-performance-title" class="mt-2 truncate text-xl font-bold text-[var(--color-on-surface)]" x-text="dashboard.overview.campaign"></h3>
-                    <p class="mt-1 text-sm text-[var(--color-on-surface-muted)]">Core call performance for the selected report scope.</p>
+                    <p class="mt-1 text-sm text-[var(--color-on-surface-muted)]" x-text="dashboard.sourceLabel"></p>
+                    <p class="mt-1 text-xs text-[var(--color-on-surface-muted)]" x-text="dashboard.reconciliationLabel"></p>
                 </div>
 
                 <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-[var(--color-on-surface-dim)]">
                     <span class="inline-flex items-center gap-1.5">
                         <x-icon name="clock" class="h-4 w-4 text-[var(--color-on-surface-muted)]" />
-                        <span x-text="filters.query_date + ' to ' + filters.end_date"></span>
+                        <span x-text="dashboard.periodLabel"></span>
                     </span>
                     <span class="inline-flex items-center gap-1.5">
                         <x-icon name="tag" class="h-4 w-4 text-[var(--color-on-surface-muted)]" />
@@ -251,32 +251,32 @@
             <div class="grid grid-cols-1 gap-5 pt-5 xl:grid-cols-[minmax(16rem,0.9fr)_minmax(0,2.1fr)] xl:gap-6">
                 <div class="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-card)] p-5 sm:p-6">
                     <p class="report-eyebrow">Answer Rate</p>
-                    <p class="mt-2 text-xs text-[var(--color-on-surface-muted)]">Answered ÷ total calls × 100, minus ANA abandoned rate.</p>
-                    <p class="mt-3 text-3xl font-semibold leading-none tracking-tight text-[var(--color-on-surface)] tabular-nums" x-text="formatPercent(dashboard.overview.answerRate)"></p>
+                    <p class="mt-2 text-xs text-[var(--color-on-surface-muted)]">VICIdial-reported answers ÷ total call attempts × 100.</p>
+                    <p class="mt-3 text-3xl font-semibold leading-none tracking-tight text-[var(--color-on-surface)] tabular-nums" x-text="formatPercent(dashboard.overview.answerRate, 2)"></p>
                     <p class="mt-3 text-sm leading-6 text-[var(--color-on-surface-muted)]">
                         <span class="font-semibold text-[var(--color-on-surface)] tabular-nums" x-text="formatNumber(dashboard.overview.answeredCalls)"></span>
                         answered from
                         <span class="font-semibold text-[var(--color-on-surface)] tabular-nums" x-text="formatNumber(dashboard.overview.totalCalls)"></span>
-                        total calls.
+                        call attempts.
                     </p>
                 </div>
 
                 <dl class="grid grid-cols-2 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] sm:grid-cols-4">
                     <div class="min-w-0 border-b border-r border-[var(--color-border)] p-4 sm:p-5">
-                        <dt class="report-metric-label">Total Calls</dt>
+                        <dt class="report-metric-label">Total Call Attempts</dt>
                         <dd class="mt-2 text-2xl font-bold text-[var(--color-on-surface)] tabular-nums" x-text="formatNumber(dashboard.overview.totalCalls)"></dd>
                     </div>
                     <div class="min-w-0 border-b border-[var(--color-border)] p-4 sm:border-r sm:p-5">
-                        <dt class="report-metric-label">Answered</dt>
+                        <dt class="report-metric-label">Answered Attempts</dt>
                         <dd class="mt-2 text-2xl font-bold text-[var(--color-on-surface)] tabular-nums" x-text="formatNumber(dashboard.overview.answeredCalls)"></dd>
                     </div>
                     <div class="min-w-0 border-b border-r border-[var(--color-border)] p-4 sm:border-r-0 sm:p-5">
-                        <dt class="report-metric-label">Contact Rate</dt>
-                        <dd class="mt-2 text-2xl font-bold text-[var(--color-on-surface)] tabular-nums" x-text="formatPercent(dashboard.overview.contactRate)"></dd>
+                        <dt class="report-metric-label">Calls Matching Disposition Filter</dt>
+                        <dd class="mt-2 text-2xl font-bold text-[var(--color-on-surface)] tabular-nums" x-text="formatNumber(dashboard.dispo.summary.totalCalls)"></dd>
                     </div>
                     <div class="min-w-0 border-b border-[var(--color-border)] p-4 sm:p-5">
-                        <dt class="report-metric-label">Abandoned Rate (ANA)</dt>
-                        <dd class="mt-2 text-2xl font-bold text-[var(--color-on-surface)] tabular-nums" x-text="formatPercent(dashboard.overview.abandonedRate)"></dd>
+                        <dt class="report-metric-label">Contact and Abandoned Rates</dt>
+                        <dd class="mt-2 text-sm text-[var(--color-on-surface-muted)]">Unavailable. Requires verified call outcomes.</dd>
                     </div>
                     <div class="min-w-0 border-b border-[var(--color-border)] p-4 sm:border-b-0 sm:border-r sm:p-5">
                         <dt class="report-metric-label">Calls per Agent</dt>
@@ -375,7 +375,7 @@
                                 <td class="font-medium text-[var(--color-on-surface)]" x-text="row.label"></td>
                                 <td class="tabular-nums" x-text="formatNumber(row.total)"></td>
                                 <td class="tabular-nums" x-text="formatNumber(row.answered)"></td>
-                                <td class="text-right tabular-nums" x-text="formatPercent(row.answerRate)"></td>
+                                <td class="text-right tabular-nums" x-text="formatPercent(row.answerRate, 2)"></td>
                                 <td x-text="row.topStatus"></td>
                                 <td class="text-right tabular-nums" x-text="row.peakHourLabel"></td>
                             </tr>
@@ -493,17 +493,15 @@
                 </div>
             </div>
             <div class="report-panel report-totals-panel">
-                <p class="chart-title mb-0">Report Totals</p>
+                <p class="chart-title mb-0">Disposition Totals</p>
                 <div class="report-inline-metrics report-inline-metrics--two">
                     <div class="report-inline-metric">
-                        <p class="report-metric-label">Total Calls</p>
+                        <p class="report-metric-label">Calls in This Breakdown</p>
                         <p class="mt-2 text-2xl font-bold text-[var(--color-on-surface)]" x-text="formatNumber(dashboard.dispo.summary.totalCalls)"></p>
                     </div>
                     <div class="report-inline-metric">
-                        <p class="report-metric-label">Contact Rate</p>
-                        <p class="mt-2 text-lg font-semibold text-[var(--color-on-surface)] truncate" x-text="formatPercent(dashboard.overview.contactRate)"></p>
-                        <p class="report-metric-label mt-3">Abandoned Rate (ANA)</p>
-                        <p class="mt-2 text-lg font-semibold text-[var(--color-on-surface)]" x-text="formatPercent(dashboard.overview.abandonedRate)"></p>
+                        <p class="report-metric-label">Disposition Scope</p>
+                        <p class="mt-2 text-sm font-semibold text-[var(--color-on-surface)]" x-text="dashboard.scopeLabel"></p>
                     </div>
                 </div>
             </div>
@@ -521,7 +519,7 @@
                 <x-table.index caption="Disposition Table">
                     <x-table.head :columns="[
                         ['label' => 'Campaign and In-Group'],
-                        ['label' => 'Total Calls', 'align' => 'right'],
+                        ['label' => 'Matching Calls', 'align' => 'right'],
                         ['label' => 'Top Disposition'],
                         ['label' => 'Breakdown'],
                     ]" />
@@ -633,7 +631,7 @@ window.telephonyReports = function () {
         mode: 'historical',
         loading: false,
         errorMessage: '',
-        refreshInFlight: false,
+        activeRequestKey: '',
         pollInterval: null,
         requestController: null,
         liveHistory: [],
@@ -645,8 +643,8 @@ window.telephonyReports = function () {
         filters: {
             crm_campaign: @json($campaign),
             campaigns: '---ALL---',
-            query_date: new Date().toISOString().slice(0, 10),
-            end_date: new Date().toISOString().slice(0, 10),
+            query_date: '',
+            end_date: '',
             timezone: @json(config('vicidial.report_timezone', config('app.timezone', 'UTC'))),
             disposition_scope: @json(($reportDispositionSettings['hide_system_dispositions'] ?? false) ? 'exclude_system' : 'all'),
             comparison: 'none',
@@ -658,7 +656,6 @@ window.telephonyReports = function () {
             { value: 'system_only', label: 'System Dispositions Only' },
         ],
         systemDispositionCodes: @json($reportDispositionSettings['system_disposition_codes'] ?? config('vicidial.report_system_disposition_codes', [])),
-        systemDispositionFilterLocked: @json((bool) ($reportDispositionSettings['hide_system_dispositions'] ?? false)),
         recordingFilters: {
             agent_user: '',
             lead_id: '',
@@ -672,13 +669,14 @@ window.telephonyReports = function () {
         },
         dashboard: {
             scopeLabel: @json(($reportDispositionSettings['hide_system_dispositions'] ?? false) ? 'Hide System Dispositions' : 'All Dispositions'),
+            periodLabel: '',
+            sourceLabel: '',
+            reconciliationLabel: '',
             overview: {
                 campaign: @json($campaignName),
                 totalCalls: null,
                 answeredCalls: null,
                 answerRate: null,
-                contactRate: null,
-                abandonedRate: null,
                 averageTalkTimeSeconds: null,
                 agentsWithActivity: null,
                 callsPerAgent: null,
@@ -752,6 +750,8 @@ window.telephonyReports = function () {
         _onVisibilityChange: null,
 
         async init() {
+            this.filters.query_date = this.dateInReportTimezone();
+            this.filters.end_date = this.filters.query_date;
             this._onPopState = () => this.refreshAll();
             window.addEventListener('popstate', this._onPopState);
             this._onVisibilityChange = () => {
@@ -795,14 +795,42 @@ window.telephonyReports = function () {
             this.liveChart = null;
         },
 
+        dateInReportTimezone() {
+            const options = { year: 'numeric', month: '2-digit', day: '2-digit' };
+            let formatter;
+            try {
+                formatter = new Intl.DateTimeFormat('en-CA', { ...options, timeZone: this.filters.timezone });
+            } catch {
+                formatter = new Intl.DateTimeFormat('en-CA', { ...options, timeZone: 'UTC' });
+            }
+            const parts = Object.fromEntries(formatter.formatToParts().map(({ type, value }) => [type, value]));
+            return parts.year + '-' + parts.month + '-' + parts.day;
+        },
+
+        reportRequestKey() {
+            const { crm_campaign, campaigns, query_date, end_date, timezone, disposition_scope, comparison } = this.filters;
+            if (this.mode === 'live') {
+                return JSON.stringify([this.mode, crm_campaign]);
+            }
+            const dates = this.mode === 'today' ? [this.dateInReportTimezone()] : [query_date, end_date, comparison];
+            return JSON.stringify([this.mode, crm_campaign, campaigns, timezone, disposition_scope, ...dates]);
+        },
+
+        get reportIsCurrent() {
+            return this.dashboardSnapshotKey === this.reportRequestKey();
+        },
+
         async refreshAll() {
-            if (this.refreshInFlight) {
+            const key = this.reportRequestKey();
+            if (this.requestController && this.activeRequestKey === key) {
                 return;
             }
+            this.requestController?.abort();
+            const controller = new AbortController();
+            this.requestController = controller;
+            this.activeRequestKey = key;
             this.loading = true;
             this.errorMessage = '';
-            this.refreshInFlight = true;
-            this.requestController = new AbortController();
 
             try {
                 const endpoint = this.mode === 'historical'
@@ -813,37 +841,41 @@ window.telephonyReports = function () {
                         ...this.filters,
                         campaign: this.filters.crm_campaign,
                     },
-                    signal: this.requestController.signal,
+                    signal: controller.signal,
                 });
+                if (controller.signal.aborted || key !== this.reportRequestKey()) {
+                    return;
+                }
                 const data = response.data?.data ?? {};
                 this.payloads.dashboard = response.data;
-                if (this.mode === 'historical') {
-                    this.applyDashboard(data);
-                } else {
+                if (this.mode === 'live') {
                     this.applyRealtime(data);
+                } else {
+                    this.applyDashboard(data, key);
                 }
-                await this.renderCharts();
+                await this.renderCharts(controller);
             } catch (e) {
-                if (e.code === 'ERR_CANCELED' || e.name === 'CanceledError' || e.name === 'AbortError') {
+                if (controller.signal.aborted || key !== this.reportRequestKey()) {
                     return;
                 }
                 this.errorMessage = e.response?.data?.message || 'Failed to load report data.';
-                if (this.mode === 'historical' && this.hasDashboardSnapshot) {
+                if (this.mode !== 'live' && this.hasDashboardSnapshot && this.reportIsCurrent) {
                     this.dashboard.availability = {
                         ...this.dashboard.availability,
                         status: 'stale',
                         message: 'The last successful report snapshot is being shown. Retry to request fresh data.',
                     };
                 }
-                if (this.mode !== 'historical' && this.realtime.lastUpdated) {
+                if (this.mode === 'live' && this.realtime.lastUpdated) {
                     this.realtime.status = 'stale';
                     this.realtime.staleMessage = 'The last live snapshot could not be refreshed. Retry to request a fresh snapshot.';
                 }
                 Alpine.store('toast').error(this.errorMessage);
             } finally {
-                this.loading = false;
-                this.refreshInFlight = false;
-                this.requestController = null;
+                if (this.requestController === controller) {
+                    this.loading = false;
+                    this.requestController = null;
+                }
             }
         },
 
@@ -883,8 +915,6 @@ window.telephonyReports = function () {
         applyRealtime(data) {
             const metrics = data.metrics || {};
             const rolling = data.rolling || {};
-            const today = data.today || {};
-            const isToday = this.mode === 'today';
             const status = data.freshness?.status || data.availability?.status || 'unavailable';
             const normalizedStatus = String(status).toLowerCase();
             const realtimeSnapshotKey = this.mode + '|' + this.filters.crm_campaign;
@@ -914,14 +944,7 @@ window.telephonyReports = function () {
                 return;
             }
             const numberOrDash = (value) => value === null || value === undefined ? 'N/A' : this.formatNumber(value);
-            const cards = isToday ? [
-                { key: 'today-total', label: "Today's Calls", value: numberOrDash(today.total_calls), scope: this.cleanReportText(today.label || 'Midnight to Now') },
-                { key: 'today-answered', label: 'Answered', value: numberOrDash(today.answered), scope: this.cleanReportText(today.label || 'Midnight to Now') },
-                { key: 'today-rate', label: 'Answer Rate', value: this.formatPercent(today.answer_rate), scope: this.cleanReportText(today.label || 'Midnight to Now') },
-                { key: 'live-calls', label: 'Live Calls', value: numberOrDash(metrics.live_calls), scope: 'Current snapshot' },
-                { key: 'waiting', label: 'Waiting Calls', value: numberOrDash(metrics.calls_waiting), scope: 'Current snapshot' },
-                { key: 'available', label: 'Available Agents', value: numberOrDash(metrics.available_agents), scope: 'Current snapshot' },
-            ] : [
+            const cards = [
                 { key: 'live-calls', label: 'Live Calls', value: numberOrDash(metrics.live_calls), scope: 'Current snapshot' },
                 { key: 'active-agents', label: 'Active Agents', value: numberOrDash(metrics.active_agents), scope: 'Current snapshot' },
                 { key: 'available', label: 'Available Agents', value: numberOrDash(metrics.available_agents), scope: 'Current snapshot' },
@@ -939,7 +962,7 @@ window.telephonyReports = function () {
                 staleMessage: data.freshness?.status === 'stale' ? 'Live data is stale. Retry to request a fresh snapshot.' : (data.availability?.message || ''),
                 cards,
                 sources: Object.entries(data.sources || {}).map(([key, source]) => ({ key, label: this.humanizeLabel(key), status: source.status || 'unavailable' })),
-                dispositions: Object.entries((isToday ? today.dispositions : rolling.dispositions) || {}).map(([code, count]) => ({ code, count: this.formatNumber(count) })),
+                dispositions: Object.entries(rolling.dispositions || {}).map(([code, count]) => ({ code, count: this.formatNumber(count) })),
             };
             this.hasRealtimeSnapshot = true;
             this.realtimeSnapshotKey = realtimeSnapshotKey;
@@ -957,20 +980,11 @@ window.telephonyReports = function () {
             }].slice(-60);
         },
 
-        applyDashboard(data) {
-            const availabilityStatus = String(data.availability?.status || 'unavailable').toLowerCase();
-            const dashboardSnapshotKey = [
-                data.filters?.crm_campaign || this.filters.crm_campaign,
-                this.filters.campaigns,
-                this.filters.query_date,
-                this.filters.end_date,
-                this.filters.timezone,
-                this.filters.disposition_scope,
-                this.filters.comparison,
-            ].join('|');
+        applyDashboard(data, dashboardSnapshotKey) {
+            const summary = data.summary || {};
             if (this.hasDashboardSnapshot
                 && this.dashboardSnapshotKey === dashboardSnapshotKey
-                && availabilityStatus !== 'live') {
+                && summary.total_calls == null) {
                 this.dashboard.availability = {
                     ...this.dashboard.availability,
                     ...(data.availability || {}),
@@ -980,7 +994,6 @@ window.telephonyReports = function () {
 
                 return;
             }
-            const summary = data.summary || {};
             const callVolume = data.call_volume || {};
             const campaigns = Array.isArray(data.campaigns) ? data.campaigns : [];
             const dispositions = data.dispositions || { labels: [], values: [], percentages: [] };
@@ -990,19 +1003,25 @@ window.telephonyReports = function () {
             this.dashboard.availability = data.availability || this.dashboard.availability;
             if (Array.isArray(data.campaign_scope?.campaign_codes)) {
                 this.mappedCampaigns = data.campaign_scope.campaign_codes;
-                if (this.filters.campaigns !== '---ALL---' && !this.mappedCampaigns.includes(this.filters.campaigns)) {
-                    this.filters.campaigns = '---ALL---';
-                }
             }
-            this.dashboard.scopeLabel = this.dispositionScopeLabel(this.filters.disposition_scope);
+            this.dashboard.scopeLabel = this.dispositionScopeLabel(data.filters?.disposition_scope);
+            const scope = data.report_scope || {};
+            const { query_date: from, end_date: through, timezone = this.filters.timezone } = data.filters || {};
+            this.dashboard.periodLabel = from === through ? (from || '') : from + ' to ' + through;
+            const observed = scope.observed_at
+                ? new Date(scope.observed_at).toLocaleString(undefined, { timeZone: timezone })
+                : null;
+            this.dashboard.sourceLabel = ['VICIdial', timezone, observed && 'Fetched ' + observed, scope.days_open && 'Provisional']
+                .filter(Boolean).join(' · ');
+            this.dashboard.reconciliationLabel = scope.reconciliation === 'approved'
+                ? 'Campaign approved for reporting'
+                : 'Native VICIdial reconciliation pending';
             this.dashboard.overview = {
                 ...this.dashboard.overview,
                 campaign: data.filters?.crm_campaign || this.filters.crm_campaign,
                 totalCalls: summary.total_calls,
                 answeredCalls: summary.answered_calls,
                 answerRate: summary.answer_rate,
-                contactRate: summary.contact_rate ?? null,
-                abandonedRate: summary.abandoned_rate ?? null,
                 averageTalkTimeSeconds: summary.average_talk_time_seconds ?? null,
                 agentsWithActivity: summary.agents_with_activity,
                 callsPerAgent: summary.calls_per_agent,
@@ -1074,7 +1093,7 @@ window.telephonyReports = function () {
                     totalCalls: data.disposition_summary?.total_calls ?? null,
                     topDisposition: dispositions.labels?.[0] || 'N/A',
                     topDispositionCount: dispositions.values?.[0] ?? null,
-                    scopeLabel: this.dispositionScopeLabel(this.filters.disposition_scope),
+                    scopeLabel: this.dashboard.scopeLabel,
                 },
             };
             this.dashboard.dispo.rows.forEach((dispositionRow, index) => {
@@ -1094,7 +1113,7 @@ window.telephonyReports = function () {
                 { key: 'other', label: 'Other', seconds: time.other_seconds ?? null },
             ];
             this.dashboard.comparison = this.normalizeComparison(data.comparison);
-            this.hasDashboardSnapshot = availabilityStatus === 'live';
+            this.hasDashboardSnapshot = summary.total_calls != null;
             this.dashboardSnapshotKey = dashboardSnapshotKey;
         },
 
@@ -1103,11 +1122,10 @@ window.telephonyReports = function () {
                 return { enabled: false, periodLabel: '', availabilityLabel: '', cards: [] };
             }
             const labels = {
-                total_calls: 'Total Calls',
-                answered_calls: 'Answered',
+                total_calls: 'Total Call Attempts',
+                answered_calls: 'Answered Attempts',
                 answer_rate: 'Answer Rate',
-                contact_rate: 'Contact Rate',
-                abandoned_rate: 'Abandoned Rate',
+                disposition_calls: 'Calls Matching Disposition Filter',
                 average_talk_time_seconds: 'Average Talk',
                 agents_with_activity: 'Agents With Activity',
                 calls_per_agent: 'Calls per Agent',
@@ -1117,13 +1135,13 @@ window.telephonyReports = function () {
                 const isRate = metric.unit === 'rate';
                 const changeLabel = change === null
                     ? 'No comparable baseline'
-                    : (change >= 0 ? 'Increase of ' : 'Decrease of ') + Math.abs(change).toFixed(1)
+                    : (change >= 0 ? 'Increase of ' : 'Decrease of ') + Math.abs(change).toFixed(isRate ? 2 : 1)
                         + (isRate ? ' percentage points' : '%') + ' versus previous';
 
                 return {
                     key,
                     label: labels[key] || key,
-                    value: metric.current === null ? 'N/A' : (isRate ? this.formatPercent(metric.current) : this.formatNumber(metric.current)),
+                    value: metric.current === null ? 'N/A' : (isRate ? this.formatPercent(metric.current, 2) : this.formatNumber(metric.current)),
                     changeLabel,
                     tone: change === null ? 'text-[var(--color-on-surface-dim)]' : (change >= 0 ? 'text-[var(--color-success-fg)]' : 'text-[var(--color-danger-fg)]'),
                 };
@@ -1405,15 +1423,15 @@ window.telephonyReports = function () {
             return option?.label || 'All Dispositions';
         },
 
-        async renderCharts() {
-            if (this.mode !== 'historical') {
-                await this.renderLiveChart();
+        async renderCharts(controller) {
+            if (this.mode === 'live') {
+                await this.renderLiveChart(controller);
                 return;
             }
             this.destroyCharts();
 
             const ApexCharts = await window.ApexChartsLoader?.() ?? null;
-            if (!ApexCharts) {
+            if (!ApexCharts || controller?.signal.aborted) {
                 return;
             }
 
@@ -1508,10 +1526,10 @@ window.telephonyReports = function () {
             window.crmCharts?.resizeGroup?.(CHART_GROUP);
         },
 
-        async renderLiveChart() {
+        async renderLiveChart(controller) {
             const ApexCharts = await window.ApexChartsLoader?.() ?? null;
             const chartElement = document.getElementById('chart-live-activity');
-            if (!ApexCharts || !chartElement || this.liveHistory.length === 0) {
+            if (!ApexCharts || controller?.signal.aborted || !chartElement || this.liveHistory.length === 0) {
                 return;
             }
 
@@ -1743,7 +1761,7 @@ window.telephonyReports = function () {
             return new Intl.NumberFormat().format(number);
         },
 
-        formatPercent(value) {
+        formatPercent(value, decimals = 1) {
             if (value === null || value === undefined || value === '') {
                 return 'N/A';
             }
@@ -1753,7 +1771,7 @@ window.telephonyReports = function () {
                 return 'N/A';
             }
 
-            return `${number.toFixed(1)}%`;
+            return `${number.toFixed(decimals)}%`;
         },
     };
 };

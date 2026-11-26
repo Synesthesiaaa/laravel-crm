@@ -15,6 +15,7 @@ class ReportingController extends Controller
     public function realtime(
         Request $request,
         RealtimeTelephonyReportService $service,
+        HistoricalTelephonyReportService $history,
         ?string $mode = null,
     ): JsonResponse {
         $validated = $request->validate([
@@ -23,6 +24,9 @@ class ReportingController extends Controller
         $mode = $mode ?? (string) ($validated['mode'] ?? 'live');
         if (! in_array($mode, ['live', 'today'], true)) {
             abort(422, 'Unsupported real-time report mode.');
+        }
+        if ($mode === 'today') {
+            return $this->analyticalReport($request, $history, true);
         }
 
         return response()->json([
@@ -33,6 +37,11 @@ class ReportingController extends Controller
     }
 
     public function dashboard(Request $request, HistoricalTelephonyReportService $service): JsonResponse
+    {
+        return $this->analyticalReport($request, $service, false);
+    }
+
+    private function analyticalReport(Request $request, HistoricalTelephonyReportService $service, bool $today): JsonResponse
     {
         $validated = $request->validate([
             'campaigns' => ['nullable', 'string', 'max:255'],
@@ -47,7 +56,30 @@ class ReportingController extends Controller
             $request->user(),
             $this->campaign($request),
             $validated,
+            $today,
         );
+        if ($today) {
+            $summary = $data['summary'];
+            $scope = $data['report_scope'];
+            $data['mode'] = 'today';
+            $data['time_scope'] = [
+                'label' => 'Today',
+                'start' => $scope['start'],
+                'end' => $scope['observed_at'],
+            ];
+            $data['today'] = [
+                'label' => 'Midnight → now',
+                'day_key' => $data['filters']['query_date'],
+                'start' => $scope['start'],
+                'end' => $scope['observed_at'],
+                'total_calls' => $summary['total_calls'],
+                'answered' => $summary['answered_calls'],
+                'answer_rate' => $summary['answer_rate'],
+                'source' => $summary['total_calls'] === null ? 'unavailable' : 'vicidial',
+                'available' => $summary['total_calls'] !== null,
+                'dispositions' => $data['disposition_summary']['code_totals'],
+            ];
+        }
 
         return response()->json([
             'success' => true,

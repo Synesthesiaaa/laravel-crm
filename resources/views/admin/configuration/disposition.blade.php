@@ -2,7 +2,7 @@
                 <div>
                     <h2 class="text-lg font-semibold text-[var(--color-on-surface)]">Report Disposition Settings</h2>
                     <p class="mt-1 max-w-2xl text-sm text-[var(--color-on-surface-muted)]">
-                        Control whether VICIdial system-generated retry results are counted in report totals shown to supervisors and administrators.
+                        Choose the initial disposition filter for supervisors and administrators.
                     </p>
                 </div>
 
@@ -17,9 +17,9 @@
                     <section class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-5 space-y-5">
                         <label class="flex items-start justify-between gap-5">
                             <span>
-                                <span class="block text-sm font-semibold text-[var(--color-on-surface)]">Hide system dispositions in reports</span>
+                                <span class="block text-sm font-semibold text-[var(--color-on-surface)]">Hide system dispositions by default</span>
                                 <span class="mt-1 block text-xs leading-5 text-[var(--color-on-surface-muted)]">
-                                    Excludes configured system results from Total Calls, campaign totals, status breakdowns, disposition totals, contact rate, and calls per agent. This is intended for automatic retry statuses that were not final user-handled outcomes.
+                                    Applies to the disposition subtotal and breakdown. Total call attempts, reported answers, and hourly volume use the full campaign scope. Report users can change the disposition filter.
                                 </span>
                             </span>
                             <input type="checkbox"

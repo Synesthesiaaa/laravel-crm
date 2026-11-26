@@ -28,7 +28,7 @@ class ReportDispositionConfigurationTest extends TestCase
             ->withSession($this->campaignSession())
             ->get(route('admin.configuration', ['tab' => 'disposition']))
             ->assertOk()
-            ->assertSee('Hide system dispositions in reports')
+            ->assertSee('Hide system dispositions by default')
             ->assertSee('name="system_disposition_codes"', false);
 
         $this->actingAs($this->superAdmin)
@@ -52,7 +52,7 @@ class ReportDispositionConfigurationTest extends TestCase
             ->withSession($this->campaignSession())
             ->get(route('reports.index'))
             ->assertOk()
-            ->assertSee('systemDispositionFilterLocked: true', false)
+            ->assertDontSee('systemDispositionFilterLocked', false)
             ->assertSee('disposition_scope: "exclude_system"', false)
             ->assertSee('NA', false)
             ->assertSee('AB', false);

@@ -18,6 +18,10 @@ return [
     'agent_api_timeout' => (int) env('VICI_AGENT_API_TIMEOUT', 4),
     'agent_connect_timeout' => (int) env('VICI_AGENT_CONNECT_TIMEOUT', 2),
     'report_timezone' => env('VICI_REPORT_TIMEZONE', env('APP_TIMEZONE', 'UTC')),
+    'report_reconciled_campaigns' => array_values(array_filter(array_map(
+        static fn (string $campaign): string => strtolower(trim($campaign)),
+        explode(',', (string) env('VICI_RECONCILED_REPORT_CAMPAIGNS', '')),
+    ))),
     'campaign_scope_cache_seconds' => (int) env('VICI_CAMPAIGN_SCOPE_CACHE_SECONDS', 60),
     'campaign_catalog_cache_seconds' => (int) env('VICI_CAMPAIGN_CATALOG_CACHE_SECONDS', 60),
     'call_history_sync' => [

@@ -10,20 +10,20 @@
 4. Open **More Filters** when you need **VICIdial Campaigns**, **Disposition Scope**, or **Comparison**.
 5. Select **Refresh Reports**. Review the displayed campaign, period, source health, and freshness before comparing results.
 
-Historical reports concern the selected period. Today means midnight to now in the report's effective timezone. Live reports use an operational window and current sources; they should not be treated as an all-day ledger. Mapped VICIdial campaigns and the server's reporting permissions affect what can be returned.
+Historical and Today use the same VICIdial sources. Today selects the current calendar day in the report timezone. Figures for an open day are provisional, and the fetch time shows when the CRM received the figures. Live shows operational activity for a rolling window. Mapped VICIdial campaigns and the server's reporting permissions determine the available data.
 
-## What the historical metrics mean
+## What the report metrics mean
 
 | Metric | Implemented meaning |
 | --- | --- |
-| Total calls | Available scoped call-status totals, subject to selected disposition scope. |
-| Answer rate | (Answered calls − ANA calls) ÷ total calls × 100, rounded to two decimals. This subtracts the abandoned rate from the original answer rate. Confirmed zero totals return zero; unverifiable inputs stay unavailable. |
-| Abandoned rate | ANA (Agent Not Available) calls ÷ total calls × 100. Displayed beside Contact Rate. |
-| Contact rate | Sum of all non-system disposition counts ÷ total calls × 100. Uses the configured system disposition list and does not require a contacted-code group. |
-| Calls per agent | Total calls ÷ agents with activity, rounded to two decimals; unavailable when no usable agent count exists. |
-| Average talk time | The parsed agent summary uses total talk seconds ÷ total agent calls when talk data is available, rounded to one decimal. It is not assumed to use only answered calls. |
+| Total Call Attempts | The VICIdial call-status count for the selected campaigns and dates, including all dispositions. |
+| Answered Attempts and Answer Rate | The answered count from the same VICIdial response. The rate divides that count by total attempts and rounds to two decimals. Confirmed zero totals produce a zero rate. |
+| Calls Matching Disposition Filter | The sum of the disposition counts included by the active filter. |
+| Contact and Abandoned Rates | Unavailable until the source can verify the required call outcomes. |
+| Calls per Agent | Total attempts divided by agents with activity, rounded to two decimals. Requires an available, equivalently scoped agent count. |
+| Average Talk Time | Total talk seconds divided by agent calls from the agent export, rounded to one decimal. |
 
-The optional conversion funnel retains its configurable disposition groups. A system disposition can be included, excluded, or selected alone. Changing scope changes the rate inputs: ANA calls excluded by the selected scope do not contribute to its abandoned rate, and system-only scope has zero contacted calls. Some scoped answer metrics remain unavailable when the source cannot verify them consistently. Compare the same filters and source availability. Live operational metrics retain their existing source definitions.
+Disposition filters change the matching subtotal and disposition breakdowns. The full attempt count, answer count, and hourly volume use the full disposition population. The optional funnel uses configured disposition groups. Use the native VICIdial report for official figures while a campaign shows **Native VICIdial reconciliation pending**. [Reconciliation runbook](../operations/vicidial-report-reconciliation.md)
 
 Dashboard **Daily Comparison** has an **Overall / form** selector. Its chart and accessible data table compare the selected form against the equivalent previous-month days, with the existing volume/amount controls. Daily, weekly, and monthly activity charts show an Overall series and a named series for each form; use the legend to show or hide a series. Empty forms retain zero buckets. Activity counts all submissions; Daily Comparison follows configured sales qualification rules.
 

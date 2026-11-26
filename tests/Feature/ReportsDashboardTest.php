@@ -47,7 +47,6 @@ class ReportsDashboardTest extends TestCase
         $response->assertSee('Live: Rolling Window');
         $response->assertSee('Today: Midnight to Now');
         $response->assertSee('chart-live-activity');
-        $response->assertSee('refreshInFlight');
         $response->assertSee('Disposition Scope');
         $response->assertSee('Hide System Dispositions');
         $response->assertSee('id="reports-disposition-scope"', false);
@@ -75,8 +74,9 @@ class ReportsDashboardTest extends TestCase
         $response->assertOk();
         $response->assertSee('Performance Snapshot');
         $response->assertSee('Answer Rate');
-        $response->assertSee('Total Calls');
-        $response->assertSee('Contact Rate');
+        $response->assertSee('Total Call Attempts');
+        $response->assertSee('Calls Matching Disposition Filter');
+        $response->assertSee('Contact and Abandoned Rates');
         $response->assertSee('Calls per Agent');
         $response->assertSee('Average Talk Time');
         $response->assertSee('Agents With Activity');
@@ -249,7 +249,7 @@ class ReportsDashboardTest extends TestCase
         });
     }
 
-    public function test_configured_system_dispositions_are_forced_out_of_historical_report_totals(): void
+    public function test_disposition_defaults_and_explicit_filters_preserve_full_call_totals(): void
     {
         SystemSetting::query()->insert([
             [
@@ -278,45 +278,49 @@ class ReportsDashboardTest extends TestCase
 
         Http::fake(function ($request) {
             return match ($request->data()['function'] ?? null) {
-                'call_status_stats' => ($request->data()['statuses'] ?? null) === 'SALE'
-                    ? Http::response('TESTCAMP|3|1|08-3|SALE-3', 200)
-                    : Http::response('TESTCAMP|10|2|08-10|SALE-3,NA-4,AB-3', 200),
+                'call_status_stats' => Http::response('TESTCAMP|6381|55|08-6381|SALE-1116,NA-5000,AB-265', 200),
                 'agent_stats_export' => Http::response("user|campaign|full_name|calls|total_talk_time\nagent-a|TESTCAMP|Agent A|10|600", 200),
-                'call_dispo_report' => Http::response("campaign|ingroup|SALE|NA|AB\nTESTCAMP|IN|3|4|3", 200),
+                'call_dispo_report' => Http::response("campaign|ingroup|SALE|NA|AB\nTESTCAMP|IN|1,116 (17.49%)|5,000|265", 200),
                 default => Http::response('', 200),
             };
         });
 
         $user = User::factory()->create(['role' => User::ROLE_TEAM_LEADER]);
-        $response = $this->actingAs($user)
-            ->withSession(['campaign' => 'campaign-a', 'campaign_name' => 'Campaign A'])
-            ->getJson(route('api.reports.dashboard', [
-                'campaign' => 'campaign-a',
-                'query_date' => '2026-08-20',
-                'end_date' => '2026-08-20',
-                'disposition_scope' => 'all',
-            ]));
+        $this->actingAs($user)
+            ->withSession(['campaign' => 'campaign-a', 'campaign_name' => 'Campaign A']);
+        $filters = [
+            'campaign' => 'campaign-a',
+            'query_date' => '2026-08-20',
+            'end_date' => '2026-08-20',
+        ];
 
-        $response->assertOk()
+        $this->getJson(route('api.reports.dashboard', $filters))->assertOk()
             ->assertJsonPath('data.filters.disposition_scope', 'exclude_system')
-            ->assertJsonPath('data.summary.total_calls', 3)
-            ->assertJsonPath('data.summary.answered_calls', 1)
-            ->assertJsonPath('data.summary.answer_rate', 33.33)
-            ->assertJsonPath('data.campaigns.0.total_calls', 3)
-            ->assertJsonPath('data.disposition_summary.total_calls', 3)
-            ->assertJsonPath('data.status_totals.SALE', 3)
+            ->assertJsonPath('data.summary.total_calls', 6381)
+            ->assertJsonPath('data.summary.answered_calls', 55)
+            ->assertJsonPath('data.summary.answer_rate', 0.86)
+            ->assertJsonPath('data.summary.contact_rate', null)
+            ->assertJsonPath('data.summary.abandoned_rate', null)
+            ->assertJsonPath('data.campaigns.0.total_calls', 6381)
+            ->assertJsonPath('data.call_volume.values.8', 6381)
+            ->assertJsonPath('data.disposition_summary.total_calls', 1116)
+            ->assertJsonPath('data.status_totals.SALE', 1116)
             ->assertJsonMissingPath('data.status_totals.NA')
             ->assertJsonMissingPath('data.status_totals.AB');
 
-        Http::assertSent(function ($request): bool {
-            return ($request->data()['function'] ?? null) === 'call_status_stats'
-                && ($request->data()['statuses'] ?? null) === 'SALE';
-        });
+        $this->getJson(route('api.reports.dashboard', $filters + ['disposition_scope' => 'all']))->assertOk()
+            ->assertJsonPath('data.filters.disposition_scope', 'all')
+            ->assertJsonPath('data.summary.total_calls', 6381)
+            ->assertJsonPath('data.disposition_summary.total_calls', 6381)
+            ->assertJsonPath('data.status_totals.NA', 5000);
+
+        Http::assertNotSent(fn ($request): bool => isset($request->data()['statuses']));
     }
 
-    public function test_live_and_today_reports_reuse_one_normalized_snapshot_and_keep_scopes_explicit(): void
+    public function test_today_matches_historical_in_the_report_timezone_and_live_keeps_its_operational_window(): void
     {
-        Carbon::setTestNow(Carbon::parse('2026-08-26 12:00:00'));
+        config(['vicidial.report_timezone' => 'Asia/Manila']);
+        Carbon::setTestNow(Carbon::parse('2026-08-26T16:00:00Z'));
 
         try {
             $campaign = Campaign::factory()->create(['code' => 'campaign-a', 'name' => 'Campaign A']);
@@ -367,9 +371,27 @@ class ReportsDashboardTest extends TestCase
                 ->assertJsonPath('data.today.answered', 4)
                 ->assertJsonPath('data.today.source', 'vicidial')
                 ->assertJsonPath('data.today.available', true)
-                ->assertJsonPath('data.today.label', 'Midnight → now');
+                ->assertJsonPath('data.today.label', 'Midnight → now')
+                ->assertJsonPath('data.filters.query_date', '2026-08-27')
+                ->assertJsonPath('data.report_scope.start', '2026-08-27T00:00:00+08:00')
+                ->assertJsonPath('data.report_scope.days_open', true)
+                ->assertJsonPath('data.report_scope.reconciliation', 'pending');
 
             Http::assertSentCount(6);
+            $historical = $this->getJson(route('api.reports.dashboard', [
+                'campaign' => 'campaign-a',
+                'query_date' => '2026-08-27',
+                'end_date' => '2026-08-27',
+            ]))->assertOk();
+            $this->assertSame($historical->json('data.summary'), $today->json('data.summary'));
+
+            Http::swap(new \Illuminate\Http\Client\Factory);
+            Http::fake(['*' => Http::response('', 503)]);
+            $this->getJson(route('api.reports.today', ['campaign' => 'campaign-a']))
+                ->assertOk()
+                ->assertJsonPath('data.today.total_calls', null)
+                ->assertJsonPath('data.today.source', 'unavailable')
+                ->assertJsonPath('data.today.available', false);
         } finally {
             Carbon::setTestNow();
         }
